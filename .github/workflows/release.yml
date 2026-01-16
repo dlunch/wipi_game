@@ -7,7 +7,7 @@ on:
       - opened
       - synchronize
 
-name: Build Examples
+name: Release
 
 jobs:
   rust_ci:
