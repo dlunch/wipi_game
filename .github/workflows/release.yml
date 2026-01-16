@@ -10,7 +10,7 @@ on:
 name: Release
 
 jobs:
-  rust_ci:
+  build_release:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
