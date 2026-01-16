@@ -1,0 +1,16 @@
+[package]
+name = "wipi_game"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["simulation"]
+ktf = ["wipi/ktf", "wipi_build/ktf"]
+lgt = ["wipi/lgt", "wipi_build/lgt"]
+simulation = ["wipi/simulation"]
+
+[dependencies]
+wipi = { git = "https://github.com/dlunch/wipi" }
+
+[build-dependencies]
+wipi_build = { git = "https://github.com/dlunch/wipi" }
