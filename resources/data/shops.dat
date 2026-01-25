@@ -1,0 +1,4 @@
+# 상점 데이터
+# 포맷: id:name:item_id:item_id:...
+
+weapon_shop:무기 상점:wooden_sword:iron_sword:steel_sword:leather_armor:iron_armor:potion:hi_potion

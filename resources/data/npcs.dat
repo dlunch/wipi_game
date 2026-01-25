@@ -1,0 +1,13 @@
+# NPC 데이터
+# 포맷: id:name:map_id:type:x:y:dialog_id:shop_id
+# type: V=Villager, S=ShopKeeper, Q=QuestGiver, H=Healer
+# shop_id는 ShopKeeper만 해당 (선택)
+
+# 마을 NPC (40x20 맵)
+elder:마을 장로:village:Q:4:3:dialog_elder
+shopkeeper:무기상인:village:S:4:11:dialog_shop:weapon_shop
+healer:치료사:village:H:4:15:dialog_healer
+villager1:농부:village:V:18:5:dialog_villager
+
+# 성 NPC (40x20 맵)
+guard:성문 경비병:castle:Q:20:15:dialog_guard

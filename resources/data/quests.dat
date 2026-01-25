@@ -1,0 +1,8 @@
+# 퀘스트 데이터
+# 포맷: id:name:type:target_id:count:reward_exp:reward_gold:description[:reward_item]
+# type: KILL, COLLECT, TALK, REACH
+
+quest_goblin:고블린 퇴치:KILL:goblin:5:100:50:숲의 고블린 5마리 처치:potion
+quest_wolf:늑대 사냥:KILL:wolf:3:80:30:숲의 늑대 3마리 처치
+quest_skeleton:해골 소탕:KILL:skeleton:5:150:80:동굴의 해골 5마리 처치:iron_sword
+quest_boss:마왕 토벌:KILL:boss_demon:1:1000:500:왕좌의 방에서 마왕 처치:legendary_sword

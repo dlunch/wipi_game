@@ -1,0 +1,39 @@
+# 대화 데이터
+# 포맷:
+# @DIALOG:dialog_id
+# [CONDITION:][:ACTION:]대화 내용
+# @END
+#
+# CONDITION: HAS_QUEST=id, QUEST_DONE=id, HAS_ITEM=id, HAS_GOLD=n
+# ACTION: GIVE_QUEST=id, COMPLETE_QUEST=id, GIVE_ITEM=id, TAKE_ITEM=id
+#         GIVE_GOLD=n, TAKE_GOLD=n, OPEN_SHOP=id, HEAL
+
+@DIALOG:dialog_elder
+어서오게, 젊은 용사여.
+최근 숲에 고블린이 나타나 마을을 위협하고 있다네.
+HAS_QUEST=quest_goblin::이미 부탁을 들어주고 있구나. 고블린 5마리를 처치해주게.
+QUEST_DONE=quest_goblin:COMPLETE_QUEST=quest_goblin:훌륭하네! 마을을 구해줘서 고맙네.
+GIVE_QUEST=quest_goblin:숲의 고블린 5마리를 처치해줄 수 있겠나?
+@END
+
+@DIALOG:dialog_shop
+어서 오시게! 좋은 무기가 많이 있다네.
+OPEN_SHOP=weapon_shop:구경해 보시게.
+@END
+
+@DIALOG:dialog_healer
+상처가 있으시군요.
+HEAL:체력을 회복해 드렸습니다.
+무리하지 마세요.
+@END
+
+@DIALOG:dialog_villager
+평화롭던 마을에 몬스터가 나타났어요...
+장로님께 가보세요.
+@END
+
+@DIALOG:dialog_guard
+이 성은 마왕이 점령했다.
+HAS_QUEST=quest_boss::마왕을 물리치러 가시는 건가요? 조심하세요!
+강해지지 않으면 들어갈 수 없소.
+@END
