@@ -309,7 +309,7 @@ impl RpgGame {
 
         if let Some(event) = event {
             match event {
-                TileEvent::MapExit(target) => {
+                TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
                     if !target.is_empty() {
                         self.change_map(&target);
                     }
@@ -329,11 +329,6 @@ impl RpgGame {
                     }
                 }
                 TileEvent::Npc => {}
-                TileEvent::DungeonEntrance(target) => {
-                    if !target.is_empty() {
-                        self.change_map(&target);
-                    }
-                }
             }
         }
     }
@@ -585,10 +580,9 @@ impl RpgGame {
                     KeyCode::Up => state.move_up(),
                     KeyCode::Down => state.move_down(self.player.inventory.len()),
                     KeyCode::Ok => {
-                        if state.selected < self.player.inventory.len() {
-                            let sell_price = self.player.inventory[state.selected].price / 2;
+                        if let Some(item) = self.player.remove_item_at(state.selected) {
+                            let sell_price = item.price / 2;
                             self.player.stats.gold += sell_price;
-                            self.player.inventory.remove(state.selected);
                             if state.selected >= self.player.inventory.len() && state.selected > 0 {
                                 state.selected -= 1;
                             }

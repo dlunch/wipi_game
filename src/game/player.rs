@@ -201,4 +201,13 @@ impl Player {
             false
         }
     }
+
+    pub fn remove_item_at(&mut self, index: usize) -> Option<Item> {
+        if index >= self.inventory.len() {
+            return None;
+        }
+        let item = self.inventory.remove(index);
+        self.fix_equipped_indices(index);
+        Some(item)
+    }
 }

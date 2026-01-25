@@ -20,7 +20,7 @@ pub fn save_game(player: &Player) -> bool {
 
 pub fn load_game(player: &mut Player) -> bool {
     if let Ok(db) = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly) {
-        let mut buf = [0u8; 1024];
+        let mut buf = [0u8; 4096];
         if let Ok(len) = db.read(&mut buf)
             && let Ok(data) = core::str::from_utf8(&buf[..len])
         {

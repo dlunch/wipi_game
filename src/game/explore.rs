@@ -53,7 +53,20 @@ fn draw_map_with_entities(
                 fill_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_BLACK);
             } else {
                 let tile = map.get_tile(map_x as usize, map_y as usize);
-                fill_rect(fb, px, py, TILE_SIZE, TILE_SIZE, tile_color(tile));
+                let is_opened = tile == Tile::Treasure
+                    && player.is_treasure_opened(
+                        &player.current_map_id,
+                        map_x as usize,
+                        map_y as usize,
+                    );
+                fill_rect(
+                    fb,
+                    px,
+                    py,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    tile_color(tile, is_opened),
+                );
             }
         }
     }
@@ -179,13 +192,19 @@ fn draw_hud(
     }
 }
 
-fn tile_color(tile: Tile) -> Color {
+fn tile_color(tile: Tile, is_opened_treasure: bool) -> Color {
     match tile {
         Tile::Wall => COLOR_DARK_GRAY,
         Tile::Floor | Tile::PlayerStart | Tile::Enemy => COLOR_GRAY,
         Tile::House => COLOR_BROWN,
         Tile::Dungeon => COLOR_DUNGEON,
-        Tile::Treasure => COLOR_YELLOW,
+        Tile::Treasure => {
+            if is_opened_treasure {
+                COLOR_BROWN
+            } else {
+                COLOR_YELLOW
+            }
+        }
         Tile::Exit => COLOR_GREEN,
         Tile::Water => COLOR_BLUE,
         Tile::Tree => COLOR_FOREST,

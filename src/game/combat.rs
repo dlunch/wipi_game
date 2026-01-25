@@ -99,19 +99,32 @@ impl CombatSystem {
     pub fn spawn_enemies(&mut self, map: &Map, enemy_data: &[Enemy]) {
         self.enemies.clear();
 
-        for (enemy_id, _weight) in &map.encounters {
-            if let Some(data) = enemy_data.iter().find(|e| &e.id == enemy_id) {
-                for y in 0..map.height {
-                    for x in 0..map.width {
-                        if map.get_tile(x, y) == Tile::Enemy
-                            && !self.enemies.iter().any(|e| e.x == x && e.y == y)
-                        {
-                            self.enemies.push(FieldEnemy::new(data.clone(), x, y));
-                            break;
-                        }
-                    }
+        let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
+        for y in 0..map.height {
+            for x in 0..map.width {
+                if map.get_tile(x, y) == Tile::Enemy {
+                    enemy_tiles.push((x, y));
                 }
             }
+        }
+
+        if enemy_tiles.is_empty() || map.encounters.is_empty() {
+            return;
+        }
+
+        let available_enemies: Vec<&Enemy> = map
+            .encounters
+            .iter()
+            .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
+            .collect();
+
+        if available_enemies.is_empty() {
+            return;
+        }
+
+        for (i, (x, y)) in enemy_tiles.iter().enumerate() {
+            let enemy = available_enemies[i % available_enemies.len()];
+            self.enemies.push(FieldEnemy::new(enemy.clone(), *x, *y));
         }
     }
 
