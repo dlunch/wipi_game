@@ -184,6 +184,16 @@ fn draw_hud(
     let hp_text = format!("{}/{}", player.stats.current_hp, player.stats.max_hp);
     draw_text(fb, 46, hud_y + 10, &hp_text, COLOR_WHITE);
 
+    let active_quests = player
+        .quests
+        .iter()
+        .filter(|q| !q.rewarded && !q.completed)
+        .count();
+    if active_quests > 0 {
+        let quest_text = format!("Q:{}", active_quests);
+        draw_text(fb, screen_w - 70, hud_y + 2, &quest_text, COLOR_GREEN);
+    }
+
     let lv_text = format!("Lv{}", player.stats.level);
     draw_text(fb, screen_w - 30, hud_y + 2, &lv_text, COLOR_YELLOW);
 

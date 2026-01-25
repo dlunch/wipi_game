@@ -52,24 +52,32 @@ impl FieldEnemy {
     }
 
     fn move_towards(&mut self, target_x: usize, target_y: usize, map: &Map) {
-        let dx = match target_x.cmp(&self.x) {
-            core::cmp::Ordering::Greater => 1i32,
+        let dx: i32 = match target_x.cmp(&self.x) {
+            core::cmp::Ordering::Greater => 1,
             core::cmp::Ordering::Less => -1,
             core::cmp::Ordering::Equal => 0,
         };
-        let dy = match target_y.cmp(&self.y) {
-            core::cmp::Ordering::Greater => 1i32,
+        let dy: i32 = match target_y.cmp(&self.y) {
+            core::cmp::Ordering::Greater => 1,
             core::cmp::Ordering::Less => -1,
             core::cmp::Ordering::Equal => 0,
         };
 
-        let new_x = (self.x as i32 + dx) as usize;
-        let new_y = (self.y as i32 + dy) as usize;
+        let new_x = self.x.checked_add_signed(dx as isize);
+        let new_y = self.y.checked_add_signed(dy as isize);
 
-        if dx != 0 && map.get_tile(new_x, self.y).is_passable() {
-            self.x = new_x;
-        } else if dy != 0 && map.get_tile(self.x, new_y).is_passable() {
-            self.y = new_y;
+        if let Some(nx) = new_x
+            && dx != 0
+            && map.get_tile(nx, self.y).is_passable()
+        {
+            self.x = nx;
+            return;
+        }
+        if let Some(ny) = new_y
+            && dy != 0
+            && map.get_tile(self.x, ny).is_passable()
+        {
+            self.y = ny;
         }
     }
 
@@ -89,6 +97,8 @@ pub struct CombatSystem {
     pub player_attack_cooldown: u32,
     pub player_hit_flash: u32,
     update_counter: u32,
+    respawn_timer: u32,
+    respawn_positions: Vec<(usize, usize, usize)>,
 }
 
 impl CombatSystem {
@@ -98,6 +108,8 @@ impl CombatSystem {
 
     pub fn spawn_enemies(&mut self, map: &Map, enemy_data: &[Enemy]) {
         self.enemies.clear();
+        self.respawn_positions.clear();
+        self.respawn_timer = 0;
 
         let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
         for y in 0..map.height {
@@ -123,8 +135,10 @@ impl CombatSystem {
         }
 
         for (i, (x, y)) in enemy_tiles.iter().enumerate() {
-            let enemy = available_enemies[i % available_enemies.len()];
+            let enemy_idx = i % available_enemies.len();
+            let enemy = available_enemies[enemy_idx];
             self.enemies.push(FieldEnemy::new(enemy.clone(), *x, *y));
+            self.respawn_positions.push((*x, *y, enemy_idx));
         }
     }
 
@@ -134,6 +148,7 @@ impl CombatSystem {
         player_y: usize,
         player_def: i32,
         map: &Map,
+        enemy_data: &[Enemy],
     ) -> CombatResult {
         self.update_counter = self.update_counter.wrapping_add(1);
 
@@ -169,7 +184,57 @@ impl CombatSystem {
 
         self.enemies.retain(|e| !e.is_dead());
 
+        self.try_respawn(player_x, player_y, map, enemy_data);
+
         CombatResult { damage_taken }
+    }
+
+    fn try_respawn(&mut self, player_x: usize, player_y: usize, map: &Map, enemy_data: &[Enemy]) {
+        const RESPAWN_DELAY: u32 = 300;
+        const RESPAWN_DISTANCE: usize = 8;
+
+        if self.respawn_positions.is_empty() {
+            return;
+        }
+
+        let max_enemies = self.respawn_positions.len();
+        if self.enemies.len() >= max_enemies {
+            self.respawn_timer = 0;
+            return;
+        }
+
+        self.respawn_timer += 1;
+        if self.respawn_timer < RESPAWN_DELAY {
+            return;
+        }
+
+        let available_enemies: Vec<&Enemy> = map
+            .encounters
+            .iter()
+            .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
+            .collect();
+
+        if available_enemies.is_empty() {
+            return;
+        }
+
+        for (x, y, enemy_idx) in &self.respawn_positions {
+            let distance = x.abs_diff(player_x) + y.abs_diff(player_y);
+            if distance < RESPAWN_DISTANCE {
+                continue;
+            }
+
+            let already_exists = self.enemies.iter().any(|e| e.x == *x && e.y == *y);
+            if already_exists {
+                continue;
+            }
+
+            if let Some(enemy) = available_enemies.get(*enemy_idx) {
+                self.enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y));
+                self.respawn_timer = 0;
+                return;
+            }
+        }
     }
 
     pub fn player_attack(
@@ -236,9 +301,9 @@ impl Direction {
     pub fn apply(&self, x: usize, y: usize) -> (usize, usize) {
         match self {
             Direction::Up => (x, y.saturating_sub(1)),
-            Direction::Down => (x, y + 1),
+            Direction::Down => (x, y.saturating_add(1)),
             Direction::Left => (x.saturating_sub(1), y),
-            Direction::Right => (x + 1, y),
+            Direction::Right => (x.saturating_add(1), y),
         }
     }
 }

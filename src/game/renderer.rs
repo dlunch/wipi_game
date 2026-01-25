@@ -1,6 +1,6 @@
 use wipi::framebuffer::{Color, Framebuffer};
 
-pub const TILE_SIZE: i32 = 8;
+pub const TILE_SIZE: i32 = 16;
 
 pub const COLOR_BLACK: Color = Color {
     r: 0,

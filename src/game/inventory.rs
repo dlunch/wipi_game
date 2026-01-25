@@ -25,11 +25,11 @@ impl InventoryState {
         }
     }
 
-    pub fn move_down(&mut self, item_count: usize) {
+    pub fn move_down(&mut self, item_count: usize, visible: usize) {
         if item_count > 0 && self.selected < item_count - 1 {
             self.selected += 1;
-            if self.selected >= self.scroll + 6 {
-                self.scroll = self.selected - 5;
+            if self.selected >= self.scroll + visible {
+                self.scroll = self.selected - visible + 1;
             }
         }
     }
@@ -52,15 +52,15 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventorySt
         return;
     }
 
-    let visible_items: i32 = 6;
     let start_y: i32 = 24;
     let item_height: i32 = 14;
+    let visible_items = ((screen_h - 50) / item_height).max(1) as usize;
 
     for (i, item) in player
         .inventory
         .iter()
         .skip(state.scroll)
-        .take(visible_items as usize)
+        .take(visible_items)
         .enumerate()
     {
         let actual_idx = state.scroll + i;
@@ -102,15 +102,15 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventorySt
         draw_text(fb, 24, y + 2, &item_text, COLOR_WHITE);
     }
 
-    if player.inventory.len() > visible_items as usize {
+    if player.inventory.len() > visible_items {
         if state.scroll > 0 {
             draw_text(fb, screen_w - 16, 24, "^", COLOR_WHITE);
         }
-        if state.scroll + (visible_items as usize) < player.inventory.len() {
+        if state.scroll + visible_items < player.inventory.len() {
             draw_text(
                 fb,
                 screen_w - 16,
-                start_y + visible_items * item_height - 8,
+                start_y + (visible_items as i32) * item_height - 8,
                 "v",
                 COLOR_WHITE,
             );

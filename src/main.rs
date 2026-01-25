@@ -287,9 +287,13 @@ impl RpgGame {
         }
 
         if let Some(map) = self.current_map().cloned() {
-            let result =
-                self.combat
-                    .update(self.player.x, self.player.y, self.player.total_def(), &map);
+            let result = self.combat.update(
+                self.player.x,
+                self.player.y,
+                self.player.total_def(),
+                &map,
+                &self.enemies,
+            );
 
             if result.damage_taken > 0 {
                 self.player.stats.take_damage(result.damage_taken);
@@ -489,9 +493,13 @@ impl RpgGame {
     }
 
     fn handle_inventory_input(&mut self, key: KeyCode) {
+        const INVENTORY_VISIBLE_ITEMS: usize = 19;
+
         match key {
             KeyCode::Up => self.inventory_state.move_up(),
-            KeyCode::Down => self.inventory_state.move_down(self.player.inventory.len()),
+            KeyCode::Down => self
+                .inventory_state
+                .move_down(self.player.inventory.len(), INVENTORY_VISIBLE_ITEMS),
             KeyCode::Ok => {
                 let idx = self.inventory_state.selected;
                 self.player.use_item(idx);
@@ -541,18 +549,20 @@ impl RpgGame {
     }
 
     fn handle_shop_input(&mut self, key: KeyCode) {
+        const SHOP_VISIBLE_ITEMS: usize = 8;
+
         if let GameState::Shop(ref mut state) = self.state {
             match state.mode {
                 ShopMode::Select => match key {
                     KeyCode::Up => state.move_up(),
-                    KeyCode::Down => state.move_down(2),
+                    KeyCode::Down => state.move_down(2, 2),
                     KeyCode::Ok => {
                         state.mode = if state.selected == 0 {
                             ShopMode::Buy
                         } else {
                             ShopMode::Sell
                         };
-                        state.selected = 0;
+                        state.reset_selection();
                     }
                     KeyCode::Back => {
                         self.state = GameState::Explore;
@@ -561,7 +571,7 @@ impl RpgGame {
                 },
                 ShopMode::Buy => match key {
                     KeyCode::Up => state.move_up(),
-                    KeyCode::Down => state.move_down(state.items.len()),
+                    KeyCode::Down => state.move_down(state.items.len(), SHOP_VISIBLE_ITEMS),
                     KeyCode::Ok => {
                         if let Some(item) = state.items.get(state.selected).cloned()
                             && self.player.stats.gold >= item.price
@@ -572,25 +582,33 @@ impl RpgGame {
                     }
                     KeyCode::Back => {
                         state.mode = ShopMode::Select;
-                        state.selected = 0;
+                        state.reset_selection();
                     }
                     _ => {}
                 },
                 ShopMode::Sell => match key {
                     KeyCode::Up => state.move_up(),
-                    KeyCode::Down => state.move_down(self.player.inventory.len()),
+                    KeyCode::Down => {
+                        state.move_down(self.player.inventory.len(), SHOP_VISIBLE_ITEMS)
+                    }
                     KeyCode::Ok => {
                         if let Some(item) = self.player.remove_item_at(state.selected) {
                             let sell_price = item.price / 2;
                             self.player.stats.gold += sell_price;
-                            if state.selected >= self.player.inventory.len() && state.selected > 0 {
+                            let inv_len = self.player.inventory.len();
+                            if state.selected >= inv_len && state.selected > 0 {
                                 state.selected -= 1;
+                            }
+                            if state.scroll > 0
+                                && state.scroll >= inv_len.saturating_sub(SHOP_VISIBLE_ITEMS - 1)
+                            {
+                                state.scroll = inv_len.saturating_sub(SHOP_VISIBLE_ITEMS);
                             }
                         }
                     }
                     KeyCode::Back => {
                         state.mode = ShopMode::Select;
-                        state.selected = 0;
+                        state.reset_selection();
                     }
                     _ => {}
                 },

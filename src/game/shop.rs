@@ -59,16 +59,22 @@ fn draw_mode_select(fb: &mut Framebuffer, state: &ShopState) {
 
 fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
     let screen_w = fb.width() as i32;
+    let screen_h = fb.height() as i32;
+    let visible_items = ((screen_h - 60) / 12).max(1) as usize;
 
     draw_text(fb, 8, 18, "== BUY ==", COLOR_GREEN);
 
-    for (i, item) in state.items.iter().enumerate() {
+    for (i, item) in state
+        .items
+        .iter()
+        .skip(state.scroll)
+        .take(visible_items)
+        .enumerate()
+    {
+        let actual_idx = state.scroll + i;
         let y = 30 + (i as i32 * 12);
-        if y > 100 {
-            break;
-        }
 
-        let is_selected = i == state.selected;
+        let is_selected = actual_idx == state.selected;
         let can_afford = player.stats.gold >= item.price;
 
         let (text_color1, text_color2) = if is_selected {
@@ -88,10 +94,25 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
         let price_text = format!("{}G", item.price);
         draw_text(fb, screen_w - 40, y, &price_text, text_color2);
     }
+
+    if state.scroll > 0 {
+        draw_text(fb, screen_w - 16, 30, "^", COLOR_WHITE);
+    }
+    if state.scroll + visible_items < state.items.len() {
+        draw_text(
+            fb,
+            screen_w - 16,
+            30 + ((visible_items - 1) as i32) * 12,
+            "v",
+            COLOR_WHITE,
+        );
+    }
 }
 
 fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
     let screen_w = fb.width() as i32;
+    let screen_h = fb.height() as i32;
+    let visible_items = ((screen_h - 60) / 12).max(1) as usize;
 
     draw_text(fb, 8, 18, "== SELL ==", COLOR_BLUE);
 
@@ -100,13 +121,17 @@ fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
         return;
     }
 
-    for (i, item) in player.inventory.iter().enumerate() {
+    for (i, item) in player
+        .inventory
+        .iter()
+        .skip(state.scroll)
+        .take(visible_items)
+        .enumerate()
+    {
+        let actual_idx = state.scroll + i;
         let y = 30 + (i as i32 * 12);
-        if y > 100 {
-            break;
-        }
 
-        let is_selected = i == state.selected;
+        let is_selected = actual_idx == state.selected;
         let (text_color1, text_color2) = if is_selected {
             (COLOR_WHITE, COLOR_WHITE)
         } else {
@@ -122,5 +147,18 @@ fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
         let sell_price = item.price / 2;
         let price_text = format!("{}G", sell_price);
         draw_text(fb, screen_w - 40, y, &price_text, text_color2);
+    }
+
+    if state.scroll > 0 {
+        draw_text(fb, screen_w - 16, 30, "^", COLOR_WHITE);
+    }
+    if state.scroll + visible_items < player.inventory.len() {
+        draw_text(
+            fb,
+            screen_w - 16,
+            30 + ((visible_items - 1) as i32) * 12,
+            "v",
+            COLOR_WHITE,
+        );
     }
 }
