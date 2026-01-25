@@ -360,9 +360,9 @@ impl RpgGame {
 
         let (target_x, target_y) = match self.player.facing {
             game::Direction::Up => (self.player.x, self.player.y.saturating_sub(1)),
-            game::Direction::Down => (self.player.x, self.player.y + 1),
+            game::Direction::Down => (self.player.x, self.player.y.saturating_add(1)),
             game::Direction::Left => (self.player.x.saturating_sub(1), self.player.y),
-            game::Direction::Right => (self.player.x + 1, self.player.y),
+            game::Direction::Right => (self.player.x.saturating_add(1), self.player.y),
         };
 
         let Some(npc) = self.find_npc_at(target_x, target_y).cloned() else {
@@ -493,13 +493,9 @@ impl RpgGame {
     }
 
     fn handle_inventory_input(&mut self, key: KeyCode) {
-        const INVENTORY_VISIBLE_ITEMS: usize = 19;
-
         match key {
             KeyCode::Up => self.inventory_state.move_up(),
-            KeyCode::Down => self
-                .inventory_state
-                .move_down(self.player.inventory.len(), INVENTORY_VISIBLE_ITEMS),
+            KeyCode::Down => self.inventory_state.move_down(self.player.inventory.len()),
             KeyCode::Ok => {
                 let idx = self.inventory_state.selected;
                 self.player.use_item(idx);
