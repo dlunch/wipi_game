@@ -269,11 +269,12 @@ impl RpgGame {
 
         self.player.set_facing(dx, dy);
 
-        if let Some(map) = self.current_map() {
-            let new_x = (self.player.x as i32 + dx) as usize;
-            let new_y = (self.player.y as i32 + dy) as usize;
-
-            if self.player.can_move(map, dx, dy) && !self.combat.enemy_at(new_x, new_y) {
+        if let Some(map) = self.current_map()
+            && self.player.can_move(map, dx, dy)
+        {
+            let new_x = self.player.x.wrapping_add_signed(dx as isize);
+            let new_y = self.player.y.wrapping_add_signed(dy as isize);
+            if !self.combat.enemy_at(new_x, new_y) {
                 self.player.move_by(dx, dy);
                 self.check_tile_events();
             }
@@ -328,7 +329,6 @@ impl RpgGame {
                             .open_treasure(&map_id, self.player.x, self.player.y);
                     }
                 }
-                TileEvent::Npc => {}
             }
         }
     }

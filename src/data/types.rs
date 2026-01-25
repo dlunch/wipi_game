@@ -162,14 +162,16 @@ impl Default for PlayerStats {
 }
 
 impl PlayerStats {
-    pub fn total_atk(&self, weapon: Option<&Item>) -> i32 {
+    pub fn total_atk(&self, weapon: Option<&Item>, accessory: Option<&Item>) -> i32 {
         let weapon_atk = weapon.map(|w| w.param1).unwrap_or(0);
-        self.base_atk + weapon_atk
+        let accessory_atk = accessory.map(|a| a.param1).unwrap_or(0);
+        self.base_atk + weapon_atk + accessory_atk
     }
 
-    pub fn total_def(&self, armor: Option<&Item>) -> i32 {
+    pub fn total_def(&self, armor: Option<&Item>, accessory: Option<&Item>) -> i32 {
         let armor_def = armor.map(|a| a.param1).unwrap_or(0);
-        self.base_def + armor_def
+        let accessory_def = accessory.map(|a| a.param2).unwrap_or(0);
+        self.base_def + armor_def + accessory_def
     }
 
     pub fn heal(&mut self, amount: i32) {
@@ -186,12 +188,12 @@ impl PlayerStats {
 
     pub fn add_exp(&mut self, exp: i32) -> bool {
         self.exp += exp;
-        if self.exp >= self.exp_to_next {
+        let mut leveled_up = false;
+        while self.exp >= self.exp_to_next {
             self.level_up();
-            true
-        } else {
-            false
+            leveled_up = true;
         }
+        leveled_up
     }
 
     fn level_up(&mut self) {

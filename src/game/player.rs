@@ -65,12 +65,17 @@ impl Player {
         self.equipped_armor.and_then(|i| self.inventory.get(i))
     }
 
+    pub fn get_accessory(&self) -> Option<&Item> {
+        self.equipped_accessory.and_then(|i| self.inventory.get(i))
+    }
+
     pub fn total_atk(&self) -> i32 {
-        self.stats.total_atk(self.get_weapon())
+        self.stats
+            .total_atk(self.get_weapon(), self.get_accessory())
     }
 
     pub fn total_def(&self) -> i32 {
-        self.stats.total_def(self.get_armor())
+        self.stats.total_def(self.get_armor(), self.get_accessory())
     }
 
     pub fn add_item(&mut self, item: Item) {
@@ -131,14 +136,22 @@ impl Player {
     }
 
     pub fn can_move(&self, map: &Map, dx: i32, dy: i32) -> bool {
-        let new_x = (self.x as i32 + dx) as usize;
-        let new_y = (self.y as i32 + dy) as usize;
+        let Some(new_x) = self.x.checked_add_signed(dx as isize) else {
+            return false;
+        };
+        let Some(new_y) = self.y.checked_add_signed(dy as isize) else {
+            return false;
+        };
         map.get_tile(new_x, new_y).is_passable()
     }
 
     pub fn move_by(&mut self, dx: i32, dy: i32) {
-        self.x = (self.x as i32 + dx) as usize;
-        self.y = (self.y as i32 + dy) as usize;
+        if let Some(new_x) = self.x.checked_add_signed(dx as isize) {
+            self.x = new_x;
+        }
+        if let Some(new_y) = self.y.checked_add_signed(dy as isize) {
+            self.y = new_y;
+        }
 
         self.facing = match (dx, dy) {
             (0, -1) => Direction::Up,

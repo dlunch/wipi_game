@@ -224,7 +224,6 @@ pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
             }
             None
         }
-        Tile::House => Some(TileEvent::Npc),
         Tile::Dungeon => {
             for (dx, dy, target) in &map.dungeons {
                 if *dx == player.x && *dy == player.y {
@@ -241,6 +240,5 @@ pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
 pub enum TileEvent {
     Treasure,
     MapExit(alloc::string::String),
-    Npc,
     DungeonEntrance(alloc::string::String),
 }
