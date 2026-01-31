@@ -16,7 +16,8 @@ pub struct Player {
     pub y: usize,
     pub facing: Direction,
     pub quests: Vec<QuestProgress>,
-    pub opened_treasures: Vec<(String, usize, usize)>, // (map_id, x, y)
+    pub opened_treasures: Vec<(String, usize, usize)>,
+    pub skill_cooldowns: [u32; 3],
 }
 
 impl Player {
@@ -34,6 +35,26 @@ impl Player {
             facing: Direction::Down,
             quests: Vec::new(),
             opened_treasures: Vec::new(),
+            skill_cooldowns: [0; 3],
+        }
+    }
+
+    pub fn update_cooldowns(&mut self) {
+        for cd in &mut self.skill_cooldowns {
+            if *cd > 0 {
+                *cd -= 1;
+            }
+        }
+    }
+
+    pub fn can_use_skill(&self, slot: usize, mp_cost: i32) -> bool {
+        slot < 3 && self.skill_cooldowns[slot] == 0 && self.stats.current_mp >= mp_cost
+    }
+
+    pub fn use_skill(&mut self, slot: usize, mp_cost: i32, cooldown: u32) {
+        if slot < 3 {
+            self.skill_cooldowns[slot] = cooldown;
+            self.stats.current_mp = (self.stats.current_mp - mp_cost).max(0);
         }
     }
 

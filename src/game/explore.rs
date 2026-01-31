@@ -1,14 +1,14 @@
 use alloc::format;
 use wipi::framebuffer::{Color, Framebuffer};
 
-use super::Player;
 use super::combat::{CombatSystem, Direction};
 use super::renderer::{
-    COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
-    COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
-    draw_hp_bar, draw_rect, draw_text, fill_rect,
+    clear_screen, draw_hp_bar, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE,
+    COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN,
+    COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
 };
-use crate::data::{Map, Npc, Tile};
+use super::Player;
+use crate::data::{Map, Npc, SkillType, Tile};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
@@ -120,6 +120,11 @@ fn draw_map_with_entities(
                 TILE_SIZE - 2,
                 enemy_color,
             );
+
+            let hp_ratio = enemy.hp as f32 / enemy.data.hp as f32;
+            let bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
+            fill_rect(fb, px + 1, py - 2, TILE_SIZE - 2, 2, COLOR_DARK_GRAY);
+            fill_rect(fb, px + 1, py - 2, bar_width, 2, COLOR_GREEN);
         }
     }
 
@@ -141,6 +146,28 @@ fn draw_map_with_entities(
     );
 
     draw_facing_indicator(fb, half_x as i32, half_y as i32, &player.facing);
+
+    for effect in &combat.skill_effects {
+        let screen_x = effect.x as i32 - camera_x;
+        let screen_y = effect.y as i32 - camera_y;
+
+        if screen_x >= 0
+            && screen_y >= 0
+            && screen_x < view_tiles_x as i32
+            && screen_y < view_tiles_y as i32
+        {
+            let px = screen_x * TILE_SIZE;
+            let py = screen_y * TILE_SIZE;
+
+            let color = match effect.effect_type {
+                SkillType::Attack => COLOR_WHITE,
+                SkillType::Ranged => COLOR_YELLOW,
+                SkillType::Heal => COLOR_GREEN,
+                SkillType::Area => COLOR_CYAN,
+            };
+            draw_rect(fb, px, py, TILE_SIZE, TILE_SIZE, color);
+        }
+    }
 }
 
 fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, facing: &Direction) {

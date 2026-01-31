@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::data::{Enemy, Map, Tile};
+use crate::data::{Enemy, Map, Skill, SkillType, Tile};
 
 #[derive(Debug, Clone)]
 pub struct FieldEnemy {
@@ -91,11 +91,20 @@ impl FieldEnemy {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SkillEffect {
+    pub x: usize,
+    pub y: usize,
+    pub effect_type: SkillType,
+    pub timer: u32,
+}
+
 #[derive(Default)]
 pub struct CombatSystem {
     pub enemies: Vec<FieldEnemy>,
     pub player_attack_cooldown: u32,
     pub player_hit_flash: u32,
+    pub skill_effects: Vec<SkillEffect>,
     update_counter: u32,
     respawn_timer: u32,
     respawn_positions: Vec<(usize, usize, usize)>,
@@ -158,6 +167,13 @@ impl CombatSystem {
         if self.player_hit_flash > 0 {
             self.player_hit_flash -= 1;
         }
+
+        for effect in &mut self.skill_effects {
+            if effect.timer > 0 {
+                effect.timer -= 1;
+            }
+        }
+        self.skill_effects.retain(|e| e.timer > 0);
 
         let mut damage_taken = 0;
 
@@ -250,6 +266,13 @@ impl CombatSystem {
 
         let (tx, ty) = facing.apply(player_x, player_y);
 
+        self.skill_effects.push(SkillEffect {
+            x: tx,
+            y: ty,
+            effect_type: SkillType::Attack,
+            timer: 6,
+        });
+
         for enemy in &mut self.enemies {
             if enemy.x == tx && enemy.y == ty && !enemy.is_dead() {
                 let damage = (player_atk - enemy.data.def / 2).max(1);
@@ -277,6 +300,97 @@ impl CombatSystem {
             .iter()
             .any(|e| e.x == x && e.y == y && !e.is_dead())
     }
+
+    pub fn use_skill(
+        &mut self,
+        skill: &Skill,
+        player_x: usize,
+        player_y: usize,
+        player_atk: i32,
+        facing: Direction,
+    ) -> SkillResult {
+        let mut kills = Vec::new();
+        let damage = skill.power + player_atk / 2;
+
+        match skill.skill_type {
+            SkillType::Attack => {}
+            SkillType::Ranged => {
+                for dist in 1..=skill.range {
+                    let (tx, ty) = facing.apply_distance(player_x, player_y, dist);
+                    self.skill_effects.push(SkillEffect {
+                        x: tx,
+                        y: ty,
+                        effect_type: SkillType::Ranged,
+                        timer: 8,
+                    });
+                    if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
+                        kills.push(kill);
+                        break;
+                    }
+                }
+            }
+            SkillType::Area => {
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    let (tx, ty) = dir.apply(player_x, player_y);
+                    self.skill_effects.push(SkillEffect {
+                        x: tx,
+                        y: ty,
+                        effect_type: SkillType::Area,
+                        timer: 8,
+                    });
+                    if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
+                        kills.push(kill);
+                    }
+                }
+            }
+            SkillType::Heal => {
+                self.skill_effects.push(SkillEffect {
+                    x: player_x,
+                    y: player_y,
+                    effect_type: SkillType::Heal,
+                    timer: 15,
+                });
+            }
+        }
+
+        SkillResult {
+            heal_amount: if skill.skill_type == SkillType::Heal {
+                skill.power
+            } else {
+                0
+            },
+            kills,
+        }
+    }
+
+    fn damage_enemy_at(&mut self, x: usize, y: usize, damage: i32) -> Option<KillReward> {
+        for enemy in &mut self.enemies {
+            if enemy.x == x && enemy.y == y && !enemy.is_dead() {
+                let actual_damage = (damage - enemy.data.def / 2).max(1);
+                enemy.take_damage(actual_damage);
+
+                if enemy.is_dead() {
+                    return Some(KillReward {
+                        enemy_id: enemy.data.id.clone(),
+                        exp: enemy.data.exp,
+                        gold: enemy.data.gold,
+                    });
+                }
+                return None;
+            }
+        }
+        None
+    }
+}
+
+pub struct SkillResult {
+    pub heal_amount: i32,
+    pub kills: Vec<KillReward>,
 }
 
 pub struct CombatResult {
@@ -299,11 +413,15 @@ pub enum Direction {
 
 impl Direction {
     pub fn apply(&self, x: usize, y: usize) -> (usize, usize) {
+        self.apply_distance(x, y, 1)
+    }
+
+    pub fn apply_distance(&self, x: usize, y: usize, dist: usize) -> (usize, usize) {
         match self {
-            Direction::Up => (x, y.saturating_sub(1)),
-            Direction::Down => (x, y.saturating_add(1)),
-            Direction::Left => (x.saturating_sub(1), y),
-            Direction::Right => (x.saturating_add(1), y),
+            Direction::Up => (x, y.saturating_sub(dist)),
+            Direction::Down => (x, y.saturating_add(dist)),
+            Direction::Left => (x.saturating_sub(dist), y),
+            Direction::Right => (x.saturating_add(dist), y),
         }
     }
 }

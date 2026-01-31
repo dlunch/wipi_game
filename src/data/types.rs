@@ -296,3 +296,55 @@ pub struct Shop {
     pub name: String,
     pub items: Vec<String>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkillType {
+    Attack,
+    Ranged,
+    Heal,
+    Area,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct Skill {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub skill_type: SkillType,
+    pub power: i32,
+    pub mp_cost: i32,
+    pub range: usize,
+    pub cooldown: u32,
+}
+
+impl Skill {
+    pub const FIREBALL: Skill = Skill {
+        id: "fireball",
+        name: "Fireball",
+        skill_type: SkillType::Ranged,
+        power: 20,
+        mp_cost: 10,
+        range: 3,
+        cooldown: 30,
+    };
+
+    pub const HEAL: Skill = Skill {
+        id: "heal",
+        name: "Heal",
+        skill_type: SkillType::Heal,
+        power: 30,
+        mp_cost: 15,
+        range: 0,
+        cooldown: 60,
+    };
+
+    pub const SPIN_ATTACK: Skill = Skill {
+        id: "spin",
+        name: "Spin",
+        skill_type: SkillType::Area,
+        power: 15,
+        mp_cost: 8,
+        range: 1,
+        cooldown: 20,
+    };
+}

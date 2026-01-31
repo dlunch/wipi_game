@@ -15,8 +15,8 @@ use wipi::{
 };
 
 use data::{
-    Dialog, Enemy, Item, Map, Npc, Quest, Shop, parse_dialogs, parse_enemies, parse_items,
-    parse_maps, parse_npcs, parse_quests, parse_shops,
+    Dialog, Enemy, Item, Map, Npc, Quest, Shop, Skill, SkillType, parse_dialogs, parse_enemies,
+    parse_items, parse_maps, parse_npcs, parse_quests, parse_shops,
 };
 use game::{
     COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, CombatSystem, DialogState, GameState, InventoryState,
@@ -231,17 +231,16 @@ impl RpgGame {
                 }
             }
             KeyCode::Key1 => {
-                self.inventory_state = InventoryState::default();
-                self.state = GameState::Inventory;
+                self.use_skill(0, &Skill::FIREBALL);
             }
             KeyCode::Key2 => {
-                self.state = GameState::Stats;
+                self.use_skill(1, &Skill::HEAL);
             }
             KeyCode::Key3 => {
-                self.state = GameState::QuestLog;
+                self.use_skill(2, &Skill::SPIN_ATTACK);
             }
             KeyCode::Key0 => {
-                save_game(&self.player);
+                self.state = GameState::PauseMenu(0);
             }
             KeyCode::Back => {
                 save_game(&self.player);
@@ -298,6 +297,8 @@ impl RpgGame {
             return;
         }
 
+        self.player.update_cooldowns();
+
         if let Some(map) = self.current_map().cloned() {
             let result = self.combat.update(
                 self.player.x,
@@ -314,6 +315,32 @@ impl RpgGame {
                     self.state = GameState::GameOver;
                 }
             }
+        }
+    }
+
+    fn use_skill(&mut self, slot: usize, skill: &Skill) {
+        if !self.player.can_use_skill(slot, skill.mp_cost) {
+            return;
+        }
+
+        let result = self.combat.use_skill(
+            skill,
+            self.player.x,
+            self.player.y,
+            self.player.total_atk(),
+            self.player.facing,
+        );
+
+        self.player.use_skill(slot, skill.mp_cost, skill.cooldown);
+
+        if skill.skill_type == SkillType::Heal {
+            self.player.stats.heal(result.heal_amount);
+        }
+
+        for kill in result.kills {
+            self.player.stats.add_exp(kill.exp);
+            self.player.stats.gold += kill.gold;
+            self.update_kill_quest(&kill.enemy_id);
         }
     }
 
@@ -646,6 +673,66 @@ impl RpgGame {
             }
         }
     }
+
+    fn draw_pause_menu(&self, fb: &mut Framebuffer, selected: usize) {
+        let w = fb.width() as i32;
+        let h = fb.height() as i32;
+        let menu_w = 100;
+        let menu_h = 80;
+        let x = (w - menu_w) / 2;
+        let y = (h - menu_h) / 2;
+
+        fill_rect(fb, x, y, menu_w, menu_h, COLOR_DARK_GRAY);
+        draw_rect(fb, x, y, menu_w, menu_h, COLOR_WHITE);
+
+        let items = ["Inventory", "Stats", "Quests", "Save"];
+        for (i, item) in items.iter().enumerate() {
+            let is_selected = i == selected;
+            let prefix = if is_selected { "> " } else { "  " };
+            let y_pos = y + 10 + (i as i32 * 16);
+            if is_selected {
+                draw_text(fb, x + 10, y_pos, prefix, COLOR_RED);
+                draw_text(fb, x + 22, y_pos, item, COLOR_RED);
+            } else {
+                draw_text(fb, x + 10, y_pos, prefix, COLOR_WHITE);
+                draw_text(fb, x + 22, y_pos, item, COLOR_WHITE);
+            }
+        }
+    }
+
+    fn handle_pause_menu_input(&mut self, key: KeyCode) {
+        if let GameState::PauseMenu(ref mut selected) = self.state {
+            match key {
+                KeyCode::Up => {
+                    if *selected > 0 {
+                        *selected -= 1;
+                    }
+                }
+                KeyCode::Down => {
+                    if *selected < 3 {
+                        *selected += 1;
+                    }
+                }
+                KeyCode::Ok => match *selected {
+                    0 => {
+                        self.inventory_state = InventoryState::default();
+                        self.state = GameState::Inventory;
+                    }
+                    1 => self.state = GameState::Stats,
+                    2 => self.state = GameState::QuestLog,
+                    3 => {
+                        save_game(&self.player);
+                        self.state = GameState::Explore;
+                    }
+                    _ => {}
+                },
+                KeyCode::Back | KeyCode::Key0 => {
+                    self.state = GameState::Explore;
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 enum MenuAction {
@@ -688,6 +775,12 @@ impl App for RpgGame {
             GameState::QuestLog => {
                 draw_quest_log(&mut fb, &self.player, &self.quests);
             }
+            GameState::PauseMenu(selected) => {
+                if let Some(map) = self.current_map() {
+                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.npcs);
+                }
+                self.draw_pause_menu(&mut fb, *selected);
+            }
             GameState::GameOver => {
                 clear_screen(&mut fb);
                 let w = fb.width() as i32;
@@ -710,6 +803,7 @@ impl App for RpgGame {
             GameState::Dialog(_) => self.handle_dialog_input(key),
             GameState::Shop(_) => self.handle_shop_input(key),
             GameState::QuestLog => self.handle_quest_input(key),
+            GameState::PauseMenu(_) => self.handle_pause_menu_input(key),
             GameState::GameOver => self.handle_gameover_input(key),
         }
     }

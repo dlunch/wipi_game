@@ -11,6 +11,7 @@ pub enum GameState {
     Dialog(DialogState),
     Shop(ShopState),
     QuestLog,
+    PauseMenu(usize),
     GameOver,
 }
 

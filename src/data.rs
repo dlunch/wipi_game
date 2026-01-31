@@ -6,5 +6,5 @@ pub use parser::{
 };
 pub use types::{
     Dialog, DialogAction, DialogCondition, DialogLine, Enemy, Item, ItemKind, Map, Npc, NpcType,
-    PlayerStats, Quest, QuestProgress, QuestType, Shop, Tile,
+    PlayerStats, Quest, QuestProgress, QuestType, Shop, Skill, SkillType, Tile,
 };
