@@ -9,7 +9,10 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::str;
 
-use wipi::{app::App, event::KeyCode, framebuffer::Framebuffer, resource::Resource, wipi_main};
+use wipi::{
+    app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, resource::Resource,
+    wipi_main,
+};
 
 use data::{
     Dialog, Enemy, Item, Map, Npc, Quest, Shop, parse_dialogs, parse_enemies, parse_items,
@@ -36,28 +39,42 @@ pub struct RpgGame {
     combat: CombatSystem,
 }
 
-impl Default for RpgGame {
-    fn default() -> Self {
-        Self::new()
+use wipi::WIPICError;
+
+#[derive(Debug)]
+pub enum GameError {
+    WIPIC(WIPICError),
+    Utf8(core::str::Utf8Error),
+}
+
+impl From<WIPICError> for GameError {
+    fn from(e: WIPICError) -> Self {
+        GameError::WIPIC(e)
+    }
+}
+
+impl From<core::str::Utf8Error> for GameError {
+    fn from(e: core::str::Utf8Error) -> Self {
+        GameError::Utf8(e)
     }
 }
 
 impl RpgGame {
-    pub fn new() -> Self {
-        let items = Self::load_items();
-        let enemies = Self::load_enemies();
-        let maps = Self::load_maps();
-        let npcs = Self::load_npcs();
-        let dialogs = Self::load_dialogs();
-        let quests = Self::load_quests();
-        let shops = Self::load_shops();
+    pub fn new() -> Result<Self, GameError> {
+        let items = Self::load_items()?;
+        let enemies = Self::load_enemies()?;
+        let maps = Self::load_maps()?;
+        let npcs = Self::load_npcs()?;
+        let dialogs = Self::load_dialogs()?;
+        let quests = Self::load_quests()?;
+        let shops = Self::load_shops()?;
 
         let menu_state = MenuState {
             selected: 0,
             has_save: has_save_data(),
         };
 
-        Self {
+        Ok(Self {
             state: GameState::Menu(menu_state),
             player: Player::new(String::from("Hero"), "village"),
             items,
@@ -69,70 +86,41 @@ impl RpgGame {
             shops,
             inventory_state: InventoryState::default(),
             combat: CombatSystem::new(),
-        }
+        })
     }
 
-    fn load_items() -> Vec<Item> {
-        if let Ok(resource) = Resource::new("data/items.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_items(text);
-        }
-        Vec::new()
+    fn load_resource<T>(path: &str, parser: fn(&str) -> T) -> Result<T, GameError> {
+        let resource = Resource::new(path)?;
+        let text = str::from_utf8(resource.read())?;
+        Ok(parser(text))
     }
 
-    fn load_enemies() -> Vec<Enemy> {
-        if let Ok(resource) = Resource::new("data/enemies.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_enemies(text);
-        }
-        Vec::new()
+    fn load_items() -> Result<Vec<Item>, GameError> {
+        Self::load_resource("data/items.dat", parse_items)
     }
 
-    fn load_maps() -> Vec<Map> {
-        if let Ok(resource) = Resource::new("data/maps.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_maps(text);
-        }
-        Vec::new()
+    fn load_enemies() -> Result<Vec<Enemy>, GameError> {
+        Self::load_resource("data/enemies.dat", parse_enemies)
     }
 
-    fn load_npcs() -> Vec<Npc> {
-        if let Ok(resource) = Resource::new("data/npcs.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_npcs(text);
-        }
-        Vec::new()
+    fn load_maps() -> Result<Vec<Map>, GameError> {
+        Self::load_resource("data/maps.dat", parse_maps)
     }
 
-    fn load_dialogs() -> Vec<Dialog> {
-        if let Ok(resource) = Resource::new("data/dialogs.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_dialogs(text);
-        }
-        Vec::new()
+    fn load_npcs() -> Result<Vec<Npc>, GameError> {
+        Self::load_resource("data/npcs.dat", parse_npcs)
     }
 
-    fn load_quests() -> Vec<Quest> {
-        if let Ok(resource) = Resource::new("data/quests.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_quests(text);
-        }
-        Vec::new()
+    fn load_dialogs() -> Result<Vec<Dialog>, GameError> {
+        Self::load_resource("data/dialogs.dat", parse_dialogs)
     }
 
-    fn load_shops() -> Vec<Shop> {
-        if let Ok(resource) = Resource::new("data/shops.dat")
-            && let Ok(text) = str::from_utf8(resource.read())
-        {
-            return parse_shops(text);
-        }
-        Vec::new()
+    fn load_quests() -> Result<Vec<Quest>, GameError> {
+        Self::load_resource("data/quests.dat", parse_quests)
+    }
+
+    fn load_shops() -> Result<Vec<Shop>, GameError> {
+        Self::load_resource("data/shops.dat", parse_shops)
     }
 
     fn current_map(&self) -> Option<&Map> {
@@ -685,6 +673,7 @@ impl App for RpgGame {
                 draw_text(&mut fb, w / 2 - 30, h / 2 + 8, "OK:Menu", COLOR_WHITE);
             }
         }
+        repaint(0, 0, 0, fb.width() as i32, fb.height() as i32);
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
@@ -703,5 +692,8 @@ impl App for RpgGame {
 
 #[wipi_main]
 pub fn main() -> RpgGame {
-    RpgGame::new()
+    match RpgGame::new() {
+        Ok(game) => game,
+        Err(e) => panic!("Failed to load game: {:?}", e),
+    }
 }
