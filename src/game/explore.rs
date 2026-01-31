@@ -3,9 +3,9 @@ use wipi::framebuffer::{Color, Framebuffer};
 
 use super::combat::{CombatSystem, Direction};
 use super::renderer::{
-    clear_screen, draw_hp_bar, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE,
-    COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN,
-    COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
+    clear_screen, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE, COLOR_BROWN,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN, COLOR_RED,
+    COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
 };
 use super::Player;
 use crate::data::{Map, Npc, SkillType, Tile};
@@ -145,6 +145,18 @@ fn draw_map_with_entities(
         player_color,
     );
 
+    let hp_ratio = player.stats.current_hp as f32 / player.stats.max_hp as f32;
+    let bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
+    fill_rect(
+        fb,
+        px + 1,
+        py + TILE_SIZE,
+        TILE_SIZE - 2,
+        2,
+        COLOR_DARK_GRAY,
+    );
+    fill_rect(fb, px + 1, py + TILE_SIZE, bar_width, 2, COLOR_GREEN);
+
     draw_facing_indicator(fb, half_x as i32, half_y as i32, &player.facing);
 
     for effect in &combat.skill_effects {
@@ -198,18 +210,6 @@ fn draw_hud(
     draw_rect(fb, 0, hud_y, screen_w, 20, COLOR_WHITE);
 
     draw_text(fb, 4, hud_y + 2, &map.name, COLOR_CYAN);
-
-    draw_hp_bar(
-        fb,
-        4,
-        hud_y + 12,
-        40,
-        player.stats.current_hp,
-        player.stats.max_hp,
-    );
-
-    let hp_text = format!("{}/{}", player.stats.current_hp, player.stats.max_hp);
-    draw_text(fb, 46, hud_y + 10, &hp_text, COLOR_WHITE);
 
     let active_quests = player
         .quests
