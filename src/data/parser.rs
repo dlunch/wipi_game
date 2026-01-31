@@ -145,10 +145,10 @@ pub fn parse_maps(data: &str) -> Vec<Map> {
                     builder.dungeons.push((x, y, target));
                 }
             }
-        } else if !line.is_empty() && current_map.is_some() {
-            if let Some(ref mut builder) = current_map {
-                builder.add_row(line);
-            }
+        } else if !line.is_empty()
+            && let Some(ref mut builder) = current_map
+        {
+            builder.add_row(line);
         }
     }
 
