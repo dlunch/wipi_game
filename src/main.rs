@@ -37,6 +37,8 @@ pub struct RpgGame {
     shops: Vec<Shop>,
     inventory_state: InventoryState,
     combat: CombatSystem,
+    pressed_direction: Option<KeyCode>,
+    move_cooldown: u32,
 }
 
 use wipi::WIPICError;
@@ -86,6 +88,8 @@ impl RpgGame {
             shops,
             inventory_state: InventoryState::default(),
             combat: CombatSystem::new(),
+            pressed_direction: None,
+            move_cooldown: 0,
         })
     }
 
@@ -203,11 +207,11 @@ impl RpgGame {
     }
 
     fn handle_explore_input(&mut self, key: KeyCode) {
-        let (dx, dy) = match key {
-            KeyCode::Up => (0, -1),
-            KeyCode::Down => (0, 1),
-            KeyCode::Left => (-1, 0),
-            KeyCode::Right => (1, 0),
+        match key {
+            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+                self.pressed_direction = Some(key);
+                self.move_cooldown = 0;
+            }
             KeyCode::Ok => {
                 self.try_interact_with_npc();
                 if matches!(self.state, GameState::Dialog(_)) {
@@ -225,24 +229,19 @@ impl RpgGame {
                     self.player.stats.gold += reward.gold;
                     self.update_kill_quest(&reward.enemy_id);
                 }
-                return;
             }
             KeyCode::Key1 => {
                 self.inventory_state = InventoryState::default();
                 self.state = GameState::Inventory;
-                return;
             }
             KeyCode::Key2 => {
                 self.state = GameState::Stats;
-                return;
             }
             KeyCode::Key3 => {
                 self.state = GameState::QuestLog;
-                return;
             }
             KeyCode::Key0 => {
                 save_game(&self.player);
-                return;
             }
             KeyCode::Back => {
                 save_game(&self.player);
@@ -250,8 +249,17 @@ impl RpgGame {
                     selected: 0,
                     has_save: has_save_data(),
                 });
-                return;
             }
+            _ => {}
+        }
+    }
+
+    fn try_move(&mut self, key: KeyCode) {
+        let (dx, dy) = match key {
+            KeyCode::Up => (0, -1),
+            KeyCode::Down => (0, 1),
+            KeyCode::Left => (-1, 0),
+            KeyCode::Right => (1, 0),
             _ => return,
         };
 
@@ -266,6 +274,22 @@ impl RpgGame {
                 self.player.move_by(dx, dy);
                 self.check_tile_events();
             }
+        }
+    }
+
+    fn update_movement(&mut self) {
+        if !matches!(self.state, GameState::Explore) {
+            return;
+        }
+
+        if self.move_cooldown > 0 {
+            self.move_cooldown -= 1;
+            return;
+        }
+
+        if let Some(key) = self.pressed_direction {
+            self.try_move(key);
+            self.move_cooldown = 5;
         }
     }
 
@@ -632,6 +656,7 @@ enum MenuAction {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
+        self.update_movement();
         self.update_combat();
 
         let mut fb = Framebuffer::screen_framebuffer();
@@ -686,6 +711,12 @@ impl App for RpgGame {
             GameState::Shop(_) => self.handle_shop_input(key),
             GameState::QuestLog => self.handle_quest_input(key),
             GameState::GameOver => self.handle_gameover_input(key),
+        }
+    }
+
+    fn on_keyup(&mut self, key: KeyCode) {
+        if self.pressed_direction == Some(key) {
+            self.pressed_direction = None;
         }
     }
 }

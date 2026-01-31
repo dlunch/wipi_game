@@ -1881,7 +1881,7 @@ dependencies = [
 [[package]]
 name = "wipi"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "wipi_boot",
  "wipi_macros",
@@ -1892,7 +1892,7 @@ dependencies = [
 [[package]]
 name = "wipi_boot"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "cfg-if",
  "wipi_types",
@@ -1902,7 +1902,7 @@ dependencies = [
 [[package]]
 name = "wipi_build"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 
 [[package]]
 name = "wipi_game"
@@ -1915,7 +1915,7 @@ dependencies = [
 [[package]]
 name = "wipi_macros"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1925,7 +1925,7 @@ dependencies = [
 [[package]]
 name = "wipi_types"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -1934,7 +1934,7 @@ dependencies = [
 [[package]]
 name = "wipic_simulation"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "once_cell",
  "png",
@@ -1946,7 +1946,7 @@ dependencies = [
 [[package]]
 name = "wipic_sys"
 version = "0.0.1"
-source = "git+https://github.com/dlunch/wipi#463ec015b6e819bf72a21539f0191e85099c762d"
+source = "git+https://github.com/dlunch/wipi#6cb8a525e5543cb94fb661c3d8d52ae20796de3e"
 dependencies = [
  "cfg-if",
  "wipi_boot",
