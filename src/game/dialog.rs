@@ -1,14 +1,11 @@
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect, draw_text,
-    fill_rect,
+    draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW,
 };
 use super::state::DialogState;
 
 pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
-    clear_screen(fb);
-
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
 
