@@ -123,7 +123,6 @@ if matches!(self.state, GameState::Explore) { ... }
 ### Memory & Allocation
 - **NO standard library** - use `alloc::` for String, Vec, etc.
 - Clone sparingly - prefer references where possible
-- `Color` type doesn't implement `Copy` - be careful with reuse
 
 ### Struct Design
 - Implement `Default` trait when struct has sensible defaults

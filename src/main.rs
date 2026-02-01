@@ -48,7 +48,7 @@ impl RpgGame {
     }
 
     fn current_map(&self) -> Option<&data::Map> {
-        self.data.find_map_by_player(&self.player.current_map_id)
+        self.data.find_map(&self.player.current_map_id)
     }
 
     fn start_new_game(&mut self) {
@@ -79,7 +79,7 @@ impl RpgGame {
         self.player = Player::new(String::from("Hero"), "village");
 
         if load_game(&mut self.player) {
-            if let Some(map) = self.data.find_map_by_player(&self.player.current_map_id) {
+            if let Some(map) = self.data.find_map(&self.player.current_map_id) {
                 self.combat.spawn_enemies(map, &self.data.enemies);
             }
             self.state = GameState::Explore;
@@ -141,11 +141,7 @@ impl RpgGame {
             return;
         }
 
-        let Some(map) = self
-            .data
-            .find_map_by_player(&self.player.current_map_id)
-            .cloned()
-        else {
+        let Some(map) = self.data.find_map(&self.player.current_map_id).cloned() else {
             return;
         };
 

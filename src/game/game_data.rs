@@ -95,10 +95,6 @@ impl GameData {
         self.maps.iter().find(|m| m.id == id)
     }
 
-    pub fn find_map_by_player(&self, current_map_id: &str) -> Option<&Map> {
-        self.maps.iter().find(|m| m.id == current_map_id)
-    }
-
     pub fn find_item(&self, id: &str) -> Option<&Item> {
         self.items.iter().find(|i| i.id == id)
     }
