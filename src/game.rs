@@ -18,7 +18,8 @@ pub use menu::draw_menu;
 pub use player::Player;
 pub use quest::draw_quest_log;
 pub use renderer::{
-    COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text, fill_rect,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect,
+    draw_text, fill_rect,
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use shop::draw_shop;

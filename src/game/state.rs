@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 
 #[derive(Debug, Clone)]
 pub enum GameState {
+    Loading(usize),
     Menu(MenuState),
     Explore,
     Inventory,
@@ -110,7 +111,11 @@ pub struct MenuState {
 
 impl MenuState {
     pub fn menu_count(&self) -> usize {
-        if self.has_save { 3 } else { 2 }
+        if self.has_save {
+            3
+        } else {
+            2
+        }
     }
 
     pub fn move_up(&mut self) {

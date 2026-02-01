@@ -19,10 +19,10 @@ use data::{
     parse_items, parse_maps, parse_npcs, parse_quests, parse_shops,
 };
 use game::{
-    COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, CombatSystem, DialogState, GameState, InventoryState,
-    MenuState, Player, ShopMode, ShopState, TileEvent, check_tile_event, clear_screen, draw_dialog,
-    draw_explore, draw_inventory, draw_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
-    draw_text, fill_rect, has_save_data, load_game, save_game,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, DialogState,
+    GameState, InventoryState, MenuState, Player, ShopMode, ShopState, TileEvent, check_tile_event,
+    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_quest_log, draw_rect,
+    draw_shop, draw_stats, draw_text, fill_rect, has_save_data, load_game, save_game,
 };
 
 pub struct RpgGame {
@@ -64,29 +64,16 @@ impl From<core::str::Utf8Error> for GameError {
 
 impl RpgGame {
     pub fn new() -> Result<Self, GameError> {
-        let items = Self::load_items()?;
-        let enemies = Self::load_enemies()?;
-        let maps = Self::load_maps()?;
-        let npcs = Self::load_npcs()?;
-        let dialogs = Self::load_dialogs()?;
-        let quests = Self::load_quests()?;
-        let shops = Self::load_shops()?;
-
-        let menu_state = MenuState {
-            selected: 0,
-            has_save: has_save_data(),
-        };
-
         Ok(Self {
-            state: GameState::Menu(menu_state),
+            state: GameState::Loading(0),
             player: Player::new(String::from("Hero"), "village"),
-            items,
-            enemies,
-            maps,
-            npcs,
-            dialogs,
-            quests,
-            shops,
+            items: Vec::new(),
+            enemies: Vec::new(),
+            maps: Vec::new(),
+            npcs: Vec::new(),
+            dialogs: Vec::new(),
+            quests: Vec::new(),
+            shops: Vec::new(),
             inventory_state: InventoryState::default(),
             combat: CombatSystem::new(),
             pressed_direction: None,
@@ -94,6 +81,25 @@ impl RpgGame {
             mp_regen_timer: 0,
         })
     }
+
+    fn load_step(&mut self, step: usize) -> bool {
+        match step {
+            0 => self.items = Self::load_items().unwrap_or_default(),
+            1 => self.enemies = Self::load_enemies().unwrap_or_default(),
+            2 => self.maps = Self::load_maps().unwrap_or_default(),
+            3 => self.npcs = Self::load_npcs().unwrap_or_default(),
+            4 => self.dialogs = Self::load_dialogs().unwrap_or_default(),
+            5 => self.quests = Self::load_quests().unwrap_or_default(),
+            6 => self.shops = Self::load_shops().unwrap_or_default(),
+            _ => return true,
+        }
+        false
+    }
+
+    const LOADING_STEPS: usize = 7;
+    const LOADING_LABELS: [&str; 7] = [
+        "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops",
+    ];
 
     fn load_resource<T>(path: &str, parser: fn(&str) -> T) -> Result<T, GameError> {
         let resource = Resource::new(path)?;
@@ -747,6 +753,30 @@ impl RpgGame {
             }
         }
     }
+
+    fn draw_loading(&self, step: usize) {
+        let mut fb = Framebuffer::screen_framebuffer();
+        clear_screen(&mut fb);
+
+        let w = fb.width() as i32;
+        let h = fb.height() as i32;
+
+        draw_text(&mut fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
+
+        let label = Self::LOADING_LABELS.get(step).unwrap_or(&"");
+        draw_text(&mut fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
+
+        let bar_w = 120;
+        let bar_h = 8;
+        let bar_x = w / 2 - bar_w / 2;
+        let bar_y = h / 2 + 10;
+
+        draw_rect(&mut fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
+        let progress = ((step + 1) * bar_w as usize / Self::LOADING_STEPS) as i32;
+        fill_rect(&mut fb, bar_x + 1, bar_y + 1, progress - 2, bar_h - 2, COLOR_GREEN);
+
+        repaint(0, 0, 0, w, h);
+    }
 }
 
 enum MenuAction {
@@ -757,12 +787,27 @@ enum MenuAction {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
+        if let GameState::Loading(step) = self.state {
+            self.draw_loading(step);
+            if self.load_step(step) {
+                let menu_state = MenuState {
+                    selected: 0,
+                    has_save: has_save_data(),
+                };
+                self.state = GameState::Menu(menu_state);
+            } else {
+                self.state = GameState::Loading(step + 1);
+            }
+            return;
+        }
+
         self.update_movement();
         self.update_combat();
 
         let mut fb = Framebuffer::screen_framebuffer();
 
         match &self.state {
+            GameState::Loading(_) => {}
             GameState::Menu(menu_state) => {
                 draw_menu(&mut fb, menu_state);
             }
@@ -810,6 +855,7 @@ impl App for RpgGame {
 
     fn on_keydown(&mut self, key: KeyCode) {
         match &self.state {
+            GameState::Loading(_) => {}
             GameState::Menu(_) => self.handle_menu_input(key),
             GameState::Explore => self.handle_explore_input(key),
             GameState::Inventory => self.handle_inventory_input(key),
