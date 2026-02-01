@@ -150,13 +150,13 @@ impl Default for PlayerStats {
             level: 1,
             exp: 0,
             exp_to_next: 100,
-            max_hp: 50,
-            current_hp: 50,
-            max_mp: 20,
-            current_mp: 20,
-            base_atk: 10,
-            base_def: 5,
-            gold: 0,
+            max_hp: 80,
+            current_hp: 80,
+            max_mp: 30,
+            current_mp: 30,
+            base_atk: 12,
+            base_def: 8,
+            gold: 50,
         }
     }
 }
