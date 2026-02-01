@@ -5,8 +5,10 @@ mod game_data;
 mod inventory;
 mod menu;
 mod movement;
+mod npc_system;
 mod player;
 mod quest;
+mod quest_system;
 mod renderer;
 mod save;
 mod shop;
@@ -19,8 +21,10 @@ pub use game_data::GameData;
 pub use inventory::{InventoryState, draw_inventory, draw_stats};
 pub use menu::draw_menu;
 pub use movement::MovementController;
+pub use npc_system::NpcInteraction;
 pub use player::Player;
 pub use quest::draw_quest_log;
+pub use quest_system::QuestSystem;
 pub use renderer::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect,
     draw_text, fill_rect,

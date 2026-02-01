@@ -11,11 +11,11 @@ use wipi::{
     app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main,
 };
 
-use data::{Dialog, DialogAction, DialogCondition, NpcType, Quest, Skill, SkillType};
+use data::{Skill, SkillType};
 use game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, DialogState,
-    GameData, GameState, InventoryState, MenuState, MovementController, Player, ShopMode,
-    ShopState, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, GameData,
+    GameState, InventoryState, MenuState, MovementController, NpcInteraction, Player, QuestSystem,
+    ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory,
     draw_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
     has_save_data, load_game, save_game,
 };
@@ -213,7 +213,7 @@ impl RpgGame {
         for kill in result.kills {
             self.player.stats.add_exp(kill.exp);
             self.player.stats.gold += kill.gold;
-            self.update_kill_quest(&kill.enemy_id);
+            QuestSystem::on_enemy_killed(&mut self.player, &self.data, &kill.enemy_id);
         }
     }
 
@@ -254,76 +254,11 @@ impl RpgGame {
     }
 
     fn try_interact_with_npc(&mut self) {
-        let (target_x, target_y) = match self.player.facing {
-            game::Direction::Up => (self.player.x, self.player.y.saturating_sub(1)),
-            game::Direction::Down => (self.player.x, self.player.y.saturating_add(1)),
-            game::Direction::Left => (self.player.x.saturating_sub(1), self.player.y),
-            game::Direction::Right => (self.player.x.saturating_add(1), self.player.y),
-        };
-
-        let Some(npc) = self
-            .data
-            .find_npc_at(&self.player.current_map_id, target_x, target_y)
-            .cloned()
-        else {
-            return;
-        };
-
-        match npc.npc_type {
-            NpcType::Healer => {
-                self.player.stats.current_hp = self.player.stats.max_hp;
-                self.player.stats.current_mp = self.player.stats.max_mp;
-
-                if let Some(dialog) = self.data.find_dialog(&npc.dialog_id).cloned() {
-                    let filtered = self.filter_dialog_lines(&dialog);
-                    if !filtered.lines.is_empty() {
-                        self.state = GameState::Dialog(DialogState::new(npc.name.clone(), &filtered));
-                        return;
-                    }
-                }
-            }
-            NpcType::ShopKeeper => {
-                let shop = npc
-                    .shop_id
-                    .as_ref()
-                    .and_then(|sid| self.data.find_shop(sid))
-                    .or_else(|| self.data.shops.first())
-                    .cloned();
-
-                if let Some(shop) = shop {
-                    let shop_items = self.data.get_shop_items(&shop);
-                    self.state = GameState::Shop(ShopState::new(shop, shop_items));
-                    return;
-                }
-            }
-            NpcType::QuestGiver | NpcType::Villager => {}
-        }
-
-        if let Some(dialog) = self.data.find_dialog(&npc.dialog_id).cloned() {
-            let filtered = self.filter_dialog_lines(&dialog);
-            if !filtered.lines.is_empty() {
-                self.state = GameState::Dialog(DialogState::new(npc.name.clone(), &filtered));
-            }
-        }
-    }
-
-    fn filter_dialog_lines(&self, dialog: &Dialog) -> Dialog {
-        let filtered = dialog
-            .lines
-            .iter()
-            .filter(|line| match &line.condition {
-                None => true,
-                Some(DialogCondition::HasQuest(id)) => self.player.has_quest(id),
-                Some(DialogCondition::QuestComplete(id)) => self.player.is_quest_complete(id),
-                Some(DialogCondition::HasItem(id)) => self.player.has_item(id),
-                Some(DialogCondition::HasGold(amount)) => self.player.stats.gold >= *amount,
-            })
-            .cloned()
-            .collect();
-
-        Dialog {
-            id: dialog.id.clone(),
-            lines: filtered,
+        let facing = self.player.facing;
+        if let Some(new_state) =
+            NpcInteraction::try_interact(&mut self.player, &self.data, facing)
+        {
+            self.state = new_state;
         }
     }
 
@@ -336,70 +271,10 @@ impl RpgGame {
             return;
         };
 
-        match action {
-            DialogAction::GiveQuest(id) => {
-                self.player.add_quest(&id);
-            }
-            DialogAction::CompleteQuest(id) => {
-                if let Some(quest) = self.data.find_quest(&id).cloned() {
-                    self.complete_quest(&quest);
-                }
-            }
-            DialogAction::GiveItem(id) => {
-                if let Some(item) = self.data.find_item(&id).cloned() {
-                    self.player.add_item(item);
-                }
-            }
-            DialogAction::TakeItem(id) => {
-                self.player.remove_item(&id);
-            }
-            DialogAction::GiveGold(amount) => {
-                self.player.stats.gold += amount;
-            }
-            DialogAction::TakeGold(amount) => {
-                self.player.stats.gold = (self.player.stats.gold - amount).max(0);
-            }
-            DialogAction::OpenShop(id) => {
-                if let Some(shop) = self.data.find_shop(&id).cloned() {
-                    let shop_items = self.data.get_shop_items(&shop);
-                    self.state = GameState::Shop(ShopState::new(shop, shop_items));
-                }
-            }
-            DialogAction::Heal => {
-                self.player.stats.current_hp = self.player.stats.max_hp;
-                self.player.stats.current_mp = self.player.stats.max_mp;
-            }
-        }
-    }
-
-    fn complete_quest(&mut self, quest: &Quest) {
-        self.player.stats.add_exp(quest.reward_exp);
-        self.player.stats.gold += quest.reward_gold;
-
-        if let Some(item_id) = &quest.reward_item
-            && let Some(item) = self.data.find_item(item_id).cloned()
+        if let Some(new_state) =
+            NpcInteraction::process_action(&mut self.player, &self.data, &action)
         {
-            self.player.add_item(item);
-        }
-
-        self.player.complete_quest(&quest.id);
-    }
-
-    fn update_kill_quest(&mut self, killed_enemy_id: &str) {
-        for progress in &mut self.player.quests {
-            if progress.completed || progress.rewarded {
-                continue;
-            }
-
-            if let Some(quest) = self.data.find_quest(&progress.quest_id)
-                && quest.quest_type == data::QuestType::Kill
-                && quest.target_id == killed_enemy_id
-            {
-                progress.current_count += 1;
-                if progress.current_count >= quest.target_count {
-                    progress.completed = true;
-                }
-            }
+            self.state = new_state;
         }
     }
 
@@ -480,7 +355,7 @@ impl RpgGame {
                 ) {
                     self.player.stats.add_exp(reward.exp);
                     self.player.stats.gold += reward.gold;
-                    self.update_kill_quest(&reward.enemy_id);
+                    QuestSystem::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
                 }
             }
             KeyCode::Key1 => self.use_skill(0, &Skill::FIREBALL),
