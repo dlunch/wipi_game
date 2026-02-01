@@ -8,7 +8,7 @@ use super::renderer::{
     COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
 };
 use super::Player;
-use crate::data::{Map, Npc, SkillType, Tile};
+use crate::data::{Map, Npc, Skill, SkillType, Tile};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
@@ -33,7 +33,7 @@ fn draw_map_with_entities(
 ) {
     let screen_w = fb.width() as i32;
     let view_tiles_x = (screen_w / TILE_SIZE) as usize;
-    let view_tiles_y = ((screen_h - 20) / TILE_SIZE) as usize;
+    let view_tiles_y = ((screen_h - 30) / TILE_SIZE) as usize;
 
     let half_x = view_tiles_x / 2;
     let half_y = view_tiles_y / 2;
@@ -204,10 +204,10 @@ fn draw_hud(
     screen_h: i32,
 ) {
     let screen_w = fb.width() as i32;
-    let hud_y = screen_h - 20;
+    let hud_y = screen_h - 30;
 
-    fill_rect(fb, 0, hud_y, screen_w, 20, COLOR_BLACK);
-    draw_rect(fb, 0, hud_y, screen_w, 20, COLOR_WHITE);
+    fill_rect(fb, 0, hud_y, screen_w, 30, COLOR_BLACK);
+    draw_rect(fb, 0, hud_y, screen_w, 30, COLOR_WHITE);
 
     draw_text(fb, 4, hud_y + 2, &map.name, COLOR_CYAN);
 
@@ -225,7 +225,33 @@ fn draw_hud(
     draw_text(fb, screen_w - 30, hud_y + 2, &lv_text, COLOR_YELLOW);
 
     if let Some(enemy) = combat.enemies.iter().find(|e| !e.is_dead()) {
-        draw_text(fb, screen_w - 50, hud_y + 10, &enemy.data.name, COLOR_RED);
+        draw_text(fb, screen_w - 80, hud_y + 2, &enemy.data.name, COLOR_RED);
+    }
+
+    draw_skill_bar(fb, hud_y + 14, screen_w, player);
+}
+
+fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &Player) {
+    let skills: [(&Skill, &str); 3] = [
+        (&Skill::FIREBALL, "1"),
+        (&Skill::HEAL, "2"),
+        (&Skill::SPIN_ATTACK, "3"),
+    ];
+
+    let slot_width = screen_w / 3;
+
+    for (i, (skill, key)) in skills.iter().enumerate() {
+        let x = i as i32 * slot_width + 4;
+        let cd = player.skill_cooldowns[i];
+        let is_ready = cd == 0 && player.stats.current_mp >= skill.mp_cost;
+
+        let color = if is_ready { COLOR_WHITE } else { COLOR_GRAY };
+        let text = if cd > 0 {
+            format!("[{}]{} {}", key, skill.name, cd / 10)
+        } else {
+            format!("[{}]{}", key, skill.name)
+        };
+        draw_text(fb, x, y, &text, color);
     }
 }
 
