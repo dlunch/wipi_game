@@ -91,12 +91,6 @@ use super::{Player, GameState};
 use crate::data::{Item, Map};
 ```
 
-### Naming Conventions
-- **Structs/Enums**: PascalCase (`GameState`, `FieldEnemy`)
-- **Functions/Methods**: snake_case (`update_combat`, `find_npc_at`)
-- **Constants**: SCREAMING_SNAKE_CASE (`COLOR_RED`, `TILE_SIZE`)
-- **Modules**: snake_case (`game_data`, `npc_system`)
-
 ### Error Handling
 - No `panic!` in production code paths
 - Use `Option<T>` for nullable values
