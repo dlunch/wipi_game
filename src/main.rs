@@ -271,11 +271,17 @@ impl RpgGame {
         {
             let new_x = self.player.x.wrapping_add_signed(dx as isize);
             let new_y = self.player.y.wrapping_add_signed(dy as isize);
-            if !self.combat.enemy_at(new_x, new_y) {
+            if !self.combat.enemy_at(new_x, new_y) && !self.npc_at(new_x, new_y) {
                 self.player.move_by(dx, dy);
                 self.check_tile_events();
             }
         }
+    }
+
+    fn npc_at(&self, x: usize, y: usize) -> bool {
+        self.npcs
+            .iter()
+            .any(|npc| npc.map_id == self.player.current_map_id && npc.x == x && npc.y == y)
     }
 
     fn update_movement(&mut self) {

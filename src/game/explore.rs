@@ -87,6 +87,11 @@ fn draw_map_with_entities(
             let px = screen_x * TILE_SIZE;
             let py = screen_y * TILE_SIZE;
             fill_rect(fb, px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_CYAN);
+
+            let dist = player.x.abs_diff(npc.x) + player.y.abs_diff(npc.y);
+            if dist <= 2 {
+                draw_text(fb, px, py - 8, &npc.name, COLOR_YELLOW);
+            }
         }
     }
 
