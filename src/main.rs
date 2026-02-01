@@ -7,9 +7,7 @@ mod game;
 
 use alloc::string::String;
 
-use wipi::{
-    app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main,
-};
+use wipi::{app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main};
 
 use data::{Skill, SkillType};
 use game::{
@@ -143,16 +141,17 @@ impl RpgGame {
             return;
         }
 
-        let Some(map) = self.data.find_map_by_player(&self.player.current_map_id).cloned() else {
+        let Some(map) = self
+            .data
+            .find_map_by_player(&self.player.current_map_id)
+            .cloned()
+        else {
             return;
         };
 
-        let moved = self.movement.update(
-            &mut self.player,
-            &map,
-            &self.combat,
-            &self.data.npcs,
-        );
+        let moved = self
+            .movement
+            .update(&mut self.player, &map, &self.combat, &self.data.npcs);
 
         if moved {
             self.check_tile_events();
@@ -218,7 +217,9 @@ impl RpgGame {
     }
 
     fn check_tile_events(&mut self) {
-        let event = self.current_map().and_then(|map| check_tile_event(map, &self.player));
+        let event = self
+            .current_map()
+            .and_then(|map| check_tile_event(map, &self.player));
 
         let Some(event) = event else { return };
 
@@ -230,11 +231,15 @@ impl RpgGame {
             }
             TileEvent::Treasure => {
                 let map_id = self.player.current_map_id.clone();
-                if !self.player.is_treasure_opened(&map_id, self.player.x, self.player.y) {
+                if !self
+                    .player
+                    .is_treasure_opened(&map_id, self.player.x, self.player.y)
+                {
                     if let Some(potion) = self.data.find_item("potion").cloned() {
                         self.player.add_item(potion);
                     }
-                    self.player.open_treasure(&map_id, self.player.x, self.player.y);
+                    self.player
+                        .open_treasure(&map_id, self.player.x, self.player.y);
                 }
             }
         }
@@ -255,8 +260,7 @@ impl RpgGame {
 
     fn try_interact_with_npc(&mut self) {
         let facing = self.player.facing;
-        if let Some(new_state) =
-            NpcInteraction::try_interact(&mut self.player, &self.data, facing)
+        if let Some(new_state) = NpcInteraction::try_interact(&mut self.player, &self.data, facing)
         {
             self.state = new_state;
         }

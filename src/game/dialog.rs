@@ -1,7 +1,7 @@
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW,
+    COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, draw_rect, draw_text, fill_rect,
 };
 use super::state::DialogState;
 

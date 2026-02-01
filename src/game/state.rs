@@ -111,11 +111,7 @@ pub struct MenuState {
 
 impl MenuState {
     pub fn menu_count(&self) -> usize {
-        if self.has_save {
-            3
-        } else {
-            2
-        }
+        if self.has_save { 3 } else { 2 }
     }
 
     pub fn move_up(&mut self) {

@@ -1,13 +1,13 @@
 use alloc::format;
 use wipi::framebuffer::{Color, Framebuffer};
 
+use super::Player;
 use super::combat::{CombatSystem, Direction};
 use super::renderer::{
-    clear_screen, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE, COLOR_BROWN,
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN, COLOR_RED,
-    COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
+    COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
+    COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
+    draw_rect, draw_text, fill_rect,
 };
-use super::Player;
 use crate::data::{Map, Npc, Skill, SkillType, Tile};
 
 pub fn draw_explore(

@@ -1,12 +1,12 @@
 use alloc::vec::Vec;
 use core::str;
 
-use wipi::resource::Resource;
 use wipi::WIPICError;
+use wipi::resource::Resource;
 
 use crate::data::{
-    parse_dialogs, parse_enemies, parse_items, parse_maps, parse_npcs, parse_quests, parse_shops,
-    Dialog, Enemy, Item, Map, Npc, Quest, Shop,
+    Dialog, Enemy, Item, Map, Npc, Quest, Shop, parse_dialogs, parse_enemies, parse_items,
+    parse_maps, parse_npcs, parse_quests, parse_shops,
 };
 
 pub enum LoadError {

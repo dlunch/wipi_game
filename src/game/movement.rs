@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
-use super::combat::CombatSystem;
 use super::Player;
+use super::combat::CombatSystem;
 use crate::data::{Map, Npc};
 
 #[derive(Default)]
