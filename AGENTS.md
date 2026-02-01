@@ -29,8 +29,19 @@ cargo fmt
 
 ## Testing
 
-No test framework available - `no_std` environment doesn't support standard test harness.
-Manual testing via simulation mode: `cargo run` (in wipi repo with this as dependency).
+```bash
+# Run all tests
+cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run tests in specific module
+cargo test module_name::
+```
+
+Note: Tests run in simulation mode with std library available.
+Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 
 ## Project Structure
 
