@@ -178,6 +178,10 @@ impl PlayerStats {
         self.current_hp = (self.current_hp + amount).min(self.max_hp);
     }
 
+    pub fn recover_mp(&mut self, amount: i32) {
+        self.current_mp = (self.current_mp + amount).min(self.max_mp);
+    }
+
     pub fn take_damage(&mut self, damage: i32) {
         self.current_hp = (self.current_hp - damage).max(0);
     }

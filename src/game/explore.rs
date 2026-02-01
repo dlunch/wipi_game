@@ -146,7 +146,7 @@ fn draw_map_with_entities(
     );
 
     let hp_ratio = player.stats.current_hp as f32 / player.stats.max_hp as f32;
-    let bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
+    let hp_bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
     fill_rect(
         fb,
         px + 1,
@@ -155,7 +155,19 @@ fn draw_map_with_entities(
         2,
         COLOR_DARK_GRAY,
     );
-    fill_rect(fb, px + 1, py + TILE_SIZE, bar_width, 2, COLOR_GREEN);
+    fill_rect(fb, px + 1, py + TILE_SIZE, hp_bar_width, 2, COLOR_GREEN);
+
+    let mp_ratio = player.stats.current_mp as f32 / player.stats.max_mp as f32;
+    let mp_bar_width = ((TILE_SIZE - 2) as f32 * mp_ratio) as i32;
+    fill_rect(
+        fb,
+        px + 1,
+        py + TILE_SIZE + 2,
+        TILE_SIZE - 2,
+        2,
+        COLOR_DARK_GRAY,
+    );
+    fill_rect(fb, px + 1, py + TILE_SIZE + 2, mp_bar_width, 2, COLOR_BLUE);
 
     draw_facing_indicator(fb, half_x as i32, half_y as i32, &player.facing);
 

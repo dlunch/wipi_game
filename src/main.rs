@@ -39,6 +39,7 @@ pub struct RpgGame {
     combat: CombatSystem,
     pressed_direction: Option<KeyCode>,
     move_cooldown: u32,
+    mp_regen_timer: u32,
 }
 
 use wipi::WIPICError;
@@ -90,6 +91,7 @@ impl RpgGame {
             combat: CombatSystem::new(),
             pressed_direction: None,
             move_cooldown: 0,
+            mp_regen_timer: 0,
         })
     }
 
@@ -298,6 +300,12 @@ impl RpgGame {
         }
 
         self.player.update_cooldowns();
+
+        self.mp_regen_timer += 1;
+        if self.mp_regen_timer >= 60 {
+            self.mp_regen_timer = 0;
+            self.player.stats.recover_mp(1);
+        }
 
         if let Some(map) = self.current_map().cloned() {
             let result = self.combat.update(
