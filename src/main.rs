@@ -6,160 +6,72 @@ mod data;
 mod game;
 
 use alloc::string::String;
-use alloc::vec::Vec;
-use core::str;
 
 use wipi::{
-    app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, resource::Resource,
-    wipi_main,
+    app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main,
 };
 
-use data::{
-    Dialog, Enemy, Item, Map, Npc, Quest, Shop, Skill, SkillType, parse_dialogs, parse_enemies,
-    parse_items, parse_maps, parse_npcs, parse_quests, parse_shops,
-};
+use data::{Dialog, DialogAction, DialogCondition, NpcType, Quest, Skill, SkillType};
 use game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, DialogState,
-    GameState, InventoryState, MenuState, Player, ShopMode, ShopState, TileEvent, check_tile_event,
-    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_quest_log, draw_rect,
-    draw_shop, draw_stats, draw_text, fill_rect, has_save_data, load_game, save_game,
+    GameData, GameState, InventoryState, MenuState, MovementController, Player, ShopMode,
+    ShopState, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory,
+    draw_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    has_save_data, load_game, save_game,
 };
 
 pub struct RpgGame {
     state: GameState,
     player: Player,
-    items: Vec<Item>,
-    enemies: Vec<Enemy>,
-    maps: Vec<Map>,
-    npcs: Vec<Npc>,
-    dialogs: Vec<Dialog>,
-    quests: Vec<Quest>,
-    shops: Vec<Shop>,
+    data: GameData,
     inventory_state: InventoryState,
     combat: CombatSystem,
-    pressed_direction: Option<KeyCode>,
-    move_cooldown: u32,
+    movement: MovementController,
     mp_regen_timer: u32,
 }
 
-use wipi::WIPICError;
-
-#[derive(Debug)]
-pub enum GameError {
-    WIPIC(WIPICError),
-    Utf8(core::str::Utf8Error),
-}
-
-impl From<WIPICError> for GameError {
-    fn from(e: WIPICError) -> Self {
-        GameError::WIPIC(e)
-    }
-}
-
-impl From<core::str::Utf8Error> for GameError {
-    fn from(e: core::str::Utf8Error) -> Self {
-        GameError::Utf8(e)
+impl Default for RpgGame {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl RpgGame {
-    pub fn new() -> Result<Self, GameError> {
-        Ok(Self {
+    pub fn new() -> Self {
+        Self {
             state: GameState::Loading(0),
             player: Player::new(String::from("Hero"), "village"),
-            items: Vec::new(),
-            enemies: Vec::new(),
-            maps: Vec::new(),
-            npcs: Vec::new(),
-            dialogs: Vec::new(),
-            quests: Vec::new(),
-            shops: Vec::new(),
+            data: GameData::default(),
             inventory_state: InventoryState::default(),
             combat: CombatSystem::new(),
-            pressed_direction: None,
-            move_cooldown: 0,
+            movement: MovementController::default(),
             mp_regen_timer: 0,
-        })
-    }
-
-    fn load_step(&mut self, step: usize) -> bool {
-        match step {
-            0 => self.items = Self::load_items().unwrap_or_default(),
-            1 => self.enemies = Self::load_enemies().unwrap_or_default(),
-            2 => self.maps = Self::load_maps().unwrap_or_default(),
-            3 => self.npcs = Self::load_npcs().unwrap_or_default(),
-            4 => self.dialogs = Self::load_dialogs().unwrap_or_default(),
-            5 => self.quests = Self::load_quests().unwrap_or_default(),
-            6 => self.shops = Self::load_shops().unwrap_or_default(),
-            _ => return true,
         }
-        false
     }
 
-    const LOADING_STEPS: usize = 7;
-    const LOADING_LABELS: [&str; 7] = [
-        "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops",
-    ];
-
-    fn load_resource<T>(path: &str, parser: fn(&str) -> T) -> Result<T, GameError> {
-        let resource = Resource::new(path)?;
-        let text = str::from_utf8(resource.read())?;
-        Ok(parser(text))
-    }
-
-    fn load_items() -> Result<Vec<Item>, GameError> {
-        Self::load_resource("data/items.dat", parse_items)
-    }
-
-    fn load_enemies() -> Result<Vec<Enemy>, GameError> {
-        Self::load_resource("data/enemies.dat", parse_enemies)
-    }
-
-    fn load_maps() -> Result<Vec<Map>, GameError> {
-        Self::load_resource("data/maps.dat", parse_maps)
-    }
-
-    fn load_npcs() -> Result<Vec<Npc>, GameError> {
-        Self::load_resource("data/npcs.dat", parse_npcs)
-    }
-
-    fn load_dialogs() -> Result<Vec<Dialog>, GameError> {
-        Self::load_resource("data/dialogs.dat", parse_dialogs)
-    }
-
-    fn load_quests() -> Result<Vec<Quest>, GameError> {
-        Self::load_resource("data/quests.dat", parse_quests)
-    }
-
-    fn load_shops() -> Result<Vec<Shop>, GameError> {
-        Self::load_resource("data/shops.dat", parse_shops)
-    }
-
-    fn current_map(&self) -> Option<&Map> {
-        self.maps
-            .iter()
-            .find(|m| m.id == self.player.current_map_id)
+    fn current_map(&self) -> Option<&data::Map> {
+        self.data.find_map_by_player(&self.player.current_map_id)
     }
 
     fn start_new_game(&mut self) {
         self.player = Player::new(String::from("Hero"), "village");
 
-        if let Some(sword) = self.items.iter().find(|i| i.id == "wooden_sword").cloned() {
+        if let Some(sword) = self.data.find_item("wooden_sword").cloned() {
             self.player.add_item(sword);
             self.player.equipped_weapon = Some(0);
         }
-        if let Some(armor) = self.items.iter().find(|i| i.id == "cloth").cloned() {
+        if let Some(armor) = self.data.find_item("cloth").cloned() {
             self.player.add_item(armor);
             self.player.equipped_armor = Some(1);
         }
-        if let Some(potion) = self.items.iter().find(|i| i.id == "potion").cloned() {
+        if let Some(potion) = self.data.find_item("potion").cloned() {
             self.player.add_item(potion.clone());
             self.player.add_item(potion);
         }
 
-        if let Some(map) = self.maps.iter().find(|m| m.id == "village") {
+        if let Some(map) = self.data.find_map("village") {
             self.player.spawn_at_map(map);
-            self.combat.spawn_enemies(map, &self.enemies);
+            self.combat.spawn_enemies(map, &self.data.enemies);
         }
 
         self.state = GameState::Explore;
@@ -169,12 +81,8 @@ impl RpgGame {
         self.player = Player::new(String::from("Hero"), "village");
 
         if load_game(&mut self.player) {
-            if let Some(map) = self
-                .maps
-                .iter()
-                .find(|m| m.id == self.player.current_map_id)
-            {
-                self.combat.spawn_enemies(map, &self.enemies);
+            if let Some(map) = self.data.find_map_by_player(&self.player.current_map_id) {
+                self.combat.spawn_enemies(map, &self.data.enemies);
             }
             self.state = GameState::Explore;
         } else {
@@ -182,112 +90,52 @@ impl RpgGame {
         }
     }
 
-    fn handle_menu_input(&mut self, key: KeyCode) {
-        if let GameState::Menu(ref mut menu) = self.state {
-            match key {
-                KeyCode::Up => menu.move_up(),
-                KeyCode::Down => menu.move_down(),
-                KeyCode::Ok => {
-                    let action = if menu.has_save {
-                        match menu.selected {
-                            0 => MenuAction::NewGame,
-                            1 => MenuAction::Continue,
-                            _ => MenuAction::Exit,
-                        }
-                    } else {
-                        match menu.selected {
-                            0 => MenuAction::NewGame,
-                            _ => MenuAction::Exit,
-                        }
-                    };
-
-                    match action {
-                        MenuAction::NewGame => self.start_new_game(),
-                        MenuAction::Continue => self.continue_game(),
-                        MenuAction::Exit => {
-                            wipi::kernel::exit(0);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn handle_explore_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
-                self.pressed_direction = Some(key);
-                self.move_cooldown = 0;
-            }
-            KeyCode::Ok => {
-                self.try_interact_with_npc();
-                if matches!(self.state, GameState::Dialog(_)) {
-                    return;
-                }
-
-                let reward = self.combat.player_attack(
-                    self.player.x,
-                    self.player.y,
-                    self.player.total_atk(),
-                    self.player.facing,
-                );
-                if let Some(reward) = reward {
-                    self.player.stats.add_exp(reward.exp);
-                    self.player.stats.gold += reward.gold;
-                    self.update_kill_quest(&reward.enemy_id);
-                }
-            }
-            KeyCode::Key1 => {
-                self.use_skill(0, &Skill::FIREBALL);
-            }
-            KeyCode::Key2 => {
-                self.use_skill(1, &Skill::HEAL);
-            }
-            KeyCode::Key3 => {
-                self.use_skill(2, &Skill::SPIN_ATTACK);
-            }
-            KeyCode::Key0 => {
-                self.state = GameState::PauseMenu(0);
-            }
-            KeyCode::Back => {
-                save_game(&self.player);
-                self.state = GameState::Menu(MenuState {
-                    selected: 0,
-                    has_save: has_save_data(),
-                });
-            }
-            _ => {}
-        }
-    }
-
-    fn try_move(&mut self, key: KeyCode) {
-        let (dx, dy) = match key {
-            KeyCode::Up => (0, -1),
-            KeyCode::Down => (0, 1),
-            KeyCode::Left => (-1, 0),
-            KeyCode::Right => (1, 0),
-            _ => return,
+    fn update_loading(&mut self) {
+        let GameState::Loading(step) = self.state else {
+            return;
         };
 
-        self.player.set_facing(dx, dy);
+        self.draw_loading(step);
 
-        if let Some(map) = self.current_map()
-            && self.player.can_move(map, dx, dy)
-        {
-            let new_x = self.player.x.wrapping_add_signed(dx as isize);
-            let new_y = self.player.y.wrapping_add_signed(dy as isize);
-            if !self.combat.enemy_at(new_x, new_y) && !self.npc_at(new_x, new_y) {
-                self.player.move_by(dx, dy);
-                self.check_tile_events();
-            }
+        if self.data.load_step(step) {
+            self.state = GameState::Menu(MenuState {
+                selected: 0,
+                has_save: has_save_data(),
+            });
+        } else {
+            self.state = GameState::Loading(step + 1);
         }
     }
 
-    fn npc_at(&self, x: usize, y: usize) -> bool {
-        self.npcs
-            .iter()
-            .any(|npc| npc.map_id == self.player.current_map_id && npc.x == x && npc.y == y)
+    fn draw_loading(&self, step: usize) {
+        let mut fb = Framebuffer::screen_framebuffer();
+        clear_screen(&mut fb);
+
+        let w = fb.width() as i32;
+        let h = fb.height() as i32;
+
+        draw_text(&mut fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
+
+        let label = GameData::LOAD_LABELS.get(step).unwrap_or(&"");
+        draw_text(&mut fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
+
+        let bar_w = 120;
+        let bar_h = 8;
+        let bar_x = w / 2 - bar_w / 2;
+        let bar_y = h / 2 + 10;
+
+        draw_rect(&mut fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
+        let progress = ((step + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32;
+        fill_rect(
+            &mut fb,
+            bar_x + 1,
+            bar_y + 1,
+            progress - 2,
+            bar_h - 2,
+            COLOR_GREEN,
+        );
+
+        repaint(0, 0, 0, w, h);
     }
 
     fn update_movement(&mut self) {
@@ -295,14 +143,19 @@ impl RpgGame {
             return;
         }
 
-        if self.move_cooldown > 0 {
-            self.move_cooldown -= 1;
+        let Some(map) = self.data.find_map_by_player(&self.player.current_map_id).cloned() else {
             return;
-        }
+        };
 
-        if let Some(key) = self.pressed_direction {
-            self.try_move(key);
-            self.move_cooldown = 5;
+        let moved = self.movement.update(
+            &mut self.player,
+            &map,
+            &self.combat,
+            &self.data.npcs,
+        );
+
+        if moved {
+            self.check_tile_events();
         }
     }
 
@@ -325,7 +178,7 @@ impl RpgGame {
                 self.player.y,
                 self.player.total_def(),
                 &map,
-                &self.enemies,
+                &self.data.enemies,
             );
 
             if result.damage_taken > 0 {
@@ -365,58 +218,42 @@ impl RpgGame {
     }
 
     fn check_tile_events(&mut self) {
-        let event = if let Some(map) = self.current_map() {
-            check_tile_event(map, &self.player)
-        } else {
-            None
-        };
+        let event = self.current_map().and_then(|map| check_tile_event(map, &self.player));
 
-        if let Some(event) = event {
-            match event {
-                TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-                    if !target.is_empty() {
-                        self.change_map(&target);
-                    }
+        let Some(event) = event else { return };
+
+        match event {
+            TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
+                if !target.is_empty() {
+                    self.change_map(&target);
                 }
-                TileEvent::Treasure => {
-                    let map_id = self.player.current_map_id.clone();
-                    if !self
-                        .player
-                        .is_treasure_opened(&map_id, self.player.x, self.player.y)
-                    {
-                        if let Some(potion) = self.items.iter().find(|i| i.id == "potion").cloned()
-                        {
-                            self.player.add_item(potion);
-                        }
-                        self.player
-                            .open_treasure(&map_id, self.player.x, self.player.y);
+            }
+            TileEvent::Treasure => {
+                let map_id = self.player.current_map_id.clone();
+                if !self.player.is_treasure_opened(&map_id, self.player.x, self.player.y) {
+                    if let Some(potion) = self.data.find_item("potion").cloned() {
+                        self.player.add_item(potion);
                     }
+                    self.player.open_treasure(&map_id, self.player.x, self.player.y);
                 }
             }
         }
     }
 
     fn change_map(&mut self, target_id: &str) {
-        let map = self.maps.iter().find(|m| m.id == target_id).cloned();
-        if let Some(map) = map {
-            self.player.current_map_id = map.id.clone();
-            if let Some((x, y)) = map.find_player_start() {
-                self.player.x = x;
-                self.player.y = y;
-            }
-            self.combat.spawn_enemies(&map, &self.enemies);
-        }
-    }
+        let Some(map) = self.data.find_map(target_id).cloned() else {
+            return;
+        };
 
-    fn find_npc_at(&self, x: usize, y: usize) -> Option<&Npc> {
-        self.npcs
-            .iter()
-            .find(|npc| npc.map_id == self.player.current_map_id && npc.x == x && npc.y == y)
+        self.player.current_map_id = map.id.clone();
+        if let Some((x, y)) = map.find_player_start() {
+            self.player.x = x;
+            self.player.y = y;
+        }
+        self.combat.spawn_enemies(&map, &self.data.enemies);
     }
 
     fn try_interact_with_npc(&mut self) {
-        use data::NpcType;
-
         let (target_x, target_y) = match self.player.facing {
             game::Direction::Up => (self.player.x, self.player.y.saturating_sub(1)),
             game::Direction::Down => (self.player.x, self.player.y.saturating_add(1)),
@@ -424,7 +261,11 @@ impl RpgGame {
             game::Direction::Right => (self.player.x.saturating_add(1), self.player.y),
         };
 
-        let Some(npc) = self.find_npc_at(target_x, target_y).cloned() else {
+        let Some(npc) = self
+            .data
+            .find_npc_at(&self.player.current_map_id, target_x, target_y)
+            .cloned()
+        else {
             return;
         };
 
@@ -433,11 +274,10 @@ impl RpgGame {
                 self.player.stats.current_hp = self.player.stats.max_hp;
                 self.player.stats.current_mp = self.player.stats.max_mp;
 
-                if let Some(dialog) = self.dialogs.iter().find(|d| d.id == npc.dialog_id).cloned() {
-                    let filtered_lines = self.filter_dialog_lines(&dialog);
-                    if !filtered_lines.lines.is_empty() {
-                        self.state =
-                            GameState::Dialog(DialogState::new(npc.name.clone(), &filtered_lines));
+                if let Some(dialog) = self.data.find_dialog(&npc.dialog_id).cloned() {
+                    let filtered = self.filter_dialog_lines(&dialog);
+                    if !filtered.lines.is_empty() {
+                        self.state = GameState::Dialog(DialogState::new(npc.name.clone(), &filtered));
                         return;
                     }
                 }
@@ -446,15 +286,12 @@ impl RpgGame {
                 let shop = npc
                     .shop_id
                     .as_ref()
-                    .and_then(|sid| self.shops.iter().find(|s| s.id == *sid))
-                    .or_else(|| self.shops.first())
+                    .and_then(|sid| self.data.find_shop(sid))
+                    .or_else(|| self.data.shops.first())
                     .cloned();
+
                 if let Some(shop) = shop {
-                    let shop_items: Vec<_> = shop
-                        .items
-                        .iter()
-                        .filter_map(|item_id| self.items.iter().find(|i| i.id == *item_id).cloned())
-                        .collect();
+                    let shop_items = self.data.get_shop_items(&shop);
                     self.state = GameState::Shop(ShopState::new(shop, shop_items));
                     return;
                 }
@@ -462,32 +299,27 @@ impl RpgGame {
             NpcType::QuestGiver | NpcType::Villager => {}
         }
 
-        if let Some(dialog) = self.dialogs.iter().find(|d| d.id == npc.dialog_id).cloned() {
-            let filtered_lines = self.filter_dialog_lines(&dialog);
-            if !filtered_lines.lines.is_empty() {
-                self.state = GameState::Dialog(DialogState::new(npc.name.clone(), &filtered_lines));
+        if let Some(dialog) = self.data.find_dialog(&npc.dialog_id).cloned() {
+            let filtered = self.filter_dialog_lines(&dialog);
+            if !filtered.lines.is_empty() {
+                self.state = GameState::Dialog(DialogState::new(npc.name.clone(), &filtered));
             }
         }
     }
 
     fn filter_dialog_lines(&self, dialog: &Dialog) -> Dialog {
-        use data::DialogCondition;
-
-        let mut filtered = Vec::new();
-
-        for line in &dialog.lines {
-            let should_show = match &line.condition {
+        let filtered = dialog
+            .lines
+            .iter()
+            .filter(|line| match &line.condition {
                 None => true,
                 Some(DialogCondition::HasQuest(id)) => self.player.has_quest(id),
                 Some(DialogCondition::QuestComplete(id)) => self.player.is_quest_complete(id),
                 Some(DialogCondition::HasItem(id)) => self.player.has_item(id),
                 Some(DialogCondition::HasGold(amount)) => self.player.stats.gold >= *amount,
-            };
-
-            if should_show {
-                filtered.push(line.clone());
-            }
-        }
+            })
+            .cloned()
+            .collect();
 
         Dialog {
             id: dialog.id.clone(),
@@ -496,185 +328,61 @@ impl RpgGame {
     }
 
     fn process_dialog_action(&mut self) {
-        if let GameState::Dialog(ref state) = self.state
-            && let Some(action) = state.current_action().cloned()
+        let GameState::Dialog(ref state) = self.state else {
+            return;
+        };
+
+        let Some(action) = state.current_action().cloned() else {
+            return;
+        };
+
+        match action {
+            DialogAction::GiveQuest(id) => {
+                self.player.add_quest(&id);
+            }
+            DialogAction::CompleteQuest(id) => {
+                if let Some(quest) = self.data.find_quest(&id).cloned() {
+                    self.complete_quest(&quest);
+                }
+            }
+            DialogAction::GiveItem(id) => {
+                if let Some(item) = self.data.find_item(&id).cloned() {
+                    self.player.add_item(item);
+                }
+            }
+            DialogAction::TakeItem(id) => {
+                self.player.remove_item(&id);
+            }
+            DialogAction::GiveGold(amount) => {
+                self.player.stats.gold += amount;
+            }
+            DialogAction::TakeGold(amount) => {
+                self.player.stats.gold = (self.player.stats.gold - amount).max(0);
+            }
+            DialogAction::OpenShop(id) => {
+                if let Some(shop) = self.data.find_shop(&id).cloned() {
+                    let shop_items = self.data.get_shop_items(&shop);
+                    self.state = GameState::Shop(ShopState::new(shop, shop_items));
+                }
+            }
+            DialogAction::Heal => {
+                self.player.stats.current_hp = self.player.stats.max_hp;
+                self.player.stats.current_mp = self.player.stats.max_mp;
+            }
+        }
+    }
+
+    fn complete_quest(&mut self, quest: &Quest) {
+        self.player.stats.add_exp(quest.reward_exp);
+        self.player.stats.gold += quest.reward_gold;
+
+        if let Some(item_id) = &quest.reward_item
+            && let Some(item) = self.data.find_item(item_id).cloned()
         {
-            use data::DialogAction;
-            match action {
-                DialogAction::GiveQuest(id) => {
-                    self.player.add_quest(&id);
-                }
-                DialogAction::CompleteQuest(id) => {
-                    if let Some(quest) = self.quests.iter().find(|q| q.id == id).cloned() {
-                        self.player.stats.add_exp(quest.reward_exp);
-                        self.player.stats.gold += quest.reward_gold;
-                        if let Some(item_id) = &quest.reward_item
-                            && let Some(item) =
-                                self.items.iter().find(|i| i.id == *item_id).cloned()
-                        {
-                            self.player.add_item(item);
-                        }
-                        self.player.complete_quest(&id);
-                    }
-                }
-                DialogAction::GiveItem(id) => {
-                    if let Some(item) = self.items.iter().find(|i| i.id == id).cloned() {
-                        self.player.add_item(item);
-                    }
-                }
-                DialogAction::TakeItem(id) => {
-                    self.player.remove_item(&id);
-                }
-                DialogAction::GiveGold(amount) => {
-                    self.player.stats.gold += amount;
-                }
-                DialogAction::TakeGold(amount) => {
-                    self.player.stats.gold = (self.player.stats.gold - amount).max(0);
-                }
-                DialogAction::OpenShop(id) => {
-                    if let Some(shop) = self.shops.iter().find(|s| s.id == id).cloned() {
-                        let shop_items: Vec<_> = shop
-                            .items
-                            .iter()
-                            .filter_map(|item_id| {
-                                self.items.iter().find(|i| i.id == *item_id).cloned()
-                            })
-                            .collect();
-                        self.state = GameState::Shop(ShopState::new(shop, shop_items));
-                    }
-                }
-                DialogAction::Heal => {
-                    self.player.stats.current_hp = self.player.stats.max_hp;
-                    self.player.stats.current_mp = self.player.stats.max_mp;
-                }
-            }
+            self.player.add_item(item);
         }
-    }
 
-    fn handle_inventory_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Up => self.inventory_state.move_up(),
-            KeyCode::Down => self.inventory_state.move_down(self.player.inventory.len()),
-            KeyCode::Ok => {
-                let idx = self.inventory_state.selected;
-                self.player.use_item(idx);
-            }
-            KeyCode::Back => {
-                self.state = GameState::Explore;
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_stats_input(&mut self, key: KeyCode) {
-        if matches!(key, KeyCode::Back | KeyCode::Ok) {
-            self.state = GameState::Explore;
-        }
-    }
-
-    fn handle_gameover_input(&mut self, key: KeyCode) {
-        if matches!(key, KeyCode::Ok) {
-            self.state = GameState::Menu(MenuState {
-                selected: 0,
-                has_save: has_save_data(),
-            });
-        }
-    }
-
-    fn handle_dialog_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Ok => {
-                self.process_dialog_action();
-
-                if matches!(self.state, GameState::Shop(_)) {
-                    return;
-                }
-
-                if let GameState::Dialog(ref mut state) = self.state
-                    && !state.advance()
-                {
-                    self.state = GameState::Explore;
-                }
-            }
-            KeyCode::Back => {
-                self.state = GameState::Explore;
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_shop_input(&mut self, key: KeyCode) {
-        const SHOP_VISIBLE_ITEMS: usize = 8;
-
-        if let GameState::Shop(ref mut state) = self.state {
-            match state.mode {
-                ShopMode::Select => match key {
-                    KeyCode::Up => state.move_up(),
-                    KeyCode::Down => state.move_down(2, 2),
-                    KeyCode::Ok => {
-                        state.mode = if state.selected == 0 {
-                            ShopMode::Buy
-                        } else {
-                            ShopMode::Sell
-                        };
-                        state.reset_selection();
-                    }
-                    KeyCode::Back => {
-                        self.state = GameState::Explore;
-                    }
-                    _ => {}
-                },
-                ShopMode::Buy => match key {
-                    KeyCode::Up => state.move_up(),
-                    KeyCode::Down => state.move_down(state.items.len(), SHOP_VISIBLE_ITEMS),
-                    KeyCode::Ok => {
-                        if let Some(item) = state.items.get(state.selected).cloned()
-                            && self.player.stats.gold >= item.price
-                        {
-                            self.player.stats.gold -= item.price;
-                            self.player.add_item(item);
-                        }
-                    }
-                    KeyCode::Back => {
-                        state.mode = ShopMode::Select;
-                        state.reset_selection();
-                    }
-                    _ => {}
-                },
-                ShopMode::Sell => match key {
-                    KeyCode::Up => state.move_up(),
-                    KeyCode::Down => {
-                        state.move_down(self.player.inventory.len(), SHOP_VISIBLE_ITEMS)
-                    }
-                    KeyCode::Ok => {
-                        if let Some(item) = self.player.remove_item_at(state.selected) {
-                            let sell_price = item.price / 2;
-                            self.player.stats.gold += sell_price;
-                            let inv_len = self.player.inventory.len();
-                            if state.selected >= inv_len && state.selected > 0 {
-                                state.selected -= 1;
-                            }
-                            if state.scroll > 0
-                                && state.scroll >= inv_len.saturating_sub(SHOP_VISIBLE_ITEMS - 1)
-                            {
-                                state.scroll = inv_len.saturating_sub(SHOP_VISIBLE_ITEMS);
-                            }
-                        }
-                    }
-                    KeyCode::Back => {
-                        state.mode = ShopMode::Select;
-                        state.reset_selection();
-                    }
-                    _ => {}
-                },
-            }
-        }
-    }
-
-    fn handle_quest_input(&mut self, key: KeyCode) {
-        if matches!(key, KeyCode::Back | KeyCode::Ok) {
-            self.state = GameState::Explore;
-        }
+        self.player.complete_quest(&quest.id);
     }
 
     fn update_kill_quest(&mut self, killed_enemy_id: &str) {
@@ -682,7 +390,8 @@ impl RpgGame {
             if progress.completed || progress.rewarded {
                 continue;
             }
-            if let Some(quest) = self.quests.iter().find(|q| q.id == progress.quest_id)
+
+            if let Some(quest) = self.data.find_quest(&progress.quest_id)
                 && quest.quest_type == data::QuestType::Kill
                 && quest.target_id == killed_enemy_id
             {
@@ -720,62 +429,197 @@ impl RpgGame {
         }
     }
 
-    fn handle_pause_menu_input(&mut self, key: KeyCode) {
-        if let GameState::PauseMenu(ref mut selected) = self.state {
-            match key {
-                KeyCode::Up => {
-                    if *selected > 0 {
-                        *selected -= 1;
+    fn handle_menu_input(&mut self, key: KeyCode) {
+        let GameState::Menu(ref mut menu) = self.state else {
+            return;
+        };
+
+        match key {
+            KeyCode::Up => menu.move_up(),
+            KeyCode::Down => menu.move_down(),
+            KeyCode::Ok => {
+                let action = if menu.has_save {
+                    match menu.selected {
+                        0 => MenuAction::NewGame,
+                        1 => MenuAction::Continue,
+                        _ => MenuAction::Exit,
                     }
+                } else {
+                    match menu.selected {
+                        0 => MenuAction::NewGame,
+                        _ => MenuAction::Exit,
+                    }
+                };
+
+                match action {
+                    MenuAction::NewGame => self.start_new_game(),
+                    MenuAction::Continue => self.continue_game(),
+                    MenuAction::Exit => wipi::kernel::exit(0),
                 }
-                KeyCode::Down => {
-                    if *selected < 3 {
-                        *selected += 1;
-                    }
-                }
-                KeyCode::Ok => match *selected {
-                    0 => {
-                        self.inventory_state = InventoryState::default();
-                        self.state = GameState::Inventory;
-                    }
-                    1 => self.state = GameState::Stats,
-                    2 => self.state = GameState::QuestLog,
-                    3 => {
-                        save_game(&self.player);
-                        self.state = GameState::Explore;
-                    }
-                    _ => {}
-                },
-                KeyCode::Back | KeyCode::Key0 => {
-                    self.state = GameState::Explore;
-                }
-                _ => {}
             }
+            _ => {}
         }
     }
 
-    fn draw_loading(&self, step: usize) {
-        let mut fb = Framebuffer::screen_framebuffer();
-        clear_screen(&mut fb);
+    fn handle_explore_input(&mut self, key: KeyCode) {
+        match key {
+            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+                self.movement.on_direction_pressed(key);
+            }
+            KeyCode::Ok => {
+                self.try_interact_with_npc();
+                if matches!(self.state, GameState::Dialog(_)) {
+                    return;
+                }
 
-        let w = fb.width() as i32;
-        let h = fb.height() as i32;
+                if let Some(reward) = self.combat.player_attack(
+                    self.player.x,
+                    self.player.y,
+                    self.player.total_atk(),
+                    self.player.facing,
+                ) {
+                    self.player.stats.add_exp(reward.exp);
+                    self.player.stats.gold += reward.gold;
+                    self.update_kill_quest(&reward.enemy_id);
+                }
+            }
+            KeyCode::Key1 => self.use_skill(0, &Skill::FIREBALL),
+            KeyCode::Key2 => self.use_skill(1, &Skill::HEAL),
+            KeyCode::Key3 => self.use_skill(2, &Skill::SPIN_ATTACK),
+            KeyCode::Key0 => self.state = GameState::PauseMenu(0),
+            KeyCode::Back => {
+                save_game(&self.player);
+                self.state = GameState::Menu(MenuState {
+                    selected: 0,
+                    has_save: has_save_data(),
+                });
+            }
+            _ => {}
+        }
+    }
 
-        draw_text(&mut fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
+    fn handle_inventory_input(&mut self, key: KeyCode) {
+        match key {
+            KeyCode::Up => self.inventory_state.move_up(),
+            KeyCode::Down => self.inventory_state.move_down(self.player.inventory.len()),
+            KeyCode::Ok => {
+                self.player.use_item(self.inventory_state.selected);
+            }
+            KeyCode::Back => self.state = GameState::Explore,
+            _ => {}
+        }
+    }
 
-        let label = Self::LOADING_LABELS.get(step).unwrap_or(&"");
-        draw_text(&mut fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
+    fn handle_dialog_input(&mut self, key: KeyCode) {
+        match key {
+            KeyCode::Ok => {
+                self.process_dialog_action();
 
-        let bar_w = 120;
-        let bar_h = 8;
-        let bar_x = w / 2 - bar_w / 2;
-        let bar_y = h / 2 + 10;
+                if matches!(self.state, GameState::Shop(_)) {
+                    return;
+                }
 
-        draw_rect(&mut fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
-        let progress = ((step + 1) * bar_w as usize / Self::LOADING_STEPS) as i32;
-        fill_rect(&mut fb, bar_x + 1, bar_y + 1, progress - 2, bar_h - 2, COLOR_GREEN);
+                if let GameState::Dialog(ref mut state) = self.state
+                    && !state.advance()
+                {
+                    self.state = GameState::Explore;
+                }
+            }
+            KeyCode::Back => self.state = GameState::Explore,
+            _ => {}
+        }
+    }
 
-        repaint(0, 0, 0, w, h);
+    fn handle_shop_input(&mut self, key: KeyCode) {
+        const VISIBLE_ITEMS: usize = 8;
+
+        let GameState::Shop(ref mut state) = self.state else {
+            return;
+        };
+
+        match state.mode {
+            ShopMode::Select => match key {
+                KeyCode::Up => state.move_up(),
+                KeyCode::Down => state.move_down(2, 2),
+                KeyCode::Ok => {
+                    state.mode = if state.selected == 0 {
+                        ShopMode::Buy
+                    } else {
+                        ShopMode::Sell
+                    };
+                    state.reset_selection();
+                }
+                KeyCode::Back => self.state = GameState::Explore,
+                _ => {}
+            },
+            ShopMode::Buy => match key {
+                KeyCode::Up => state.move_up(),
+                KeyCode::Down => state.move_down(state.items.len(), VISIBLE_ITEMS),
+                KeyCode::Ok => {
+                    if let Some(item) = state.items.get(state.selected).cloned()
+                        && self.player.stats.gold >= item.price
+                    {
+                        self.player.stats.gold -= item.price;
+                        self.player.add_item(item);
+                    }
+                }
+                KeyCode::Back => {
+                    state.mode = ShopMode::Select;
+                    state.reset_selection();
+                }
+                _ => {}
+            },
+            ShopMode::Sell => match key {
+                KeyCode::Up => state.move_up(),
+                KeyCode::Down => state.move_down(self.player.inventory.len(), VISIBLE_ITEMS),
+                KeyCode::Ok => {
+                    if let Some(item) = self.player.remove_item_at(state.selected) {
+                        self.player.stats.gold += item.price / 2;
+
+                        let inv_len = self.player.inventory.len();
+                        if state.selected >= inv_len && state.selected > 0 {
+                            state.selected -= 1;
+                        }
+                        if state.scroll > 0
+                            && state.scroll >= inv_len.saturating_sub(VISIBLE_ITEMS - 1)
+                        {
+                            state.scroll = inv_len.saturating_sub(VISIBLE_ITEMS);
+                        }
+                    }
+                }
+                KeyCode::Back => {
+                    state.mode = ShopMode::Select;
+                    state.reset_selection();
+                }
+                _ => {}
+            },
+        }
+    }
+
+    fn handle_pause_menu_input(&mut self, key: KeyCode) {
+        let GameState::PauseMenu(ref mut selected) = self.state else {
+            return;
+        };
+
+        match key {
+            KeyCode::Up if *selected > 0 => *selected -= 1,
+            KeyCode::Down if *selected < 3 => *selected += 1,
+            KeyCode::Ok => match *selected {
+                0 => {
+                    self.inventory_state = InventoryState::default();
+                    self.state = GameState::Inventory;
+                }
+                1 => self.state = GameState::Stats,
+                2 => self.state = GameState::QuestLog,
+                3 => {
+                    save_game(&self.player);
+                    self.state = GameState::Explore;
+                }
+                _ => {}
+            },
+            KeyCode::Back | KeyCode::Key0 => self.state = GameState::Explore,
+            _ => {}
+        }
     }
 }
 
@@ -787,17 +631,8 @@ enum MenuAction {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        if let GameState::Loading(step) = self.state {
-            self.draw_loading(step);
-            if self.load_step(step) {
-                let menu_state = MenuState {
-                    selected: 0,
-                    has_save: has_save_data(),
-                };
-                self.state = GameState::Menu(menu_state);
-            } else {
-                self.state = GameState::Loading(step + 1);
-            }
+        if matches!(self.state, GameState::Loading(_)) {
+            self.update_loading();
             return;
         }
 
@@ -808,35 +643,27 @@ impl App for RpgGame {
 
         match &self.state {
             GameState::Loading(_) => {}
-            GameState::Menu(menu_state) => {
-                draw_menu(&mut fb, menu_state);
-            }
+            GameState::Menu(menu_state) => draw_menu(&mut fb, menu_state),
             GameState::Explore => {
                 if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.npcs);
+                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
                 }
             }
             GameState::Inventory => {
                 draw_inventory(&mut fb, &self.player, &self.inventory_state);
             }
-            GameState::Stats => {
-                draw_stats(&mut fb, &self.player);
-            }
+            GameState::Stats => draw_stats(&mut fb, &self.player),
             GameState::Dialog(dialog_state) => {
                 if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.npcs);
+                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
                 }
                 draw_dialog(&mut fb, dialog_state);
             }
-            GameState::Shop(shop_state) => {
-                draw_shop(&mut fb, shop_state, &self.player);
-            }
-            GameState::QuestLog => {
-                draw_quest_log(&mut fb, &self.player, &self.quests);
-            }
+            GameState::Shop(shop_state) => draw_shop(&mut fb, shop_state, &self.player),
+            GameState::QuestLog => draw_quest_log(&mut fb, &self.player, &self.data.quests),
             GameState::PauseMenu(selected) => {
                 if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.npcs);
+                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
                 }
                 self.draw_pause_menu(&mut fb, *selected);
             }
@@ -850,6 +677,7 @@ impl App for RpgGame {
                 draw_text(&mut fb, w / 2 - 30, h / 2 + 8, "OK:Menu", COLOR_WHITE);
             }
         }
+
         repaint(0, 0, 0, fb.width() as i32, fb.height() as i32);
     }
 
@@ -859,26 +687,31 @@ impl App for RpgGame {
             GameState::Menu(_) => self.handle_menu_input(key),
             GameState::Explore => self.handle_explore_input(key),
             GameState::Inventory => self.handle_inventory_input(key),
-            GameState::Stats => self.handle_stats_input(key),
+            GameState::Stats | GameState::QuestLog => {
+                if matches!(key, KeyCode::Back | KeyCode::Ok) {
+                    self.state = GameState::Explore;
+                }
+            }
             GameState::Dialog(_) => self.handle_dialog_input(key),
             GameState::Shop(_) => self.handle_shop_input(key),
-            GameState::QuestLog => self.handle_quest_input(key),
             GameState::PauseMenu(_) => self.handle_pause_menu_input(key),
-            GameState::GameOver => self.handle_gameover_input(key),
+            GameState::GameOver => {
+                if matches!(key, KeyCode::Ok) {
+                    self.state = GameState::Menu(MenuState {
+                        selected: 0,
+                        has_save: has_save_data(),
+                    });
+                }
+            }
         }
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
-        if self.pressed_direction == Some(key) {
-            self.pressed_direction = None;
-        }
+        self.movement.on_key_released(key);
     }
 }
 
 #[wipi_main]
 pub fn main() -> RpgGame {
-    match RpgGame::new() {
-        Ok(game) => game,
-        Err(e) => panic!("Failed to load game: {:?}", e),
-    }
+    RpgGame::new()
 }

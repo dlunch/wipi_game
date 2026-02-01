@@ -1,8 +1,10 @@
 mod combat;
 mod dialog;
 mod explore;
+mod game_data;
 mod inventory;
 mod menu;
+mod movement;
 mod player;
 mod quest;
 mod renderer;
@@ -13,8 +15,10 @@ mod state;
 pub use combat::{CombatSystem, Direction};
 pub use dialog::draw_dialog;
 pub use explore::{TileEvent, check_tile_event, draw_explore};
+pub use game_data::GameData;
 pub use inventory::{InventoryState, draw_inventory, draw_stats};
 pub use menu::draw_menu;
+pub use movement::MovementController;
 pub use player::Player;
 pub use quest::draw_quest_log;
 pub use renderer::{
