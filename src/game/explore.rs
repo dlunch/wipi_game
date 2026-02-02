@@ -288,7 +288,9 @@ fn tile_color(tile: Tile, is_opened_treasure: bool) -> Color {
     }
 }
 
-pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
+pub fn check_tile_event(map: &Map, player: &Player) -> Option<super::TileEvent> {
+    use super::TileEvent;
+
     let tile = map.get_tile(player.x, player.y);
 
     match tile {
@@ -311,11 +313,4 @@ pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
         }
         _ => None,
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum TileEvent {
-    Treasure,
-    MapExit(alloc::string::String),
-    DungeonEntrance(alloc::string::String),
 }

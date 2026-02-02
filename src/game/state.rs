@@ -1,6 +1,7 @@
-use crate::data::{Dialog, DialogLine, Item, Shop};
 use alloc::string::String;
 use alloc::vec::Vec;
+
+use crate::data::{Dialog, DialogLine, Item, Shop};
 
 #[derive(Debug, Clone)]
 pub enum GameState {
@@ -125,4 +126,18 @@ impl MenuState {
             self.selected += 1;
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum TileEvent {
+    Treasure,
+    MapExit(String),
+    DungeonEntrance(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MenuAction {
+    NewGame,
+    Continue,
+    Exit,
 }

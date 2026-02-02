@@ -2,7 +2,7 @@ use wipi::framebuffer::Framebuffer;
 
 use super::MenuState;
 use super::renderer::{
-    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
+    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
     draw_selection_cursor, draw_text, fill_rect,
 };
 
@@ -58,4 +58,26 @@ pub fn draw_menu(fb: &mut Framebuffer, state: &MenuState) {
     }
 
     draw_text(fb, 20, 120, "OK:Select", COLOR_GRAY);
+}
+
+pub fn draw_pause_menu(fb: &mut Framebuffer, selected: usize) {
+    let w = fb.width() as i32;
+    let h = fb.height() as i32;
+    let menu_w = 100;
+    let menu_h = 80;
+    let x = (w - menu_w) / 2;
+    let y = (h - menu_h) / 2;
+
+    fill_rect(fb, x, y, menu_w, menu_h, COLOR_DARK_GRAY);
+    draw_rect(fb, x, y, menu_w, menu_h, COLOR_WHITE);
+
+    let items = ["Inventory", "Stats", "Quests", "Save"];
+    for (i, item) in items.iter().enumerate() {
+        let is_selected = i == selected;
+        let prefix = if is_selected { "> " } else { "  " };
+        let y_pos = y + 10 + (i as i32 * 16);
+        let color = if is_selected { COLOR_RED } else { COLOR_WHITE };
+        draw_text(fb, x + 10, y_pos, prefix, color);
+        draw_text(fb, x + 22, y_pos, item, color);
+    }
 }

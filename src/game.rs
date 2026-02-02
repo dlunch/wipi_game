@@ -16,10 +16,10 @@ mod state;
 
 pub use combat::{CombatSystem, Direction};
 pub use dialog::draw_dialog;
-pub use explore::{TileEvent, check_tile_event, draw_explore};
+pub use explore::{check_tile_event, draw_explore};
 pub use game_data::GameData;
 pub use inventory::{InventoryState, draw_inventory, draw_stats};
-pub use menu::draw_menu;
+pub use menu::{draw_menu, draw_pause_menu};
 pub use movement::MovementController;
 pub use npc_system::NpcInteraction;
 pub use player::Player;
@@ -31,4 +31,4 @@ pub use renderer::{
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use shop::draw_shop;
-pub use state::{DialogState, GameState, MenuState, ShopMode, ShopState};
+pub use state::{DialogState, GameState, MenuAction, MenuState, ShopMode, ShopState, TileEvent};

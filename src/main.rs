@@ -10,12 +10,15 @@ use alloc::string::String;
 use wipi::{app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main};
 
 use data::{Skill, SkillType};
+
+const MP_REGEN_INTERVAL: u32 = 60;
+
 use game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, GameData,
-    GameState, InventoryState, MenuState, MovementController, NpcInteraction, Player, QuestSystem,
-    ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory,
-    draw_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
-    has_save_data, load_game, save_game,
+    GameState, InventoryState, MenuAction, MenuState, MovementController, NpcInteraction, Player,
+    QuestSystem, ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore,
+    draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
+    draw_text, fill_rect, has_save_data, load_game, save_game,
 };
 
 pub struct RpgGame {
@@ -163,7 +166,7 @@ impl RpgGame {
         self.player.update_cooldowns();
 
         self.mp_regen_timer += 1;
-        if self.mp_regen_timer >= 60 {
+        if self.mp_regen_timer >= MP_REGEN_INTERVAL {
             self.mp_regen_timer = 0;
             self.player.stats.recover_mp(1);
         }
@@ -244,7 +247,7 @@ impl RpgGame {
     }
 
     fn change_map(&mut self, target_id: &str) {
-        let Some(map) = self.data.find_map(target_id).cloned() else {
+        let Some(map) = self.data.find_map(target_id) else {
             return;
         };
 
@@ -253,7 +256,7 @@ impl RpgGame {
             self.player.x = x;
             self.player.y = y;
         }
-        self.combat.spawn_enemies(&map, &self.data.enemies);
+        self.combat.spawn_enemies(map, &self.data.enemies);
     }
 
     fn try_interact_with_npc(&mut self) {
@@ -277,32 +280,6 @@ impl RpgGame {
             NpcInteraction::process_action(&mut self.player, &self.data, &action)
         {
             self.state = new_state;
-        }
-    }
-
-    fn draw_pause_menu(&self, fb: &mut Framebuffer, selected: usize) {
-        let w = fb.width() as i32;
-        let h = fb.height() as i32;
-        let menu_w = 100;
-        let menu_h = 80;
-        let x = (w - menu_w) / 2;
-        let y = (h - menu_h) / 2;
-
-        fill_rect(fb, x, y, menu_w, menu_h, COLOR_DARK_GRAY);
-        draw_rect(fb, x, y, menu_w, menu_h, COLOR_WHITE);
-
-        let items = ["Inventory", "Stats", "Quests", "Save"];
-        for (i, item) in items.iter().enumerate() {
-            let is_selected = i == selected;
-            let prefix = if is_selected { "> " } else { "  " };
-            let y_pos = y + 10 + (i as i32 * 16);
-            if is_selected {
-                draw_text(fb, x + 10, y_pos, prefix, COLOR_RED);
-                draw_text(fb, x + 22, y_pos, item, COLOR_RED);
-            } else {
-                draw_text(fb, x + 10, y_pos, prefix, COLOR_WHITE);
-                draw_text(fb, x + 22, y_pos, item, COLOR_WHITE);
-            }
         }
     }
 
@@ -500,12 +477,6 @@ impl RpgGame {
     }
 }
 
-enum MenuAction {
-    NewGame,
-    Continue,
-    Exit,
-}
-
 impl App for RpgGame {
     fn on_paint(&mut self) {
         if matches!(self.state, GameState::Loading(_)) {
@@ -542,7 +513,7 @@ impl App for RpgGame {
                 if let Some(map) = self.current_map() {
                     draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
                 }
-                self.draw_pause_menu(&mut fb, *selected);
+                draw_pause_menu(&mut fb, *selected);
             }
             GameState::GameOver => {
                 clear_screen(&mut fb);

@@ -173,14 +173,7 @@ impl Player {
         if let Some(new_y) = self.y.checked_add_signed(dy as isize) {
             self.y = new_y;
         }
-
-        self.facing = match (dx, dy) {
-            (0, -1) => Direction::Up,
-            (0, 1) => Direction::Down,
-            (-1, 0) => Direction::Left,
-            (1, 0) => Direction::Right,
-            _ => self.facing,
-        };
+        self.set_facing(dx, dy);
     }
 
     pub fn set_facing(&mut self, dx: i32, dy: i32) {
