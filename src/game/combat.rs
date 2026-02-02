@@ -2,6 +2,14 @@ use alloc::vec::Vec;
 
 use crate::data::{Enemy, Map, Skill, SkillType, Tile};
 
+const HIT_FLASH_DURATION: u32 = 10;
+const ENEMY_ATTACK_COOLDOWN: u32 = 30;
+const ENEMY_MOVE_INTERVAL: u32 = 8;
+const PLAYER_ATTACK_COOLDOWN: u32 = 15;
+const ATTACK_EFFECT_DURATION: u32 = 6;
+const SKILL_EFFECT_DURATION: u32 = 8;
+const HEAL_EFFECT_DURATION: u32 = 15;
+
 #[derive(Debug, Clone)]
 pub struct FieldEnemy {
     pub data: Enemy,
@@ -31,7 +39,7 @@ impl FieldEnemy {
 
     pub fn take_damage(&mut self, damage: i32) {
         self.hp = (self.hp - damage).max(0);
-        self.hit_flash = 10;
+        self.hit_flash = HIT_FLASH_DURATION;
     }
 
     pub fn distance_to(&self, px: usize, py: usize) -> usize {
@@ -86,7 +94,7 @@ impl FieldEnemy {
     }
 
     pub fn do_attack(&mut self) -> i32 {
-        self.attack_cooldown = 30;
+        self.attack_cooldown = ENEMY_ATTACK_COOLDOWN;
         self.data.atk
     }
 }
@@ -177,7 +185,7 @@ impl CombatSystem {
 
         let mut damage_taken = 0;
 
-        if self.update_counter.is_multiple_of(8) {
+        if self.update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
             for enemy in &mut self.enemies {
                 if !enemy.is_dead() {
                     enemy.update(player_x, player_y, map);
@@ -194,7 +202,7 @@ impl CombatSystem {
                 let raw_damage = enemy.do_attack();
                 let actual_damage = (raw_damage - player_def / 2).max(1);
                 damage_taken += actual_damage;
-                self.player_hit_flash = 10;
+                self.player_hit_flash = HIT_FLASH_DURATION;
             }
         }
 
@@ -270,14 +278,14 @@ impl CombatSystem {
             x: tx,
             y: ty,
             effect_type: SkillType::Attack,
-            timer: 6,
+            timer: ATTACK_EFFECT_DURATION,
         });
 
         for enemy in &mut self.enemies {
             if enemy.x == tx && enemy.y == ty && !enemy.is_dead() {
                 let damage = (player_atk - enemy.data.def / 2).max(1);
                 enemy.take_damage(damage);
-                self.player_attack_cooldown = 15;
+                self.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
 
                 return if enemy.is_dead() {
                     Some(KillReward {
@@ -291,7 +299,7 @@ impl CombatSystem {
             }
         }
 
-        self.player_attack_cooldown = 15;
+        self.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
         None
     }
 
@@ -321,7 +329,7 @@ impl CombatSystem {
                         x: tx,
                         y: ty,
                         effect_type: SkillType::Ranged,
-                        timer: 8,
+                        timer: SKILL_EFFECT_DURATION,
                     });
                     if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
                         kills.push(kill);
@@ -341,7 +349,7 @@ impl CombatSystem {
                         x: tx,
                         y: ty,
                         effect_type: SkillType::Area,
-                        timer: 8,
+                        timer: SKILL_EFFECT_DURATION,
                     });
                     if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
                         kills.push(kill);
@@ -353,7 +361,7 @@ impl CombatSystem {
                     x: player_x,
                     y: player_y,
                     effect_type: SkillType::Heal,
-                    timer: 15,
+                    timer: HEAL_EFFECT_DURATION,
                 });
             }
         }

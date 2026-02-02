@@ -126,8 +126,7 @@ fn draw_map_with_entities(
                 enemy_color,
             );
 
-            let hp_ratio = enemy.hp as f32 / enemy.data.hp as f32;
-            let bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
+            let bar_width = enemy.hp * (TILE_SIZE - 2) / enemy.data.hp;
             fill_rect(fb, px + 1, py - 2, TILE_SIZE - 2, 2, COLOR_DARK_GRAY);
             fill_rect(fb, px + 1, py - 2, bar_width, 2, COLOR_GREEN);
         }
@@ -150,8 +149,7 @@ fn draw_map_with_entities(
         player_color,
     );
 
-    let hp_ratio = player.stats.current_hp as f32 / player.stats.max_hp as f32;
-    let hp_bar_width = ((TILE_SIZE - 2) as f32 * hp_ratio) as i32;
+    let hp_bar_width = player.stats.current_hp * (TILE_SIZE - 2) / player.stats.max_hp;
     fill_rect(
         fb,
         px + 1,
@@ -162,8 +160,7 @@ fn draw_map_with_entities(
     );
     fill_rect(fb, px + 1, py + TILE_SIZE, hp_bar_width, 2, COLOR_GREEN);
 
-    let mp_ratio = player.stats.current_mp as f32 / player.stats.max_mp as f32;
-    let mp_bar_width = ((TILE_SIZE - 2) as f32 * mp_ratio) as i32;
+    let mp_bar_width = player.stats.current_mp * (TILE_SIZE - 2) / player.stats.max_mp;
     fill_rect(
         fb,
         px + 1,

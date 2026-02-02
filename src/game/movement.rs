@@ -4,6 +4,8 @@ use super::Player;
 use super::combat::CombatSystem;
 use crate::data::{Map, Npc};
 
+const MOVE_COOLDOWN: u32 = 5;
+
 #[derive(Default)]
 pub struct MovementController {
     pub pressed_direction: Option<KeyCode>,
@@ -39,7 +41,7 @@ impl MovementController {
         };
 
         let moved = self.try_move(player, map, combat, npcs, key);
-        self.move_cooldown = 5;
+        self.move_cooldown = MOVE_COOLDOWN;
         moved
     }
 

@@ -141,13 +141,14 @@ impl RpgGame {
             return;
         }
 
-        let Some(map) = self.data.find_map(&self.player.current_map_id).cloned() else {
+        let map_id = self.player.current_map_id.clone();
+        let Some(map) = self.data.find_map(&map_id) else {
             return;
         };
 
         let moved = self
             .movement
-            .update(&mut self.player, &map, &self.combat, &self.data.npcs);
+            .update(&mut self.player, map, &self.combat, &self.data.npcs);
 
         if moved {
             self.check_tile_events();
@@ -167,14 +168,15 @@ impl RpgGame {
             self.player.stats.recover_mp(1);
         }
 
-        if let Some(map) = self.current_map().cloned() {
-            let result = self.combat.update(
-                self.player.x,
-                self.player.y,
-                self.player.total_def(),
-                &map,
-                &self.data.enemies,
-            );
+        let player_x = self.player.x;
+        let player_y = self.player.y;
+        let player_def = self.player.total_def();
+        let map_id = self.player.current_map_id.clone();
+
+        if let Some(map) = self.data.find_map(&map_id) {
+            let result =
+                self.combat
+                    .update(player_x, player_y, player_def, map, &self.data.enemies);
 
             if result.damage_taken > 0 {
                 self.player.stats.take_damage(result.damage_taken);

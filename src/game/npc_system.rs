@@ -9,12 +9,7 @@ impl NpcInteraction {
         data: &GameData,
         facing: Direction,
     ) -> Option<GameState> {
-        let (target_x, target_y) = match facing {
-            Direction::Up => (player.x, player.y.saturating_sub(1)),
-            Direction::Down => (player.x, player.y.saturating_add(1)),
-            Direction::Left => (player.x.saturating_sub(1), player.y),
-            Direction::Right => (player.x.saturating_add(1), player.y),
-        };
+        let (target_x, target_y) = facing.apply(player.x, player.y);
 
         let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
 
