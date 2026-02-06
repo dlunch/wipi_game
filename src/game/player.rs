@@ -238,3 +238,205 @@ impl Player {
         Some(item)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::{Item, ItemKind};
+
+    fn make_item(id: &str, kind: ItemKind) -> Item {
+        Item {
+            id: String::from(id),
+            name: String::from(id),
+            kind,
+            param1: 10,
+            param2: 5,
+            param3: 0,
+            price: 100,
+        }
+    }
+
+    fn make_potion() -> Item {
+        Item {
+            id: String::from("potion"),
+            name: String::from("Potion"),
+            kind: ItemKind::Consumable,
+            param1: 30,
+            param2: 0,
+            param3: 0,
+            price: 50,
+        }
+    }
+
+    #[test]
+    fn new_player_starts_empty() {
+        let player = Player::new(String::from("Test"), "village");
+        assert_eq!(player.name, "Test");
+        assert_eq!(player.current_map_id, "village");
+        assert!(player.inventory.is_empty());
+        assert!(player.equipped_weapon.is_none());
+        assert!(player.quests.is_empty());
+    }
+
+    #[test]
+    fn equip_weapon_via_use_item() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_item("sword", ItemKind::Weapon));
+        assert!(player.use_item(0));
+        assert_eq!(player.equipped_weapon, Some(0));
+    }
+
+    #[test]
+    fn equip_armor_via_use_item() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_item("armor", ItemKind::Armor));
+        assert!(player.use_item(0));
+        assert_eq!(player.equipped_armor, Some(0));
+    }
+
+    #[test]
+    fn use_consumable_heals_and_removes() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.stats.current_hp = 20;
+        player.add_item(make_potion());
+        assert!(player.use_item(0));
+        assert_eq!(player.stats.current_hp, 50);
+        assert!(player.inventory.is_empty());
+    }
+
+    #[test]
+    fn fix_equipped_indices_on_remove() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_potion());
+        player.add_item(make_item("sword", ItemKind::Weapon));
+        player.add_item(make_item("armor", ItemKind::Armor));
+        player.equipped_weapon = Some(1);
+        player.equipped_armor = Some(2);
+
+        player.use_item(0); // remove potion at index 0
+        assert_eq!(player.equipped_weapon, Some(0)); // shifted from 1 to 0
+        assert_eq!(player.equipped_armor, Some(1)); // shifted from 2 to 1
+    }
+
+    #[test]
+    fn fix_equipped_clears_on_exact_removal() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_item("sword", ItemKind::Weapon));
+        player.equipped_weapon = Some(0);
+
+        player.remove_item("sword");
+        assert_eq!(player.equipped_weapon, None);
+    }
+
+    #[test]
+    fn use_item_out_of_bounds() {
+        let mut player = Player::new(String::from("H"), "v");
+        assert!(!player.use_item(0));
+        assert!(!player.use_item(99));
+    }
+
+    #[test]
+    fn remove_item_at_returns_item() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_potion());
+        let removed = player.remove_item_at(0);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().id, "potion");
+        assert!(player.inventory.is_empty());
+    }
+
+    #[test]
+    fn remove_item_at_out_of_bounds() {
+        let mut player = Player::new(String::from("H"), "v");
+        assert!(player.remove_item_at(0).is_none());
+    }
+
+    #[test]
+    fn quest_lifecycle() {
+        let mut player = Player::new(String::from("H"), "v");
+        assert!(!player.has_quest("q1"));
+
+        player.add_quest("q1");
+        assert!(player.has_quest("q1"));
+        assert!(!player.is_quest_complete("q1"));
+
+        player.quests[0].completed = true;
+        assert!(player.is_quest_complete("q1"));
+
+        player.mark_quest_rewarded("q1");
+        assert!(!player.has_quest("q1")); // rewarded quests are not "active"
+    }
+
+    #[test]
+    fn add_quest_no_duplicates() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_quest("q1");
+        player.add_quest("q1");
+        assert_eq!(player.quests.len(), 1);
+    }
+
+    #[test]
+    fn treasure_tracking() {
+        let mut player = Player::new(String::from("H"), "v");
+        assert!(!player.is_treasure_opened("map1", 3, 4));
+
+        player.open_treasure("map1", 3, 4);
+        assert!(player.is_treasure_opened("map1", 3, 4));
+        assert!(!player.is_treasure_opened("map1", 3, 5));
+        assert!(!player.is_treasure_opened("map2", 3, 4));
+
+        player.open_treasure("map1", 3, 4); // duplicate
+        assert_eq!(player.opened_treasures.len(), 1);
+    }
+
+    #[test]
+    fn skill_cooldowns() {
+        let mut player = Player::new(String::from("H"), "v");
+        assert!(player.can_use_skill(0, 10));
+
+        player.use_skill(0, 10, 30);
+        assert!(!player.can_use_skill(0, 10)); // on cooldown
+        assert_eq!(player.skill_cooldowns[0], 30);
+        assert_eq!(player.stats.current_mp, 20); // 30 - 10
+
+        for _ in 0..30 {
+            player.update_cooldowns();
+        }
+        assert!(player.can_use_skill(0, 10)); // cooldown expired
+    }
+
+    #[test]
+    fn skill_insufficient_mp() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.stats.current_mp = 5;
+        assert!(!player.can_use_skill(0, 10));
+    }
+
+    #[test]
+    fn total_atk_def_with_equipment() {
+        let mut player = Player::new(String::from("H"), "v");
+        let base_atk = player.stats.base_atk;
+        let base_def = player.stats.base_def;
+        assert_eq!(player.total_atk(), base_atk);
+        assert_eq!(player.total_def(), base_def);
+
+        player.add_item(make_item("sword", ItemKind::Weapon));
+        player.equipped_weapon = Some(0);
+        assert_eq!(player.total_atk(), base_atk + 10);
+
+        player.add_item(make_item("armor", ItemKind::Armor));
+        player.equipped_armor = Some(1);
+        assert_eq!(player.total_def(), base_def + 10);
+    }
+
+    #[test]
+    fn has_item_and_remove_item() {
+        let mut player = Player::new(String::from("H"), "v");
+        player.add_item(make_potion());
+        assert!(player.has_item("potion"));
+
+        assert!(player.remove_item("potion"));
+        assert!(!player.has_item("potion"));
+        assert!(!player.remove_item("potion")); // already removed
+    }
+}

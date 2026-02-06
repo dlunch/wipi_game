@@ -454,3 +454,233 @@ impl MapBuilder {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_items_weapon_and_consumable() {
+        let data = "W:sword:Iron Sword:10:5:200\nI:potion:Potion:30:50\n";
+        let items = parse_items(data);
+        assert_eq!(items.len(), 2);
+
+        assert_eq!(items[0].id, "sword");
+        assert_eq!(items[0].kind, ItemKind::Weapon);
+        assert_eq!(items[0].param1, 10);
+        assert_eq!(items[0].price, 200);
+
+        assert_eq!(items[1].id, "potion");
+        assert_eq!(items[1].kind, ItemKind::Consumable);
+        assert_eq!(items[1].param1, 30);
+        assert_eq!(items[1].price, 50);
+    }
+
+    #[test]
+    fn parse_items_armor_and_accessory() {
+        let data = "A:leather:Leather:5:2:150\nC:ring:Ring:3:1:300\n";
+        let items = parse_items(data);
+        assert_eq!(items.len(), 2);
+
+        assert_eq!(items[0].kind, ItemKind::Armor);
+        assert_eq!(items[0].param1, 5);
+
+        assert_eq!(items[1].kind, ItemKind::Accessory);
+        assert_eq!(items[1].param1, 3);
+    }
+
+    #[test]
+    fn parse_items_skips_comments_and_empty() {
+        let data = "# comment\n\nW:sword:Sword:10:0:100\n";
+        let items = parse_items(data);
+        assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn parse_items_skips_malformed() {
+        let data = "W:too:few\nX:unknown:type:1:2:3\n";
+        let items = parse_items(data);
+        assert_eq!(items.len(), 0);
+    }
+
+    #[test]
+    fn parse_enemies_basic() {
+        let data = "slime:Slime:20:5:2:10:5\ngoblin:Goblin:30:8:3:15:8\n";
+        let enemies = parse_enemies(data);
+        assert_eq!(enemies.len(), 2);
+        assert_eq!(enemies[0].id, "slime");
+        assert_eq!(enemies[0].hp, 20);
+        assert_eq!(enemies[0].atk, 5);
+        assert_eq!(enemies[1].id, "goblin");
+        assert_eq!(enemies[1].gold, 8);
+    }
+
+    #[test]
+    fn parse_enemies_skips_short_lines() {
+        let data = "too:few:fields\n# comment\n";
+        let enemies = parse_enemies(data);
+        assert_eq!(enemies.len(), 0);
+    }
+
+    #[test]
+    fn parse_maps_basic() {
+        let data = "\
+@MAP:village:Village
+###
+#P#
+###
+@ENCOUNTERS:slime:3
+@NEXT:1:1:dungeon
+@END
+";
+        let maps = parse_maps(data);
+        assert_eq!(maps.len(), 1);
+        let map = &maps[0];
+        assert_eq!(map.id, "village");
+        assert_eq!(map.name, "Village");
+        assert_eq!(map.width, 3);
+        assert_eq!(map.height, 3);
+        assert_eq!(map.get_tile(1, 1), Tile::PlayerStart);
+        assert_eq!(map.get_tile(0, 0), Tile::Wall);
+        assert_eq!(map.encounters.len(), 1);
+        assert_eq!(map.encounters[0].0, "slime");
+        assert_eq!(map.exits.len(), 1);
+        assert_eq!(map.exits[0].2, "dungeon");
+    }
+
+    #[test]
+    fn parse_maps_multiple() {
+        let data = "\
+@MAP:a:Map A
+#P
+@END
+@MAP:b:Map B
+P#
+@END
+";
+        let maps = parse_maps(data);
+        assert_eq!(maps.len(), 2);
+        assert_eq!(maps[0].id, "a");
+        assert_eq!(maps[1].id, "b");
+    }
+
+    #[test]
+    fn parse_maps_auto_exit_tiles() {
+        let data = "\
+@MAP:test:Test
+#>#
+@END
+";
+        let maps = parse_maps(data);
+        assert_eq!(maps[0].exits.len(), 1);
+        assert_eq!(maps[0].exits[0].0, 1);
+        assert_eq!(maps[0].exits[0].1, 0);
+    }
+
+    #[test]
+    fn parse_maps_dungeon_directive() {
+        let data = "\
+@MAP:test:Test
+#D#
+@DUNGEON:1:0:cave
+@END
+";
+        let maps = parse_maps(data);
+        assert_eq!(maps[0].dungeons.len(), 1);
+        assert_eq!(maps[0].dungeons[0].2, "cave");
+    }
+
+    #[test]
+    fn parse_dialogs_basic() {
+        let data = "\
+@DIALOG:greet
+Hello there!
+HEAL:I'll heal you.
+@END
+";
+        let dialogs = parse_dialogs(data);
+        assert_eq!(dialogs.len(), 1);
+        assert_eq!(dialogs[0].id, "greet");
+        assert_eq!(dialogs[0].lines.len(), 2);
+        assert_eq!(dialogs[0].lines[0].text, "Hello there!");
+        assert!(dialogs[0].lines[0].action.is_none());
+        assert!(matches!(
+            dialogs[0].lines[1].action,
+            Some(DialogAction::Heal)
+        ));
+    }
+
+    #[test]
+    fn parse_dialogs_with_condition_and_action() {
+        let data = "\
+@DIALOG:quest_npc
+HAS_QUEST=slay:COMPLETE_QUEST=slay:Well done!
+GIVE_QUEST=slay:Kill the slimes!
+@END
+";
+        let dialogs = parse_dialogs(data);
+        let lines = &dialogs[0].lines;
+        assert_eq!(lines.len(), 2);
+        assert!(matches!(
+            lines[0].condition,
+            Some(DialogCondition::HasQuest(_))
+        ));
+        assert!(matches!(
+            lines[0].action,
+            Some(DialogAction::CompleteQuest(_))
+        ));
+        assert!(matches!(lines[1].action, Some(DialogAction::GiveQuest(_))));
+    }
+
+    #[test]
+    fn parse_quests_basic() {
+        let data = "slay:Slay Quest:KILL:slime:5:50:20:Kill 5 slimes\n";
+        let quests = parse_quests(data);
+        assert_eq!(quests.len(), 1);
+        assert_eq!(quests[0].id, "slay");
+        assert_eq!(quests[0].quest_type, QuestType::Kill);
+        assert_eq!(quests[0].target_id, "slime");
+        assert_eq!(quests[0].target_count, 5);
+        assert_eq!(quests[0].reward_exp, 50);
+        assert_eq!(quests[0].reward_gold, 20);
+        assert!(quests[0].reward_item.is_none());
+    }
+
+    #[test]
+    fn parse_quests_with_reward_item() {
+        let data = "q1:Quest:COLLECT:herb:3:30:10:Collect herbs:potion\n";
+        let quests = parse_quests(data);
+        assert_eq!(quests[0].reward_item.as_deref(), Some("potion"));
+    }
+
+    #[test]
+    fn parse_shops_basic() {
+        let data = "shop1:General Store:potion:sword:armor\n";
+        let shops = parse_shops(data);
+        assert_eq!(shops.len(), 1);
+        assert_eq!(shops[0].id, "shop1");
+        assert_eq!(shops[0].name, "General Store");
+        assert_eq!(shops[0].items, vec!["potion", "sword", "armor"]);
+    }
+
+    #[test]
+    fn parse_npcs_basic() {
+        let data = "npc1:Elder:village:Q:3:5:elder_dialog\n";
+        let npcs = parse_npcs(data);
+        assert_eq!(npcs.len(), 1);
+        assert_eq!(npcs[0].name, "Elder");
+        assert_eq!(npcs[0].map_id, "village");
+        assert_eq!(npcs[0].npc_type, NpcType::QuestGiver);
+        assert_eq!(npcs[0].x, 3);
+        assert_eq!(npcs[0].y, 5);
+        assert_eq!(npcs[0].dialog_id, "elder_dialog");
+    }
+
+    #[test]
+    fn parse_npcs_with_shop() {
+        let data = "npc1:Merchant:town:S:2:3:shop_dialog:shop1\n";
+        let npcs = parse_npcs(data);
+        assert_eq!(npcs[0].npc_type, NpcType::ShopKeeper);
+        assert_eq!(npcs[0].shop_id.as_deref(), Some("shop1"));
+    }
+}

@@ -377,3 +377,226 @@ impl Skill {
         cooldown: 20,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use super::*;
+
+    fn make_item(kind: ItemKind, p1: i32, p2: i32, p3: i32) -> Item {
+        Item {
+            id: String::from("test"),
+            name: String::from("Test"),
+            kind,
+            param1: p1,
+            param2: p2,
+            param3: p3,
+            price: 100,
+        }
+    }
+
+    #[test]
+    fn item_atk_weapon() {
+        let item = make_item(ItemKind::Weapon, 15, 0, 0);
+        assert_eq!(item.atk(), 15);
+        assert_eq!(item.def(), 0);
+        assert_eq!(item.hp_restore(), 0);
+    }
+
+    #[test]
+    fn item_def_armor() {
+        let item = make_item(ItemKind::Armor, 10, 5, 0);
+        assert_eq!(item.atk(), 0);
+        assert_eq!(item.def(), 10);
+    }
+
+    #[test]
+    fn item_accessory_gives_both() {
+        let item = make_item(ItemKind::Accessory, 3, 2, 0);
+        assert_eq!(item.atk(), 3);
+        assert_eq!(item.def(), 2);
+    }
+
+    #[test]
+    fn item_consumable_hp_restore() {
+        let item = make_item(ItemKind::Consumable, 50, 0, 0);
+        assert_eq!(item.hp_restore(), 50);
+        assert_eq!(item.atk(), 0);
+        assert_eq!(item.def(), 0);
+    }
+
+    #[test]
+    fn tile_from_char_all_types() {
+        assert_eq!(Tile::from_char('#'), Tile::Wall);
+        assert_eq!(Tile::from_char('.'), Tile::Floor);
+        assert_eq!(Tile::from_char('P'), Tile::PlayerStart);
+        assert_eq!(Tile::from_char('H'), Tile::House);
+        assert_eq!(Tile::from_char('D'), Tile::Dungeon);
+        assert_eq!(Tile::from_char('T'), Tile::Treasure);
+        assert_eq!(Tile::from_char('E'), Tile::Enemy);
+        assert_eq!(Tile::from_char('>'), Tile::Exit);
+        assert_eq!(Tile::from_char('~'), Tile::Water);
+        assert_eq!(Tile::from_char('*'), Tile::Tree);
+        assert_eq!(Tile::from_char('?'), Tile::Floor); // unknown → Floor
+    }
+
+    #[test]
+    fn tile_passability() {
+        assert!(!Tile::Wall.is_passable());
+        assert!(!Tile::Water.is_passable());
+        assert!(!Tile::Tree.is_passable());
+        assert!(Tile::Floor.is_passable());
+        assert!(Tile::PlayerStart.is_passable());
+        assert!(Tile::Enemy.is_passable());
+        assert!(Tile::Exit.is_passable());
+        assert!(Tile::Treasure.is_passable());
+        assert!(Tile::Dungeon.is_passable());
+        assert!(Tile::House.is_passable());
+    }
+
+    #[test]
+    fn map_get_tile_out_of_bounds() {
+        let map = Map {
+            id: String::from("test"),
+            name: String::from("Test"),
+            width: 3,
+            height: 2,
+            tiles: vec![
+                Tile::Wall,
+                Tile::Floor,
+                Tile::Wall,
+                Tile::Wall,
+                Tile::PlayerStart,
+                Tile::Wall,
+            ],
+            encounters: Vec::new(),
+            exits: Vec::new(),
+            dungeons: Vec::new(),
+        };
+        assert_eq!(map.get_tile(1, 0), Tile::Floor);
+        assert_eq!(map.get_tile(1, 1), Tile::PlayerStart);
+        assert_eq!(map.get_tile(99, 0), Tile::Wall); // out of bounds
+        assert_eq!(map.get_tile(0, 99), Tile::Wall); // out of bounds
+    }
+
+    #[test]
+    fn map_find_player_start() {
+        let map = Map {
+            id: String::from("test"),
+            name: String::from("Test"),
+            width: 3,
+            height: 2,
+            tiles: vec![
+                Tile::Wall,
+                Tile::Floor,
+                Tile::Wall,
+                Tile::Wall,
+                Tile::PlayerStart,
+                Tile::Wall,
+            ],
+            encounters: Vec::new(),
+            exits: Vec::new(),
+            dungeons: Vec::new(),
+        };
+        assert_eq!(map.find_player_start(), Some((1, 1)));
+    }
+
+    #[test]
+    fn map_find_player_start_none() {
+        let map = Map {
+            id: String::from("test"),
+            name: String::from("Test"),
+            width: 2,
+            height: 1,
+            tiles: vec![Tile::Wall, Tile::Floor],
+            encounters: Vec::new(),
+            exits: Vec::new(),
+            dungeons: Vec::new(),
+        };
+        assert_eq!(map.find_player_start(), None);
+    }
+
+    #[test]
+    fn player_stats_default() {
+        let stats = PlayerStats::default();
+        assert_eq!(stats.level, 1);
+        assert_eq!(stats.max_hp, 80);
+        assert_eq!(stats.current_hp, 80);
+        assert_eq!(stats.gold, 50);
+    }
+
+    #[test]
+    fn player_stats_heal_clamps() {
+        let mut stats = PlayerStats::default();
+        stats.current_hp = 50;
+        stats.heal(100);
+        assert_eq!(stats.current_hp, stats.max_hp);
+    }
+
+    #[test]
+    fn player_stats_take_damage_clamps() {
+        let mut stats = PlayerStats::default();
+        stats.take_damage(9999);
+        assert_eq!(stats.current_hp, 0);
+        assert!(stats.is_dead());
+    }
+
+    #[test]
+    fn player_stats_recover_mp_clamps() {
+        let mut stats = PlayerStats::default();
+        stats.current_mp = 28;
+        stats.recover_mp(100);
+        assert_eq!(stats.current_mp, stats.max_mp);
+    }
+
+    #[test]
+    fn player_stats_level_up() {
+        let mut stats = PlayerStats::default();
+        let leveled = stats.add_exp(100);
+        assert!(leveled);
+        assert_eq!(stats.level, 2);
+        assert_eq!(stats.exp, 0);
+        assert_eq!(stats.exp_to_next, 200);
+        assert_eq!(stats.max_hp, 90);
+        assert_eq!(stats.current_hp, 90); // healed on level up
+    }
+
+    #[test]
+    fn player_stats_multi_level_up() {
+        let mut stats = PlayerStats::default();
+        stats.add_exp(300); // 100 for lv2, 200 for lv3
+        assert_eq!(stats.level, 3);
+        assert_eq!(stats.exp, 0);
+    }
+
+    #[test]
+    fn player_stats_no_level_up() {
+        let mut stats = PlayerStats::default();
+        let leveled = stats.add_exp(50);
+        assert!(!leveled);
+        assert_eq!(stats.level, 1);
+        assert_eq!(stats.exp, 50);
+    }
+
+    #[test]
+    fn player_stats_total_atk_with_equipment() {
+        let stats = PlayerStats::default();
+        let weapon = make_item(ItemKind::Weapon, 10, 0, 0);
+        let accessory = make_item(ItemKind::Accessory, 3, 2, 0);
+        assert_eq!(
+            stats.total_atk(Some(&weapon), Some(&accessory)),
+            12 + 10 + 3
+        );
+        assert_eq!(stats.total_atk(None, None), 12);
+    }
+
+    #[test]
+    fn player_stats_total_def_with_equipment() {
+        let stats = PlayerStats::default();
+        let armor = make_item(ItemKind::Armor, 5, 0, 0);
+        let accessory = make_item(ItemKind::Accessory, 0, 3, 0);
+        assert_eq!(stats.total_def(Some(&armor), Some(&accessory)), 8 + 5 + 3);
+        assert_eq!(stats.total_def(None, None), 8);
+    }
+}
