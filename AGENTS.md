@@ -92,10 +92,13 @@ use crate::data::{Item, Map};
 ```
 
 ### Error Handling
-- No `panic!` in production code paths
+- No `panic!` or `unwrap()` in production code paths
+- Use `anyhow::Result` with `?` for error propagation (`anyhow = { version = "1", default-features = false }`)
+- **Game data parsers**: Strict — malformed data must return errors (wrong fields, bad numbers, unknown types)
+- **Save/load**: IO errors propagate via `anyhow::Result`, field deserialization uses `unwrap_or` for graceful recovery
+- **Top-level handlers** (`on_paint`, `on_keydown`): Catch errors and transition to `GameState::Error`
+- `WIPICError` has no `Display` — convert with `.map_err(|e| anyhow::anyhow!("{:?}", e))`
 - Use `Option<T>` for nullable values
-- Use `Result<T, E>` only for operations that can fail at boundaries (resource loading)
-- Prefer `unwrap_or_default()` over `unwrap()` for game data loading
 - Use `let-else` pattern for early returns:
 
 ```rust
@@ -103,6 +106,10 @@ let Some(map) = self.current_map() else {
     return;
 };
 ```
+
+### Testing
+- Test functions should return `Result<()>` and use `?` instead of `unwrap()`
+- Error case tests use `assert!(result.is_err())` directly
 
 ### Pattern Matching
 - Use `if let ... && let ...` for chained conditions (Rust nightly feature)

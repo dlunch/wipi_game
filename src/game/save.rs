@@ -2,6 +2,7 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
+use anyhow::Result;
 use wipi::database::{Database, OpenMode};
 
 use super::Player;
@@ -9,26 +10,25 @@ use crate::data::{Item, ItemKind, QuestProgress};
 
 const SAVE_DB_NAME: &str = "save";
 
-pub fn save_game(player: &Player) -> bool {
+pub fn save_game(player: &Player) -> Result<()> {
     let data = serialize_save(player);
 
-    if let Ok(mut db) = Database::open(SAVE_DB_NAME, OpenMode::ReadWrite) {
-        db.write(data.as_bytes()).is_ok()
-    } else {
-        false
-    }
+    let mut db = Database::open(SAVE_DB_NAME, OpenMode::ReadWrite)
+        .map_err(|e| anyhow::anyhow!("failed to open save db: {:?}", e))?;
+    db.write(data.as_bytes())
+        .map_err(|e| anyhow::anyhow!("failed to write save db: {:?}", e))?;
+    Ok(())
 }
 
-pub fn load_game(player: &mut Player) -> bool {
-    if let Ok(db) = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly) {
-        let mut buf = [0u8; 4096];
-        if let Ok(len) = db.read(&mut buf)
-            && let Ok(data) = core::str::from_utf8(&buf[..len])
-        {
-            return deserialize_save(data, player);
-        }
-    }
-    false
+pub fn load_game(player: &mut Player) -> Result<bool> {
+    let db = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
+        .map_err(|e| anyhow::anyhow!("failed to open save db: {:?}", e))?;
+    let mut buf = [0u8; 4096];
+    let len = db
+        .read(&mut buf)
+        .map_err(|e| anyhow::anyhow!("failed to read save db: {:?}", e))?;
+    let data = core::str::from_utf8(&buf[..len])?;
+    Ok(deserialize_save(data, player))
 }
 
 pub fn has_save_data() -> bool {

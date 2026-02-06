@@ -15,6 +15,7 @@ pub enum GameState {
     QuestLog,
     PauseMenu(usize),
     GameOver,
+    Error(String),
 }
 
 #[derive(Debug, Clone)]

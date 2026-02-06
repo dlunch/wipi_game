@@ -340,8 +340,7 @@ mod tests {
         let mut player = Player::new(String::from("H"), "v");
         player.add_item(make_potion());
         let removed = player.remove_item_at(0);
-        assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, "potion");
+        assert_eq!(removed.as_ref().map(|i| i.id.as_str()), Some("potion"));
         assert!(player.inventory.is_empty());
     }
 

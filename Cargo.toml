@@ -10,6 +10,7 @@ lgt = ["wipi/lgt", "wipi_build/lgt"]
 simulation = ["wipi/simulation"]
 
 [dependencies]
+anyhow = { version = "1", default-features = false }
 wipi = { git = "https://github.com/dlunch/wipi" }
 
 [build-dependencies]

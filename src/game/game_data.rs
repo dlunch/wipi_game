@@ -1,30 +1,13 @@
 use alloc::vec::Vec;
 use core::str;
 
-use wipi::WIPICError;
+use anyhow::{Context, Result};
 use wipi::resource::Resource;
 
 use crate::data::{
     Dialog, Enemy, Item, Map, Npc, Quest, Shop, parse_dialogs, parse_enemies, parse_items,
     parse_maps, parse_npcs, parse_quests, parse_shops,
 };
-
-pub enum LoadError {
-    Resource,
-    Utf8,
-}
-
-impl From<WIPICError> for LoadError {
-    fn from(_: WIPICError) -> Self {
-        LoadError::Resource
-    }
-}
-
-impl From<core::str::Utf8Error> for LoadError {
-    fn from(_: core::str::Utf8Error) -> Self {
-        LoadError::Utf8
-    }
-}
 
 #[derive(Default)]
 pub struct GameData {
@@ -43,52 +26,26 @@ impl GameData {
         "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops",
     ];
 
-    pub fn load_step(&mut self, step: usize) -> bool {
+    pub fn load_step(&mut self, step: usize) -> Result<bool> {
         match step {
-            0 => self.items = Self::load_items().unwrap_or_default(),
-            1 => self.enemies = Self::load_enemies().unwrap_or_default(),
-            2 => self.maps = Self::load_maps().unwrap_or_default(),
-            3 => self.npcs = Self::load_npcs().unwrap_or_default(),
-            4 => self.dialogs = Self::load_dialogs().unwrap_or_default(),
-            5 => self.quests = Self::load_quests().unwrap_or_default(),
-            6 => self.shops = Self::load_shops().unwrap_or_default(),
-            _ => return true,
+            0 => self.items = Self::load_resource("data/items.dat", parse_items)?,
+            1 => self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?,
+            2 => self.maps = Self::load_resource("data/maps.dat", parse_maps)?,
+            3 => self.npcs = Self::load_resource("data/npcs.dat", parse_npcs)?,
+            4 => self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?,
+            5 => self.quests = Self::load_resource("data/quests.dat", parse_quests)?,
+            6 => self.shops = Self::load_resource("data/shops.dat", parse_shops)?,
+            _ => return Ok(true),
         }
-        false
+        Ok(false)
     }
 
-    fn load_resource<T>(path: &str, parser: fn(&str) -> T) -> Result<T, LoadError> {
-        let resource = Resource::new(path)?;
-        let text = str::from_utf8(resource.read())?;
-        Ok(parser(text))
-    }
-
-    fn load_items() -> Result<Vec<Item>, LoadError> {
-        Self::load_resource("data/items.dat", parse_items)
-    }
-
-    fn load_enemies() -> Result<Vec<Enemy>, LoadError> {
-        Self::load_resource("data/enemies.dat", parse_enemies)
-    }
-
-    fn load_maps() -> Result<Vec<Map>, LoadError> {
-        Self::load_resource("data/maps.dat", parse_maps)
-    }
-
-    fn load_npcs() -> Result<Vec<Npc>, LoadError> {
-        Self::load_resource("data/npcs.dat", parse_npcs)
-    }
-
-    fn load_dialogs() -> Result<Vec<Dialog>, LoadError> {
-        Self::load_resource("data/dialogs.dat", parse_dialogs)
-    }
-
-    fn load_quests() -> Result<Vec<Quest>, LoadError> {
-        Self::load_resource("data/quests.dat", parse_quests)
-    }
-
-    fn load_shops() -> Result<Vec<Shop>, LoadError> {
-        Self::load_resource("data/shops.dat", parse_shops)
+    fn load_resource<T>(path: &str, parser: fn(&str) -> Result<T>) -> Result<T> {
+        let resource = Resource::new(path)
+            .map_err(|e| anyhow::anyhow!("failed to open resource '{}': {:?}", path, e))?;
+        let text = str::from_utf8(resource.read())
+            .with_context(|| alloc::format!("invalid UTF-8 in '{}'", path))?;
+        parser(text).with_context(|| alloc::format!("failed to parse '{}'", path))
     }
 
     pub fn find_map(&self, id: &str) -> Option<&Map> {

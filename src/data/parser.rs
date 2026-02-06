@@ -2,41 +2,56 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
+use anyhow::{Result, bail, ensure};
+
 use super::types::{
     Dialog, DialogAction, DialogCondition, DialogLine, Enemy, Item, ItemKind, Map, Npc, NpcType,
     Quest, QuestType, Shop, Tile,
 };
 
-pub fn parse_items(data: &str) -> Vec<Item> {
+fn parse_int(s: &str, field: &str, line: &str) -> Result<i32> {
+    s.parse::<i32>()
+        .map_err(|_| anyhow::anyhow!("invalid {} '{}' in: {}", field, s, line))
+}
+
+fn parse_usize(s: &str, field: &str, line: &str) -> Result<usize> {
+    s.parse::<usize>()
+        .map_err(|_| anyhow::anyhow!("invalid {} '{}' in: {}", field, s, line))
+}
+
+pub fn parse_items(data: &str) -> Result<Vec<Item>> {
     let mut items = Vec::new();
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() < 5 {
-            continue;
-        }
+        ensure!(parts.len() >= 5, "too few fields in item line: {}", line);
 
         let kind = match parts[0] {
             "W" => ItemKind::Weapon,
             "A" => ItemKind::Armor,
             "C" => ItemKind::Accessory,
             "I" => ItemKind::Consumable,
-            _ => continue,
+            _ => bail!("unknown item kind '{}' in: {}", parts[0], line),
         };
 
         let id = parts[1].to_string();
         let name = parts[2].to_string();
-        let param1 = parts[3].parse().unwrap_or(0);
-        let param2 = parts[4].parse().unwrap_or(0);
+        let param1 = parse_int(parts[3], "param1", line)?;
+        let param2 = parse_int(parts[4], "param2", line)?;
         let (param3, price) = if kind == ItemKind::Consumable {
-            (0, parts[4].parse().unwrap_or(0))
+            (0, parse_int(parts[4], "price", line)?)
         } else {
-            let p3 = parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0);
+            ensure!(
+                parts.len() >= 6,
+                "too few fields for equipment in: {}",
+                line
+            );
+            let p3 = parse_int(parts[5], "price", line)?;
             (param2, p3)
         };
 
@@ -55,53 +70,50 @@ pub fn parse_items(data: &str) -> Vec<Item> {
         });
     }
 
-    items
+    Ok(items)
 }
 
-pub fn parse_enemies(data: &str) -> Vec<Enemy> {
+pub fn parse_enemies(data: &str) -> Result<Vec<Enemy>> {
     let mut enemies = Vec::new();
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() < 7 {
-            continue;
-        }
+        ensure!(parts.len() >= 7, "too few fields in enemy line: {}", line);
 
         enemies.push(Enemy {
             id: parts[0].to_string(),
             name: parts[1].to_string(),
-            hp: parts[2].parse().unwrap_or(0),
-            atk: parts[3].parse().unwrap_or(0),
-            def: parts[4].parse().unwrap_or(0),
-            exp: parts[5].parse().unwrap_or(0),
-            gold: parts[6].parse().unwrap_or(0),
+            hp: parse_int(parts[2], "hp", line)?,
+            atk: parse_int(parts[3], "atk", line)?,
+            def: parse_int(parts[4], "def", line)?,
+            exp: parse_int(parts[5], "exp", line)?,
+            gold: parse_int(parts[6], "gold", line)?,
         });
     }
 
-    enemies
+    Ok(enemies)
 }
 
-pub fn parse_maps(data: &str) -> Vec<Map> {
+pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
     let mut maps = Vec::new();
     let mut current_map: Option<MapBuilder> = None;
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
 
         if let Some(rest) = line.strip_prefix("@MAP:") {
-            if let Some(builder) = current_map.take()
-                && let Some(map) = builder.build()
-            {
-                maps.push(map);
+            if let Some(builder) = current_map.take() {
+                maps.push(builder.build()?);
             }
 
             let parts: Vec<&str> = rest.split(':').collect();
-            let id = parts.first().map(|s| s.to_string()).unwrap_or_default();
+            ensure!(!parts.is_empty(), "missing map id in: {}", line);
+            let id = parts[0].to_string();
             let name = parts
                 .get(1)
                 .map(|s| s.to_string())
@@ -109,10 +121,8 @@ pub fn parse_maps(data: &str) -> Vec<Map> {
 
             current_map = Some(MapBuilder::new(id, name));
         } else if line == "@END" {
-            if let Some(builder) = current_map.take()
-                && let Some(map) = builder.build()
-            {
-                maps.push(map);
+            if let Some(builder) = current_map.take() {
+                maps.push(builder.build()?);
             }
         } else if let Some(rest) = line.strip_prefix("@ENCOUNTERS:") {
             if let Some(ref mut builder) = current_map {
@@ -120,7 +130,7 @@ pub fn parse_maps(data: &str) -> Vec<Map> {
                 let mut i = 0;
                 while i + 1 < parts.len() {
                     let enemy_id = parts[i].to_string();
-                    let weight = parts[i + 1].parse().unwrap_or(1);
+                    let weight = parse_int(parts[i + 1], "encounter weight", line)?;
                     builder.encounters.push((enemy_id, weight));
                     i += 2;
                 }
@@ -128,22 +138,28 @@ pub fn parse_maps(data: &str) -> Vec<Map> {
         } else if let Some(rest) = line.strip_prefix("@NEXT:") {
             if let Some(ref mut builder) = current_map {
                 let parts: Vec<&str> = rest.split(':').collect();
-                if parts.len() >= 3 {
-                    let x = parts[0].parse().unwrap_or(0);
-                    let y = parts[1].parse().unwrap_or(0);
-                    let target = parts[2].to_string();
-                    builder.exits.push((x, y, target));
-                }
+                ensure!(
+                    parts.len() >= 3,
+                    "too few fields in @NEXT directive: {}",
+                    line
+                );
+                let x = parse_usize(parts[0], "exit x", line)?;
+                let y = parse_usize(parts[1], "exit y", line)?;
+                let target = parts[2].to_string();
+                builder.exits.push((x, y, target));
             }
         } else if let Some(rest) = line.strip_prefix("@DUNGEON:") {
             if let Some(ref mut builder) = current_map {
                 let parts: Vec<&str> = rest.split(':').collect();
-                if parts.len() >= 3 {
-                    let x = parts[0].parse().unwrap_or(0);
-                    let y = parts[1].parse().unwrap_or(0);
-                    let target = parts[2].to_string();
-                    builder.dungeons.push((x, y, target));
-                }
+                ensure!(
+                    parts.len() >= 3,
+                    "too few fields in @DUNGEON directive: {}",
+                    line
+                );
+                let x = parse_usize(parts[0], "dungeon x", line)?;
+                let y = parse_usize(parts[1], "dungeon y", line)?;
+                let target = parts[2].to_string();
+                builder.dungeons.push((x, y, target));
             }
         } else if !line.is_empty()
             && let Some(ref mut builder) = current_map
@@ -152,57 +168,53 @@ pub fn parse_maps(data: &str) -> Vec<Map> {
         }
     }
 
-    if let Some(builder) = current_map
-        && let Some(map) = builder.build()
-    {
-        maps.push(map);
+    if let Some(builder) = current_map {
+        maps.push(builder.build()?);
     }
 
-    maps
+    Ok(maps)
 }
 
-pub fn parse_npcs(data: &str) -> Vec<Npc> {
+pub fn parse_npcs(data: &str) -> Result<Vec<Npc>> {
     let mut npcs = Vec::new();
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() < 6 {
-            continue;
-        }
+        ensure!(parts.len() >= 6, "too few fields in npc line: {}", line);
 
         let npc_type = match parts[3] {
             "V" => NpcType::Villager,
             "S" => NpcType::ShopKeeper,
             "Q" => NpcType::QuestGiver,
             "H" => NpcType::Healer,
-            _ => NpcType::Villager,
+            _ => bail!("unknown npc type '{}' in: {}", parts[3], line),
         };
 
         npcs.push(Npc {
             name: parts[1].to_string(),
             map_id: parts[2].to_string(),
             npc_type,
-            x: parts[4].parse().unwrap_or(0),
-            y: parts[5].parse().unwrap_or(0),
+            x: parse_usize(parts[4], "x", line)?,
+            y: parse_usize(parts[5], "y", line)?,
             dialog_id: parts.get(6).map(|s| s.to_string()).unwrap_or_default(),
             shop_id: parts.get(7).map(|s| s.to_string()),
         });
     }
 
-    npcs
+    Ok(npcs)
 }
 
-pub fn parse_dialogs(data: &str) -> Vec<Dialog> {
+pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
     let mut dialogs = Vec::new();
     let mut current: Option<DialogBuilder> = None;
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
 
         if let Some(rest) = line.strip_prefix("@DIALOG:") {
             if let Some(builder) = current.take() {
@@ -225,29 +237,27 @@ pub fn parse_dialogs(data: &str) -> Vec<Dialog> {
         dialogs.push(builder.build());
     }
 
-    dialogs
+    Ok(dialogs)
 }
 
-pub fn parse_quests(data: &str) -> Vec<Quest> {
+pub fn parse_quests(data: &str) -> Result<Vec<Quest>> {
     let mut quests = Vec::new();
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() < 8 {
-            continue;
-        }
+        ensure!(parts.len() >= 8, "too few fields in quest line: {}", line);
 
         let quest_type = match parts[2] {
             "KILL" => QuestType::Kill,
             "COLLECT" => QuestType::Collect,
             "TALK" => QuestType::Talk,
             "REACH" => QuestType::Reach,
-            _ => QuestType::Kill,
+            _ => bail!("unknown quest type '{}' in: {}", parts[2], line),
         };
 
         quests.push(Quest {
@@ -255,30 +265,28 @@ pub fn parse_quests(data: &str) -> Vec<Quest> {
             name: parts[1].to_string(),
             quest_type,
             target_id: parts[3].to_string(),
-            target_count: parts[4].parse().unwrap_or(1),
-            reward_exp: parts[5].parse().unwrap_or(0),
-            reward_gold: parts[6].parse().unwrap_or(0),
+            target_count: parse_int(parts[4], "target_count", line)?,
+            reward_exp: parse_int(parts[5], "reward_exp", line)?,
+            reward_gold: parse_int(parts[6], "reward_gold", line)?,
             reward_item: parts.get(8).map(|s| s.to_string()),
             description: parts[7].to_string(),
         });
     }
 
-    quests
+    Ok(quests)
 }
 
-pub fn parse_shops(data: &str) -> Vec<Shop> {
+pub fn parse_shops(data: &str) -> Result<Vec<Shop>> {
     let mut shops = Vec::new();
 
-    for line in data.lines() {
-        let line = line.trim();
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() < 3 {
-            continue;
-        }
+        ensure!(parts.len() >= 3, "too few fields in shop line: {}", line);
 
         let items: Vec<String> = parts[2..].iter().map(|s| s.to_string()).collect();
 
@@ -289,7 +297,7 @@ pub fn parse_shops(data: &str) -> Vec<Shop> {
         });
     }
 
-    shops
+    Ok(shops)
 }
 
 struct DialogBuilder {
@@ -408,10 +416,8 @@ impl MapBuilder {
         self.rows.push(row.to_string());
     }
 
-    fn build(self) -> Option<Map> {
-        if self.rows.is_empty() {
-            return None;
-        }
+    fn build(self) -> Result<Map> {
+        ensure!(!self.rows.is_empty(), "map '{}' has no tile rows", self.id);
 
         let height = self.rows.len();
         let width = self
@@ -419,7 +425,7 @@ impl MapBuilder {
             .iter()
             .map(|r| r.chars().count())
             .max()
-            .unwrap_or(0);
+            .unwrap();
 
         let mut tiles = vec![Tile::Floor; width * height];
         let mut auto_exits = Vec::new();
@@ -442,7 +448,7 @@ impl MapBuilder {
             }
         }
 
-        Some(Map {
+        Ok(Map {
             id: self.id,
             name: self.name,
             width,
@@ -460,9 +466,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_items_weapon_and_consumable() {
+    fn parse_items_weapon_and_consumable() -> Result<()> {
         let data = "W:sword:Iron Sword:10:5:200\nI:potion:Potion:30:50\n";
-        let items = parse_items(data);
+        let items = parse_items(data)?;
         assert_eq!(items.len(), 2);
 
         assert_eq!(items[0].id, "sword");
@@ -474,12 +480,13 @@ mod tests {
         assert_eq!(items[1].kind, ItemKind::Consumable);
         assert_eq!(items[1].param1, 30);
         assert_eq!(items[1].price, 50);
+        Ok(())
     }
 
     #[test]
-    fn parse_items_armor_and_accessory() {
+    fn parse_items_armor_and_accessory() -> Result<()> {
         let data = "A:leather:Leather:5:2:150\nC:ring:Ring:3:1:300\n";
-        let items = parse_items(data);
+        let items = parse_items(data)?;
         assert_eq!(items.len(), 2);
 
         assert_eq!(items[0].kind, ItemKind::Armor);
@@ -487,43 +494,56 @@ mod tests {
 
         assert_eq!(items[1].kind, ItemKind::Accessory);
         assert_eq!(items[1].param1, 3);
+        Ok(())
     }
 
     #[test]
-    fn parse_items_skips_comments_and_empty() {
+    fn parse_items_skips_comments_and_empty() -> Result<()> {
         let data = "# comment\n\nW:sword:Sword:10:0:100\n";
-        let items = parse_items(data);
+        let items = parse_items(data)?;
         assert_eq!(items.len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn parse_items_skips_malformed() {
-        let data = "W:too:few\nX:unknown:type:1:2:3\n";
-        let items = parse_items(data);
-        assert_eq!(items.len(), 0);
+    fn parse_items_rejects_too_few_fields() {
+        let data = "W:too:few\n";
+        assert!(parse_items(data).is_err());
     }
 
     #[test]
-    fn parse_enemies_basic() {
+    fn parse_items_rejects_unknown_kind() {
+        let data = "X:unknown:type:1:2:3\n";
+        assert!(parse_items(data).is_err());
+    }
+
+    #[test]
+    fn parse_items_rejects_bad_number() {
+        let data = "W:sword:Sword:abc:5:200\n";
+        assert!(parse_items(data).is_err());
+    }
+
+    #[test]
+    fn parse_enemies_basic() -> Result<()> {
         let data = "slime:Slime:20:5:2:10:5\ngoblin:Goblin:30:8:3:15:8\n";
-        let enemies = parse_enemies(data);
+        let enemies = parse_enemies(data)?;
         assert_eq!(enemies.len(), 2);
         assert_eq!(enemies[0].id, "slime");
         assert_eq!(enemies[0].hp, 20);
         assert_eq!(enemies[0].atk, 5);
         assert_eq!(enemies[1].id, "goblin");
         assert_eq!(enemies[1].gold, 8);
+        Ok(())
     }
 
     #[test]
-    fn parse_enemies_skips_short_lines() {
-        let data = "too:few:fields\n# comment\n";
-        let enemies = parse_enemies(data);
-        assert_eq!(enemies.len(), 0);
+    fn parse_enemies_rejects_short_lines() {
+        let data = "too:few:fields\n";
+        assert!(parse_enemies(data).is_err());
     }
 
     #[test]
-    fn parse_maps_basic() {
+    fn parse_maps_basic() -> Result<()> {
         let data = "\
 @MAP:village:Village
 ###
@@ -533,7 +553,7 @@ mod tests {
 @NEXT:1:1:dungeon
 @END
 ";
-        let maps = parse_maps(data);
+        let maps = parse_maps(data)?;
         assert_eq!(maps.len(), 1);
         let map = &maps[0];
         assert_eq!(map.id, "village");
@@ -546,10 +566,11 @@ mod tests {
         assert_eq!(map.encounters[0].0, "slime");
         assert_eq!(map.exits.len(), 1);
         assert_eq!(map.exits[0].2, "dungeon");
+        Ok(())
     }
 
     #[test]
-    fn parse_maps_multiple() {
+    fn parse_maps_multiple() -> Result<()> {
         let data = "\
 @MAP:a:Map A
 #P
@@ -558,47 +579,50 @@ mod tests {
 P#
 @END
 ";
-        let maps = parse_maps(data);
+        let maps = parse_maps(data)?;
         assert_eq!(maps.len(), 2);
         assert_eq!(maps[0].id, "a");
         assert_eq!(maps[1].id, "b");
+        Ok(())
     }
 
     #[test]
-    fn parse_maps_auto_exit_tiles() {
+    fn parse_maps_auto_exit_tiles() -> Result<()> {
         let data = "\
 @MAP:test:Test
 #>#
 @END
 ";
-        let maps = parse_maps(data);
+        let maps = parse_maps(data)?;
         assert_eq!(maps[0].exits.len(), 1);
         assert_eq!(maps[0].exits[0].0, 1);
         assert_eq!(maps[0].exits[0].1, 0);
+        Ok(())
     }
 
     #[test]
-    fn parse_maps_dungeon_directive() {
+    fn parse_maps_dungeon_directive() -> Result<()> {
         let data = "\
 @MAP:test:Test
 #D#
 @DUNGEON:1:0:cave
 @END
 ";
-        let maps = parse_maps(data);
+        let maps = parse_maps(data)?;
         assert_eq!(maps[0].dungeons.len(), 1);
         assert_eq!(maps[0].dungeons[0].2, "cave");
+        Ok(())
     }
 
     #[test]
-    fn parse_dialogs_basic() {
+    fn parse_dialogs_basic() -> Result<()> {
         let data = "\
 @DIALOG:greet
 Hello there!
 HEAL:I'll heal you.
 @END
 ";
-        let dialogs = parse_dialogs(data);
+        let dialogs = parse_dialogs(data)?;
         assert_eq!(dialogs.len(), 1);
         assert_eq!(dialogs[0].id, "greet");
         assert_eq!(dialogs[0].lines.len(), 2);
@@ -608,17 +632,18 @@ HEAL:I'll heal you.
             dialogs[0].lines[1].action,
             Some(DialogAction::Heal)
         ));
+        Ok(())
     }
 
     #[test]
-    fn parse_dialogs_with_condition_and_action() {
+    fn parse_dialogs_with_condition_and_action() -> Result<()> {
         let data = "\
 @DIALOG:quest_npc
 HAS_QUEST=slay:COMPLETE_QUEST=slay:Well done!
 GIVE_QUEST=slay:Kill the slimes!
 @END
 ";
-        let dialogs = parse_dialogs(data);
+        let dialogs = parse_dialogs(data)?;
         let lines = &dialogs[0].lines;
         assert_eq!(lines.len(), 2);
         assert!(matches!(
@@ -630,12 +655,13 @@ GIVE_QUEST=slay:Kill the slimes!
             Some(DialogAction::CompleteQuest(_))
         ));
         assert!(matches!(lines[1].action, Some(DialogAction::GiveQuest(_))));
+        Ok(())
     }
 
     #[test]
-    fn parse_quests_basic() {
+    fn parse_quests_basic() -> Result<()> {
         let data = "slay:Slay Quest:KILL:slime:5:50:20:Kill 5 slimes\n";
-        let quests = parse_quests(data);
+        let quests = parse_quests(data)?;
         assert_eq!(quests.len(), 1);
         assert_eq!(quests[0].id, "slay");
         assert_eq!(quests[0].quest_type, QuestType::Kill);
@@ -644,29 +670,38 @@ GIVE_QUEST=slay:Kill the slimes!
         assert_eq!(quests[0].reward_exp, 50);
         assert_eq!(quests[0].reward_gold, 20);
         assert!(quests[0].reward_item.is_none());
+        Ok(())
     }
 
     #[test]
-    fn parse_quests_with_reward_item() {
+    fn parse_quests_with_reward_item() -> Result<()> {
         let data = "q1:Quest:COLLECT:herb:3:30:10:Collect herbs:potion\n";
-        let quests = parse_quests(data);
+        let quests = parse_quests(data)?;
         assert_eq!(quests[0].reward_item.as_deref(), Some("potion"));
+        Ok(())
     }
 
     #[test]
-    fn parse_shops_basic() {
+    fn parse_quests_rejects_unknown_type() {
+        let data = "q1:Quest:INVALID:x:1:10:5:desc\n";
+        assert!(parse_quests(data).is_err());
+    }
+
+    #[test]
+    fn parse_shops_basic() -> Result<()> {
         let data = "shop1:General Store:potion:sword:armor\n";
-        let shops = parse_shops(data);
+        let shops = parse_shops(data)?;
         assert_eq!(shops.len(), 1);
         assert_eq!(shops[0].id, "shop1");
         assert_eq!(shops[0].name, "General Store");
         assert_eq!(shops[0].items, vec!["potion", "sword", "armor"]);
+        Ok(())
     }
 
     #[test]
-    fn parse_npcs_basic() {
+    fn parse_npcs_basic() -> Result<()> {
         let data = "npc1:Elder:village:Q:3:5:elder_dialog\n";
-        let npcs = parse_npcs(data);
+        let npcs = parse_npcs(data)?;
         assert_eq!(npcs.len(), 1);
         assert_eq!(npcs[0].name, "Elder");
         assert_eq!(npcs[0].map_id, "village");
@@ -674,13 +709,21 @@ GIVE_QUEST=slay:Kill the slimes!
         assert_eq!(npcs[0].x, 3);
         assert_eq!(npcs[0].y, 5);
         assert_eq!(npcs[0].dialog_id, "elder_dialog");
+        Ok(())
     }
 
     #[test]
-    fn parse_npcs_with_shop() {
+    fn parse_npcs_with_shop() -> Result<()> {
         let data = "npc1:Merchant:town:S:2:3:shop_dialog:shop1\n";
-        let npcs = parse_npcs(data);
+        let npcs = parse_npcs(data)?;
         assert_eq!(npcs[0].npc_type, NpcType::ShopKeeper);
         assert_eq!(npcs[0].shop_id.as_deref(), Some("shop1"));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_npcs_rejects_unknown_type() {
+        let data = "npc1:Test:map:Z:0:0:dialog\n";
+        assert!(parse_npcs(data).is_err());
     }
 }

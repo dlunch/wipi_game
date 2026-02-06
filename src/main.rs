@@ -5,6 +5,7 @@ extern crate alloc;
 mod data;
 mod game;
 
+use alloc::format;
 use alloc::string::String;
 
 use wipi::{app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main};
@@ -83,22 +84,28 @@ impl RpgGame {
     fn continue_game(&mut self) {
         self.player = Player::new(String::from("Hero"), "village");
 
-        if load_game(&mut self.player) {
-            if self.data.find_map(&self.player.current_map_id).is_none() {
-                self.player.current_map_id = String::from("village");
-            }
-            if let Some(map) = self.data.find_map(&self.player.current_map_id) {
-                if map.get_tile(self.player.x, self.player.y) == data::Tile::Wall
-                    || self.player.x >= map.width
-                    || self.player.y >= map.height
-                {
-                    self.player.spawn_at_map(map);
+        match load_game(&mut self.player) {
+            Ok(true) => {
+                if self.data.find_map(&self.player.current_map_id).is_none() {
+                    self.player.current_map_id = String::from("village");
                 }
-                self.combat.spawn_enemies(map, &self.data.enemies);
+                if let Some(map) = self.data.find_map(&self.player.current_map_id) {
+                    if map.get_tile(self.player.x, self.player.y) == data::Tile::Wall
+                        || self.player.x >= map.width
+                        || self.player.y >= map.height
+                    {
+                        self.player.spawn_at_map(map);
+                    }
+                    self.combat.spawn_enemies(map, &self.data.enemies);
+                }
+                self.state = GameState::Explore;
             }
-            self.state = GameState::Explore;
-        } else {
-            self.start_new_game();
+            Ok(false) => {
+                self.start_new_game();
+            }
+            Err(_) => {
+                self.start_new_game();
+            }
         }
     }
 
@@ -109,13 +116,19 @@ impl RpgGame {
 
         self.draw_loading(step);
 
-        if self.data.load_step(step) {
-            self.state = GameState::Menu(MenuState {
-                selected: 0,
-                has_save: has_save_data(),
-            });
-        } else {
-            self.state = GameState::Loading(step + 1);
+        match self.data.load_step(step) {
+            Ok(true) => {
+                self.state = GameState::Menu(MenuState {
+                    selected: 0,
+                    has_save: has_save_data(),
+                });
+            }
+            Ok(false) => {
+                self.state = GameState::Loading(step + 1);
+            }
+            Err(e) => {
+                self.state = GameState::Error(format!("Load error: {}", e));
+            }
         }
     }
 
@@ -128,7 +141,7 @@ impl RpgGame {
 
         draw_text(&mut fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
 
-        let label = GameData::LOAD_LABELS.get(step).unwrap_or(&"");
+        let label = GameData::LOAD_LABELS[step];
         draw_text(&mut fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
 
         let bar_w = 120;
@@ -353,7 +366,7 @@ impl RpgGame {
             KeyCode::Key3 => self.use_skill(2, &Skill::SPIN_ATTACK),
             KeyCode::Key0 => self.state = GameState::PauseMenu(0),
             KeyCode::Back => {
-                save_game(&self.player);
+                let _ = save_game(&self.player);
                 self.state = GameState::Menu(MenuState {
                     selected: 0,
                     has_save: has_save_data(),
@@ -482,7 +495,7 @@ impl RpgGame {
                 1 => self.state = GameState::Stats,
                 2 => self.state = GameState::QuestLog,
                 3 => {
-                    save_game(&self.player);
+                    let _ = save_game(&self.player);
                     self.state = GameState::Explore;
                 }
                 _ => {}
@@ -540,6 +553,16 @@ impl App for RpgGame {
                 draw_text(&mut fb, w / 2 - 35, h / 2 - 8, "GAME OVER", COLOR_RED);
                 draw_text(&mut fb, w / 2 - 30, h / 2 + 8, "OK:Menu", COLOR_WHITE);
             }
+            GameState::Error(msg) => {
+                clear_screen(&mut fb);
+                let w = fb.width() as i32;
+                let h = fb.height() as i32;
+                fill_rect(&mut fb, 10, h / 2 - 30, w - 20, 60, COLOR_DARK_GRAY);
+                draw_rect(&mut fb, 10, h / 2 - 30, w - 20, 60, COLOR_RED);
+                draw_text(&mut fb, 16, h / 2 - 20, "ERROR", COLOR_RED);
+                draw_text(&mut fb, 16, h / 2 - 4, msg, COLOR_WHITE);
+                draw_text(&mut fb, 16, h / 2 + 16, "OK:Exit", COLOR_WHITE);
+            }
         }
 
         repaint(0, 0, 0, fb.width() as i32, fb.height() as i32);
@@ -565,6 +588,11 @@ impl App for RpgGame {
                         selected: 0,
                         has_save: has_save_data(),
                     });
+                }
+            }
+            GameState::Error(_) => {
+                if matches!(key, KeyCode::Ok) {
+                    wipi::kernel::exit(1);
                 }
             }
         }
