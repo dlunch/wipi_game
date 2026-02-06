@@ -47,15 +47,21 @@ pub fn draw_quest_log(fb: &mut Framebuffer, player: &Player, quests: &[Quest]) {
             draw_text(fb, screen_w - 40, y, &progress_text, status_color2);
 
             let desc_y = y + 10;
-            let max_len = ((screen_w - 16) / 6) as usize;
-            let desc = if quest.description.len() > max_len {
-                &quest.description[..max_len]
-            } else {
-                &quest.description
-            };
+            let max_chars = ((screen_w - 16) / 6) as usize;
+            let desc = truncate_by_chars(&quest.description, max_chars);
             draw_text(fb, 12, desc_y, desc, COLOR_GRAY);
         }
     }
 
     draw_text(fb, 8, screen_h - 14, "Back:Close", COLOR_GRAY);
+}
+
+fn truncate_by_chars(s: &str, max_chars: usize) -> &str {
+    if max_chars == 0 {
+        return "";
+    }
+    match s.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    }
 }

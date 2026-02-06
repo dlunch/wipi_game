@@ -87,7 +87,12 @@ impl NpcInteraction {
                 player.add_quest(id);
             }
             DialogAction::CompleteQuest(id) => {
-                if let Some(quest) = data.find_quest(id) {
+                let can_reward = player
+                    .quests
+                    .iter()
+                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+
+                if can_reward && let Some(quest) = data.find_quest(id) {
                     player.stats.add_exp(quest.reward_exp);
                     player.stats.gold += quest.reward_gold;
 
@@ -97,7 +102,7 @@ impl NpcInteraction {
                         player.add_item(item);
                     }
 
-                    player.complete_quest(id);
+                    player.mark_quest_rewarded(id);
                 }
             }
             DialogAction::GiveItem(id) => {

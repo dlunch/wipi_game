@@ -36,6 +36,12 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
 
 fn wrap_text(text: &str, max_chars: usize) -> alloc::vec::Vec<&str> {
     let mut lines = alloc::vec::Vec::new();
+
+    if max_chars == 0 || text.is_empty() {
+        lines.push("");
+        return lines;
+    }
+
     let mut start = 0;
     let chars: alloc::vec::Vec<_> = text.char_indices().collect();
 

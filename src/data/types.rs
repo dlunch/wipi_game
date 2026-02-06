@@ -27,6 +27,31 @@ pub struct Item {
     pub price: i32,
 }
 
+impl Item {
+    pub fn atk(&self) -> i32 {
+        match self.kind {
+            ItemKind::Weapon => self.param1,
+            ItemKind::Accessory => self.param1,
+            _ => 0,
+        }
+    }
+
+    pub fn def(&self) -> i32 {
+        match self.kind {
+            ItemKind::Armor => self.param1,
+            ItemKind::Accessory => self.param2,
+            _ => 0,
+        }
+    }
+
+    pub fn hp_restore(&self) -> i32 {
+        match self.kind {
+            ItemKind::Consumable => self.param1,
+            _ => 0,
+        }
+    }
+}
+
 /// 적 데이터
 /// 포맷: id:name:hp:atk:def:exp:gold
 /// slime:슬라임:20:5:2:10:5
@@ -163,14 +188,14 @@ impl Default for PlayerStats {
 
 impl PlayerStats {
     pub fn total_atk(&self, weapon: Option<&Item>, accessory: Option<&Item>) -> i32 {
-        let weapon_atk = weapon.map(|w| w.param1).unwrap_or(0);
-        let accessory_atk = accessory.map(|a| a.param1).unwrap_or(0);
+        let weapon_atk = weapon.map(|w| w.atk()).unwrap_or(0);
+        let accessory_atk = accessory.map(|a| a.atk()).unwrap_or(0);
         self.base_atk + weapon_atk + accessory_atk
     }
 
     pub fn total_def(&self, armor: Option<&Item>, accessory: Option<&Item>) -> i32 {
-        let armor_def = armor.map(|a| a.param1).unwrap_or(0);
-        let accessory_def = accessory.map(|a| a.param2).unwrap_or(0);
+        let armor_def = armor.map(|a| a.def()).unwrap_or(0);
+        let accessory_def = accessory.map(|a| a.def()).unwrap_or(0);
         self.base_def + armor_def + accessory_def
     }
 

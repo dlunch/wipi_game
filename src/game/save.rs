@@ -1,4 +1,5 @@
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
 
 use wipi::database::{Database, OpenMode};
@@ -35,44 +36,43 @@ pub fn has_save_data() -> bool {
 }
 
 fn serialize_save(player: &Player) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(format_args_to_string(&[
-        "PLAYER",
-        &player.name,
-        &player.current_map_id,
-        &player.x.to_string(),
-        &player.y.to_string(),
-    ]));
-
-    lines.push(format_args_to_string(&[
-        "STATS",
-        &player.stats.level.to_string(),
-        &player.stats.exp.to_string(),
-        &player.stats.max_hp.to_string(),
-        &player.stats.current_hp.to_string(),
-        &player.stats.max_mp.to_string(),
-        &player.stats.current_mp.to_string(),
-        &player.stats.base_atk.to_string(),
-        &player.stats.base_def.to_string(),
-        &player.stats.gold.to_string(),
-    ]));
-
-    lines.push(format_args_to_string(&[
-        "EQUIP",
-        &player
-            .equipped_weapon
-            .map(|i| i.to_string())
-            .unwrap_or_else(|| "-1".into()),
-        &player
-            .equipped_armor
-            .map(|i| i.to_string())
-            .unwrap_or_else(|| "-1".into()),
-        &player
-            .equipped_accessory
-            .map(|i| i.to_string())
-            .unwrap_or_else(|| "-1".into()),
-    ]));
+    let mut lines = vec![
+        String::from("VERSION:1"),
+        format_args_to_string(&[
+            "PLAYER",
+            &player.name,
+            &player.current_map_id,
+            &player.x.to_string(),
+            &player.y.to_string(),
+        ]),
+        format_args_to_string(&[
+            "STATS",
+            &player.stats.level.to_string(),
+            &player.stats.exp.to_string(),
+            &player.stats.max_hp.to_string(),
+            &player.stats.current_hp.to_string(),
+            &player.stats.max_mp.to_string(),
+            &player.stats.current_mp.to_string(),
+            &player.stats.base_atk.to_string(),
+            &player.stats.base_def.to_string(),
+            &player.stats.gold.to_string(),
+        ]),
+        format_args_to_string(&[
+            "EQUIP",
+            &player
+                .equipped_weapon
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "-1".into()),
+            &player
+                .equipped_armor
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "-1".into()),
+            &player
+                .equipped_accessory
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "-1".into()),
+        ]),
+    ];
 
     for item in &player.inventory {
         let kind_char = match item.kind {
@@ -136,9 +136,12 @@ fn deserialize_save(data: &str, player: &mut Player) -> bool {
     player.quests.clear();
     player.opened_treasures.clear();
 
+    let mut has_player = false;
+    let mut has_stats = false;
+
     for line in data.lines() {
         let line = line.trim();
-        if line.is_empty() {
+        if line.is_empty() || line.starts_with("VERSION:") {
             continue;
         }
 
@@ -153,18 +156,22 @@ fn deserialize_save(data: &str, player: &mut Player) -> bool {
                 player.current_map_id = parts[2].into();
                 player.x = parts[3].parse().unwrap_or(0);
                 player.y = parts[4].parse().unwrap_or(0);
+                has_player = true;
             }
             "STATS" if parts.len() >= 10 => {
-                player.stats.level = parts[1].parse().unwrap_or(1);
-                player.stats.exp = parts[2].parse().unwrap_or(0);
-                player.stats.max_hp = parts[3].parse().unwrap_or(50);
+                player.stats.level = parts[1].parse().unwrap_or(1).max(1);
+                player.stats.exp = parts[2].parse().unwrap_or(0).max(0);
+                player.stats.max_hp = parts[3].parse().unwrap_or(50).max(1);
                 player.stats.current_hp = parts[4].parse().unwrap_or(50);
-                player.stats.max_mp = parts[5].parse().unwrap_or(20);
+                player.stats.max_mp = parts[5].parse().unwrap_or(20).max(0);
                 player.stats.current_mp = parts[6].parse().unwrap_or(20);
-                player.stats.base_atk = parts[7].parse().unwrap_or(10);
-                player.stats.base_def = parts[8].parse().unwrap_or(5);
-                player.stats.gold = parts[9].parse().unwrap_or(0);
+                player.stats.base_atk = parts[7].parse().unwrap_or(10).max(0);
+                player.stats.base_def = parts[8].parse().unwrap_or(5).max(0);
+                player.stats.gold = parts[9].parse().unwrap_or(0).max(0);
                 player.stats.exp_to_next = player.stats.level * 100;
+                player.stats.current_hp = player.stats.current_hp.clamp(0, player.stats.max_hp);
+                player.stats.current_mp = player.stats.current_mp.clamp(0, player.stats.max_mp);
+                has_stats = true;
             }
             "EQUIP" if parts.len() >= 4 => {
                 player.equipped_weapon = parts[1]
@@ -217,6 +224,27 @@ fn deserialize_save(data: &str, player: &mut Player) -> bool {
             }
             _ => {}
         }
+    }
+
+    if !has_player || !has_stats {
+        return false;
+    }
+
+    let inv_len = player.inventory.len();
+    if let Some(idx) = player.equipped_weapon
+        && idx >= inv_len
+    {
+        player.equipped_weapon = None;
+    }
+    if let Some(idx) = player.equipped_armor
+        && idx >= inv_len
+    {
+        player.equipped_armor = None;
+    }
+    if let Some(idx) = player.equipped_accessory
+        && idx >= inv_len
+    {
+        player.equipped_accessory = None;
     }
 
     true

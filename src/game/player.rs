@@ -111,7 +111,7 @@ impl Player {
         let item = &self.inventory[index];
         match item.kind {
             ItemKind::Consumable => {
-                let heal = item.param1;
+                let heal = item.hp_restore();
                 self.stats.heal(heal);
                 self.inventory.remove(index);
                 self.fix_equipped_indices(index);
@@ -209,7 +209,7 @@ impl Player {
         }
     }
 
-    pub fn complete_quest(&mut self, quest_id: &str) {
+    pub fn mark_quest_rewarded(&mut self, quest_id: &str) {
         if let Some(q) = self.quests.iter_mut().find(|q| q.quest_id == quest_id) {
             q.rewarded = true;
         }

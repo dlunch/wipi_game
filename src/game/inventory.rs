@@ -19,12 +19,18 @@ impl InventoryState {
     pub fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
+            if self.selected < self.scroll {
+                self.scroll = self.selected;
+            }
         }
     }
 
-    pub fn move_down(&mut self, item_count: usize) {
+    pub fn move_down(&mut self, item_count: usize, visible_items: usize) {
         if item_count > 0 && self.selected < item_count - 1 {
             self.selected += 1;
+            if self.selected >= self.scroll + visible_items {
+                self.scroll = self.selected - visible_items + 1;
+            }
         }
     }
 }
@@ -49,14 +55,7 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventorySt
     let start_y: i32 = 24;
     let item_height: i32 = 14;
     let visible_items = ((screen_h - 50) / item_height).max(1) as usize;
-
-    let scroll = if state.selected < state.scroll {
-        state.selected
-    } else if state.selected >= state.scroll + visible_items {
-        state.selected - visible_items + 1
-    } else {
-        state.scroll
-    };
+    let scroll = state.scroll;
 
     for (i, item) in player
         .inventory

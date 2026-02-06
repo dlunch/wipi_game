@@ -58,12 +58,14 @@ impl RpgGame {
         self.player = Player::new(String::from("Hero"), "village");
 
         if let Some(sword) = self.data.find_item("wooden_sword").cloned() {
+            let idx = self.player.inventory.len();
             self.player.add_item(sword);
-            self.player.equipped_weapon = Some(0);
+            self.player.equipped_weapon = Some(idx);
         }
         if let Some(armor) = self.data.find_item("cloth").cloned() {
+            let idx = self.player.inventory.len();
             self.player.add_item(armor);
-            self.player.equipped_armor = Some(1);
+            self.player.equipped_armor = Some(idx);
         }
         if let Some(potion) = self.data.find_item("potion").cloned() {
             self.player.add_item(potion.clone());
@@ -82,7 +84,16 @@ impl RpgGame {
         self.player = Player::new(String::from("Hero"), "village");
 
         if load_game(&mut self.player) {
+            if self.data.find_map(&self.player.current_map_id).is_none() {
+                self.player.current_map_id = String::from("village");
+            }
             if let Some(map) = self.data.find_map(&self.player.current_map_id) {
+                if map.get_tile(self.player.x, self.player.y) == data::Tile::Wall
+                    || self.player.x >= map.width
+                    || self.player.y >= map.height
+                {
+                    self.player.spawn_at_map(map);
+                }
                 self.combat.spawn_enemies(map, &self.data.enemies);
             }
             self.state = GameState::Explore;
@@ -126,7 +137,7 @@ impl RpgGame {
         let bar_y = h / 2 + 10;
 
         draw_rect(&mut fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
-        let progress = ((step + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32;
+        let progress = (((step + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32).min(bar_w);
         fill_rect(
             &mut fb,
             bar_x + 1,
@@ -355,7 +366,12 @@ impl RpgGame {
     fn handle_inventory_input(&mut self, key: KeyCode) {
         match key {
             KeyCode::Up => self.inventory_state.move_up(),
-            KeyCode::Down => self.inventory_state.move_down(self.player.inventory.len()),
+            KeyCode::Down => {
+                let fb = Framebuffer::screen_framebuffer();
+                let visible = ((fb.height() as i32 - 50) / 14).max(1) as usize;
+                self.inventory_state
+                    .move_down(self.player.inventory.len(), visible);
+            }
             KeyCode::Ok => {
                 self.player.use_item(self.inventory_state.selected);
             }

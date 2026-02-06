@@ -127,6 +127,10 @@ impl CombatSystem {
         self.enemies.clear();
         self.respawn_positions.clear();
         self.respawn_timer = 0;
+        self.player_attack_cooldown = 0;
+        self.player_hit_flash = 0;
+        self.skill_effects.clear();
+        self.update_counter = 0;
 
         let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
         for y in 0..map.height {
