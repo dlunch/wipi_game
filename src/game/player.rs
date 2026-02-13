@@ -2,29 +2,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::Direction;
-use crate::data::{Item, ItemKind, Map, PlayerStats, QuestProgress};
-
-pub enum PlayerIntent {
-    UpdateCooldowns,
-    UseSkill {
-        slot: usize,
-        mp_cost: i32,
-        cooldown: u32,
-    },
-    UseItem {
-        index: usize,
-    },
-    TakeDamage(i32),
-    Heal(i32),
-    RecoverMp(i32),
-}
-
-pub enum PlayerEvent {
-    None,
-    ItemUsed,
-    SkillUsed,
-    Died,
-}
+use crate::data::{Item, Map, PlayerStats, QuestProgress};
 
 pub struct Player {
     pub name: String,
@@ -43,50 +21,6 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn reduce(&mut self, intent: PlayerIntent) -> PlayerEvent {
-        match intent {
-            PlayerIntent::UpdateCooldowns => {
-                self.update_cooldowns();
-                PlayerEvent::None
-            }
-            PlayerIntent::UseSkill {
-                slot,
-                mp_cost,
-                cooldown,
-            } => {
-                if self.can_use_skill(slot, mp_cost) {
-                    self.use_skill(slot, mp_cost, cooldown);
-                    PlayerEvent::SkillUsed
-                } else {
-                    PlayerEvent::None
-                }
-            }
-            PlayerIntent::UseItem { index } => {
-                if self.use_item(index) {
-                    PlayerEvent::ItemUsed
-                } else {
-                    PlayerEvent::None
-                }
-            }
-            PlayerIntent::TakeDamage(amount) => {
-                self.stats.take_damage(amount);
-                if self.stats.is_dead() {
-                    PlayerEvent::Died
-                } else {
-                    PlayerEvent::None
-                }
-            }
-            PlayerIntent::Heal(amount) => {
-                self.stats.heal(amount);
-                PlayerEvent::None
-            }
-            PlayerIntent::RecoverMp(amount) => {
-                self.stats.recover_mp(amount);
-                PlayerEvent::None
-            }
-        }
-    }
-
     pub fn new(name: String, start_map: &str) -> Self {
         Self {
             name,
@@ -102,25 +36,6 @@ impl Player {
             quests: Vec::new(),
             opened_treasures: Vec::new(),
             skill_cooldowns: [0; 3],
-        }
-    }
-
-    pub fn update_cooldowns(&mut self) {
-        for cd in &mut self.skill_cooldowns {
-            if *cd > 0 {
-                *cd -= 1;
-            }
-        }
-    }
-
-    pub fn can_use_skill(&self, slot: usize, mp_cost: i32) -> bool {
-        slot < 3 && self.skill_cooldowns[slot] == 0 && self.stats.current_mp >= mp_cost
-    }
-
-    pub fn use_skill(&mut self, slot: usize, mp_cost: i32, cooldown: u32) {
-        if slot < 3 {
-            self.skill_cooldowns[slot] = cooldown;
-            self.stats.current_mp = (self.stats.current_mp - mp_cost).max(0);
         }
     }
 
@@ -169,36 +84,7 @@ impl Player {
         self.inventory.push(item);
     }
 
-    pub fn use_item(&mut self, index: usize) -> bool {
-        if index >= self.inventory.len() {
-            return false;
-        }
-
-        let item = &self.inventory[index];
-        match item.kind {
-            ItemKind::Consumable => {
-                let heal = item.hp_restore();
-                self.stats.heal(heal);
-                self.inventory.remove(index);
-                self.fix_equipped_indices(index);
-                true
-            }
-            ItemKind::Weapon => {
-                self.equipped_weapon = Some(index);
-                true
-            }
-            ItemKind::Armor => {
-                self.equipped_armor = Some(index);
-                true
-            }
-            ItemKind::Accessory => {
-                self.equipped_accessory = Some(index);
-                true
-            }
-        }
-    }
-
-    fn fix_equipped_indices(&mut self, removed: usize) {
+    pub fn fix_equipped_indices(&mut self, removed: usize) {
         if let Some(ref mut i) = self.equipped_weapon {
             if *i > removed {
                 *i -= 1;
@@ -309,6 +195,7 @@ impl Player {
 mod tests {
     use super::*;
     use crate::data::{Item, ItemKind};
+    use crate::game::systems::player::{can_use_skill, update_cooldowns, use_item, use_skill};
 
     fn make_item(id: &str, kind: ItemKind) -> Item {
         Item {
@@ -348,7 +235,7 @@ mod tests {
     fn equip_weapon_via_use_item() {
         let mut player = Player::new(String::from("H"), "v");
         player.add_item(make_item("sword", ItemKind::Weapon));
-        assert!(player.use_item(0));
+        assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_weapon, Some(0));
     }
 
@@ -356,7 +243,7 @@ mod tests {
     fn equip_armor_via_use_item() {
         let mut player = Player::new(String::from("H"), "v");
         player.add_item(make_item("armor", ItemKind::Armor));
-        assert!(player.use_item(0));
+        assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_armor, Some(0));
     }
 
@@ -365,7 +252,7 @@ mod tests {
         let mut player = Player::new(String::from("H"), "v");
         player.stats.current_hp = 20;
         player.add_item(make_potion());
-        assert!(player.use_item(0));
+        assert!(use_item(&mut player, 0));
         assert_eq!(player.stats.current_hp, 50);
         assert!(player.inventory.is_empty());
     }
@@ -379,7 +266,7 @@ mod tests {
         player.equipped_weapon = Some(1);
         player.equipped_armor = Some(2);
 
-        player.use_item(0); // remove potion at index 0
+        use_item(&mut player, 0); // remove potion at index 0
         assert_eq!(player.equipped_weapon, Some(0)); // shifted from 1 to 0
         assert_eq!(player.equipped_armor, Some(1)); // shifted from 2 to 1
     }
@@ -397,8 +284,8 @@ mod tests {
     #[test]
     fn use_item_out_of_bounds() {
         let mut player = Player::new(String::from("H"), "v");
-        assert!(!player.use_item(0));
-        assert!(!player.use_item(99));
+        assert!(!use_item(&mut player, 0));
+        assert!(!use_item(&mut player, 99));
     }
 
     #[test]
@@ -457,24 +344,24 @@ mod tests {
     #[test]
     fn skill_cooldowns() {
         let mut player = Player::new(String::from("H"), "v");
-        assert!(player.can_use_skill(0, 10));
+        assert!(can_use_skill(&player, 0, 10));
 
-        player.use_skill(0, 10, 30);
-        assert!(!player.can_use_skill(0, 10)); // on cooldown
+        use_skill(&mut player, 0, 10, 30);
+        assert!(!can_use_skill(&player, 0, 10)); // on cooldown
         assert_eq!(player.skill_cooldowns[0], 30);
         assert_eq!(player.stats.current_mp, 20); // 30 - 10
 
         for _ in 0..30 {
-            player.update_cooldowns();
+            update_cooldowns(&mut player);
         }
-        assert!(player.can_use_skill(0, 10)); // cooldown expired
+        assert!(can_use_skill(&player, 0, 10)); // cooldown expired
     }
 
     #[test]
     fn skill_insufficient_mp() {
         let mut player = Player::new(String::from("H"), "v");
         player.stats.current_mp = 5;
-        assert!(!player.can_use_skill(0, 10));
+        assert!(!can_use_skill(&player, 0, 10));
     }
 
     #[test]

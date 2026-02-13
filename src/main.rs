@@ -192,11 +192,7 @@ impl RpgGame {
                 });
             }
             AppEffect::ReleaseMovementKey(key) => {
-                let _ = game::movement::reduce(
-                    &mut self.movement,
-                    game::MovementIntent::KeyReleased(key),
-                    None,
-                );
+                game::movement::on_key_released(&mut self.movement, key);
             }
             AppEffect::Exit(code) => wipi::kernel::exit(code),
         }
@@ -392,15 +388,12 @@ impl RpgGame {
             return;
         };
 
-        let moved = game::movement::reduce(
+        let moved = game::movement::tick(
             &mut self.movement,
-            game::MovementIntent::Tick,
-            Some(game::MovementContext {
-                player: &mut self.player,
-                map,
-                combat: &self.combat,
-                npcs: &self.data.npcs,
-            }),
+            &mut self.player,
+            map,
+            &self.combat,
+            &self.data.npcs,
         );
 
         if moved {
@@ -413,12 +406,12 @@ impl RpgGame {
             return;
         }
 
-        let _ = self.player.reduce(game::PlayerIntent::UpdateCooldowns);
+        let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UpdateCooldowns);
 
         self.mp_regen_timer += 1;
         if self.mp_regen_timer >= MP_REGEN_INTERVAL {
             self.mp_regen_timer = 0;
-            let _ = self.player.reduce(game::PlayerIntent::RecoverMp(1));
+            let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::RecoverMp(1));
         }
 
         let player_x = self.player.x;
@@ -442,8 +435,10 @@ impl RpgGame {
 
             if result.damage_taken > 0
                 && matches!(
-                    self.player
-                        .reduce(game::PlayerIntent::TakeDamage(result.damage_taken)),
+                    game::player_system::reduce(
+                        &mut self.player,
+                        game::PlayerIntent::TakeDamage(result.damage_taken),
+                    ),
                     game::PlayerEvent::Died
                 )
             {
@@ -453,7 +448,7 @@ impl RpgGame {
     }
 
      fn use_skill(&mut self, slot: usize, skill: &Skill) {
-         if !self.player.can_use_skill(slot, skill.mp_cost) {
+         if !game::player_system::can_use_skill(&self.player, slot, skill.mp_cost) {
              return;
          }
 
@@ -470,7 +465,7 @@ impl RpgGame {
              return;
          };
 
-         let _ = self.player.reduce(game::PlayerIntent::UseSkill {
+         let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UseSkill {
              slot,
              mp_cost: skill.mp_cost,
              cooldown: skill.cooldown,
@@ -478,10 +473,13 @@ impl RpgGame {
 
          for effect in &result.player_effects {
              match effect {
-                 PlayerEffect::Heal(amount) => {
-                     let _ = self.player.reduce(game::PlayerIntent::Heal(*amount));
-                 }
-             }
+                  PlayerEffect::Heal(amount) => {
+                      let _ = game::player_system::reduce(
+                          &mut self.player,
+                          game::PlayerIntent::Heal(*amount),
+                      );
+                  }
+              }
          }
 
          for kill in result.kills {
@@ -602,11 +600,7 @@ impl RpgGame {
     fn handle_explore_input(&mut self, intent: ExploreIntent) {
         match intent {
             ExploreIntent::MoveDirection(key) => {
-                let _ = game::movement::reduce(
-                    &mut self.movement,
-                    game::MovementIntent::DirectionPressed(key),
-                    None,
-                );
+                game::movement::on_direction_pressed(&mut self.movement, key);
             }
             ExploreIntent::TryNpcInteract => {
                 self.try_interact_with_npc();
@@ -657,7 +651,7 @@ impl RpgGame {
                     .move_down(self.player.inventory.len(), visible);
             }
             InventoryIntent::UseSelected => {
-                let _ = self.player.reduce(game::PlayerIntent::UseItem {
+                let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UseItem {
                     index: self.inventory_state.selected,
                 });
             }

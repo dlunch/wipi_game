@@ -1,23 +1,10 @@
 use wipi::event::KeyCode;
 
-use super::combat::{CombatState, enemy_at};
+use super::combat::{enemy_at, CombatState};
 use crate::data::{Map, Npc};
 use crate::game::Player;
 
 const MOVE_COOLDOWN: u32 = 5;
-
-pub enum MovementIntent {
-    DirectionPressed(KeyCode),
-    KeyReleased(KeyCode),
-    Tick,
-}
-
-pub struct MovementContext<'a> {
-    pub player: &'a mut Player,
-    pub map: &'a Map,
-    pub combat: &'a CombatState,
-    pub npcs: &'a [Npc],
-}
 
 #[derive(Default)]
 pub struct MovementState {
@@ -25,41 +12,18 @@ pub struct MovementState {
     pub move_cooldown: u32,
 }
 
-pub fn reduce(
-    state: &mut MovementState,
-    intent: MovementIntent,
-    ctx: Option<MovementContext<'_>>,
-) -> bool {
-    match intent {
-        MovementIntent::DirectionPressed(key) => {
-            on_direction_pressed(state, key);
-            false
-        }
-        MovementIntent::KeyReleased(key) => {
-            on_key_released(state, key);
-            false
-        }
-        MovementIntent::Tick => {
-            let Some(ctx) = ctx else {
-                return false;
-            };
-            update(state, ctx.player, ctx.map, ctx.combat, ctx.npcs)
-        }
-    }
-}
-
-fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {
+pub fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {
     state.pressed_direction = Some(key);
     state.move_cooldown = 0;
 }
 
-fn on_key_released(state: &mut MovementState, key: KeyCode) {
+pub fn on_key_released(state: &mut MovementState, key: KeyCode) {
     if state.pressed_direction == Some(key) {
         state.pressed_direction = None;
     }
 }
 
-fn update(
+pub fn tick(
     state: &mut MovementState,
     player: &mut Player,
     map: &Map,

@@ -7,7 +7,7 @@ mod systems;
 mod tile_event;
 
 pub use game_data::GameData;
-pub use player::{Player, PlayerEvent, PlayerIntent};
+pub use player::Player;
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_dialog,
     draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
@@ -23,7 +23,8 @@ pub use systems::NpcIntent;
 pub use systems::combat;
 pub use systems::movement;
 pub use systems::npc;
+pub use systems::player as player_system;
 pub use systems::quest;
 pub use systems::{CombatEvent, CombatIntent, CombatState, Direction, PlayerEffect};
-pub use systems::{MovementContext, MovementIntent, MovementState};
+pub use systems::{MovementState, PlayerEvent, PlayerIntent};
 pub use tile_event::check_tile_event;
