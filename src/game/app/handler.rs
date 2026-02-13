@@ -31,6 +31,10 @@ pub(super) fn handle_explore_input(
     data: &GameData,
     intent: ExploreIntent,
 ) {
+    let is_peaceful = data
+        .find_map(&player.current_map_id)
+        .is_some_and(|m| m.peaceful);
+
     match intent {
         ExploreIntent::MoveDirection(key) => {
             game::movement::on_direction_pressed(movement, key);
@@ -43,7 +47,7 @@ pub(super) fn handle_explore_input(
                 *state = new_state;
             }
         }
-        ExploreIntent::Attack => {
+        ExploreIntent::Attack if !is_peaceful => {
             if matches!(*state, GameState::Dialog(_)) {
                 return;
             }
@@ -61,9 +65,19 @@ pub(super) fn handle_explore_input(
                 game::quest::on_enemy_killed(player, data, &reward.enemy_id);
             }
         }
-        ExploreIntent::Skill1 => update::use_skill(player, combat, data, 0, &Skill::FIREBALL),
-        ExploreIntent::Skill2 => update::use_skill(player, combat, data, 1, &Skill::HEAL),
-        ExploreIntent::Skill3 => update::use_skill(player, combat, data, 2, &Skill::SPIN_ATTACK),
+        ExploreIntent::Skill1 if !is_peaceful => {
+            update::use_skill(player, combat, data, 0, &Skill::FIREBALL)
+        }
+        ExploreIntent::Skill2 if !is_peaceful => {
+            update::use_skill(player, combat, data, 1, &Skill::HEAL)
+        }
+        ExploreIntent::Skill3 if !is_peaceful => {
+            update::use_skill(player, combat, data, 2, &Skill::SPIN_ATTACK)
+        }
+        ExploreIntent::Attack
+        | ExploreIntent::Skill1
+        | ExploreIntent::Skill2
+        | ExploreIntent::Skill3 => {}
         ExploreIntent::Pause => *state = GameState::PauseMenu(0),
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);

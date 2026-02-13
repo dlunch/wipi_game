@@ -19,7 +19,7 @@ pub fn draw_explore(
     clear_screen(fb);
     let screen_h = fb.height() as i32;
     draw_map_with_entities(fb, map, player, combat, npcs, screen_h);
-    draw_hud(fb, map, player, combat, screen_h);
+    draw_hud(fb, map, player, combat, screen_h, map.peaceful);
 }
 
 fn draw_map_with_entities(
@@ -227,6 +227,7 @@ fn draw_hud(
     player: &PlayerState,
     combat: &CombatState,
     screen_h: i32,
+    peaceful: bool,
 ) {
     let screen_w = fb.width() as i32;
     let hud_y = screen_h - 30;
@@ -253,7 +254,9 @@ fn draw_hud(
         draw_text(fb, screen_w - 80, hud_y + 2, &enemy.data.name, COLOR_RED);
     }
 
-    draw_skill_bar(fb, hud_y + 14, screen_w, player);
+    if !peaceful {
+        draw_skill_bar(fb, hud_y + 14, screen_w, player);
+    }
 }
 
 fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &PlayerState) {

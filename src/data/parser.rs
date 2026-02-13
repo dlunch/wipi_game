@@ -164,6 +164,10 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 let target = parts[2].to_string();
                 builder.dungeons.push((x, y, target));
             }
+        } else if line == "@PEACEFUL" {
+            if let Some(ref mut builder) = current_map {
+                builder.peaceful = true;
+            }
         } else if let Some(rest) = line.strip_prefix("@NPC:") {
             if let Some(ref mut builder) = current_map {
                 let parts: Vec<&str> = rest.split(':').collect();
@@ -416,6 +420,7 @@ struct MapBuilder {
     exits: Vec<(usize, usize, String)>,
     dungeons: Vec<(usize, usize, String)>,
     npcs: Vec<(usize, usize, String)>,
+    peaceful: bool,
 }
 
 impl MapBuilder {
@@ -428,6 +433,7 @@ impl MapBuilder {
             exits: Vec::new(),
             dungeons: Vec::new(),
             npcs: Vec::new(),
+            peaceful: false,
         }
     }
 
@@ -477,6 +483,7 @@ impl MapBuilder {
             exits,
             dungeons: self.dungeons,
             npcs: self.npcs,
+            peaceful: self.peaceful,
         })
     }
 }

@@ -133,6 +133,7 @@ pub struct Map {
     pub exits: Vec<(usize, usize, String)>,
     pub dungeons: Vec<(usize, usize, String)>,
     pub npcs: Vec<(usize, usize, String)>,
+    pub peaceful: bool,
 }
 
 impl Map {
@@ -480,6 +481,7 @@ mod tests {
             exits: Vec::new(),
             dungeons: Vec::new(),
             npcs: Vec::new(),
+            peaceful: false,
         };
         assert_eq!(map.get_tile(1, 0), Tile::Floor);
         assert_eq!(map.get_tile(1, 1), Tile::PlayerStart);
@@ -506,6 +508,7 @@ mod tests {
             exits: Vec::new(),
             dungeons: Vec::new(),
             npcs: Vec::new(),
+            peaceful: false,
         };
         assert_eq!(map.find_player_start(), Some((1, 1)));
     }
@@ -522,6 +525,7 @@ mod tests {
             exits: Vec::new(),
             dungeons: Vec::new(),
             npcs: Vec::new(),
+            peaceful: false,
         };
         assert_eq!(map.find_player_start(), None);
     }
