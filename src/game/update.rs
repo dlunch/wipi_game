@@ -3,14 +3,13 @@ use alloc::string::String;
 
 use crate::data::{Skill, Tile};
 use crate::game::{
-    self, check_tile_event, has_save_data, load_game, CombatIntent, CombatState, DialogState,
-    GameData, GameState, MenuState, MovementState, PlayerEffect, PlayerIntent, PlayerState,
-    TileEvent,
+    self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
+    PlayerEffect, PlayerIntent, PlayerState, TileEvent, check_tile_event, has_save_data, load_game,
 };
 
 const MP_REGEN_INTERVAL: u32 = 60;
 
-pub(super) fn update_loading(state: &mut GameState, data: &mut GameData) {
+pub(crate) fn update_loading(state: &mut GameState, data: &mut GameData) {
     let GameState::Loading(step) = *state else {
         return;
     };
@@ -31,7 +30,7 @@ pub(super) fn update_loading(state: &mut GameState, data: &mut GameData) {
     }
 }
 
-pub(super) fn update_movement(
+pub(crate) fn update_movement(
     state: &GameState,
     movement: &mut MovementState,
     player: &mut PlayerState,
@@ -54,7 +53,7 @@ pub(super) fn update_movement(
     }
 }
 
-pub(super) fn update_combat(
+pub(crate) fn update_combat(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -102,7 +101,7 @@ pub(super) fn update_combat(
     }
 }
 
-pub(super) fn use_skill(
+pub(crate) fn use_skill(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
@@ -150,7 +149,7 @@ pub(super) fn use_skill(
     }
 }
 
-pub(super) fn check_tile_events(
+pub(crate) fn check_tile_events(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
@@ -181,7 +180,7 @@ pub(super) fn check_tile_events(
     }
 }
 
-pub(super) fn change_map(
+pub(crate) fn change_map(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
@@ -205,7 +204,7 @@ pub(super) fn change_map(
     );
 }
 
-pub(super) fn start_new_game(
+pub(crate) fn start_new_game(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -246,7 +245,7 @@ pub(super) fn start_new_game(
     }
 }
 
-pub(super) fn continue_game(
+pub(crate) fn continue_game(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,

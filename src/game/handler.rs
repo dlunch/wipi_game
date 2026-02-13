@@ -1,13 +1,11 @@
 use crate::data::Skill;
 use crate::game::{
-    self, has_save_data, save_game, CombatIntent, CombatState, DialogIntent, GameData, GameState,
+    self, CombatIntent, CombatState, DialogIntent, ExploreIntent, GameData, GameState,
     InventoryIntent, InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState,
-    PauseMenuIntent, PlayerState, ShopIntent,
+    PauseMenuIntent, PlayerState, ShopIntent, has_save_data, save_game, update,
 };
 
-use super::{update, ExploreIntent};
-
-pub(super) fn handle_menu_input(
+pub(crate) fn handle_menu_input(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -23,7 +21,7 @@ pub(super) fn handle_menu_input(
     }
 }
 
-pub(super) fn handle_explore_input(
+pub(crate) fn handle_explore_input(
     state: &mut GameState,
     movement: &mut MovementState,
     player: &mut PlayerState,
@@ -89,7 +87,7 @@ pub(super) fn handle_explore_input(
     }
 }
 
-pub(super) fn handle_inventory_input(
+pub(crate) fn handle_inventory_input(
     state: &mut GameState,
     player: &mut PlayerState,
     inventory_state: &mut InventoryState,
@@ -98,7 +96,7 @@ pub(super) fn handle_inventory_input(
     game::inventory::reduce(state, player, inventory_state, intent);
 }
 
-pub(super) fn handle_dialog_input(
+pub(crate) fn handle_dialog_input(
     state: &mut GameState,
     player: &mut PlayerState,
     data: &GameData,
@@ -107,7 +105,7 @@ pub(super) fn handle_dialog_input(
     game::dialog::reduce(state, player, data, intent);
 }
 
-pub(super) fn handle_shop_input(
+pub(crate) fn handle_shop_input(
     state: &mut GameState,
     player: &mut PlayerState,
     intent: ShopIntent,
@@ -115,7 +113,7 @@ pub(super) fn handle_shop_input(
     game::shop::reduce(state, player, intent);
 }
 
-pub(super) fn handle_pause_menu_input(
+pub(crate) fn handle_pause_menu_input(
     state: &mut GameState,
     player: &PlayerState,
     inventory_state: &mut InventoryState,

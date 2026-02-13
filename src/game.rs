@@ -1,12 +1,14 @@
-pub mod app;
 mod game_data;
+pub(crate) mod handler;
+mod intent;
 mod rendering;
 mod save;
 mod state;
 mod systems;
+pub(crate) mod update;
 
-pub use app::RpgGame;
 pub use game_data::GameData;
+pub use intent::{AppAction, AppEffect, ExploreIntent, explore_intents_for_key};
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_dialog,
     draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
