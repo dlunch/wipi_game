@@ -37,3 +37,27 @@ HEAL:체력을 회복해 드렸습니다.
 HAS_QUEST=quest_boss::마왕을 물리치러 가시는 건가요? 조심하세요!
 강해지지 않으면 들어갈 수 없소.
 @END
+@DIALOG:dialog_ranger
+고원은 넓고 위험하다.
+HAS_QUEST=quest_orc_hunt::오크 토벌은 진행 중인가?
+QUEST_DONE=quest_orc_hunt:COMPLETE_QUEST=quest_orc_hunt:좋아, 이걸 가져가라.
+GIVE_QUEST=quest_orc_hunt:고원의 오크 4마리를 처치해줘.
+@END
+
+@DIALOG:dialog_highland_shop
+멀리서 왔군. 장비를 정비하게.
+OPEN_SHOP=highland_shop:고원 원정 장비를 보여주지.
+@END
+
+@DIALOG:dialog_archaeologist
+유적 깊숙한 곳에 강한 망령이 배회하고 있어.
+HAS_QUEST=quest_wraith::망령 조사 의뢰는 계속 부탁하네.
+QUEST_DONE=quest_wraith:COMPLETE_QUEST=quest_wraith:훌륭해! 유적이 한결 안전해졌네.
+GIVE_QUEST=quest_wraith:유적의 망령 3마리를 정리해주게.
+@END
+
+@DIALOG:dialog_swamp_guide
+늪지 상층으로 가면 마왕성의 비밀 통로가 있다네.
+조심하게, 독안개가 짙다.
+@END
+

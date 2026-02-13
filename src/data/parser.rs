@@ -164,6 +164,19 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 let target = parts[2].to_string();
                 builder.dungeons.push((x, y, target));
             }
+        } else if let Some(rest) = line.strip_prefix("@NPC:") {
+            if let Some(ref mut builder) = current_map {
+                let parts: Vec<&str> = rest.split(':').collect();
+                ensure!(
+                    parts.len() >= 3,
+                    "too few fields in @NPC directive: {}",
+                    line
+                );
+                let x = parse_usize(parts[0], "npc x", line)?;
+                let y = parse_usize(parts[1], "npc y", line)?;
+                let npc_id = parts[2].to_string();
+                builder.npcs.push((x, y, npc_id));
+            }
         } else if !line.is_empty()
             && let Some(ref mut builder) = current_map
         {
@@ -188,24 +201,25 @@ pub fn parse_npcs(data: &str) -> Result<Vec<Npc>> {
         }
 
         let parts: Vec<&str> = line.split(':').collect();
-        ensure!(parts.len() >= 6, "too few fields in npc line: {}", line);
+        ensure!(parts.len() >= 4, "too few fields in npc line: {}", line);
 
-        let npc_type = match parts[3] {
+        let npc_type = match parts[2] {
             "V" => NpcType::Villager,
             "S" => NpcType::ShopKeeper,
             "Q" => NpcType::QuestGiver,
             "H" => NpcType::Healer,
-            _ => bail!("unknown npc type '{}' in: {}", parts[3], line),
+            _ => bail!("unknown npc type '{}' in: {}", parts[2], line),
         };
 
         npcs.push(Npc {
+            id: parts[0].to_string(),
             name: parts[1].to_string(),
-            map_id: parts[2].to_string(),
+            map_id: String::new(),
             npc_type,
-            x: parse_usize(parts[4], "x", line)?,
-            y: parse_usize(parts[5], "y", line)?,
-            dialog_id: parts.get(6).map(|s| s.to_string()).unwrap_or_default(),
-            shop_id: parts.get(7).map(|s| s.to_string()),
+            x: 0,
+            y: 0,
+            dialog_id: parts[3].to_string(),
+            shop_id: parts.get(4).map(|s| s.to_string()),
         });
     }
 
@@ -401,6 +415,7 @@ struct MapBuilder {
     encounters: Vec<(String, i32)>,
     exits: Vec<(usize, usize, String)>,
     dungeons: Vec<(usize, usize, String)>,
+    npcs: Vec<(usize, usize, String)>,
 }
 
 impl MapBuilder {
@@ -412,6 +427,7 @@ impl MapBuilder {
             encounters: Vec::new(),
             exits: Vec::new(),
             dungeons: Vec::new(),
+            npcs: Vec::new(),
         }
     }
 
@@ -455,6 +471,7 @@ impl MapBuilder {
             encounters: self.encounters,
             exits,
             dungeons: self.dungeons,
+            npcs: self.npcs,
         })
     }
 }
@@ -619,6 +636,22 @@ P#
     }
 
     #[test]
+    fn parse_maps_npc_directive() -> Result<()> {
+        let data = "\
+@MAP:test:Test
+#P#
+@NPC:1:0:elder
+@END
+";
+        let maps = parse_maps(data)?;
+        assert_eq!(maps[0].npcs.len(), 1);
+        assert_eq!(maps[0].npcs[0].0, 1);
+        assert_eq!(maps[0].npcs[0].1, 0);
+        assert_eq!(maps[0].npcs[0].2, "elder");
+        Ok(())
+    }
+
+    #[test]
     fn parse_dialogs_basic() -> Result<()> {
         let data = "\
 @DIALOG:greet
@@ -704,21 +737,19 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_npcs_basic() -> Result<()> {
-        let data = "npc1:Elder:village:Q:3:5:elder_dialog\n";
+        let data = "npc1:Elder:Q:elder_dialog\n";
         let npcs = parse_npcs(data)?;
         assert_eq!(npcs.len(), 1);
+        assert_eq!(npcs[0].id, "npc1");
         assert_eq!(npcs[0].name, "Elder");
-        assert_eq!(npcs[0].map_id, "village");
         assert_eq!(npcs[0].npc_type, NpcType::QuestGiver);
-        assert_eq!(npcs[0].x, 3);
-        assert_eq!(npcs[0].y, 5);
         assert_eq!(npcs[0].dialog_id, "elder_dialog");
         Ok(())
     }
 
     #[test]
     fn parse_npcs_with_shop() -> Result<()> {
-        let data = "npc1:Merchant:town:S:2:3:shop_dialog:shop1\n";
+        let data = "npc1:Merchant:S:shop_dialog:shop1\n";
         let npcs = parse_npcs(data)?;
         assert_eq!(npcs[0].npc_type, NpcType::ShopKeeper);
         assert_eq!(npcs[0].shop_id.as_deref(), Some("shop1"));
@@ -727,7 +758,7 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_npcs_rejects_unknown_type() {
-        let data = "npc1:Test:map:Z:0:0:dialog\n";
+        let data = "npc1:Test:Z:dialog\n";
         assert!(parse_npcs(data).is_err());
     }
 }

@@ -6,3 +6,7 @@ quest_goblin:고블린 퇴치:KILL:goblin:5:100:50:숲의 고블린 5마리 처�
 quest_wolf:늑대 사냥:KILL:wolf:3:80:30:숲의 늑대 3마리 처치
 quest_skeleton:해골 소탕:KILL:skeleton:5:150:80:동굴의 해골 5마리 처치:iron_sword
 quest_boss:마왕 토벌:KILL:boss_demon:1:1000:500:왕좌의 방에서 마왕 처치:legendary_sword
+
+quest_orc_hunt:고원 오크 토벌:KILL:orc:4:220:140:바람의 고원 오크 4마리 처치:chainmail
+quest_wraith:유적 망령 정화:KILL:wraith:3:320:220:고대 유적의 망령 3마리 처치:power_ring
+

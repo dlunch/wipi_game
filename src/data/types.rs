@@ -132,6 +132,7 @@ pub struct Map {
     pub encounters: Vec<(String, i32)>,
     pub exits: Vec<(usize, usize, String)>,
     pub dungeons: Vec<(usize, usize, String)>,
+    pub npcs: Vec<(usize, usize, String)>,
 }
 
 impl Map {
@@ -240,6 +241,7 @@ impl PlayerStats {
 
 #[derive(Debug, Clone)]
 pub struct Npc {
+    pub id: String,
     pub name: String,
     pub map_id: String,
     pub x: usize,
@@ -473,6 +475,7 @@ mod tests {
             encounters: Vec::new(),
             exits: Vec::new(),
             dungeons: Vec::new(),
+            npcs: Vec::new(),
         };
         assert_eq!(map.get_tile(1, 0), Tile::Floor);
         assert_eq!(map.get_tile(1, 1), Tile::PlayerStart);
@@ -498,6 +501,7 @@ mod tests {
             encounters: Vec::new(),
             exits: Vec::new(),
             dungeons: Vec::new(),
+            npcs: Vec::new(),
         };
         assert_eq!(map.find_player_start(), Some((1, 1)));
     }
@@ -513,6 +517,7 @@ mod tests {
             encounters: Vec::new(),
             exits: Vec::new(),
             dungeons: Vec::new(),
+            npcs: Vec::new(),
         };
         assert_eq!(map.find_player_start(), None);
     }
