@@ -59,7 +59,6 @@ pub(super) fn update_combat(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
-    mp_regen_timer: &mut u32,
 ) {
     if !matches!(state, GameState::Explore) {
         return;
@@ -67,9 +66,9 @@ pub(super) fn update_combat(
 
     let _ = game::player::reduce(player, PlayerIntent::UpdateCooldowns);
 
-    *mp_regen_timer += 1;
-    if *mp_regen_timer >= MP_REGEN_INTERVAL {
-        *mp_regen_timer = 0;
+    player.mp_regen_timer += 1;
+    if player.mp_regen_timer >= MP_REGEN_INTERVAL {
+        player.mp_regen_timer = 0;
         let _ = game::player::reduce(player, PlayerIntent::RecoverMp(1));
     }
 

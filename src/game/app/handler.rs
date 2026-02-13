@@ -1,11 +1,11 @@
 use crate::data::Skill;
 use crate::game::{
-    self, CombatIntent, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
-    InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState, PauseMenuIntent,
-    PlayerState, ShopIntent, has_save_data, save_game,
+    self, has_save_data, save_game, CombatIntent, CombatState, DialogIntent, GameData, GameState,
+    InventoryIntent, InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState,
+    PauseMenuIntent, PlayerState, ShopIntent,
 };
 
-use super::{ExploreIntent, update};
+use super::{update, ExploreIntent};
 
 pub(super) fn handle_menu_input(
     state: &mut GameState,

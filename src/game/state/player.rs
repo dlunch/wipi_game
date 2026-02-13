@@ -19,6 +19,7 @@ pub struct PlayerState {
     pub quests: Vec<QuestProgress>,
     pub opened_treasures: Vec<(String, usize, usize)>,
     pub skill_cooldowns: [u32; 3],
+    pub mp_regen_timer: u32,
 }
 
 impl PlayerState {
@@ -37,6 +38,7 @@ impl PlayerState {
             quests: Vec::new(),
             opened_treasures: Vec::new(),
             skill_cooldowns: [0; 3],
+            mp_regen_timer: 0,
         }
     }
 

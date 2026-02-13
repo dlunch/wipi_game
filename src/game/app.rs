@@ -11,9 +11,8 @@ use wipi::event::KeyCode;
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
-    self, CombatState, DialogIntent, GameData, GameState, InventoryIntent, InventoryState,
-    MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState, ShopIntent, has_save_data,
-    render,
+    self, has_save_data, render, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
+    InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState, ShopIntent,
 };
 
 use self::intent::explore_intents_for_key;
@@ -25,7 +24,6 @@ pub struct RpgGame {
     pub(crate) inventory_state: InventoryState,
     pub(crate) combat: CombatState,
     pub(crate) movement: MovementState,
-    pub(crate) mp_regen_timer: u32,
 }
 
 impl Default for RpgGame {
@@ -43,7 +41,6 @@ impl RpgGame {
             inventory_state: InventoryState::default(),
             combat: CombatState::default(),
             movement: MovementState::default(),
-            mp_regen_timer: 0,
         }
     }
 
@@ -121,7 +118,6 @@ impl RpgGame {
             inventory_state,
             combat,
             movement,
-            mp_regen_timer,
         } = self;
 
         match effect {
@@ -130,7 +126,7 @@ impl RpgGame {
                 update::update_movement(state, movement, player, combat, data);
             }
             AppEffect::UpdateCombat => {
-                update::update_combat(state, player, combat, data, mp_regen_timer);
+                update::update_combat(state, player, combat, data);
             }
             AppEffect::ApplyMenuIntent(intent) => {
                 handler::handle_menu_input(state, player, combat, data, intent);
