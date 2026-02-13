@@ -41,6 +41,7 @@
 @NPC:4:11:shopkeeper
 @NPC:4:15:healer
 @NPC:16:12:villager1
+@NPC:25:13:guide
 @PEACEFUL
 @END
 

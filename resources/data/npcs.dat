@@ -16,3 +16,4 @@ ranger:고원 순찰대:Q:dialog_ranger
 highland_merchant:원정 상인:S:dialog_highland_shop:highland_shop
 archaeologist:고고학자:Q:dialog_archaeologist
 swamp_guide:늪지 안내인:V:dialog_swamp_guide
+guide:마을 안내원:V:dialog_guide

@@ -3,8 +3,9 @@ use alloc::string::String;
 
 use crate::data::{Skill, Tile};
 use crate::game::{
-    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerEffect,
-    PlayerIntent, PlayerState, TileEvent, check_tile_event, has_save_data, load_game,
+    self, check_tile_event, has_save_data, load_game, CombatIntent, CombatState, DialogState,
+    GameData, GameState, MenuState, MovementState, PlayerEffect, PlayerIntent, PlayerState,
+    TileEvent,
 };
 
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -239,7 +240,11 @@ pub(super) fn start_new_game(
         );
     }
 
-    *state = GameState::Explore;
+    if let Some(dialog) = data.find_dialog("dialog_guide") {
+        *state = GameState::Dialog(DialogState::new(String::from("마을 안내원"), dialog));
+    } else {
+        *state = GameState::Explore;
+    }
 }
 
 pub(super) fn continue_game(
