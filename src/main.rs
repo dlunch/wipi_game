@@ -48,7 +48,8 @@ enum AppEffect {
 #[derive(Clone, Copy)]
 enum ExploreIntent {
     MoveDirection(KeyCode),
-    Confirm,
+    TryNpcInteract,
+    Attack,
     Skill1,
     Skill2,
     Skill3,
@@ -56,19 +57,25 @@ enum ExploreIntent {
     BackToMenu,
 }
 
-fn explore_intent_for_key(key: KeyCode) -> Option<ExploreIntent> {
+fn explore_intents_for_key(key: KeyCode) -> alloc::vec::Vec<ExploreIntent> {
+    let mut intents = alloc::vec::Vec::new();
     match key {
         KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
-            Some(ExploreIntent::MoveDirection(key))
+            intents.push(ExploreIntent::MoveDirection(key));
         }
-        KeyCode::Ok => Some(ExploreIntent::Confirm),
-        KeyCode::Key1 => Some(ExploreIntent::Skill1),
-        KeyCode::Key2 => Some(ExploreIntent::Skill2),
-        KeyCode::Key3 => Some(ExploreIntent::Skill3),
-        KeyCode::Key0 => Some(ExploreIntent::Pause),
-        KeyCode::Back => Some(ExploreIntent::BackToMenu),
-        _ => None,
+        KeyCode::Ok => {
+            intents.push(ExploreIntent::TryNpcInteract);
+            intents.push(ExploreIntent::Attack);
+        }
+        KeyCode::Key1 => intents.push(ExploreIntent::Skill1),
+        KeyCode::Key2 => intents.push(ExploreIntent::Skill2),
+        KeyCode::Key3 => intents.push(ExploreIntent::Skill3),
+        KeyCode::Key0 => intents.push(ExploreIntent::Pause),
+        KeyCode::Back => intents.push(ExploreIntent::BackToMenu),
+        _ => {}
     }
+
+    intents
 }
 
 pub struct RpgGame {
@@ -120,7 +127,7 @@ impl RpgGame {
                     }
                 }
                 GameState::Explore => {
-                    if let Some(intent) = explore_intent_for_key(key) {
+                    for intent in explore_intents_for_key(key) {
                         effects.push(AppEffect::ApplyExploreIntent(intent));
                     }
                 }
@@ -579,12 +586,13 @@ impl RpgGame {
                 self.movement
                     .reduce(game::MovementIntent::DirectionPressed(key), None);
             }
-            ExploreIntent::Confirm => {
+            ExploreIntent::TryNpcInteract => {
                 self.try_interact_with_npc();
+            }
+            ExploreIntent::Attack => {
                 if matches!(self.state, GameState::Dialog(_)) {
                     return;
                 }
-
                 if let game::CombatEvent::Attack(Some(reward)) =
                     self.combat.reduce(game::CombatIntent::PlayerAttack {
                         player_x: self.player.x,
