@@ -1,9 +1,11 @@
+pub mod app;
 mod game_data;
 mod rendering;
 mod save;
 mod state;
 mod systems;
 
+pub use app::RpgGame;
 pub use game_data::GameData;
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_dialog,

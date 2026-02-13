@@ -221,7 +221,13 @@ fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, fac
     fill_rect(fb, px, py, w, h, COLOR_YELLOW);
 }
 
-fn draw_hud(fb: &mut Framebuffer, map: &Map, player: &PlayerState, combat: &CombatState, screen_h: i32) {
+fn draw_hud(
+    fb: &mut Framebuffer,
+    map: &Map,
+    player: &PlayerState,
+    combat: &CombatState,
+    screen_h: i32,
+) {
     let screen_w = fb.width() as i32;
     let hud_y = screen_h - 30;
 

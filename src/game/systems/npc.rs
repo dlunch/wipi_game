@@ -7,14 +7,22 @@ pub enum NpcIntent<'a> {
     ProcessDialogAction { action: &'a DialogAction },
 }
 
-pub fn reduce(player: &mut PlayerState, data: &GameData, intent: NpcIntent<'_>) -> Option<GameState> {
+pub fn reduce(
+    player: &mut PlayerState,
+    data: &GameData,
+    intent: NpcIntent<'_>,
+) -> Option<GameState> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
         NpcIntent::ProcessDialogAction { action } => process_action(player, data, action),
     }
 }
 
-pub fn try_interact(player: &mut PlayerState, data: &GameData, facing: Direction) -> Option<GameState> {
+pub fn try_interact(
+    player: &mut PlayerState,
+    data: &GameData,
+    facing: Direction,
+) -> Option<GameState> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
