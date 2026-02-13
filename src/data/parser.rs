@@ -85,10 +85,13 @@ pub fn parse_enemies(data: &str) -> Result<Vec<Enemy>> {
         let parts: Vec<&str> = line.split(':').collect();
         ensure!(parts.len() >= 7, "too few fields in enemy line: {}", line);
 
+        let hp = parse_int(parts[2], "hp", line)?;
+        ensure!(hp > 0, "enemy hp must be > 0 in: {}", line);
+
         enemies.push(Enemy {
             id: parts[0].to_string(),
             name: parts[1].to_string(),
-            hp: parse_int(parts[2], "hp", line)?,
+            hp,
             atk: parse_int(parts[3], "atk", line)?,
             def: parse_int(parts[4], "def", line)?,
             exp: parse_int(parts[5], "exp", line)?,
@@ -534,6 +537,12 @@ mod tests {
     #[test]
     fn parse_enemies_rejects_short_lines() {
         let data = "too:few:fields\n";
+        assert!(parse_enemies(data).is_err());
+    }
+
+    #[test]
+    fn parse_enemies_rejects_zero_hp() {
+        let data = "slime:Slime:0:5:2:10:5\n";
         assert!(parse_enemies(data).is_err());
     }
 

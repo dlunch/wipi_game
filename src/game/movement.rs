@@ -67,8 +67,12 @@ impl MovementController {
             return false;
         }
 
-        let new_x = player.x.wrapping_add_signed(dx as isize);
-        let new_y = player.y.wrapping_add_signed(dy as isize);
+        let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
+            return false;
+        };
+        let Some(new_y) = player.y.checked_add_signed(dy as isize) else {
+            return false;
+        };
 
         if combat.enemy_at(new_x, new_y) {
             return false;
