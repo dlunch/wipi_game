@@ -1,10 +1,10 @@
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, GameData,
-    GameState, InventoryState, PlayerState, clear_screen, draw_dialog, draw_explore,
-    draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
-    draw_text, fill_rect,
+    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
+    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, CombatState, GameData,
+    GameState, InventoryState, PlayerState, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED,
+    COLOR_WHITE,
 };
 
 pub fn render(
@@ -71,7 +71,8 @@ fn draw_loading(fb: &mut Framebuffer, step: usize) {
 
     draw_text(fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
 
-    let label = GameData::LOAD_LABELS[step];
+    let clamped = step.min(GameData::LOAD_STEPS - 1);
+    let label = GameData::LOAD_LABELS[clamped];
     draw_text(fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
 
     let bar_w = 120;
@@ -80,7 +81,7 @@ fn draw_loading(fb: &mut Framebuffer, step: usize) {
     let bar_y = h / 2 + 10;
 
     draw_rect(fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
-    let progress = (((step + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32).min(bar_w);
+    let progress = (((clamped + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32).min(bar_w);
     fill_rect(
         fb,
         bar_x + 1,
