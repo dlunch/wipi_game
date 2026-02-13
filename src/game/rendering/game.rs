@@ -7,7 +7,7 @@ use crate::game::{
     draw_text, fill_rect,
 };
 
-pub(super) fn render(
+pub fn render(
     state: &GameState,
     player: &PlayerState,
     combat: &CombatState,
@@ -63,7 +63,7 @@ pub(super) fn render(
     }
 }
 
-pub(super) fn draw_loading(step: usize) {
+pub fn draw_loading(step: usize) {
     let mut fb = Framebuffer::screen_framebuffer();
     clear_screen(&mut fb);
 

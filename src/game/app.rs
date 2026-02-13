@@ -1,6 +1,5 @@
 mod handler;
 mod intent;
-mod render;
 mod update;
 
 pub use intent::{AppAction, AppEffect, ExploreIntent};
@@ -13,7 +12,7 @@ use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
     self, CombatState, GameData, GameState, InventoryState, MenuState, MovementState, PlayerState,
-    has_save_data, pause_menu_intent_for_key,
+    has_save_data, pause_menu_intent_for_key, render,
 };
 
 use self::intent::explore_intents_for_key;
@@ -170,7 +169,7 @@ impl RpgGame {
     }
 
     pub fn render(&self, fb: &mut Framebuffer) {
-        render::render(
+        render(
             &self.state,
             &self.player,
             &self.combat,

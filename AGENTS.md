@@ -47,32 +47,60 @@ Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 
 ```
 src/
-├── main.rs          # Entry point, RpgGame struct, App trait impl, input handling
-├── data.rs          # Re-exports from data module
+├── main.rs              # Entry point, App trait impl (thin — delegates to game/app)
+├── data.rs              # Re-exports from data module
 ├── data/
-│   ├── types.rs     # Data structures (Item, Enemy, Map, Quest, etc.)
-│   └── parser.rs    # Text file parsers for .dat resources
-├── game.rs          # Re-exports from game module
+│   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
+│   └── parser.rs        # Text file parsers for .dat resources
+├── game.rs              # Re-exports from game module (state, systems, rendering, app)
 └── game/
-    ├── combat.rs       # Combat system, enemy AI
-    ├── dialog.rs       # Dialog rendering
-    ├── explore.rs      # Map/entity rendering, HUD
-    ├── game_data.rs    # Resource loading, data queries
-    ├── inventory.rs    # Inventory UI
-    ├── menu.rs         # Main menu
-    ├── movement.rs     # Player movement controller
-    ├── npc_system.rs   # NPC interaction, dialog processing
-    ├── player.rs       # Player state
-    ├── quest.rs        # Quest log UI
-    ├── quest_system.rs # Quest progress tracking
-    ├── renderer.rs     # Drawing primitives, colors
-    ├── save.rs         # Save/load system
-    ├── shop.rs         # Shop UI
-    └── state.rs        # Game state enums
+    ├── app.rs           # RpgGame struct, dispatch pipeline, effect application
+    ├── app/
+    │   ├── intent.rs    # AppAction, AppEffect, ExploreIntent enums
+    │   ├── handler.rs   # Input handler free functions (per-state intent handling)
+    │   └── update.rs    # Game loop free functions (loading, movement, combat tick)
+    ├── state.rs         # GameState enum + re-exports from state sub-modules
+    ├── state/
+    │   ├── player.rs    # PlayerState struct + inventory/equipment/quest methods
+    │   ├── dialog.rs    # DialogState, DialogIntent
+    │   ├── shop.rs      # ShopState, ShopMode, ShopIntent
+    │   ├── menu.rs      # MenuState, MenuAction, MenuIntent, PauseMenuIntent
+    │   ├── inventory.rs # InventoryState, InventoryIntent
+    │   └── tile_event.rs # TileEvent enum, check_tile_event
+    ├── systems.rs       # Re-exports from systems sub-modules
+    ├── systems/
+    │   ├── combat.rs    # CombatState, CombatIntent/Event, stateless combat logic
+    │   ├── movement.rs  # MovementState, tick/key press/release free functions
+    │   ├── npc.rs       # NPC interaction free functions
+    │   ├── player.rs    # PlayerIntent/Event, reduce free function
+    │   └── quest.rs     # Quest progression free functions
+    ├── rendering.rs     # Re-exports from rendering sub-modules
+    ├── rendering/
+    │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
+    │   ├── game.rs      # Main render dispatch, loading screen
+    │   ├── dialog.rs    # Dialog box rendering
+    │   ├── explore.rs   # Map/entity/HUD rendering
+    │   ├── inventory.rs # Inventory & stats UI
+    │   ├── menu.rs      # Main menu & pause menu
+    │   ├── quest.rs     # Quest log UI
+    │   └── shop.rs      # Shop UI
+    ├── game_data.rs     # Resource loading, data queries
+    └── save.rs          # Save/load system
 resources/
-├── data/            # Game data files (.dat)
-└── images/          # Image assets
+├── data/                # Game data files (.dat)
+└── images/              # Image assets
 ```
+
+## Architecture
+
+The codebase follows a **state + stateless systems + rendering** pattern:
+
+- **State** (`state/`): Pure data structs (`PlayerState`, `DialogState`, etc.). All state struct names end with `State`.
+- **Systems** (`systems/`): Stateless free functions that operate on state. Each system owns its runtime state (e.g. `CombatState`) but logic is free functions, not methods.
+- **Rendering** (`rendering/`): Pure draw functions. No game logic — only reads state and draws to framebuffer.
+- **App** (`app/`): Orchestration layer. `RpgGame` struct holds all state. Input → `AppAction` → `AppEffect` → apply via free functions taking individual fields.
+
+Input flow: `key → intent_for_key() → AppEffect → apply_effect() → system free fn(state fields) → state mutation → render(state fields)`
 
 ## Code Style Guidelines
 
@@ -142,8 +170,9 @@ if matches!(self.state, GameState::Explore) { ... }
 - Doc comments (`///`) only for public API if truly needed
 
 ### Module Organization
-- Each system has its own file under `game/`
-- Module file (`game.rs`, `data.rs`) only contains `mod` and `pub use`
+- Each system has its own file under `game/systems/`
+- State structs live under `game/state/`, rendering under `game/rendering/`
+- Module file (`game.rs`, `data.rs`, `state.rs`, etc.) only contains `mod` and `pub use`
 - Prefer functions over methods when logic doesn't need `self`
 
 ### Functions
