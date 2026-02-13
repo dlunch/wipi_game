@@ -22,8 +22,8 @@ pub use state::{
 pub use systems::NpcIntent;
 pub use systems::combat;
 pub use systems::movement;
-pub use systems::npc_system;
-pub use systems::quest_system;
+pub use systems::npc;
+pub use systems::quest;
 pub use systems::{CombatEvent, CombatIntent, CombatState, Direction, PlayerEffect};
 pub use systems::{MovementContext, MovementIntent, MovementState};
 pub use tile_event::check_tile_event;

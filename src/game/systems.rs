@@ -1,8 +1,8 @@
 pub mod combat;
 pub mod movement;
-pub mod npc_system;
-pub mod quest_system;
+pub mod npc;
+pub mod quest;
 
 pub use combat::{CombatEvent, CombatIntent, CombatState, Direction, PlayerEffect};
 pub use movement::{MovementContext, MovementIntent, MovementState};
-pub use npc_system::NpcIntent;
+pub use npc::NpcIntent;
