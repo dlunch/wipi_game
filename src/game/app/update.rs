@@ -4,7 +4,7 @@ use alloc::string::String;
 use crate::data::{Skill, Tile};
 use crate::game::{
     self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerEffect,
-    PlayerIntent, PlayerState, TileEvent, check_tile_event, draw_loading, has_save_data, load_game,
+    PlayerIntent, PlayerState, TileEvent, check_tile_event, has_save_data, load_game,
 };
 
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -13,8 +13,6 @@ pub(super) fn update_loading(state: &mut GameState, data: &mut GameData) {
     let GameState::Loading(step) = *state else {
         return;
     };
-
-    draw_loading(step);
 
     match data.load_step(step) {
         Ok(true) => {

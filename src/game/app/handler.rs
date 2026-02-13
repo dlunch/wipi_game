@@ -1,10 +1,8 @@
-use wipi::framebuffer::Framebuffer;
-
 use crate::data::Skill;
 use crate::game::{
     self, CombatIntent, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
-    InventoryState, MenuAction, MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState,
-    ShopIntent, ShopMode, has_save_data, save_game,
+    InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState, PauseMenuIntent,
+    PlayerState, ShopIntent, has_save_data, save_game,
 };
 
 use super::{ExploreIntent, update};
@@ -16,32 +14,11 @@ pub(super) fn handle_menu_input(
     data: &GameData,
     intent: MenuIntent,
 ) {
-    let GameState::Menu(ref mut menu) = *state else {
-        return;
-    };
-
-    match intent {
-        MenuIntent::MoveUp => menu.move_up(),
-        MenuIntent::MoveDown => menu.move_down(),
-        MenuIntent::Select => {
-            let action = if menu.has_save {
-                match menu.selected {
-                    0 => MenuAction::NewGame,
-                    1 => MenuAction::Continue,
-                    _ => MenuAction::Exit,
-                }
-            } else {
-                match menu.selected {
-                    0 => MenuAction::NewGame,
-                    _ => MenuAction::Exit,
-                }
-            };
-
-            match action {
-                MenuAction::NewGame => update::start_new_game(state, player, combat, data),
-                MenuAction::Continue => update::continue_game(state, player, combat, data),
-                MenuAction::Exit => wipi::kernel::exit(0),
-            }
+    if let MenuEvent::Action(action) = game::menu::reduce(state, intent) {
+        match action {
+            MenuAction::NewGame => update::start_new_game(state, player, combat, data),
+            MenuAction::Continue => update::continue_game(state, player, combat, data),
+            MenuAction::Exit => wipi::kernel::exit(0),
         }
     }
 }
@@ -104,23 +81,7 @@ pub(super) fn handle_inventory_input(
     inventory_state: &mut InventoryState,
     intent: InventoryIntent,
 ) {
-    match intent {
-        InventoryIntent::MoveUp => inventory_state.move_up(),
-        InventoryIntent::MoveDown => {
-            let fb = Framebuffer::screen_framebuffer();
-            let visible = ((fb.height() as i32 - 50) / 14).max(1) as usize;
-            inventory_state.move_down(player.inventory.len(), visible);
-        }
-        InventoryIntent::UseSelected => {
-            let _ = game::player::reduce(
-                player,
-                game::PlayerIntent::UseItem {
-                    index: inventory_state.selected,
-                },
-            );
-        }
-        InventoryIntent::Back => *state = GameState::Explore,
-    }
+    game::inventory::reduce(state, player, inventory_state, intent);
 }
 
 pub(super) fn handle_dialog_input(
@@ -129,31 +90,7 @@ pub(super) fn handle_dialog_input(
     data: &GameData,
     intent: DialogIntent,
 ) {
-    match intent {
-        DialogIntent::Confirm => {
-            if let GameState::Dialog(ref dialog_state) = *state
-                && let Some(action) = dialog_state.current_action().cloned()
-                && let Some(new_state) = game::npc::reduce(
-                    player,
-                    data,
-                    game::NpcIntent::ProcessDialogAction { action: &action },
-                )
-            {
-                *state = new_state;
-            }
-
-            if matches!(*state, GameState::Shop(_)) {
-                return;
-            }
-
-            if let GameState::Dialog(ref mut dialog_state) = *state
-                && !dialog_state.advance()
-            {
-                *state = GameState::Explore;
-            }
-        }
-        DialogIntent::Back => *state = GameState::Explore,
-    }
+    game::dialog::reduce(state, player, data, intent);
 }
 
 pub(super) fn handle_shop_input(
@@ -161,66 +98,7 @@ pub(super) fn handle_shop_input(
     player: &mut PlayerState,
     intent: ShopIntent,
 ) {
-    const VISIBLE_ITEMS: usize = 8;
-
-    let GameState::Shop(ref mut shop_state) = *state else {
-        return;
-    };
-
-    match shop_state.mode {
-        ShopMode::Select => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(2, 2),
-            ShopIntent::Confirm => {
-                shop_state.mode = if shop_state.selected == 0 {
-                    ShopMode::Buy
-                } else {
-                    ShopMode::Sell
-                };
-                shop_state.reset_selection();
-            }
-            ShopIntent::Back => *state = GameState::Explore,
-        },
-        ShopMode::Buy => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(shop_state.items.len(), VISIBLE_ITEMS),
-            ShopIntent::Confirm => {
-                if let Some(item) = shop_state.items.get(shop_state.selected).cloned()
-                    && player.stats.gold >= item.price
-                {
-                    player.stats.gold -= item.price;
-                    player.add_item(item);
-                }
-            }
-            ShopIntent::Back => {
-                shop_state.mode = ShopMode::Select;
-                shop_state.reset_selection();
-            }
-        },
-        ShopMode::Sell => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(player.inventory.len(), VISIBLE_ITEMS),
-            ShopIntent::Confirm => {
-                if let Some(item) = player.remove_item_at(shop_state.selected) {
-                    player.stats.gold += item.price / 2;
-
-                    let inv_len = player.inventory.len();
-                    if shop_state.selected >= inv_len && shop_state.selected > 0 {
-                        shop_state.selected -= 1;
-                    }
-                    if shop_state.scroll > 0
-                        && shop_state.scroll >= inv_len.saturating_sub(VISIBLE_ITEMS - 1)
-                    {
-                        shop_state.scroll = inv_len.saturating_sub(VISIBLE_ITEMS);
-                    }
-                }
-            }
-            ShopIntent::Back => {
-                shop_state.mode = ShopMode::Select;
-                shop_state.reset_selection();
-            }
-        },
-    }
+    game::shop::reduce(state, player, intent);
 }
 
 pub(super) fn handle_pause_menu_input(
@@ -229,27 +107,5 @@ pub(super) fn handle_pause_menu_input(
     inventory_state: &mut InventoryState,
     intent: PauseMenuIntent,
 ) {
-    let GameState::PauseMenu(ref mut selected) = *state else {
-        return;
-    };
-
-    match intent {
-        PauseMenuIntent::MoveUp if *selected > 0 => *selected -= 1,
-        PauseMenuIntent::MoveDown if *selected < 3 => *selected += 1,
-        PauseMenuIntent::Select => match *selected {
-            0 => {
-                *inventory_state = InventoryState::default();
-                *state = GameState::Inventory;
-            }
-            1 => *state = GameState::Stats,
-            2 => *state = GameState::QuestLog,
-            3 => {
-                let _ = save_game(player);
-                *state = GameState::Explore;
-            }
-            _ => {}
-        },
-        PauseMenuIntent::Back => *state = GameState::Explore,
-        _ => {}
-    }
+    game::menu::reduce_pause(state, player, inventory_state, intent);
 }

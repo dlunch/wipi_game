@@ -11,8 +11,9 @@ use wipi::event::KeyCode;
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
-    self, CombatState, GameData, GameState, InventoryState, MenuState, MovementState, PlayerState,
-    has_save_data, pause_menu_intent_for_key, render,
+    self, CombatState, DialogIntent, GameData, GameState, InventoryIntent, InventoryState,
+    MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState, ShopIntent, has_save_data,
+    render,
 };
 
 use self::intent::explore_intents_for_key;
@@ -61,7 +62,7 @@ impl RpgGame {
             AppAction::KeyDown(key) => match self.state {
                 GameState::Loading(_) => {}
                 GameState::Menu(_) => {
-                    if let Some(intent) = MenuState::intent_for_key(key) {
+                    if let Some(intent) = MenuIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyMenuIntent(intent));
                     }
                 }
@@ -71,7 +72,7 @@ impl RpgGame {
                     }
                 }
                 GameState::Inventory => {
-                    if let Some(intent) = InventoryState::intent_for_key(key) {
+                    if let Some(intent) = InventoryIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyInventoryIntent(intent));
                     }
                 }
@@ -81,17 +82,17 @@ impl RpgGame {
                     }
                 }
                 GameState::Dialog(_) => {
-                    if let Some(intent) = game::DialogState::intent_for_key(key) {
+                    if let Some(intent) = DialogIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyDialogIntent(intent));
                     }
                 }
                 GameState::Shop(_) => {
-                    if let Some(intent) = game::ShopState::intent_for_key(key) {
+                    if let Some(intent) = ShopIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyShopIntent(intent));
                     }
                 }
                 GameState::PauseMenu(_) => {
-                    if let Some(intent) = pause_menu_intent_for_key(key) {
+                    if let Some(intent) = PauseMenuIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyPauseMenuIntent(intent));
                     }
                 }

@@ -1,8 +1,6 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
 use crate::data::{Dialog, DialogAction, DialogLine};
 
 #[derive(Debug, Clone)]
@@ -39,18 +37,4 @@ impl DialogState {
             .get(self.current_line)
             .and_then(|l| l.action.as_ref())
     }
-
-    pub fn intent_for_key(key: KeyCode) -> Option<DialogIntent> {
-        match key {
-            KeyCode::Ok => Some(DialogIntent::Confirm),
-            KeyCode::Back => Some(DialogIntent::Back),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum DialogIntent {
-    Confirm,
-    Back,
 }

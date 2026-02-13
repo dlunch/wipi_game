@@ -1,7 +1,5 @@
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
 use crate::data::{Item, Shop};
 
 #[derive(Debug, Clone)]
@@ -53,22 +51,4 @@ impl ShopState {
         self.selected = 0;
         self.scroll = 0;
     }
-
-    pub fn intent_for_key(key: KeyCode) -> Option<ShopIntent> {
-        match key {
-            KeyCode::Up => Some(ShopIntent::MoveUp),
-            KeyCode::Down => Some(ShopIntent::MoveDown),
-            KeyCode::Ok => Some(ShopIntent::Confirm),
-            KeyCode::Back => Some(ShopIntent::Back),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ShopIntent {
-    MoveUp,
-    MoveDown,
-    Confirm,
-    Back,
 }
