@@ -11,7 +11,6 @@ use alloc::vec::Vec;
 use wipi::event::KeyCode;
 use wipi::framebuffer::Framebuffer;
 
-use crate::data::Map;
 use crate::game::{
     self, CombatState, GameData, GameState, InventoryState, MenuState, MovementState, PlayerState,
     has_save_data, pause_menu_intent_for_key,
@@ -115,29 +114,49 @@ impl RpgGame {
     }
 
     fn apply_effect(&mut self, effect: AppEffect) {
+        let Self {
+            state,
+            player,
+            data,
+            inventory_state,
+            combat,
+            movement,
+            mp_regen_timer,
+        } = self;
+
         match effect {
-            AppEffect::UpdateLoading => update::update_loading(self),
-            AppEffect::UpdateMovement => update::update_movement(self),
-            AppEffect::UpdateCombat => update::update_combat(self),
-            AppEffect::ApplyMenuIntent(intent) => handler::handle_menu_input(self, intent),
-            AppEffect::ApplyExploreIntent(intent) => handler::handle_explore_input(self, intent),
+            AppEffect::UpdateLoading => update::update_loading(state, data),
+            AppEffect::UpdateMovement => {
+                update::update_movement(state, movement, player, combat, data);
+            }
+            AppEffect::UpdateCombat => {
+                update::update_combat(state, player, combat, data, mp_regen_timer);
+            }
+            AppEffect::ApplyMenuIntent(intent) => {
+                handler::handle_menu_input(state, player, combat, data, intent);
+            }
+            AppEffect::ApplyExploreIntent(intent) => {
+                handler::handle_explore_input(state, movement, player, combat, data, intent);
+            }
             AppEffect::ApplyInventoryIntent(intent) => {
-                handler::handle_inventory_input(self, intent)
+                handler::handle_inventory_input(state, player, inventory_state, intent);
             }
-            AppEffect::ApplyDialogIntent(intent) => handler::handle_dialog_input(self, intent),
-            AppEffect::ApplyShopIntent(intent) => handler::handle_shop_input(self, intent),
+            AppEffect::ApplyDialogIntent(intent) => {
+                handler::handle_dialog_input(state, player, data, intent);
+            }
+            AppEffect::ApplyShopIntent(intent) => handler::handle_shop_input(state, player, intent),
             AppEffect::ApplyPauseMenuIntent(intent) => {
-                handler::handle_pause_menu_input(self, intent)
+                handler::handle_pause_menu_input(state, player, inventory_state, intent);
             }
-            AppEffect::ReturnToExplore => self.state = GameState::Explore,
+            AppEffect::ReturnToExplore => *state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {
-                self.state = GameState::Menu(MenuState {
+                *state = GameState::Menu(MenuState {
                     selected: 0,
                     has_save: has_save_data(),
                 });
             }
             AppEffect::ReleaseMovementKey(key) => {
-                game::movement::on_key_released(&mut self.movement, key);
+                game::movement::on_key_released(movement, key);
             }
             AppEffect::Exit(code) => wipi::kernel::exit(code),
         }
@@ -151,10 +170,13 @@ impl RpgGame {
     }
 
     pub fn render(&self, fb: &mut Framebuffer) {
-        render::render(self, fb);
-    }
-
-    pub(crate) fn current_map(&self) -> Option<&Map> {
-        self.data.find_map(&self.player.current_map_id)
+        render::render(
+            &self.state,
+            &self.player,
+            &self.combat,
+            &self.data,
+            &self.inventory_state,
+            fb,
+        );
     }
 }

@@ -2,14 +2,21 @@ use wipi::framebuffer::Framebuffer;
 
 use crate::data::Skill;
 use crate::game::{
-    self, CombatIntent, DialogIntent, GameState, InventoryIntent, InventoryState, MenuAction,
-    MenuIntent, MenuState, PauseMenuIntent, ShopIntent, ShopMode, has_save_data, save_game,
+    self, CombatIntent, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
+    InventoryState, MenuAction, MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState,
+    ShopIntent, ShopMode, has_save_data, save_game,
 };
 
-use super::{ExploreIntent, RpgGame, update};
+use super::{ExploreIntent, update};
 
-pub(super) fn handle_menu_input(game: &mut RpgGame, intent: MenuIntent) {
-    let GameState::Menu(ref mut menu) = game.state else {
+pub(super) fn handle_menu_input(
+    state: &mut GameState,
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+    intent: MenuIntent,
+) {
+    let GameState::Menu(ref mut menu) = *state else {
         return;
     };
 
@@ -31,47 +38,59 @@ pub(super) fn handle_menu_input(game: &mut RpgGame, intent: MenuIntent) {
             };
 
             match action {
-                MenuAction::NewGame => update::start_new_game(game),
-                MenuAction::Continue => update::continue_game(game),
+                MenuAction::NewGame => update::start_new_game(state, player, combat, data),
+                MenuAction::Continue => update::continue_game(state, player, combat, data),
                 MenuAction::Exit => wipi::kernel::exit(0),
             }
         }
     }
 }
 
-pub(super) fn handle_explore_input(game: &mut RpgGame, intent: ExploreIntent) {
+pub(super) fn handle_explore_input(
+    state: &mut GameState,
+    movement: &mut MovementState,
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+    intent: ExploreIntent,
+) {
     match intent {
         ExploreIntent::MoveDirection(key) => {
-            game::movement::on_direction_pressed(&mut game.movement, key);
+            game::movement::on_direction_pressed(movement, key);
         }
         ExploreIntent::TryNpcInteract => {
-            try_interact_with_npc(game);
+            let facing = player.facing;
+            if let Some(new_state) =
+                game::npc::reduce(player, data, game::NpcIntent::Interact { facing })
+            {
+                *state = new_state;
+            }
         }
         ExploreIntent::Attack => {
-            if matches!(game.state, GameState::Dialog(_)) {
+            if matches!(*state, GameState::Dialog(_)) {
                 return;
             }
             if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
-                &mut game.combat,
+                combat,
                 CombatIntent::PlayerAttack {
-                    player_x: game.player.x,
-                    player_y: game.player.y,
-                    player_atk: game.player.total_atk(),
-                    facing: game.player.facing,
+                    player_x: player.x,
+                    player_y: player.y,
+                    player_atk: player.total_atk(),
+                    facing: player.facing,
                 },
             ) {
-                game.player.stats.add_exp(reward.exp);
-                game.player.stats.gold += reward.gold;
-                game::quest::on_enemy_killed(&mut game.player, &game.data, &reward.enemy_id);
+                player.stats.add_exp(reward.exp);
+                player.stats.gold += reward.gold;
+                game::quest::on_enemy_killed(player, data, &reward.enemy_id);
             }
         }
-        ExploreIntent::Skill1 => update::use_skill(game, 0, &Skill::FIREBALL),
-        ExploreIntent::Skill2 => update::use_skill(game, 1, &Skill::HEAL),
-        ExploreIntent::Skill3 => update::use_skill(game, 2, &Skill::SPIN_ATTACK),
-        ExploreIntent::Pause => game.state = GameState::PauseMenu(0),
+        ExploreIntent::Skill1 => update::use_skill(player, combat, data, 0, &Skill::FIREBALL),
+        ExploreIntent::Skill2 => update::use_skill(player, combat, data, 1, &Skill::HEAL),
+        ExploreIntent::Skill3 => update::use_skill(player, combat, data, 2, &Skill::SPIN_ATTACK),
+        ExploreIntent::Pause => *state = GameState::PauseMenu(0),
         ExploreIntent::BackToMenu => {
-            let _ = save_game(&game.player);
-            game.state = GameState::Menu(MenuState {
+            let _ = save_game(player);
+            *state = GameState::Menu(MenuState {
                 selected: 0,
                 has_save: has_save_data(),
             });
@@ -79,111 +98,138 @@ pub(super) fn handle_explore_input(game: &mut RpgGame, intent: ExploreIntent) {
     }
 }
 
-pub(super) fn handle_inventory_input(game: &mut RpgGame, intent: InventoryIntent) {
+pub(super) fn handle_inventory_input(
+    state: &mut GameState,
+    player: &mut PlayerState,
+    inventory_state: &mut InventoryState,
+    intent: InventoryIntent,
+) {
     match intent {
-        InventoryIntent::MoveUp => game.inventory_state.move_up(),
+        InventoryIntent::MoveUp => inventory_state.move_up(),
         InventoryIntent::MoveDown => {
             let fb = Framebuffer::screen_framebuffer();
             let visible = ((fb.height() as i32 - 50) / 14).max(1) as usize;
-            game.inventory_state
-                .move_down(game.player.inventory.len(), visible);
+            inventory_state.move_down(player.inventory.len(), visible);
         }
         InventoryIntent::UseSelected => {
             let _ = game::player::reduce(
-                &mut game.player,
+                player,
                 game::PlayerIntent::UseItem {
-                    index: game.inventory_state.selected,
+                    index: inventory_state.selected,
                 },
             );
         }
-        InventoryIntent::Back => game.state = GameState::Explore,
+        InventoryIntent::Back => *state = GameState::Explore,
     }
 }
 
-pub(super) fn handle_dialog_input(game: &mut RpgGame, intent: DialogIntent) {
+pub(super) fn handle_dialog_input(
+    state: &mut GameState,
+    player: &mut PlayerState,
+    data: &GameData,
+    intent: DialogIntent,
+) {
     match intent {
         DialogIntent::Confirm => {
-            process_dialog_action(game);
+            if let GameState::Dialog(ref dialog_state) = *state
+                && let Some(action) = dialog_state.current_action().cloned()
+                && let Some(new_state) = game::npc::reduce(
+                    player,
+                    data,
+                    game::NpcIntent::ProcessDialogAction { action: &action },
+                )
+            {
+                *state = new_state;
+            }
 
-            if matches!(game.state, GameState::Shop(_)) {
+            if matches!(*state, GameState::Shop(_)) {
                 return;
             }
 
-            if let GameState::Dialog(ref mut state) = game.state
-                && !state.advance()
+            if let GameState::Dialog(ref mut dialog_state) = *state
+                && !dialog_state.advance()
             {
-                game.state = GameState::Explore;
+                *state = GameState::Explore;
             }
         }
-        DialogIntent::Back => game.state = GameState::Explore,
+        DialogIntent::Back => *state = GameState::Explore,
     }
 }
 
-pub(super) fn handle_shop_input(game: &mut RpgGame, intent: ShopIntent) {
+pub(super) fn handle_shop_input(
+    state: &mut GameState,
+    player: &mut PlayerState,
+    intent: ShopIntent,
+) {
     const VISIBLE_ITEMS: usize = 8;
 
-    let GameState::Shop(ref mut state) = game.state else {
+    let GameState::Shop(ref mut shop_state) = *state else {
         return;
     };
 
-    match state.mode {
+    match shop_state.mode {
         ShopMode::Select => match intent {
-            ShopIntent::MoveUp => state.move_up(),
-            ShopIntent::MoveDown => state.move_down(2, 2),
+            ShopIntent::MoveUp => shop_state.move_up(),
+            ShopIntent::MoveDown => shop_state.move_down(2, 2),
             ShopIntent::Confirm => {
-                state.mode = if state.selected == 0 {
+                shop_state.mode = if shop_state.selected == 0 {
                     ShopMode::Buy
                 } else {
                     ShopMode::Sell
                 };
-                state.reset_selection();
+                shop_state.reset_selection();
             }
-            ShopIntent::Back => game.state = GameState::Explore,
+            ShopIntent::Back => *state = GameState::Explore,
         },
         ShopMode::Buy => match intent {
-            ShopIntent::MoveUp => state.move_up(),
-            ShopIntent::MoveDown => state.move_down(state.items.len(), VISIBLE_ITEMS),
+            ShopIntent::MoveUp => shop_state.move_up(),
+            ShopIntent::MoveDown => shop_state.move_down(shop_state.items.len(), VISIBLE_ITEMS),
             ShopIntent::Confirm => {
-                if let Some(item) = state.items.get(state.selected).cloned()
-                    && game.player.stats.gold >= item.price
+                if let Some(item) = shop_state.items.get(shop_state.selected).cloned()
+                    && player.stats.gold >= item.price
                 {
-                    game.player.stats.gold -= item.price;
-                    game.player.add_item(item);
+                    player.stats.gold -= item.price;
+                    player.add_item(item);
                 }
             }
             ShopIntent::Back => {
-                state.mode = ShopMode::Select;
-                state.reset_selection();
+                shop_state.mode = ShopMode::Select;
+                shop_state.reset_selection();
             }
         },
         ShopMode::Sell => match intent {
-            ShopIntent::MoveUp => state.move_up(),
-            ShopIntent::MoveDown => state.move_down(game.player.inventory.len(), VISIBLE_ITEMS),
+            ShopIntent::MoveUp => shop_state.move_up(),
+            ShopIntent::MoveDown => shop_state.move_down(player.inventory.len(), VISIBLE_ITEMS),
             ShopIntent::Confirm => {
-                if let Some(item) = game.player.remove_item_at(state.selected) {
-                    game.player.stats.gold += item.price / 2;
+                if let Some(item) = player.remove_item_at(shop_state.selected) {
+                    player.stats.gold += item.price / 2;
 
-                    let inv_len = game.player.inventory.len();
-                    if state.selected >= inv_len && state.selected > 0 {
-                        state.selected -= 1;
+                    let inv_len = player.inventory.len();
+                    if shop_state.selected >= inv_len && shop_state.selected > 0 {
+                        shop_state.selected -= 1;
                     }
-                    if state.scroll > 0
-                        && state.scroll >= inv_len.saturating_sub(VISIBLE_ITEMS - 1)
+                    if shop_state.scroll > 0
+                        && shop_state.scroll >= inv_len.saturating_sub(VISIBLE_ITEMS - 1)
                     {
-                        state.scroll = inv_len.saturating_sub(VISIBLE_ITEMS);
+                        shop_state.scroll = inv_len.saturating_sub(VISIBLE_ITEMS);
                     }
                 }
             }
             ShopIntent::Back => {
-                state.mode = ShopMode::Select;
-                state.reset_selection();
+                shop_state.mode = ShopMode::Select;
+                shop_state.reset_selection();
             }
         },
     }
 }
 
-pub(super) fn handle_pause_menu_input(game: &mut RpgGame, intent: PauseMenuIntent) {
-    let GameState::PauseMenu(ref mut selected) = game.state else {
+pub(super) fn handle_pause_menu_input(
+    state: &mut GameState,
+    player: &PlayerState,
+    inventory_state: &mut InventoryState,
+    intent: PauseMenuIntent,
+) {
+    let GameState::PauseMenu(ref mut selected) = *state else {
         return;
     };
 
@@ -192,47 +238,18 @@ pub(super) fn handle_pause_menu_input(game: &mut RpgGame, intent: PauseMenuInten
         PauseMenuIntent::MoveDown if *selected < 3 => *selected += 1,
         PauseMenuIntent::Select => match *selected {
             0 => {
-                game.inventory_state = InventoryState::default();
-                game.state = GameState::Inventory;
+                *inventory_state = InventoryState::default();
+                *state = GameState::Inventory;
             }
-            1 => game.state = GameState::Stats,
-            2 => game.state = GameState::QuestLog,
+            1 => *state = GameState::Stats,
+            2 => *state = GameState::QuestLog,
             3 => {
-                let _ = save_game(&game.player);
-                game.state = GameState::Explore;
+                let _ = save_game(player);
+                *state = GameState::Explore;
             }
             _ => {}
         },
-        PauseMenuIntent::Back => game.state = GameState::Explore,
+        PauseMenuIntent::Back => *state = GameState::Explore,
         _ => {}
-    }
-}
-
-pub(super) fn try_interact_with_npc(game: &mut RpgGame) {
-    let facing = game.player.facing;
-    if let Some(new_state) = game::npc::reduce(
-        &mut game.player,
-        &game.data,
-        game::NpcIntent::Interact { facing },
-    ) {
-        game.state = new_state;
-    }
-}
-
-pub(super) fn process_dialog_action(game: &mut RpgGame) {
-    let GameState::Dialog(ref state) = game.state else {
-        return;
-    };
-
-    let Some(action) = state.current_action().cloned() else {
-        return;
-    };
-
-    if let Some(new_state) = game::npc::reduce(
-        &mut game.player,
-        &game.data,
-        game::NpcIntent::ProcessDialogAction { action: &action },
-    ) {
-        game.state = new_state;
     }
 }

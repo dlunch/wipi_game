@@ -1,37 +1,43 @@
 use wipi::{framebuffer::Framebuffer, graphics::repaint};
 
 use crate::game::{
-    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
-    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, GameData, GameState,
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, GameData,
+    GameState, InventoryState, PlayerState, clear_screen, draw_dialog, draw_explore,
+    draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
+    draw_text, fill_rect,
 };
 
-use super::RpgGame;
-
-pub(super) fn render(game: &RpgGame, fb: &mut Framebuffer) {
-    match &game.state {
+pub(super) fn render(
+    state: &GameState,
+    player: &PlayerState,
+    combat: &CombatState,
+    data: &GameData,
+    inventory_state: &InventoryState,
+    fb: &mut Framebuffer,
+) {
+    match state {
         GameState::Loading(_) => {}
         GameState::Menu(menu_state) => draw_menu(fb, menu_state),
         GameState::Explore => {
-            if let Some(map) = game.current_map() {
-                draw_explore(fb, map, &game.player, &game.combat, &game.data.npcs);
+            if let Some(map) = data.find_map(&player.current_map_id) {
+                draw_explore(fb, map, player, combat, &data.npcs);
             }
         }
         GameState::Inventory => {
-            draw_inventory(fb, &game.player, &game.inventory_state);
+            draw_inventory(fb, player, inventory_state);
         }
-        GameState::Stats => draw_stats(fb, &game.player),
+        GameState::Stats => draw_stats(fb, player),
         GameState::Dialog(dialog_state) => {
-            if let Some(map) = game.current_map() {
-                draw_explore(fb, map, &game.player, &game.combat, &game.data.npcs);
+            if let Some(map) = data.find_map(&player.current_map_id) {
+                draw_explore(fb, map, player, combat, &data.npcs);
             }
             draw_dialog(fb, dialog_state);
         }
-        GameState::Shop(shop_state) => draw_shop(fb, shop_state, &game.player),
-        GameState::QuestLog => draw_quest_log(fb, &game.player, &game.data.quests),
+        GameState::Shop(shop_state) => draw_shop(fb, shop_state, player),
+        GameState::QuestLog => draw_quest_log(fb, player, &data.quests),
         GameState::PauseMenu(selected) => {
-            if let Some(map) = game.current_map() {
-                draw_explore(fb, map, &game.player, &game.combat, &game.data.npcs);
+            if let Some(map) = data.find_map(&player.current_map_id) {
+                draw_explore(fb, map, player, combat, &data.npcs);
             }
             draw_pause_menu(fb, *selected);
         }
@@ -57,7 +63,7 @@ pub(super) fn render(game: &RpgGame, fb: &mut Framebuffer) {
     }
 }
 
-pub(super) fn draw_loading(_game: &RpgGame, step: usize) {
+pub(super) fn draw_loading(step: usize) {
     let mut fb = Framebuffer::screen_framebuffer();
     clear_screen(&mut fb);
 
