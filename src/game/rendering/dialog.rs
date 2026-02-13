@@ -3,7 +3,7 @@ use wipi::framebuffer::Framebuffer;
 use super::renderer::{
     COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, draw_rect, draw_text, fill_rect,
 };
-use super::state::DialogState;
+use crate::game::DialogState;
 
 pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
     let screen_w = fb.width() as i32;

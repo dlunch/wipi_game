@@ -17,10 +17,10 @@ const MP_REGEN_INTERVAL: u32 = 60;
 use game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, DialogIntent,
     GameData, GameState, InventoryIntent, InventoryState, MenuAction, MenuIntent, MenuState,
-    MovementState, PauseMenuIntent, Player, PlayerEffect,
-    ShopIntent, ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore,
-    draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
-    draw_text, fill_rect, has_save_data, load_game, pause_menu_intent_for_key, save_game,
+    MovementState, PauseMenuIntent, Player, PlayerEffect, ShopIntent, ShopMode, TileEvent,
+    check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu,
+    draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    has_save_data, load_game, pause_menu_intent_for_key, save_game,
 };
 
 enum AppAction {
@@ -282,10 +282,13 @@ impl RpgGame {
 
         if let Some(map) = self.data.find_map("village") {
             self.player.spawn_at_map(map);
-            let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
-                map,
-                enemy_data: &self.data.enemies,
-            });
+            let _ = game::combat::reduce(
+                &mut self.combat,
+                game::CombatIntent::SpawnEnemies {
+                    map,
+                    enemy_data: &self.data.enemies,
+                },
+            );
         }
 
         self.state = GameState::Explore;
@@ -306,10 +309,13 @@ impl RpgGame {
                     {
                         self.player.spawn_at_map(map);
                     }
-                    let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
-                        map,
-                        enemy_data: &self.data.enemies,
-                    });
+                    let _ = game::combat::reduce(
+                        &mut self.combat,
+                        game::CombatIntent::SpawnEnemies {
+                            map,
+                            enemy_data: &self.data.enemies,
+                        },
+                    );
                 }
                 self.state = GameState::Explore;
             }
@@ -524,10 +530,13 @@ impl RpgGame {
             self.player.x = x;
             self.player.y = y;
         }
-        let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
-            map,
-            enemy_data: &self.data.enemies,
-        });
+        let _ = game::combat::reduce(
+            &mut self.combat,
+            game::CombatIntent::SpawnEnemies {
+                map,
+                enemy_data: &self.data.enemies,
+            },
+        );
     }
 
     fn try_interact_with_npc(&mut self) {
@@ -614,11 +623,14 @@ impl RpgGame {
                         player_atk: self.player.total_atk(),
                         facing: self.player.facing,
                     },
-                )
-                {
+                ) {
                     self.player.stats.add_exp(reward.exp);
                     self.player.stats.gold += reward.gold;
-                    game::quest_system::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
+                    game::quest_system::on_enemy_killed(
+                        &mut self.player,
+                        &self.data,
+                        &reward.enemy_id,
+                    );
                 }
             }
             ExploreIntent::Skill1 => self.use_skill(0, &Skill::FIREBALL),

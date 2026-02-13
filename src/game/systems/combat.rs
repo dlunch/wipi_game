@@ -164,7 +164,9 @@ pub fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent 
             player_def,
             map,
             enemy_data,
-        } => CombatEvent::Tick(update(state, player_x, player_y, player_def, map, enemy_data)),
+        } => CombatEvent::Tick(update(
+            state, player_x, player_y, player_def, map, enemy_data,
+        )),
         CombatIntent::PlayerAttack {
             player_x,
             player_y,
@@ -177,7 +179,9 @@ pub fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent 
             player_y,
             player_atk,
             facing,
-        } => CombatEvent::Skill(use_skill(state, skill, player_x, player_y, player_atk, facing)),
+        } => CombatEvent::Skill(use_skill(
+            state, skill, player_x, player_y, player_atk, facing,
+        )),
     }
 }
 
@@ -322,7 +326,9 @@ fn try_respawn(
         }
 
         if let Some(enemy) = available_enemies.get(*enemy_idx) {
-            state.enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y));
+            state
+                .enemies
+                .push(FieldEnemy::new((*enemy).clone(), *x, *y));
             state.respawn_timer = 0;
             return;
         }

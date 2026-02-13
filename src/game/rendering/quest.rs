@@ -2,12 +2,12 @@ use alloc::format;
 use alloc::vec::Vec;
 use wipi::framebuffer::Framebuffer;
 
-use super::Player;
 use super::renderer::{
     COLOR_BLACK, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
     draw_text, fill_rect,
 };
 use crate::data::Quest;
+use crate::game::Player;
 
 pub fn draw_quest_log(fb: &mut Framebuffer, player: &Player, quests: &[Quest]) {
     clear_screen(fb);

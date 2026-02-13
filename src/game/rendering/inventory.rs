@@ -1,58 +1,13 @@
 use alloc::format;
-use wipi::event::KeyCode;
 use wipi::framebuffer::Framebuffer;
 
-use super::Player;
 use super::renderer::{
     COLOR_BLACK, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE,
     COLOR_YELLOW, clear_screen, draw_hp_bar, draw_rect, draw_selection_cursor, draw_text,
     fill_rect,
 };
 use crate::data::ItemKind;
-
-#[derive(Default)]
-pub struct InventoryState {
-    pub selected: usize,
-    pub scroll: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum InventoryIntent {
-    MoveUp,
-    MoveDown,
-    UseSelected,
-    Back,
-}
-
-impl InventoryState {
-    pub fn intent_for_key(key: KeyCode) -> Option<InventoryIntent> {
-        match key {
-            KeyCode::Up => Some(InventoryIntent::MoveUp),
-            KeyCode::Down => Some(InventoryIntent::MoveDown),
-            KeyCode::Ok => Some(InventoryIntent::UseSelected),
-            KeyCode::Back => Some(InventoryIntent::Back),
-            _ => None,
-        }
-    }
-
-    pub fn move_up(&mut self) {
-        if self.selected > 0 {
-            self.selected -= 1;
-            if self.selected < self.scroll {
-                self.scroll = self.selected;
-            }
-        }
-    }
-
-    pub fn move_down(&mut self, item_count: usize, visible_items: usize) {
-        if item_count > 0 && self.selected < item_count - 1 {
-            self.selected += 1;
-            if self.selected >= self.scroll + visible_items {
-                self.scroll = self.selected - visible_items + 1;
-            }
-        }
-    }
-}
+use crate::game::{InventoryState, Player};
 
 pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventoryState) {
     clear_screen(fb);

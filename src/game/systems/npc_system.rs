@@ -27,7 +27,10 @@ pub fn try_interact(player: &mut Player, data: &GameData, facing: Direction) -> 
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
                 let filtered = filter_lines(player, dialog);
                 if !filtered.lines.is_empty() {
-                    return Some(GameState::Dialog(DialogState::new(npc.name.clone(), &filtered)));
+                    return Some(GameState::Dialog(DialogState::new(
+                        npc.name.clone(),
+                        &filtered,
+                    )));
                 }
             }
         }
@@ -50,7 +53,10 @@ pub fn try_interact(player: &mut Player, data: &GameData, facing: Direction) -> 
     if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
         let filtered = filter_lines(player, dialog);
         if !filtered.lines.is_empty() {
-            return Some(GameState::Dialog(DialogState::new(npc.name.clone(), &filtered)));
+            return Some(GameState::Dialog(DialogState::new(
+                npc.name.clone(),
+                &filtered,
+            )));
         }
     }
 
@@ -77,7 +83,11 @@ pub fn filter_lines(player: &Player, dialog: &Dialog) -> Dialog {
     }
 }
 
-pub fn process_action(player: &mut Player, data: &GameData, action: &DialogAction) -> Option<GameState> {
+pub fn process_action(
+    player: &mut Player,
+    data: &GameData,
+    action: &DialogAction,
+) -> Option<GameState> {
     match action {
         DialogAction::GiveQuest(id) => {
             player.add_quest(id);
