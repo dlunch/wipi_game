@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use super::combat::{enemy_at, CombatState};
+use super::combat::{CombatState, enemy_at};
 use crate::data::{Map, Npc};
 use crate::game::Player;
 

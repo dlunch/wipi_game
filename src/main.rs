@@ -447,47 +447,48 @@ impl RpgGame {
         }
     }
 
-     fn use_skill(&mut self, slot: usize, skill: &Skill) {
-         if !game::player::can_use_skill(&self.player, slot, skill.mp_cost) {
-             return;
-         }
+    fn use_skill(&mut self, slot: usize, skill: &Skill) {
+        if !game::player::can_use_skill(&self.player, slot, skill.mp_cost) {
+            return;
+        }
 
-         let game::CombatEvent::Skill(result) = game::combat::reduce(
-             &mut self.combat,
-             game::CombatIntent::UseSkill {
-                 skill,
-                 player_x: self.player.x,
-                 player_y: self.player.y,
-                 player_atk: self.player.total_atk(),
-                 facing: self.player.facing,
-             },
-         ) else {
-             return;
-         };
+        let game::CombatEvent::Skill(result) = game::combat::reduce(
+            &mut self.combat,
+            game::CombatIntent::UseSkill {
+                skill,
+                player_x: self.player.x,
+                player_y: self.player.y,
+                player_atk: self.player.total_atk(),
+                facing: self.player.facing,
+            },
+        ) else {
+            return;
+        };
 
-         let _ = game::player::reduce(&mut self.player, game::PlayerIntent::UseSkill {
-             slot,
-             mp_cost: skill.mp_cost,
-             cooldown: skill.cooldown,
-         });
+        let _ = game::player::reduce(
+            &mut self.player,
+            game::PlayerIntent::UseSkill {
+                slot,
+                mp_cost: skill.mp_cost,
+                cooldown: skill.cooldown,
+            },
+        );
 
-         for effect in &result.player_effects {
-             match effect {
-                  PlayerEffect::Heal(amount) => {
-                       let _ = game::player::reduce(
-                          &mut self.player,
-                          game::PlayerIntent::Heal(*amount),
-                      );
-                  }
-              }
-         }
+        for effect in &result.player_effects {
+            match effect {
+                PlayerEffect::Heal(amount) => {
+                    let _ =
+                        game::player::reduce(&mut self.player, game::PlayerIntent::Heal(*amount));
+                }
+            }
+        }
 
-         for kill in result.kills {
-             self.player.stats.add_exp(kill.exp);
-             self.player.stats.gold += kill.gold;
-             game::quest::on_enemy_killed(&mut self.player, &self.data, &kill.enemy_id);
-         }
-     }
+        for kill in result.kills {
+            self.player.stats.add_exp(kill.exp);
+            self.player.stats.gold += kill.gold;
+            game::quest::on_enemy_killed(&mut self.player, &self.data, &kill.enemy_id);
+        }
+    }
 
     fn check_tile_events(&mut self) {
         let event = self
@@ -537,34 +538,34 @@ impl RpgGame {
         );
     }
 
-     fn try_interact_with_npc(&mut self) {
-         let facing = self.player.facing;
-         if let Some(new_state) = game::npc::reduce(
-             &mut self.player,
-             &self.data,
-             game::NpcIntent::Interact { facing },
-         ) {
-             self.state = new_state;
-         }
-     }
+    fn try_interact_with_npc(&mut self) {
+        let facing = self.player.facing;
+        if let Some(new_state) = game::npc::reduce(
+            &mut self.player,
+            &self.data,
+            game::NpcIntent::Interact { facing },
+        ) {
+            self.state = new_state;
+        }
+    }
 
-     fn process_dialog_action(&mut self) {
-         let GameState::Dialog(ref state) = self.state else {
-             return;
-         };
+    fn process_dialog_action(&mut self) {
+        let GameState::Dialog(ref state) = self.state else {
+            return;
+        };
 
-         let Some(action) = state.current_action().cloned() else {
-             return;
-         };
+        let Some(action) = state.current_action().cloned() else {
+            return;
+        };
 
-         if let Some(new_state) = game::npc::reduce(
-             &mut self.player,
-             &self.data,
-             game::NpcIntent::ProcessDialogAction { action: &action },
-         ) {
-             self.state = new_state;
-         }
-     }
+        if let Some(new_state) = game::npc::reduce(
+            &mut self.player,
+            &self.data,
+            game::NpcIntent::ProcessDialogAction { action: &action },
+        ) {
+            self.state = new_state;
+        }
+    }
 
     fn handle_menu_input(&mut self, intent: MenuIntent) {
         let GameState::Menu(ref mut menu) = self.state else {
@@ -609,23 +610,19 @@ impl RpgGame {
                 if matches!(self.state, GameState::Dialog(_)) {
                     return;
                 }
-                 if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
-                     &mut self.combat,
-                     game::CombatIntent::PlayerAttack {
-                         player_x: self.player.x,
-                         player_y: self.player.y,
-                         player_atk: self.player.total_atk(),
-                         facing: self.player.facing,
-                     },
-                 ) {
-                     self.player.stats.add_exp(reward.exp);
-                     self.player.stats.gold += reward.gold;
-                     game::quest::on_enemy_killed(
-                         &mut self.player,
-                         &self.data,
-                         &reward.enemy_id,
-                     );
-                 }
+                if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
+                    &mut self.combat,
+                    game::CombatIntent::PlayerAttack {
+                        player_x: self.player.x,
+                        player_y: self.player.y,
+                        player_atk: self.player.total_atk(),
+                        facing: self.player.facing,
+                    },
+                ) {
+                    self.player.stats.add_exp(reward.exp);
+                    self.player.stats.gold += reward.gold;
+                    game::quest::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
+                }
             }
             ExploreIntent::Skill1 => self.use_skill(0, &Skill::FIREBALL),
             ExploreIntent::Skill2 => self.use_skill(1, &Skill::HEAL),
@@ -651,9 +648,12 @@ impl RpgGame {
                     .move_down(self.player.inventory.len(), visible);
             }
             InventoryIntent::UseSelected => {
-                let _ = game::player::reduce(&mut self.player, game::PlayerIntent::UseItem {
-                    index: self.inventory_state.selected,
-                });
+                let _ = game::player::reduce(
+                    &mut self.player,
+                    game::PlayerIntent::UseItem {
+                        index: self.inventory_state.selected,
+                    },
+                );
             }
             InventoryIntent::Back => self.state = GameState::Explore,
         }
