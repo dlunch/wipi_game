@@ -4,12 +4,14 @@ use wipi::event::KeyCode;
 
 use crate::game::{DialogIntent, InventoryIntent, MenuIntent, PauseMenuIntent, ShopIntent};
 
+#[derive(Debug, Clone, Copy)]
 pub enum AppAction {
     Tick,
     KeyDown(KeyCode),
     KeyUp(KeyCode),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum AppEffect {
     UpdateLoading,
     UpdateMovement,
@@ -26,7 +28,7 @@ pub enum AppEffect {
     Exit(i32),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
     MoveDirection(KeyCode),
     TryNpcInteract,

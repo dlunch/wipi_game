@@ -1,30 +1,10 @@
-use wipi::event::KeyCode;
-
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct InventoryState {
     pub selected: usize,
     pub scroll: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum InventoryIntent {
-    MoveUp,
-    MoveDown,
-    UseSelected,
-    Back,
-}
-
 impl InventoryState {
-    pub fn intent_for_key(key: KeyCode) -> Option<InventoryIntent> {
-        match key {
-            KeyCode::Up => Some(InventoryIntent::MoveUp),
-            KeyCode::Down => Some(InventoryIntent::MoveDown),
-            KeyCode::Ok => Some(InventoryIntent::UseSelected),
-            KeyCode::Back => Some(InventoryIntent::Back),
-            _ => None,
-        }
-    }
-
     pub fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;

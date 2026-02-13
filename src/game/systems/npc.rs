@@ -2,6 +2,7 @@ use super::combat::Direction;
 use crate::data::{Dialog, DialogAction, DialogCondition, NpcType};
 use crate::game::{DialogState, GameData, GameState, PlayerState, ShopState};
 
+#[derive(Debug)]
 pub enum NpcIntent<'a> {
     Interact { facing: Direction },
     ProcessDialogAction { action: &'a DialogAction },

@@ -1,6 +1,7 @@
 use crate::data::ItemKind;
 use crate::game::PlayerState;
 
+#[derive(Debug, Clone, Copy)]
 pub enum PlayerIntent {
     UpdateCooldowns,
     UseSkill {
@@ -16,6 +17,7 @@ pub enum PlayerIntent {
     RecoverMp(i32),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum PlayerEvent {
     None,
     ItemUsed,

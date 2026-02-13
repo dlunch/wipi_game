@@ -439,7 +439,12 @@ impl MapBuilder {
         ensure!(!self.rows.is_empty(), "map '{}' has no tile rows", self.id);
 
         let height = self.rows.len();
-        let width = self.rows.iter().map(|r| r.chars().count()).max().unwrap();
+        let width = self
+            .rows
+            .iter()
+            .map(|r| r.chars().count())
+            .max()
+            .unwrap_or(0);
 
         let mut tiles = vec![Tile::Floor; width * height];
         let mut auto_exits = Vec::new();

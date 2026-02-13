@@ -9,7 +9,7 @@ mod shop;
 
 pub use dialog::draw_dialog;
 pub use explore::draw_explore;
-pub use game::{draw_loading, render};
+pub use game::render;
 pub use inventory::{draw_inventory, draw_stats};
 pub use menu::{draw_menu, draw_pause_menu};
 pub use quest::draw_quest_log;

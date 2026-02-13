@@ -1,4 +1,4 @@
-use wipi::{framebuffer::Framebuffer, graphics::repaint};
+use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, GameData,
@@ -16,7 +16,7 @@ pub fn render(
     fb: &mut Framebuffer,
 ) {
     match state {
-        GameState::Loading(_) => {}
+        GameState::Loading(step) => draw_loading(fb, *step),
         GameState::Menu(menu_state) => draw_menu(fb, menu_state),
         GameState::Explore => {
             if let Some(map) = data.find_map(&player.current_map_id) {
@@ -63,33 +63,30 @@ pub fn render(
     }
 }
 
-pub fn draw_loading(step: usize) {
-    let mut fb = Framebuffer::screen_framebuffer();
-    clear_screen(&mut fb);
+fn draw_loading(fb: &mut Framebuffer, step: usize) {
+    clear_screen(fb);
 
     let w = fb.width() as i32;
     let h = fb.height() as i32;
 
-    draw_text(&mut fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
+    draw_text(fb, w / 2 - 30, h / 2 - 30, "Loading...", COLOR_WHITE);
 
     let label = GameData::LOAD_LABELS[step];
-    draw_text(&mut fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
+    draw_text(fb, w / 2 - 30, h / 2 - 10, label, COLOR_CYAN);
 
     let bar_w = 120;
     let bar_h = 8;
     let bar_x = w / 2 - bar_w / 2;
     let bar_y = h / 2 + 10;
 
-    draw_rect(&mut fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
+    draw_rect(fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
     let progress = (((step + 1) * bar_w as usize / GameData::LOAD_STEPS) as i32).min(bar_w);
     fill_rect(
-        &mut fb,
+        fb,
         bar_x + 1,
         bar_y + 1,
         progress - 2,
         bar_h - 2,
         COLOR_GREEN,
     );
-
-    repaint(0, 0, 0, w, h);
 }

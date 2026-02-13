@@ -10,6 +10,7 @@ const ATTACK_EFFECT_DURATION: u32 = 6;
 const SKILL_EFFECT_DURATION: u32 = 8;
 const HEAL_EFFECT_DURATION: u32 = 15;
 
+#[derive(Debug)]
 pub enum CombatIntent<'a> {
     SpawnEnemies {
         map: &'a Map,
@@ -37,6 +38,7 @@ pub enum CombatIntent<'a> {
     },
 }
 
+#[derive(Debug)]
 pub enum CombatEvent {
     None,
     Tick(CombatResult),
@@ -470,19 +472,23 @@ fn damage_enemy_at(state: &mut CombatState, x: usize, y: usize, damage: i32) -> 
     None
 }
 
+#[derive(Debug, Clone)]
 pub struct SkillResult {
     pub player_effects: Vec<PlayerEffect>,
     pub kills: Vec<KillReward>,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum PlayerEffect {
     Heal(i32),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct CombatResult {
     pub damage_taken: i32,
 }
 
+#[derive(Debug, Clone)]
 pub struct KillReward {
     pub enemy_id: alloc::string::String,
     pub exp: i32,
