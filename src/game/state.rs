@@ -1,6 +1,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use wipi::event::KeyCode;
+
 use crate::data::{Dialog, DialogLine, Item, Shop};
 
 #[derive(Debug, Clone)]
@@ -141,4 +143,76 @@ pub enum MenuAction {
     NewGame,
     Continue,
     Exit,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MenuIntent {
+    MoveUp,
+    MoveDown,
+    Select,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DialogIntent {
+    Confirm,
+    Back,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PauseMenuIntent {
+    MoveUp,
+    MoveDown,
+    Select,
+    Back,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ShopIntent {
+    MoveUp,
+    MoveDown,
+    Confirm,
+    Back,
+}
+
+impl MenuState {
+    pub fn intent_for_key(key: KeyCode) -> Option<MenuIntent> {
+        match key {
+            KeyCode::Up => Some(MenuIntent::MoveUp),
+            KeyCode::Down => Some(MenuIntent::MoveDown),
+            KeyCode::Ok => Some(MenuIntent::Select),
+            _ => None,
+        }
+    }
+}
+
+impl DialogState {
+    pub fn intent_for_key(key: KeyCode) -> Option<DialogIntent> {
+        match key {
+            KeyCode::Ok => Some(DialogIntent::Confirm),
+            KeyCode::Back => Some(DialogIntent::Back),
+            _ => None,
+        }
+    }
+}
+
+pub fn pause_menu_intent_for_key(key: KeyCode) -> Option<PauseMenuIntent> {
+    match key {
+        KeyCode::Up => Some(PauseMenuIntent::MoveUp),
+        KeyCode::Down => Some(PauseMenuIntent::MoveDown),
+        KeyCode::Ok => Some(PauseMenuIntent::Select),
+        KeyCode::Back | KeyCode::Key0 => Some(PauseMenuIntent::Back),
+        _ => None,
+    }
+}
+
+impl ShopState {
+    pub fn intent_for_key(key: KeyCode) -> Option<ShopIntent> {
+        match key {
+            KeyCode::Up => Some(ShopIntent::MoveUp),
+            KeyCode::Down => Some(ShopIntent::MoveDown),
+            KeyCode::Ok => Some(ShopIntent::Confirm),
+            KeyCode::Back => Some(ShopIntent::Back),
+            _ => None,
+        }
+    }
 }

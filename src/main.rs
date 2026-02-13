@@ -10,17 +10,66 @@ use alloc::string::String;
 
 use wipi::{app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, wipi_main};
 
-use data::{Skill, SkillType};
+use data::Skill;
 
 const MP_REGEN_INTERVAL: u32 = 60;
 
 use game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, GameData,
-    GameState, InventoryState, MenuAction, MenuState, MovementController, NpcInteraction, Player,
-    QuestSystem, ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, DialogIntent,
+    GameData, GameState, InventoryIntent, InventoryState, MenuAction, MenuIntent, MenuState,
+    MovementController, NpcInteraction, PauseMenuIntent, Player, PlayerEffect, QuestSystem,
+    ShopIntent, ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore,
     draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
-    draw_text, fill_rect, has_save_data, load_game, save_game,
+    draw_text, fill_rect, has_save_data, load_game, pause_menu_intent_for_key, save_game,
 };
+
+enum AppAction {
+    Tick,
+    KeyDown(KeyCode),
+    KeyUp(KeyCode),
+}
+
+enum AppEffect {
+    UpdateLoading,
+    UpdateMovement,
+    UpdateCombat,
+    ApplyMenuIntent(MenuIntent),
+    ApplyExploreIntent(ExploreIntent),
+    ApplyInventoryIntent(InventoryIntent),
+    ApplyDialogIntent(DialogIntent),
+    ApplyShopIntent(ShopIntent),
+    ApplyPauseMenuIntent(PauseMenuIntent),
+    ReturnToExplore,
+    ReturnToMenuFromGameOver,
+    ReleaseMovementKey(KeyCode),
+    Exit(i32),
+}
+
+#[derive(Clone, Copy)]
+enum ExploreIntent {
+    MoveDirection(KeyCode),
+    Confirm,
+    Skill1,
+    Skill2,
+    Skill3,
+    Pause,
+    BackToMenu,
+}
+
+fn explore_intent_for_key(key: KeyCode) -> Option<ExploreIntent> {
+    match key {
+        KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+            Some(ExploreIntent::MoveDirection(key))
+        }
+        KeyCode::Ok => Some(ExploreIntent::Confirm),
+        KeyCode::Key1 => Some(ExploreIntent::Skill1),
+        KeyCode::Key2 => Some(ExploreIntent::Skill2),
+        KeyCode::Key3 => Some(ExploreIntent::Skill3),
+        KeyCode::Key0 => Some(ExploreIntent::Pause),
+        KeyCode::Back => Some(ExploreIntent::BackToMenu),
+        _ => None,
+    }
+}
 
 pub struct RpgGame {
     state: GameState,
@@ -48,6 +97,151 @@ impl RpgGame {
             combat: CombatSystem::new(),
             movement: MovementController::default(),
             mp_regen_timer: 0,
+        }
+    }
+
+    fn collect_effects(&self, action: AppAction) -> alloc::vec::Vec<AppEffect> {
+        let mut effects = alloc::vec::Vec::new();
+
+        match action {
+            AppAction::Tick => match self.state {
+                GameState::Loading(_) => effects.push(AppEffect::UpdateLoading),
+                GameState::Explore => {
+                    effects.push(AppEffect::UpdateMovement);
+                    effects.push(AppEffect::UpdateCombat);
+                }
+                _ => {}
+            },
+            AppAction::KeyDown(key) => match self.state {
+                GameState::Loading(_) => {}
+                GameState::Menu(_) => {
+                    if let Some(intent) = MenuState::intent_for_key(key) {
+                        effects.push(AppEffect::ApplyMenuIntent(intent));
+                    }
+                }
+                GameState::Explore => {
+                    if let Some(intent) = explore_intent_for_key(key) {
+                        effects.push(AppEffect::ApplyExploreIntent(intent));
+                    }
+                }
+                GameState::Inventory => {
+                    if let Some(intent) = InventoryState::intent_for_key(key) {
+                        effects.push(AppEffect::ApplyInventoryIntent(intent));
+                    }
+                }
+                GameState::Stats | GameState::QuestLog => {
+                    if matches!(key, KeyCode::Back | KeyCode::Ok) {
+                        effects.push(AppEffect::ReturnToExplore);
+                    }
+                }
+                GameState::Dialog(_) => {
+                    if let Some(intent) = game::DialogState::intent_for_key(key) {
+                        effects.push(AppEffect::ApplyDialogIntent(intent));
+                    }
+                }
+                GameState::Shop(_) => {
+                    if let Some(intent) = game::ShopState::intent_for_key(key) {
+                        effects.push(AppEffect::ApplyShopIntent(intent));
+                    }
+                }
+                GameState::PauseMenu(_) => {
+                    if let Some(intent) = pause_menu_intent_for_key(key) {
+                        effects.push(AppEffect::ApplyPauseMenuIntent(intent));
+                    }
+                }
+                GameState::GameOver => {
+                    if matches!(key, KeyCode::Ok) {
+                        effects.push(AppEffect::ReturnToMenuFromGameOver);
+                    }
+                }
+                GameState::Error(_) => {
+                    if matches!(key, KeyCode::Ok) {
+                        effects.push(AppEffect::Exit(1));
+                    }
+                }
+            },
+            AppAction::KeyUp(key) => effects.push(AppEffect::ReleaseMovementKey(key)),
+        }
+
+        effects
+    }
+
+    fn apply_effect(&mut self, effect: AppEffect) {
+        match effect {
+            AppEffect::UpdateLoading => self.update_loading(),
+            AppEffect::UpdateMovement => self.update_movement(),
+            AppEffect::UpdateCombat => self.update_combat(),
+            AppEffect::ApplyMenuIntent(intent) => self.handle_menu_input(intent),
+            AppEffect::ApplyExploreIntent(intent) => self.handle_explore_input(intent),
+            AppEffect::ApplyInventoryIntent(intent) => self.handle_inventory_input(intent),
+            AppEffect::ApplyDialogIntent(intent) => self.handle_dialog_input(intent),
+            AppEffect::ApplyShopIntent(intent) => self.handle_shop_input(intent),
+            AppEffect::ApplyPauseMenuIntent(intent) => self.handle_pause_menu_input(intent),
+            AppEffect::ReturnToExplore => self.state = GameState::Explore,
+            AppEffect::ReturnToMenuFromGameOver => {
+                self.state = GameState::Menu(MenuState {
+                    selected: 0,
+                    has_save: has_save_data(),
+                });
+            }
+            AppEffect::ReleaseMovementKey(key) => self.movement.on_key_released(key),
+            AppEffect::Exit(code) => wipi::kernel::exit(code),
+        }
+    }
+
+    fn dispatch(&mut self, action: AppAction) {
+        let effects = self.collect_effects(action);
+        for effect in effects {
+            self.apply_effect(effect);
+        }
+    }
+
+    fn render(&self, fb: &mut Framebuffer) {
+        match &self.state {
+            GameState::Loading(_) => {}
+            GameState::Menu(menu_state) => draw_menu(fb, menu_state),
+            GameState::Explore => {
+                if let Some(map) = self.current_map() {
+                    draw_explore(fb, map, &self.player, &self.combat, &self.data.npcs);
+                }
+            }
+            GameState::Inventory => {
+                draw_inventory(fb, &self.player, &self.inventory_state);
+            }
+            GameState::Stats => draw_stats(fb, &self.player),
+            GameState::Dialog(dialog_state) => {
+                if let Some(map) = self.current_map() {
+                    draw_explore(fb, map, &self.player, &self.combat, &self.data.npcs);
+                }
+                draw_dialog(fb, dialog_state);
+            }
+            GameState::Shop(shop_state) => draw_shop(fb, shop_state, &self.player),
+            GameState::QuestLog => draw_quest_log(fb, &self.player, &self.data.quests),
+            GameState::PauseMenu(selected) => {
+                if let Some(map) = self.current_map() {
+                    draw_explore(fb, map, &self.player, &self.combat, &self.data.npcs);
+                }
+                draw_pause_menu(fb, *selected);
+            }
+            GameState::GameOver => {
+                clear_screen(fb);
+                let w = fb.width() as i32;
+                let h = fb.height() as i32;
+                fill_rect(fb, w / 2 - 40, h / 2 - 20, 80, 40, COLOR_DARK_GRAY);
+                draw_rect(fb, w / 2 - 40, h / 2 - 20, 80, 40, COLOR_RED);
+                draw_text(fb, w / 2 - 35, h / 2 - 8, "GAME OVER", COLOR_RED);
+                draw_text(fb, w / 2 - 30, h / 2 + 8, "OK:Menu", COLOR_WHITE);
+            }
+            GameState::Error(msg) => {
+                clear_screen(fb);
+                let w = fb.width() as i32;
+                let h = fb.height() as i32;
+                fill_rect(fb, 10, h / 2 - 30, w - 20, 60, COLOR_DARK_GRAY);
+                draw_rect(fb, 10, h / 2 - 30, w - 20, 60, COLOR_RED);
+                draw_text(fb, 16, h / 2 - 20, "ERROR", COLOR_RED);
+                draw_text(fb, 16, h / 2 - 4, msg, COLOR_WHITE);
+                draw_text(fb, 16, h / 2 + 16, "OK:Exit", COLOR_WHITE);
+            }
         }
     }
 
@@ -230,8 +424,10 @@ impl RpgGame {
 
         self.player.use_skill(slot, skill.mp_cost, skill.cooldown);
 
-        if skill.skill_type == SkillType::Heal {
-            self.player.stats.heal(result.heal_amount);
+        for effect in &result.player_effects {
+            match effect {
+                PlayerEffect::Heal(amount) => self.player.stats.heal(*amount),
+            }
         }
 
         for kill in result.kills {
@@ -307,15 +503,15 @@ impl RpgGame {
         }
     }
 
-    fn handle_menu_input(&mut self, key: KeyCode) {
+    fn handle_menu_input(&mut self, intent: MenuIntent) {
         let GameState::Menu(ref mut menu) = self.state else {
             return;
         };
 
-        match key {
-            KeyCode::Up => menu.move_up(),
-            KeyCode::Down => menu.move_down(),
-            KeyCode::Ok => {
+        match intent {
+            MenuIntent::MoveUp => menu.move_up(),
+            MenuIntent::MoveDown => menu.move_down(),
+            MenuIntent::Select => {
                 let action = if menu.has_save {
                     match menu.selected {
                         0 => MenuAction::NewGame,
@@ -335,16 +531,15 @@ impl RpgGame {
                     MenuAction::Exit => wipi::kernel::exit(0),
                 }
             }
-            _ => {}
         }
     }
 
-    fn handle_explore_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+    fn handle_explore_input(&mut self, intent: ExploreIntent) {
+        match intent {
+            ExploreIntent::MoveDirection(key) => {
                 self.movement.on_direction_pressed(key);
             }
-            KeyCode::Ok => {
+            ExploreIntent::Confirm => {
                 self.try_interact_with_npc();
                 if matches!(self.state, GameState::Dialog(_)) {
                     return;
@@ -361,41 +556,39 @@ impl RpgGame {
                     QuestSystem::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
                 }
             }
-            KeyCode::Key1 => self.use_skill(0, &Skill::FIREBALL),
-            KeyCode::Key2 => self.use_skill(1, &Skill::HEAL),
-            KeyCode::Key3 => self.use_skill(2, &Skill::SPIN_ATTACK),
-            KeyCode::Key0 => self.state = GameState::PauseMenu(0),
-            KeyCode::Back => {
+            ExploreIntent::Skill1 => self.use_skill(0, &Skill::FIREBALL),
+            ExploreIntent::Skill2 => self.use_skill(1, &Skill::HEAL),
+            ExploreIntent::Skill3 => self.use_skill(2, &Skill::SPIN_ATTACK),
+            ExploreIntent::Pause => self.state = GameState::PauseMenu(0),
+            ExploreIntent::BackToMenu => {
                 let _ = save_game(&self.player);
                 self.state = GameState::Menu(MenuState {
                     selected: 0,
                     has_save: has_save_data(),
                 });
             }
-            _ => {}
         }
     }
 
-    fn handle_inventory_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Up => self.inventory_state.move_up(),
-            KeyCode::Down => {
+    fn handle_inventory_input(&mut self, intent: InventoryIntent) {
+        match intent {
+            InventoryIntent::MoveUp => self.inventory_state.move_up(),
+            InventoryIntent::MoveDown => {
                 let fb = Framebuffer::screen_framebuffer();
                 let visible = ((fb.height() as i32 - 50) / 14).max(1) as usize;
                 self.inventory_state
                     .move_down(self.player.inventory.len(), visible);
             }
-            KeyCode::Ok => {
+            InventoryIntent::UseSelected => {
                 self.player.use_item(self.inventory_state.selected);
             }
-            KeyCode::Back => self.state = GameState::Explore,
-            _ => {}
+            InventoryIntent::Back => self.state = GameState::Explore,
         }
     }
 
-    fn handle_dialog_input(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Ok => {
+    fn handle_dialog_input(&mut self, intent: DialogIntent) {
+        match intent {
+            DialogIntent::Confirm => {
                 self.process_dialog_action();
 
                 if matches!(self.state, GameState::Shop(_)) {
@@ -408,12 +601,11 @@ impl RpgGame {
                     self.state = GameState::Explore;
                 }
             }
-            KeyCode::Back => self.state = GameState::Explore,
-            _ => {}
+            DialogIntent::Back => self.state = GameState::Explore,
         }
     }
 
-    fn handle_shop_input(&mut self, key: KeyCode) {
+    fn handle_shop_input(&mut self, intent: ShopIntent) {
         const VISIBLE_ITEMS: usize = 8;
 
         let GameState::Shop(ref mut state) = self.state else {
@@ -421,10 +613,10 @@ impl RpgGame {
         };
 
         match state.mode {
-            ShopMode::Select => match key {
-                KeyCode::Up => state.move_up(),
-                KeyCode::Down => state.move_down(2, 2),
-                KeyCode::Ok => {
+            ShopMode::Select => match intent {
+                ShopIntent::MoveUp => state.move_up(),
+                ShopIntent::MoveDown => state.move_down(2, 2),
+                ShopIntent::Confirm => {
                     state.mode = if state.selected == 0 {
                         ShopMode::Buy
                     } else {
@@ -432,13 +624,12 @@ impl RpgGame {
                     };
                     state.reset_selection();
                 }
-                KeyCode::Back => self.state = GameState::Explore,
-                _ => {}
+                ShopIntent::Back => self.state = GameState::Explore,
             },
-            ShopMode::Buy => match key {
-                KeyCode::Up => state.move_up(),
-                KeyCode::Down => state.move_down(state.items.len(), VISIBLE_ITEMS),
-                KeyCode::Ok => {
+            ShopMode::Buy => match intent {
+                ShopIntent::MoveUp => state.move_up(),
+                ShopIntent::MoveDown => state.move_down(state.items.len(), VISIBLE_ITEMS),
+                ShopIntent::Confirm => {
                     if let Some(item) = state.items.get(state.selected).cloned()
                         && self.player.stats.gold >= item.price
                     {
@@ -446,16 +637,15 @@ impl RpgGame {
                         self.player.add_item(item);
                     }
                 }
-                KeyCode::Back => {
+                ShopIntent::Back => {
                     state.mode = ShopMode::Select;
                     state.reset_selection();
                 }
-                _ => {}
             },
-            ShopMode::Sell => match key {
-                KeyCode::Up => state.move_up(),
-                KeyCode::Down => state.move_down(self.player.inventory.len(), VISIBLE_ITEMS),
-                KeyCode::Ok => {
+            ShopMode::Sell => match intent {
+                ShopIntent::MoveUp => state.move_up(),
+                ShopIntent::MoveDown => state.move_down(self.player.inventory.len(), VISIBLE_ITEMS),
+                ShopIntent::Confirm => {
                     if let Some(item) = self.player.remove_item_at(state.selected) {
                         self.player.stats.gold += item.price / 2;
 
@@ -470,24 +660,23 @@ impl RpgGame {
                         }
                     }
                 }
-                KeyCode::Back => {
+                ShopIntent::Back => {
                     state.mode = ShopMode::Select;
                     state.reset_selection();
                 }
-                _ => {}
             },
         }
     }
 
-    fn handle_pause_menu_input(&mut self, key: KeyCode) {
+    fn handle_pause_menu_input(&mut self, intent: PauseMenuIntent) {
         let GameState::PauseMenu(ref mut selected) = self.state else {
             return;
         };
 
-        match key {
-            KeyCode::Up if *selected > 0 => *selected -= 1,
-            KeyCode::Down if *selected < 3 => *selected += 1,
-            KeyCode::Ok => match *selected {
+        match intent {
+            PauseMenuIntent::MoveUp if *selected > 0 => *selected -= 1,
+            PauseMenuIntent::MoveDown if *selected < 3 => *selected += 1,
+            PauseMenuIntent::Select => match *selected {
                 0 => {
                     self.inventory_state = InventoryState::default();
                     self.state = GameState::Inventory;
@@ -500,7 +689,7 @@ impl RpgGame {
                 }
                 _ => {}
             },
-            KeyCode::Back | KeyCode::Key0 => self.state = GameState::Explore,
+            PauseMenuIntent::Back => self.state = GameState::Explore,
             _ => {}
         }
     }
@@ -508,98 +697,20 @@ impl RpgGame {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        if matches!(self.state, GameState::Loading(_)) {
-            self.update_loading();
-            return;
-        }
-
-        self.update_movement();
-        self.update_combat();
+        self.dispatch(AppAction::Tick);
 
         let mut fb = Framebuffer::screen_framebuffer();
-
-        match &self.state {
-            GameState::Loading(_) => {}
-            GameState::Menu(menu_state) => draw_menu(&mut fb, menu_state),
-            GameState::Explore => {
-                if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
-                }
-            }
-            GameState::Inventory => {
-                draw_inventory(&mut fb, &self.player, &self.inventory_state);
-            }
-            GameState::Stats => draw_stats(&mut fb, &self.player),
-            GameState::Dialog(dialog_state) => {
-                if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
-                }
-                draw_dialog(&mut fb, dialog_state);
-            }
-            GameState::Shop(shop_state) => draw_shop(&mut fb, shop_state, &self.player),
-            GameState::QuestLog => draw_quest_log(&mut fb, &self.player, &self.data.quests),
-            GameState::PauseMenu(selected) => {
-                if let Some(map) = self.current_map() {
-                    draw_explore(&mut fb, map, &self.player, &self.combat, &self.data.npcs);
-                }
-                draw_pause_menu(&mut fb, *selected);
-            }
-            GameState::GameOver => {
-                clear_screen(&mut fb);
-                let w = fb.width() as i32;
-                let h = fb.height() as i32;
-                fill_rect(&mut fb, w / 2 - 40, h / 2 - 20, 80, 40, COLOR_DARK_GRAY);
-                draw_rect(&mut fb, w / 2 - 40, h / 2 - 20, 80, 40, COLOR_RED);
-                draw_text(&mut fb, w / 2 - 35, h / 2 - 8, "GAME OVER", COLOR_RED);
-                draw_text(&mut fb, w / 2 - 30, h / 2 + 8, "OK:Menu", COLOR_WHITE);
-            }
-            GameState::Error(msg) => {
-                clear_screen(&mut fb);
-                let w = fb.width() as i32;
-                let h = fb.height() as i32;
-                fill_rect(&mut fb, 10, h / 2 - 30, w - 20, 60, COLOR_DARK_GRAY);
-                draw_rect(&mut fb, 10, h / 2 - 30, w - 20, 60, COLOR_RED);
-                draw_text(&mut fb, 16, h / 2 - 20, "ERROR", COLOR_RED);
-                draw_text(&mut fb, 16, h / 2 - 4, msg, COLOR_WHITE);
-                draw_text(&mut fb, 16, h / 2 + 16, "OK:Exit", COLOR_WHITE);
-            }
-        }
+        self.render(&mut fb);
 
         repaint(0, 0, 0, fb.width() as i32, fb.height() as i32);
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
-        match &self.state {
-            GameState::Loading(_) => {}
-            GameState::Menu(_) => self.handle_menu_input(key),
-            GameState::Explore => self.handle_explore_input(key),
-            GameState::Inventory => self.handle_inventory_input(key),
-            GameState::Stats | GameState::QuestLog => {
-                if matches!(key, KeyCode::Back | KeyCode::Ok) {
-                    self.state = GameState::Explore;
-                }
-            }
-            GameState::Dialog(_) => self.handle_dialog_input(key),
-            GameState::Shop(_) => self.handle_shop_input(key),
-            GameState::PauseMenu(_) => self.handle_pause_menu_input(key),
-            GameState::GameOver => {
-                if matches!(key, KeyCode::Ok) {
-                    self.state = GameState::Menu(MenuState {
-                        selected: 0,
-                        has_save: has_save_data(),
-                    });
-                }
-            }
-            GameState::Error(_) => {
-                if matches!(key, KeyCode::Ok) {
-                    wipi::kernel::exit(1);
-                }
-            }
-        }
+        self.dispatch(AppAction::KeyDown(key));
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
-        self.movement.on_key_released(key);
+        self.dispatch(AppAction::KeyUp(key));
     }
 }
 

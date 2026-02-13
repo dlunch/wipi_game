@@ -321,6 +321,7 @@ impl CombatSystem {
         player_atk: i32,
         facing: Direction,
     ) -> SkillResult {
+        let mut player_effects = Vec::new();
         let mut kills = Vec::new();
         let damage = skill.power + player_atk / 2;
 
@@ -360,22 +361,21 @@ impl CombatSystem {
                     }
                 }
             }
-            SkillType::Heal => {
-                self.skill_effects.push(SkillEffect {
-                    x: player_x,
-                    y: player_y,
-                    effect_type: SkillType::Heal,
-                    timer: HEAL_EFFECT_DURATION,
-                });
-            }
+            SkillType::Heal => {}
+        }
+
+        if skill.heal_power > 0 {
+            self.skill_effects.push(SkillEffect {
+                x: player_x,
+                y: player_y,
+                effect_type: SkillType::Heal,
+                timer: HEAL_EFFECT_DURATION,
+            });
+            player_effects.push(PlayerEffect::Heal(skill.heal_power));
         }
 
         SkillResult {
-            heal_amount: if skill.skill_type == SkillType::Heal {
-                skill.power
-            } else {
-                0
-            },
+            player_effects,
             kills,
         }
     }
@@ -401,8 +401,12 @@ impl CombatSystem {
 }
 
 pub struct SkillResult {
-    pub heal_amount: i32,
+    pub player_effects: Vec<PlayerEffect>,
     pub kills: Vec<KillReward>,
+}
+
+pub enum PlayerEffect {
+    Heal(i32),
 }
 
 pub struct CombatResult {
