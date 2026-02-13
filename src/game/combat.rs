@@ -10,6 +10,40 @@ const ATTACK_EFFECT_DURATION: u32 = 6;
 const SKILL_EFFECT_DURATION: u32 = 8;
 const HEAL_EFFECT_DURATION: u32 = 15;
 
+pub enum CombatIntent<'a> {
+    SpawnEnemies {
+        map: &'a Map,
+        enemy_data: &'a [Enemy],
+    },
+    Tick {
+        player_x: usize,
+        player_y: usize,
+        player_def: i32,
+        map: &'a Map,
+        enemy_data: &'a [Enemy],
+    },
+    PlayerAttack {
+        player_x: usize,
+        player_y: usize,
+        player_atk: i32,
+        facing: Direction,
+    },
+    UseSkill {
+        skill: &'a Skill,
+        player_x: usize,
+        player_y: usize,
+        player_atk: i32,
+        facing: Direction,
+    },
+}
+
+pub enum CombatEvent {
+    None,
+    Tick(CombatResult),
+    Attack(Option<KillReward>),
+    Skill(SkillResult),
+}
+
 #[derive(Debug, Clone)]
 pub struct FieldEnemy {
     pub data: Enemy,
@@ -119,6 +153,35 @@ pub struct CombatSystem {
 }
 
 impl CombatSystem {
+    pub fn reduce(&mut self, intent: CombatIntent<'_>) -> CombatEvent {
+        match intent {
+            CombatIntent::SpawnEnemies { map, enemy_data } => {
+                self.spawn_enemies(map, enemy_data);
+                CombatEvent::None
+            }
+            CombatIntent::Tick {
+                player_x,
+                player_y,
+                player_def,
+                map,
+                enemy_data,
+            } => CombatEvent::Tick(self.update(player_x, player_y, player_def, map, enemy_data)),
+            CombatIntent::PlayerAttack {
+                player_x,
+                player_y,
+                player_atk,
+                facing,
+            } => CombatEvent::Attack(self.player_attack(player_x, player_y, player_atk, facing)),
+            CombatIntent::UseSkill {
+                skill,
+                player_x,
+                player_y,
+                player_atk,
+                facing,
+            } => CombatEvent::Skill(self.use_skill(skill, player_x, player_y, player_atk, facing)),
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

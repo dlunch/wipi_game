@@ -3,7 +3,23 @@ use crate::data::{Dialog, DialogAction, DialogCondition, NpcType};
 
 pub struct NpcInteraction;
 
+pub enum NpcIntent<'a> {
+    Interact { facing: Direction },
+    ProcessDialogAction { action: &'a DialogAction },
+}
+
 impl NpcInteraction {
+    pub fn reduce(
+        player: &mut Player,
+        data: &GameData,
+        intent: NpcIntent<'_>,
+    ) -> Option<GameState> {
+        match intent {
+            NpcIntent::Interact { facing } => Self::try_interact(player, data, facing),
+            NpcIntent::ProcessDialogAction { action } => Self::process_action(player, data, action),
+        }
+    }
+
     pub fn try_interact(
         player: &mut Player,
         data: &GameData,

@@ -14,15 +14,15 @@ mod save;
 mod shop;
 mod state;
 
-pub use combat::{CombatSystem, Direction, PlayerEffect};
+pub use combat::{CombatEvent, CombatIntent, CombatSystem, Direction, PlayerEffect};
 pub use dialog::draw_dialog;
 pub use explore::{check_tile_event, draw_explore};
 pub use game_data::GameData;
 pub use inventory::{InventoryIntent, InventoryState, draw_inventory, draw_stats};
 pub use menu::{draw_menu, draw_pause_menu};
-pub use movement::MovementController;
-pub use npc_system::NpcInteraction;
-pub use player::Player;
+pub use movement::{MovementContext, MovementController, MovementIntent};
+pub use npc_system::{NpcIntent, NpcInteraction};
+pub use player::{Player, PlayerEvent, PlayerIntent};
 pub use quest::draw_quest_log;
 pub use quest_system::QuestSystem;
 pub use renderer::{

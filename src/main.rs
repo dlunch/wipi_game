@@ -184,7 +184,10 @@ impl RpgGame {
                     has_save: has_save_data(),
                 });
             }
-            AppEffect::ReleaseMovementKey(key) => self.movement.on_key_released(key),
+            AppEffect::ReleaseMovementKey(key) => {
+                self.movement
+                    .reduce(game::MovementIntent::KeyReleased(key), None);
+            }
             AppEffect::Exit(code) => wipi::kernel::exit(code),
         }
     }
@@ -269,7 +272,10 @@ impl RpgGame {
 
         if let Some(map) = self.data.find_map("village") {
             self.player.spawn_at_map(map);
-            self.combat.spawn_enemies(map, &self.data.enemies);
+            let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+                map,
+                enemy_data: &self.data.enemies,
+            });
         }
 
         self.state = GameState::Explore;
@@ -290,7 +296,10 @@ impl RpgGame {
                     {
                         self.player.spawn_at_map(map);
                     }
-                    self.combat.spawn_enemies(map, &self.data.enemies);
+                    let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+                        map,
+                        enemy_data: &self.data.enemies,
+                    });
                 }
                 self.state = GameState::Explore;
             }
@@ -367,9 +376,15 @@ impl RpgGame {
             return;
         };
 
-        let moved = self
-            .movement
-            .update(&mut self.player, map, &self.combat, &self.data.npcs);
+        let moved = self.movement.reduce(
+            game::MovementIntent::Tick,
+            Some(game::MovementContext {
+                player: &mut self.player,
+                map,
+                combat: &self.combat,
+                npcs: &self.data.npcs,
+            }),
+        );
 
         if moved {
             self.check_tile_events();
@@ -381,12 +396,12 @@ impl RpgGame {
             return;
         }
 
-        self.player.update_cooldowns();
+        let _ = self.player.reduce(game::PlayerIntent::UpdateCooldowns);
 
         self.mp_regen_timer += 1;
         if self.mp_regen_timer >= MP_REGEN_INTERVAL {
             self.mp_regen_timer = 0;
-            self.player.stats.recover_mp(1);
+            let _ = self.player.reduce(game::PlayerIntent::RecoverMp(1));
         }
 
         let player_x = self.player.x;
@@ -395,16 +410,24 @@ impl RpgGame {
         let map_id = self.player.current_map_id.clone();
 
         if let Some(map) = self.data.find_map(&map_id) {
-            let result =
-                self.combat
-                    .update(player_x, player_y, player_def, map, &self.data.enemies);
+            let game::CombatEvent::Tick(result) = self.combat.reduce(game::CombatIntent::Tick {
+                player_x,
+                player_y,
+                player_def,
+                map,
+                enemy_data: &self.data.enemies,
+            }) else {
+                return;
+            };
 
-            if result.damage_taken > 0 {
-                self.player.stats.take_damage(result.damage_taken);
-
-                if self.player.stats.is_dead() {
-                    self.state = GameState::GameOver;
-                }
+            if result.damage_taken > 0
+                && matches!(
+                    self.player
+                        .reduce(game::PlayerIntent::TakeDamage(result.damage_taken)),
+                    game::PlayerEvent::Died
+                )
+            {
+                self.state = GameState::GameOver;
             }
         }
     }
@@ -414,19 +437,27 @@ impl RpgGame {
             return;
         }
 
-        let result = self.combat.use_skill(
+        let game::CombatEvent::Skill(result) = self.combat.reduce(game::CombatIntent::UseSkill {
             skill,
-            self.player.x,
-            self.player.y,
-            self.player.total_atk(),
-            self.player.facing,
-        );
+            player_x: self.player.x,
+            player_y: self.player.y,
+            player_atk: self.player.total_atk(),
+            facing: self.player.facing,
+        }) else {
+            return;
+        };
 
-        self.player.use_skill(slot, skill.mp_cost, skill.cooldown);
+        let _ = self.player.reduce(game::PlayerIntent::UseSkill {
+            slot,
+            mp_cost: skill.mp_cost,
+            cooldown: skill.cooldown,
+        });
 
         for effect in &result.player_effects {
             match effect {
-                PlayerEffect::Heal(amount) => self.player.stats.heal(*amount),
+                PlayerEffect::Heal(amount) => {
+                    let _ = self.player.reduce(game::PlayerIntent::Heal(*amount));
+                }
             }
         }
 
@@ -476,13 +507,19 @@ impl RpgGame {
             self.player.x = x;
             self.player.y = y;
         }
-        self.combat.spawn_enemies(map, &self.data.enemies);
+        let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+            map,
+            enemy_data: &self.data.enemies,
+        });
     }
 
     fn try_interact_with_npc(&mut self) {
         let facing = self.player.facing;
-        if let Some(new_state) = NpcInteraction::try_interact(&mut self.player, &self.data, facing)
-        {
+        if let Some(new_state) = NpcInteraction::reduce(
+            &mut self.player,
+            &self.data,
+            game::NpcIntent::Interact { facing },
+        ) {
             self.state = new_state;
         }
     }
@@ -496,9 +533,11 @@ impl RpgGame {
             return;
         };
 
-        if let Some(new_state) =
-            NpcInteraction::process_action(&mut self.player, &self.data, &action)
-        {
+        if let Some(new_state) = NpcInteraction::reduce(
+            &mut self.player,
+            &self.data,
+            game::NpcIntent::ProcessDialogAction { action: &action },
+        ) {
             self.state = new_state;
         }
     }
@@ -537,7 +576,8 @@ impl RpgGame {
     fn handle_explore_input(&mut self, intent: ExploreIntent) {
         match intent {
             ExploreIntent::MoveDirection(key) => {
-                self.movement.on_direction_pressed(key);
+                self.movement
+                    .reduce(game::MovementIntent::DirectionPressed(key), None);
             }
             ExploreIntent::Confirm => {
                 self.try_interact_with_npc();
@@ -545,12 +585,14 @@ impl RpgGame {
                     return;
                 }
 
-                if let Some(reward) = self.combat.player_attack(
-                    self.player.x,
-                    self.player.y,
-                    self.player.total_atk(),
-                    self.player.facing,
-                ) {
+                if let game::CombatEvent::Attack(Some(reward)) =
+                    self.combat.reduce(game::CombatIntent::PlayerAttack {
+                        player_x: self.player.x,
+                        player_y: self.player.y,
+                        player_atk: self.player.total_atk(),
+                        facing: self.player.facing,
+                    })
+                {
                     self.player.stats.add_exp(reward.exp);
                     self.player.stats.gold += reward.gold;
                     QuestSystem::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
@@ -580,7 +622,9 @@ impl RpgGame {
                     .move_down(self.player.inventory.len(), visible);
             }
             InventoryIntent::UseSelected => {
-                self.player.use_item(self.inventory_state.selected);
+                let _ = self.player.reduce(game::PlayerIntent::UseItem {
+                    index: self.inventory_state.selected,
+                });
             }
             InventoryIntent::Back => self.state = GameState::Explore,
         }

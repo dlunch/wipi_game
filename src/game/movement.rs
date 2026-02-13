@@ -6,6 +6,19 @@ use crate::data::{Map, Npc};
 
 const MOVE_COOLDOWN: u32 = 5;
 
+pub enum MovementIntent {
+    DirectionPressed(KeyCode),
+    KeyReleased(KeyCode),
+    Tick,
+}
+
+pub struct MovementContext<'a> {
+    pub player: &'a mut Player,
+    pub map: &'a Map,
+    pub combat: &'a CombatSystem,
+    pub npcs: &'a [Npc],
+}
+
 #[derive(Default)]
 pub struct MovementController {
     pub pressed_direction: Option<KeyCode>,
@@ -13,6 +26,25 @@ pub struct MovementController {
 }
 
 impl MovementController {
+    pub fn reduce(&mut self, intent: MovementIntent, ctx: Option<MovementContext<'_>>) -> bool {
+        match intent {
+            MovementIntent::DirectionPressed(key) => {
+                self.on_direction_pressed(key);
+                false
+            }
+            MovementIntent::KeyReleased(key) => {
+                self.on_key_released(key);
+                false
+            }
+            MovementIntent::Tick => {
+                let Some(ctx) = ctx else {
+                    return false;
+                };
+                self.update(ctx.player, ctx.map, ctx.combat, ctx.npcs)
+            }
+        }
+    }
+
     pub fn on_direction_pressed(&mut self, key: KeyCode) {
         self.pressed_direction = Some(key);
         self.move_cooldown = 0;

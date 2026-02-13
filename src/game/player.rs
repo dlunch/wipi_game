@@ -4,6 +4,28 @@ use alloc::vec::Vec;
 use super::combat::Direction;
 use crate::data::{Item, ItemKind, Map, PlayerStats, QuestProgress};
 
+pub enum PlayerIntent {
+    UpdateCooldowns,
+    UseSkill {
+        slot: usize,
+        mp_cost: i32,
+        cooldown: u32,
+    },
+    UseItem {
+        index: usize,
+    },
+    TakeDamage(i32),
+    Heal(i32),
+    RecoverMp(i32),
+}
+
+pub enum PlayerEvent {
+    None,
+    ItemUsed,
+    SkillUsed,
+    Died,
+}
+
 pub struct Player {
     pub name: String,
     pub stats: PlayerStats,
@@ -21,6 +43,50 @@ pub struct Player {
 }
 
 impl Player {
+    pub fn reduce(&mut self, intent: PlayerIntent) -> PlayerEvent {
+        match intent {
+            PlayerIntent::UpdateCooldowns => {
+                self.update_cooldowns();
+                PlayerEvent::None
+            }
+            PlayerIntent::UseSkill {
+                slot,
+                mp_cost,
+                cooldown,
+            } => {
+                if self.can_use_skill(slot, mp_cost) {
+                    self.use_skill(slot, mp_cost, cooldown);
+                    PlayerEvent::SkillUsed
+                } else {
+                    PlayerEvent::None
+                }
+            }
+            PlayerIntent::UseItem { index } => {
+                if self.use_item(index) {
+                    PlayerEvent::ItemUsed
+                } else {
+                    PlayerEvent::None
+                }
+            }
+            PlayerIntent::TakeDamage(amount) => {
+                self.stats.take_damage(amount);
+                if self.stats.is_dead() {
+                    PlayerEvent::Died
+                } else {
+                    PlayerEvent::None
+                }
+            }
+            PlayerIntent::Heal(amount) => {
+                self.stats.heal(amount);
+                PlayerEvent::None
+            }
+            PlayerIntent::RecoverMp(amount) => {
+                self.stats.recover_mp(amount);
+                PlayerEvent::None
+            }
+        }
+    }
+
     pub fn new(name: String, start_map: &str) -> Self {
         Self {
             name,
