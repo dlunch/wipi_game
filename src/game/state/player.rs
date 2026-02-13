@@ -1,8 +1,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::Direction;
 use crate::data::{Item, Map, PlayerStats, QuestProgress};
+use crate::game::Direction;
 
 pub struct Player {
     pub name: String,

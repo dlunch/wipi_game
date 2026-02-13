@@ -1,9 +1,13 @@
+mod player;
+
+pub use player::Player;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{Dialog, DialogLine, Item, Shop};
+use crate::data::{Dialog, DialogLine, Item, Map, Shop, Tile};
 
 #[derive(Debug, Clone)]
 pub enum GameState {
@@ -115,7 +119,11 @@ pub struct MenuState {
 
 impl MenuState {
     pub fn menu_count(&self) -> usize {
-        if self.has_save { 3 } else { 2 }
+        if self.has_save {
+            3
+        } else {
+            2
+        }
     }
 
     pub fn move_up(&mut self) {
@@ -136,6 +144,31 @@ pub enum TileEvent {
     Treasure,
     MapExit(String),
     DungeonEntrance(String),
+}
+
+pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
+    let tile = map.get_tile(player.x, player.y);
+
+    match tile {
+        Tile::Treasure => Some(TileEvent::Treasure),
+        Tile::Exit => {
+            for (ex, ey, target) in &map.exits {
+                if *ex == player.x && *ey == player.y {
+                    return Some(TileEvent::MapExit(target.clone()));
+                }
+            }
+            None
+        }
+        Tile::Dungeon => {
+            for (dx, dy, target) in &map.dungeons {
+                if *dx == player.x && *dy == player.y {
+                    return Some(TileEvent::DungeonEntrance(target.clone()));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

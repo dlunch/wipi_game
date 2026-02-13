@@ -406,12 +406,12 @@ impl RpgGame {
             return;
         }
 
-        let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UpdateCooldowns);
+        let _ = game::player::reduce(&mut self.player, game::PlayerIntent::UpdateCooldowns);
 
         self.mp_regen_timer += 1;
         if self.mp_regen_timer >= MP_REGEN_INTERVAL {
             self.mp_regen_timer = 0;
-            let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::RecoverMp(1));
+            let _ = game::player::reduce(&mut self.player, game::PlayerIntent::RecoverMp(1));
         }
 
         let player_x = self.player.x;
@@ -435,7 +435,7 @@ impl RpgGame {
 
             if result.damage_taken > 0
                 && matches!(
-                    game::player_system::reduce(
+                    game::player::reduce(
                         &mut self.player,
                         game::PlayerIntent::TakeDamage(result.damage_taken),
                     ),
@@ -448,7 +448,7 @@ impl RpgGame {
     }
 
      fn use_skill(&mut self, slot: usize, skill: &Skill) {
-         if !game::player_system::can_use_skill(&self.player, slot, skill.mp_cost) {
+         if !game::player::can_use_skill(&self.player, slot, skill.mp_cost) {
              return;
          }
 
@@ -465,7 +465,7 @@ impl RpgGame {
              return;
          };
 
-         let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UseSkill {
+         let _ = game::player::reduce(&mut self.player, game::PlayerIntent::UseSkill {
              slot,
              mp_cost: skill.mp_cost,
              cooldown: skill.cooldown,
@@ -474,7 +474,7 @@ impl RpgGame {
          for effect in &result.player_effects {
              match effect {
                   PlayerEffect::Heal(amount) => {
-                      let _ = game::player_system::reduce(
+                       let _ = game::player::reduce(
                           &mut self.player,
                           game::PlayerIntent::Heal(*amount),
                       );
@@ -651,7 +651,7 @@ impl RpgGame {
                     .move_down(self.player.inventory.len(), visible);
             }
             InventoryIntent::UseSelected => {
-                let _ = game::player_system::reduce(&mut self.player, game::PlayerIntent::UseItem {
+                let _ = game::player::reduce(&mut self.player, game::PlayerIntent::UseItem {
                     index: self.inventory_state.selected,
                 });
             }
