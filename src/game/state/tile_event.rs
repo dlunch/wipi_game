@@ -2,7 +2,7 @@ use alloc::string::String;
 
 use crate::data::{Map, Tile};
 
-use super::player::Player;
+use super::player::PlayerState;
 
 #[derive(Debug, Clone)]
 pub enum TileEvent {
@@ -11,7 +11,7 @@ pub enum TileEvent {
     DungeonEntrance(String),
 }
 
-pub fn check_tile_event(map: &Map, player: &Player) -> Option<TileEvent> {
+pub fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     let tile = map.get_tile(player.x, player.y);
 
     match tile {

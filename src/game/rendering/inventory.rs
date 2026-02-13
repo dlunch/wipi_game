@@ -7,9 +7,9 @@ use super::renderer::{
     fill_rect,
 };
 use crate::data::ItemKind;
-use crate::game::{InventoryState, Player};
+use crate::game::{InventoryState, PlayerState};
 
-pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventoryState) {
+pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &InventoryState) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;
@@ -95,7 +95,7 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &Player, state: &InventorySt
     draw_text(fb, 8, screen_h - 16, "OK:Use Back:Return", COLOR_GRAY);
 }
 
-pub fn draw_stats(fb: &mut Framebuffer, player: &Player) {
+pub fn draw_stats(fb: &mut Framebuffer, player: &PlayerState) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;

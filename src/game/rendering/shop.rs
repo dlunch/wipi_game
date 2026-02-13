@@ -5,9 +5,9 @@ use super::renderer::{
     COLOR_BLACK, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW,
     clear_screen, draw_rect, draw_text, fill_rect,
 };
-use crate::game::{Player, ShopMode, ShopState};
+use crate::game::{PlayerState, ShopMode, ShopState};
 
-pub fn draw_shop(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
+pub fn draw_shop(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;
@@ -56,7 +56,7 @@ fn draw_mode_select(fb: &mut Framebuffer, state: &ShopState) {
     draw_text(fb, center_x, 42, "Sell", sell_color);
 }
 
-fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
+fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
     let visible_items = ((screen_h - 60) / 12).max(1) as usize;
@@ -108,7 +108,7 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
     }
 }
 
-fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &Player) {
+fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
     let visible_items = ((screen_h - 60) / 12).max(1) as usize;

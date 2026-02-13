@@ -2,7 +2,7 @@ use wipi::event::KeyCode;
 
 use super::combat::{CombatState, enemy_at};
 use crate::data::{Map, Npc};
-use crate::game::Player;
+use crate::game::PlayerState;
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -25,7 +25,7 @@ pub fn on_key_released(state: &mut MovementState, key: KeyCode) {
 
 pub fn tick(
     state: &mut MovementState,
-    player: &mut Player,
+    player: &mut PlayerState,
     map: &Map,
     combat: &CombatState,
     npcs: &[Npc],
@@ -45,7 +45,7 @@ pub fn tick(
 }
 
 fn try_move(
-    player: &mut Player,
+    player: &mut PlayerState,
     map: &Map,
     combat: &CombatState,
     npcs: &[Npc],

@@ -8,7 +8,7 @@ mod tile_event;
 pub use dialog::{DialogIntent, DialogState};
 pub use inventory::{InventoryIntent, InventoryState};
 pub use menu::{MenuAction, MenuIntent, MenuState, PauseMenuIntent, pause_menu_intent_for_key};
-pub use player::Player;
+pub use player::PlayerState;
 pub use shop::{ShopIntent, ShopMode, ShopState};
 pub use tile_event::{TileEvent, check_tile_event};
 

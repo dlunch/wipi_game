@@ -1,20 +1,20 @@
 use super::combat::Direction;
 use crate::data::{Dialog, DialogAction, DialogCondition, NpcType};
-use crate::game::{DialogState, GameData, GameState, Player, ShopState};
+use crate::game::{DialogState, GameData, GameState, PlayerState, ShopState};
 
 pub enum NpcIntent<'a> {
     Interact { facing: Direction },
     ProcessDialogAction { action: &'a DialogAction },
 }
 
-pub fn reduce(player: &mut Player, data: &GameData, intent: NpcIntent<'_>) -> Option<GameState> {
+pub fn reduce(player: &mut PlayerState, data: &GameData, intent: NpcIntent<'_>) -> Option<GameState> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
         NpcIntent::ProcessDialogAction { action } => process_action(player, data, action),
     }
 }
 
-pub fn try_interact(player: &mut Player, data: &GameData, facing: Direction) -> Option<GameState> {
+pub fn try_interact(player: &mut PlayerState, data: &GameData, facing: Direction) -> Option<GameState> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
@@ -63,7 +63,7 @@ pub fn try_interact(player: &mut Player, data: &GameData, facing: Direction) -> 
     None
 }
 
-pub fn filter_lines(player: &Player, dialog: &Dialog) -> Dialog {
+pub fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
     let filtered = dialog
         .lines
         .iter()
@@ -84,7 +84,7 @@ pub fn filter_lines(player: &Player, dialog: &Dialog) -> Dialog {
 }
 
 pub fn process_action(
-    player: &mut Player,
+    player: &mut PlayerState,
     data: &GameData,
     action: &DialogAction,
 ) -> Option<GameState> {

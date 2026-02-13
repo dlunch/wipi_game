@@ -7,9 +7,9 @@ use super::renderer::{
     draw_text, fill_rect,
 };
 use crate::data::Quest;
-use crate::game::Player;
+use crate::game::PlayerState;
 
-pub fn draw_quest_log(fb: &mut Framebuffer, player: &Player, quests: &[Quest]) {
+pub fn draw_quest_log(fb: &mut Framebuffer, player: &PlayerState, quests: &[Quest]) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;

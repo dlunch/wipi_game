@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use crate::data::{Item, Map, PlayerStats, QuestProgress};
 use crate::game::Direction;
 
-pub struct Player {
+pub struct PlayerState {
     pub name: String,
     pub stats: PlayerStats,
     pub inventory: Vec<Item>,
@@ -20,7 +20,7 @@ pub struct Player {
     pub skill_cooldowns: [u32; 3],
 }
 
-impl Player {
+impl PlayerState {
     pub fn new(name: String, start_map: &str) -> Self {
         Self {
             name,
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn new_player_starts_empty() {
-        let player = Player::new(String::from("Test"), "village");
+        let player = PlayerState::new(String::from("Test"), "village");
         assert_eq!(player.name, "Test");
         assert_eq!(player.current_map_id, "village");
         assert!(player.inventory.is_empty());
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn equip_weapon_via_use_item() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_item("sword", ItemKind::Weapon));
         assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_weapon, Some(0));
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn equip_armor_via_use_item() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_item("armor", ItemKind::Armor));
         assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_armor, Some(0));
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn use_consumable_heals_and_removes() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.stats.current_hp = 20;
         player.add_item(make_potion());
         assert!(use_item(&mut player, 0));
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn fix_equipped_indices_on_remove() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_potion());
         player.add_item(make_item("sword", ItemKind::Weapon));
         player.add_item(make_item("armor", ItemKind::Armor));
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn fix_equipped_clears_on_exact_removal() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_item("sword", ItemKind::Weapon));
         player.equipped_weapon = Some(0);
 
@@ -283,14 +283,14 @@ mod tests {
 
     #[test]
     fn use_item_out_of_bounds() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         assert!(!use_item(&mut player, 0));
         assert!(!use_item(&mut player, 99));
     }
 
     #[test]
     fn remove_item_at_returns_item() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_potion());
         let removed = player.remove_item_at(0);
         assert_eq!(removed.as_ref().map(|i| i.id.as_str()), Some("potion"));
@@ -299,13 +299,13 @@ mod tests {
 
     #[test]
     fn remove_item_at_out_of_bounds() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         assert!(player.remove_item_at(0).is_none());
     }
 
     #[test]
     fn quest_lifecycle() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         assert!(!player.has_quest("q1"));
 
         player.add_quest("q1");
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn add_quest_no_duplicates() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_quest("q1");
         player.add_quest("q1");
         assert_eq!(player.quests.len(), 1);
@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn treasure_tracking() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         assert!(!player.is_treasure_opened("map1", 3, 4));
 
         player.open_treasure("map1", 3, 4);
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn skill_cooldowns() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         assert!(can_use_skill(&player, 0, 10));
 
         use_skill(&mut player, 0, 10, 30);
@@ -359,14 +359,14 @@ mod tests {
 
     #[test]
     fn skill_insufficient_mp() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.stats.current_mp = 5;
         assert!(!can_use_skill(&player, 0, 10));
     }
 
     #[test]
     fn total_atk_def_with_equipment() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         let base_atk = player.stats.base_atk;
         let base_def = player.stats.base_def;
         assert_eq!(player.total_atk(), base_atk);
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn has_item_and_remove_item() {
-        let mut player = Player::new(String::from("H"), "v");
+        let mut player = PlayerState::new(String::from("H"), "v");
         player.add_item(make_potion());
         assert!(player.has_item("potion"));
 

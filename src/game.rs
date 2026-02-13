@@ -13,7 +13,7 @@ pub use rendering::{
 pub use save::{has_save_data, load_game, save_game};
 pub use state::{
     DialogIntent, DialogState, GameState, InventoryIntent, InventoryState, MenuAction, MenuIntent,
-    MenuState, PauseMenuIntent, Player, ShopIntent, ShopMode, ShopState, TileEvent,
+    MenuState, PauseMenuIntent, PlayerState, ShopIntent, ShopMode, ShopState, TileEvent,
     check_tile_event, pause_menu_intent_for_key,
 };
 pub use systems::NpcIntent;

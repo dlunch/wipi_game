@@ -5,12 +5,12 @@ use alloc::vec::Vec;
 use anyhow::Result;
 use wipi::database::{Database, OpenMode};
 
-use super::Player;
+use super::PlayerState;
 use crate::data::{Item, ItemKind, QuestProgress};
 
 const SAVE_DB_NAME: &str = "save";
 
-pub fn save_game(player: &Player) -> Result<()> {
+pub fn save_game(player: &PlayerState) -> Result<()> {
     let data = serialize_save(player);
 
     let mut db = Database::open(SAVE_DB_NAME, OpenMode::ReadWrite)
@@ -20,7 +20,7 @@ pub fn save_game(player: &Player) -> Result<()> {
     Ok(())
 }
 
-pub fn load_game(player: &mut Player) -> Result<bool> {
+pub fn load_game(player: &mut PlayerState) -> Result<bool> {
     let db = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
         .map_err(|e| anyhow::anyhow!("failed to open save db: {:?}", e))?;
     let mut buf = [0u8; 4096];
@@ -35,7 +35,7 @@ pub fn has_save_data() -> bool {
     Database::open(SAVE_DB_NAME, OpenMode::ReadOnly).is_ok()
 }
 
-fn serialize_save(player: &Player) -> String {
+fn serialize_save(player: &PlayerState) -> String {
     let mut lines = vec![
         String::from("VERSION:1"),
         format_args_to_string(&[
@@ -131,7 +131,7 @@ fn format_args_to_string(parts: &[&str]) -> String {
     s
 }
 
-fn deserialize_save(data: &str, player: &mut Player) -> bool {
+fn deserialize_save(data: &str, player: &mut PlayerState) -> bool {
     player.inventory.clear();
     player.quests.clear();
     player.opened_treasures.clear();

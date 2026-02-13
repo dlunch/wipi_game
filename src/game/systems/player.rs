@@ -1,5 +1,5 @@
 use crate::data::ItemKind;
-use crate::game::Player;
+use crate::game::PlayerState;
 
 pub enum PlayerIntent {
     UpdateCooldowns,
@@ -23,7 +23,7 @@ pub enum PlayerEvent {
     Died,
 }
 
-pub fn reduce(player: &mut Player, intent: PlayerIntent) -> PlayerEvent {
+pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
     match intent {
         PlayerIntent::UpdateCooldowns => {
             update_cooldowns(player);
@@ -67,7 +67,7 @@ pub fn reduce(player: &mut Player, intent: PlayerIntent) -> PlayerEvent {
     }
 }
 
-pub fn update_cooldowns(player: &mut Player) {
+pub fn update_cooldowns(player: &mut PlayerState) {
     for cd in &mut player.skill_cooldowns {
         if *cd > 0 {
             *cd -= 1;
@@ -75,18 +75,18 @@ pub fn update_cooldowns(player: &mut Player) {
     }
 }
 
-pub fn can_use_skill(player: &Player, slot: usize, mp_cost: i32) -> bool {
+pub fn can_use_skill(player: &PlayerState, slot: usize, mp_cost: i32) -> bool {
     slot < 3 && player.skill_cooldowns[slot] == 0 && player.stats.current_mp >= mp_cost
 }
 
-pub fn use_skill(player: &mut Player, slot: usize, mp_cost: i32, cooldown: u32) {
+pub fn use_skill(player: &mut PlayerState, slot: usize, mp_cost: i32, cooldown: u32) {
     if slot < 3 {
         player.skill_cooldowns[slot] = cooldown;
         player.stats.current_mp = (player.stats.current_mp - mp_cost).max(0);
     }
 }
 
-pub fn use_item(player: &mut Player, index: usize) -> bool {
+pub fn use_item(player: &mut PlayerState, index: usize) -> bool {
     if index >= player.inventory.len() {
         return false;
     }

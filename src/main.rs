@@ -17,7 +17,7 @@ const MP_REGEN_INTERVAL: u32 = 60;
 use game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, DialogIntent,
     GameData, GameState, InventoryIntent, InventoryState, MenuAction, MenuIntent, MenuState,
-    MovementState, PauseMenuIntent, Player, PlayerEffect, ShopIntent, ShopMode, TileEvent,
+    MovementState, PauseMenuIntent, PlayerState, PlayerEffect, ShopIntent, ShopMode, TileEvent,
     check_tile_event, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu,
     draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
     has_save_data, load_game, pause_menu_intent_for_key, save_game,
@@ -80,7 +80,7 @@ fn explore_intents_for_key(key: KeyCode) -> alloc::vec::Vec<ExploreIntent> {
 
 pub struct RpgGame {
     state: GameState,
-    player: Player,
+    player: PlayerState,
     data: GameData,
     inventory_state: InventoryState,
     combat: CombatState,
@@ -98,7 +98,7 @@ impl RpgGame {
     pub fn new() -> Self {
         Self {
             state: GameState::Loading(0),
-            player: Player::new(String::from("Hero"), "village"),
+            player: PlayerState::new(String::from("Hero"), "village"),
             data: GameData::default(),
             inventory_state: InventoryState::default(),
             combat: CombatState::default(),
@@ -259,7 +259,7 @@ impl RpgGame {
     }
 
     fn start_new_game(&mut self) {
-        self.player = Player::new(String::from("Hero"), "village");
+        self.player = PlayerState::new(String::from("Hero"), "village");
 
         if let Some(sword) = self.data.find_item("wooden_sword").cloned() {
             let idx = self.player.inventory.len();
@@ -291,7 +291,7 @@ impl RpgGame {
     }
 
     fn continue_game(&mut self) {
-        self.player = Player::new(String::from("Hero"), "village");
+        self.player = PlayerState::new(String::from("Hero"), "village");
 
         match load_game(&mut self.player) {
             Ok(true) => {

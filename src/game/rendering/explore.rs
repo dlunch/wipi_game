@@ -7,12 +7,12 @@ use super::renderer::{
     draw_rect, draw_text, fill_rect,
 };
 use crate::data::{Map, Npc, Skill, SkillType, Tile};
-use crate::game::{CombatState, Direction, Player};
+use crate::game::{CombatState, Direction, PlayerState};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
     map: &Map,
-    player: &Player,
+    player: &PlayerState,
     combat: &CombatState,
     npcs: &[Npc],
 ) {
@@ -25,7 +25,7 @@ pub fn draw_explore(
 fn draw_map_with_entities(
     fb: &mut Framebuffer,
     map: &Map,
-    player: &Player,
+    player: &PlayerState,
     combat: &CombatState,
     npcs: &[Npc],
     screen_h: i32,
@@ -221,7 +221,7 @@ fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, fac
     fill_rect(fb, px, py, w, h, COLOR_YELLOW);
 }
 
-fn draw_hud(fb: &mut Framebuffer, map: &Map, player: &Player, combat: &CombatState, screen_h: i32) {
+fn draw_hud(fb: &mut Framebuffer, map: &Map, player: &PlayerState, combat: &CombatState, screen_h: i32) {
     let screen_w = fb.width() as i32;
     let hud_y = screen_h - 30;
 
@@ -250,7 +250,7 @@ fn draw_hud(fb: &mut Framebuffer, map: &Map, player: &Player, combat: &CombatSta
     draw_skill_bar(fb, hud_y + 14, screen_w, player);
 }
 
-fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &Player) {
+fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &PlayerState) {
     let skills: [(&Skill, &str); 3] = [
         (&Skill::FIREBALL, "1"),
         (&Skill::HEAL, "2"),

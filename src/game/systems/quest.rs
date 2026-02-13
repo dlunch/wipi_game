@@ -1,7 +1,7 @@
 use crate::data::QuestType;
-use crate::game::{GameData, Player};
+use crate::game::{GameData, PlayerState};
 
-pub fn on_enemy_killed(player: &mut Player, data: &GameData, enemy_id: &str) {
+pub fn on_enemy_killed(player: &mut PlayerState, data: &GameData, enemy_id: &str) {
     for progress in &mut player.quests {
         if progress.completed || progress.rewarded {
             continue;
