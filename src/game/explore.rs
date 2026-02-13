@@ -1,20 +1,19 @@
 use alloc::format;
 use wipi::framebuffer::{Color, Framebuffer};
 
-use super::Player;
-use super::combat::{CombatSystem, Direction};
 use super::renderer::{
-    COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
-    COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
-    draw_rect, draw_text, fill_rect,
+    clear_screen, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE, COLOR_BROWN,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN, COLOR_RED,
+    COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
 };
+use super::{CombatState, Direction, Player};
 use crate::data::{Map, Npc, Skill, SkillType, Tile};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
     map: &Map,
     player: &Player,
-    combat: &CombatSystem,
+    combat: &CombatState,
     npcs: &[Npc],
 ) {
     clear_screen(fb);
@@ -27,7 +26,7 @@ fn draw_map_with_entities(
     fb: &mut Framebuffer,
     map: &Map,
     player: &Player,
-    combat: &CombatSystem,
+    combat: &CombatState,
     npcs: &[Npc],
     screen_h: i32,
 ) {
@@ -222,13 +221,7 @@ fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, fac
     fill_rect(fb, px, py, w, h, COLOR_YELLOW);
 }
 
-fn draw_hud(
-    fb: &mut Framebuffer,
-    map: &Map,
-    player: &Player,
-    combat: &CombatSystem,
-    screen_h: i32,
-) {
+fn draw_hud(fb: &mut Framebuffer, map: &Map, player: &Player, combat: &CombatState, screen_h: i32) {
     let screen_w = fb.width() as i32;
     let hud_y = screen_h - 30;
 

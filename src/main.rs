@@ -15,9 +15,9 @@ use data::Skill;
 const MP_REGEN_INTERVAL: u32 = 60;
 
 use game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatSystem, DialogIntent,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, DialogIntent,
     GameData, GameState, InventoryIntent, InventoryState, MenuAction, MenuIntent, MenuState,
-    MovementController, NpcInteraction, PauseMenuIntent, Player, PlayerEffect, QuestSystem,
+    MovementState, PauseMenuIntent, Player, PlayerEffect,
     ShopIntent, ShopMode, TileEvent, check_tile_event, clear_screen, draw_dialog, draw_explore,
     draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
     draw_text, fill_rect, has_save_data, load_game, pause_menu_intent_for_key, save_game,
@@ -83,8 +83,8 @@ pub struct RpgGame {
     player: Player,
     data: GameData,
     inventory_state: InventoryState,
-    combat: CombatSystem,
-    movement: MovementController,
+    combat: CombatState,
+    movement: MovementState,
     mp_regen_timer: u32,
 }
 
@@ -101,8 +101,8 @@ impl RpgGame {
             player: Player::new(String::from("Hero"), "village"),
             data: GameData::default(),
             inventory_state: InventoryState::default(),
-            combat: CombatSystem::new(),
-            movement: MovementController::default(),
+            combat: CombatState::default(),
+            movement: MovementState::default(),
             mp_regen_timer: 0,
         }
     }
@@ -192,8 +192,11 @@ impl RpgGame {
                 });
             }
             AppEffect::ReleaseMovementKey(key) => {
-                self.movement
-                    .reduce(game::MovementIntent::KeyReleased(key), None);
+                let _ = game::movement::reduce(
+                    &mut self.movement,
+                    game::MovementIntent::KeyReleased(key),
+                    None,
+                );
             }
             AppEffect::Exit(code) => wipi::kernel::exit(code),
         }
@@ -279,7 +282,7 @@ impl RpgGame {
 
         if let Some(map) = self.data.find_map("village") {
             self.player.spawn_at_map(map);
-            let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+            let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
                 map,
                 enemy_data: &self.data.enemies,
             });
@@ -303,7 +306,7 @@ impl RpgGame {
                     {
                         self.player.spawn_at_map(map);
                     }
-                    let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+                    let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
                         map,
                         enemy_data: &self.data.enemies,
                     });
@@ -383,7 +386,8 @@ impl RpgGame {
             return;
         };
 
-        let moved = self.movement.reduce(
+        let moved = game::movement::reduce(
+            &mut self.movement,
             game::MovementIntent::Tick,
             Some(game::MovementContext {
                 player: &mut self.player,
@@ -417,13 +421,16 @@ impl RpgGame {
         let map_id = self.player.current_map_id.clone();
 
         if let Some(map) = self.data.find_map(&map_id) {
-            let game::CombatEvent::Tick(result) = self.combat.reduce(game::CombatIntent::Tick {
-                player_x,
-                player_y,
-                player_def,
-                map,
-                enemy_data: &self.data.enemies,
-            }) else {
+            let game::CombatEvent::Tick(result) = game::combat::reduce(
+                &mut self.combat,
+                game::CombatIntent::Tick {
+                    player_x,
+                    player_y,
+                    player_def,
+                    map,
+                    enemy_data: &self.data.enemies,
+                },
+            ) else {
                 return;
             };
 
@@ -444,13 +451,16 @@ impl RpgGame {
             return;
         }
 
-        let game::CombatEvent::Skill(result) = self.combat.reduce(game::CombatIntent::UseSkill {
-            skill,
-            player_x: self.player.x,
-            player_y: self.player.y,
-            player_atk: self.player.total_atk(),
-            facing: self.player.facing,
-        }) else {
+        let game::CombatEvent::Skill(result) = game::combat::reduce(
+            &mut self.combat,
+            game::CombatIntent::UseSkill {
+                skill,
+                player_x: self.player.x,
+                player_y: self.player.y,
+                player_atk: self.player.total_atk(),
+                facing: self.player.facing,
+            },
+        ) else {
             return;
         };
 
@@ -471,7 +481,7 @@ impl RpgGame {
         for kill in result.kills {
             self.player.stats.add_exp(kill.exp);
             self.player.stats.gold += kill.gold;
-            QuestSystem::on_enemy_killed(&mut self.player, &self.data, &kill.enemy_id);
+            game::quest_system::on_enemy_killed(&mut self.player, &self.data, &kill.enemy_id);
         }
     }
 
@@ -514,7 +524,7 @@ impl RpgGame {
             self.player.x = x;
             self.player.y = y;
         }
-        let _ = self.combat.reduce(game::CombatIntent::SpawnEnemies {
+        let _ = game::combat::reduce(&mut self.combat, game::CombatIntent::SpawnEnemies {
             map,
             enemy_data: &self.data.enemies,
         });
@@ -522,7 +532,7 @@ impl RpgGame {
 
     fn try_interact_with_npc(&mut self) {
         let facing = self.player.facing;
-        if let Some(new_state) = NpcInteraction::reduce(
+        if let Some(new_state) = game::npc_system::reduce(
             &mut self.player,
             &self.data,
             game::NpcIntent::Interact { facing },
@@ -540,7 +550,7 @@ impl RpgGame {
             return;
         };
 
-        if let Some(new_state) = NpcInteraction::reduce(
+        if let Some(new_state) = game::npc_system::reduce(
             &mut self.player,
             &self.data,
             game::NpcIntent::ProcessDialogAction { action: &action },
@@ -583,8 +593,11 @@ impl RpgGame {
     fn handle_explore_input(&mut self, intent: ExploreIntent) {
         match intent {
             ExploreIntent::MoveDirection(key) => {
-                self.movement
-                    .reduce(game::MovementIntent::DirectionPressed(key), None);
+                let _ = game::movement::reduce(
+                    &mut self.movement,
+                    game::MovementIntent::DirectionPressed(key),
+                    None,
+                );
             }
             ExploreIntent::TryNpcInteract => {
                 self.try_interact_with_npc();
@@ -593,17 +606,19 @@ impl RpgGame {
                 if matches!(self.state, GameState::Dialog(_)) {
                     return;
                 }
-                if let game::CombatEvent::Attack(Some(reward)) =
-                    self.combat.reduce(game::CombatIntent::PlayerAttack {
+                if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
+                    &mut self.combat,
+                    game::CombatIntent::PlayerAttack {
                         player_x: self.player.x,
                         player_y: self.player.y,
                         player_atk: self.player.total_atk(),
                         facing: self.player.facing,
-                    })
+                    },
+                )
                 {
                     self.player.stats.add_exp(reward.exp);
                     self.player.stats.gold += reward.gold;
-                    QuestSystem::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
+                    game::quest_system::on_enemy_killed(&mut self.player, &self.data, &reward.enemy_id);
                 }
             }
             ExploreIntent::Skill1 => self.use_skill(0, &Skill::FIREBALL),

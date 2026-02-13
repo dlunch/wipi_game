@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::combat::Direction;
+use super::Direction;
 use crate::data::{Item, ItemKind, Map, PlayerStats, QuestProgress};
 
 pub enum PlayerIntent {
