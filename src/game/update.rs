@@ -1,11 +1,43 @@
 use alloc::format;
 use alloc::string::String;
 
-use crate::data::{Skill, Tile};
+use crate::data::{Map, Skill, Tile};
 use crate::game::{
     self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
-    PlayerEffect, PlayerIntent, PlayerState, TileEvent, check_tile_event, has_save_data, load_game,
+    PlayerEffect, PlayerIntent, PlayerState, has_save_data, load_game,
 };
+
+#[derive(Debug, Clone)]
+enum TileEvent {
+    Treasure,
+    MapExit(String),
+    DungeonEntrance(String),
+}
+
+fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
+    let tile = map.get_tile(player.x, player.y);
+
+    match tile {
+        Tile::Treasure => Some(TileEvent::Treasure),
+        Tile::Exit => {
+            for (ex, ey, target) in &map.exits {
+                if *ex == player.x && *ey == player.y {
+                    return Some(TileEvent::MapExit(target.clone()));
+                }
+            }
+            None
+        }
+        Tile::Dungeon => {
+            for (dx, dy, target) in &map.dungeons {
+                if *dx == player.x && *dy == player.y {
+                    return Some(TileEvent::DungeonEntrance(target.clone()));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
 
 pub(crate) fn update_loading(state: &mut GameState, data: &mut GameData) {
     let GameState::Loading(step) = *state else {

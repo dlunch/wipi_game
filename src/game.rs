@@ -16,8 +16,7 @@ pub use rendering::{
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use state::{
-    DialogState, GameState, InventoryState, MenuAction, MenuState, PlayerState, ShopMode,
-    ShopState, TileEvent, check_tile_event,
+    DialogState, GameState, InventoryState, MenuAction, MenuState, PlayerState, ShopMode, ShopState,
 };
 pub use systems::combat;
 pub use systems::dialog;

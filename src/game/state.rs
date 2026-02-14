@@ -3,14 +3,12 @@ mod inventory;
 mod menu;
 mod player;
 mod shop;
-mod tile_event;
 
 pub use dialog::DialogState;
 pub use inventory::InventoryState;
 pub use menu::{MenuAction, MenuState};
 pub use player::PlayerState;
 pub use shop::{ShopMode, ShopState};
-pub use tile_event::{TileEvent, check_tile_event};
 
 use alloc::string::String;
 
