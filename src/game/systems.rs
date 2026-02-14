@@ -1,5 +1,6 @@
 pub mod combat;
 pub mod dialog;
+pub mod explore;
 pub mod inventory;
 pub mod menu;
 pub mod movement;
@@ -10,6 +11,7 @@ pub mod shop;
 
 pub use combat::{CombatEvent, CombatIntent, CombatState, Direction, PlayerEffect};
 pub use dialog::DialogIntent;
+pub use explore::ExploreIntent;
 pub use inventory::InventoryIntent;
 pub use menu::{MenuEvent, MenuIntent, PauseMenuIntent};
 pub use movement::MovementState;

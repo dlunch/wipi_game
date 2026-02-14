@@ -15,9 +15,9 @@ use wipi::graphics::repaint;
 use wipi::wipi_main;
 
 use crate::game::{
-    AppAction, AppEffect, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
-    InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState, ShopIntent,
-    explore_intents_for_key, has_save_data, render,
+    AppAction, AppEffect, CombatState, DialogIntent, ExploreIntent, GameData, GameState,
+    InventoryIntent, InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent,
+    PlayerState, ShopIntent, has_save_data, render,
 };
 
 pub struct RpgGame {
@@ -67,7 +67,7 @@ impl RpgGame {
                     }
                 }
                 GameState::Explore => {
-                    for intent in explore_intents_for_key(key) {
+                    for intent in ExploreIntent::intent_for_key(key) {
                         effects.push(AppEffect::ApplyExploreIntent(intent));
                     }
                 }
@@ -135,7 +135,7 @@ impl RpgGame {
                 game::handler::handle_menu_input(state, player, combat, data, intent);
             }
             AppEffect::ApplyExploreIntent(intent) => {
-                game::handler::handle_explore_input(state, movement, player, combat, data, intent);
+                game::explore::reduce(state, movement, player, combat, data, intent);
             }
             AppEffect::ApplyInventoryIntent(intent) => {
                 game::handler::handle_inventory_input(state, player, inventory_state, intent);
