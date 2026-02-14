@@ -126,10 +126,10 @@ impl RpgGame {
         match effect {
             AppEffect::UpdateLoading => game::update::update_loading(state, data),
             AppEffect::UpdateMovement => {
-                game::update::update_movement(state, movement, player, combat, data);
+                game::movement::update(state, movement, player, combat, data);
             }
             AppEffect::UpdateCombat => {
-                game::update::update_combat(state, player, combat, data);
+                game::combat::update_combat(state, player, combat, data);
             }
             AppEffect::ApplyMenuIntent(intent) => {
                 game::handler::handle_menu_input(state, player, combat, data, intent);

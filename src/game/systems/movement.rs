@@ -2,7 +2,7 @@ use wipi::event::KeyCode;
 
 use super::combat::{CombatState, enemy_at};
 use crate::data::{Map, Npc};
-use crate::game::{self, PlayerIntent, PlayerState};
+use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -10,6 +10,29 @@ const MOVE_COOLDOWN: u32 = 5;
 pub struct MovementState {
     pub pressed_direction: Option<KeyCode>,
     pub move_cooldown: u32,
+}
+
+pub fn update(
+    game_state: &GameState,
+    state: &mut MovementState,
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+) {
+    if !matches!(game_state, GameState::Explore) {
+        return;
+    }
+
+    let map_id = player.current_map_id.clone();
+    let Some(map) = data.find_map(&map_id) else {
+        return;
+    };
+
+    let moved = tick(state, player, map, combat, &data.npcs);
+
+    if moved {
+        game::explore::check_tile_events(player, combat, data);
+    }
 }
 
 pub fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {

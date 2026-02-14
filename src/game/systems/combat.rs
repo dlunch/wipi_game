@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::{Enemy, Map, Skill, SkillType, Tile};
+use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -515,5 +516,96 @@ impl Direction {
             Direction::Left => (x.saturating_sub(dist), y),
             Direction::Right => (x.saturating_add(dist), y),
         }
+    }
+}
+
+pub fn update_combat(
+    state: &mut GameState,
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+) {
+    if !matches!(state, GameState::Explore) {
+        return;
+    }
+
+    let _ = game::player::reduce(player, PlayerIntent::UpdateCooldowns);
+    let _ = game::player::reduce(player, PlayerIntent::TickMpRegen);
+
+    let player_x = player.x;
+    let player_y = player.y;
+    let player_def = player.total_def();
+    let map_id = player.current_map_id.clone();
+
+    if let Some(map) = data.find_map(&map_id) {
+        let CombatEvent::Tick(result) = reduce(
+            combat,
+            CombatIntent::Tick {
+                player_x,
+                player_y,
+                player_def,
+                map,
+                enemy_data: &data.enemies,
+            },
+        ) else {
+            return;
+        };
+
+        if result.damage_taken > 0
+            && matches!(
+                game::player::reduce(player, PlayerIntent::TakeDamage(result.damage_taken)),
+                game::PlayerEvent::Died
+            )
+        {
+            *state = GameState::GameOver;
+        }
+    }
+}
+
+pub fn use_skill_action(
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+    slot: usize,
+    skill: &Skill,
+) {
+    if !game::player::can_use_skill(player, slot, skill.mp_cost) {
+        return;
+    }
+
+    let CombatEvent::Skill(result) = reduce(
+        combat,
+        CombatIntent::UseSkill {
+            skill,
+            player_x: player.x,
+            player_y: player.y,
+            player_atk: player.total_atk(),
+            facing: player.facing,
+        },
+    ) else {
+        return;
+    };
+
+    let _ = game::player::reduce(
+        player,
+        PlayerIntent::UseSkill {
+            slot,
+            mp_cost: skill.mp_cost,
+            cooldown: skill.cooldown,
+        },
+    );
+
+    for effect in &result.player_effects {
+        match effect {
+            PlayerEffect::Heal(amount) => {
+                let _ = game::player::reduce(player, PlayerIntent::Heal(*amount));
+            }
+        }
+    }
+
+    for kill in result.kills {
+        let _ = game::player::reduce(player, PlayerIntent::AddExp(kill.exp));
+        let _ = game::player::reduce(player, PlayerIntent::AddGold(kill.gold));
+        game::quest::on_enemy_killed(player, data, &kill.enemy_id);
     }
 }

@@ -9,7 +9,7 @@ pub mod player;
 pub mod quest;
 pub mod shop;
 
-pub use combat::{CombatEvent, CombatIntent, CombatState, Direction, PlayerEffect};
+pub use combat::{CombatEvent, CombatIntent, CombatState, Direction};
 pub use dialog::DialogIntent;
 pub use explore::ExploreIntent;
 pub use inventory::InventoryIntent;

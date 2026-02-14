@@ -1,11 +1,12 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::Skill;
+use crate::data::{Map, Skill, Tile};
 use crate::game::{
     self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerIntent,
-    PlayerState, has_save_data, save_game, update,
+    PlayerState, has_save_data, save_game,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -86,13 +87,13 @@ pub fn reduce(
             }
         }
         ExploreIntent::Skill1 if !is_peaceful => {
-            update::use_skill(player, combat, data, 0, &Skill::FIREBALL)
+            game::combat::use_skill_action(player, combat, data, 0, &Skill::FIREBALL)
         }
         ExploreIntent::Skill2 if !is_peaceful => {
-            update::use_skill(player, combat, data, 1, &Skill::HEAL)
+            game::combat::use_skill_action(player, combat, data, 1, &Skill::HEAL)
         }
         ExploreIntent::Skill3 if !is_peaceful => {
-            update::use_skill(player, combat, data, 2, &Skill::SPIN_ATTACK)
+            game::combat::use_skill_action(player, combat, data, 2, &Skill::SPIN_ATTACK)
         }
         ExploreIntent::Attack
         | ExploreIntent::Skill1
@@ -107,4 +108,98 @@ pub fn reduce(
             });
         }
     }
+}
+
+#[derive(Debug, Clone)]
+enum TileEvent {
+    Treasure,
+    MapExit(String),
+    DungeonEntrance(String),
+}
+
+fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
+    let tile = map.get_tile(player.x, player.y);
+
+    match tile {
+        Tile::Treasure => Some(TileEvent::Treasure),
+        Tile::Exit => {
+            for (ex, ey, target) in &map.exits {
+                if *ex == player.x && *ey == player.y {
+                    return Some(TileEvent::MapExit(target.clone()));
+                }
+            }
+            None
+        }
+        Tile::Dungeon => {
+            for (dx, dy, target) in &map.dungeons {
+                if *dx == player.x && *dy == player.y {
+                    return Some(TileEvent::DungeonEntrance(target.clone()));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, data: &GameData) {
+    let event = data
+        .find_map(&player.current_map_id)
+        .and_then(|map| check_tile_event(map, player));
+
+    let Some(event) = event else {
+        return;
+    };
+
+    match event {
+        TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
+            if !target.is_empty() {
+                change_map(player, combat, data, &target);
+            }
+        }
+        TileEvent::Treasure => {
+            let map_id = player.current_map_id.clone();
+            if !player.is_treasure_opened(&map_id, player.x, player.y) {
+                if let Some(potion) = data.find_item("potion").cloned() {
+                    let _ = game::player::reduce(player, PlayerIntent::AddItem(potion));
+                }
+                let _ = game::player::reduce(
+                    player,
+                    PlayerIntent::OpenTreasure {
+                        map_id,
+                        x: player.x,
+                        y: player.y,
+                    },
+                );
+            }
+        }
+    }
+}
+
+pub fn change_map(
+    player: &mut PlayerState,
+    combat: &mut CombatState,
+    data: &GameData,
+    target_id: &str,
+) {
+    let Some(map) = data.find_map(target_id) else {
+        return;
+    };
+
+    let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
+    let _ = game::player::reduce(
+        player,
+        PlayerIntent::ChangeMap {
+            map_id: map.id.clone(),
+            x,
+            y,
+        },
+    );
+    let _ = game::combat::reduce(
+        combat,
+        CombatIntent::SpawnEnemies {
+            map,
+            enemy_data: &data.enemies,
+        },
+    );
 }
