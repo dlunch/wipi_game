@@ -1,8 +1,11 @@
+use alloc::vec::Vec;
+
 use crate::data::QuestType;
-use crate::game::{GameData, PlayerState};
+use crate::game::{self, GameData, PlayerIntent, PlayerState};
 
 pub fn on_enemy_killed(player: &mut PlayerState, data: &GameData, enemy_id: &str) {
-    for progress in &mut player.quests {
+    let mut updates = Vec::new();
+    for progress in &player.quests {
         if progress.completed || progress.rewarded {
             continue;
         }
@@ -11,10 +14,17 @@ pub fn on_enemy_killed(player: &mut PlayerState, data: &GameData, enemy_id: &str
             && quest.quest_type == QuestType::Kill
             && quest.target_id == enemy_id
         {
-            progress.current_count += 1;
-            if progress.current_count >= quest.target_count {
-                progress.completed = true;
-            }
+            updates.push((progress.quest_id.clone(), quest.target_count));
         }
+    }
+
+    for (quest_id, target_count) in updates {
+        let _ = game::player::reduce(
+            player,
+            PlayerIntent::UpdateQuestProgress {
+                quest_id,
+                target_count,
+            },
+        );
     }
 }

@@ -54,6 +54,7 @@ impl PlayerState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn spawn_at_map(&mut self, map: &Map) {
         if let Some((x, y)) = map.find_player_start() {
             self.x = x;

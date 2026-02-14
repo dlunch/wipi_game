@@ -2,7 +2,7 @@ use wipi::event::KeyCode;
 
 use super::combat::{CombatState, enemy_at};
 use crate::data::{Map, Npc};
-use crate::game::PlayerState;
+use crate::game::{self, PlayerIntent, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -59,7 +59,7 @@ fn try_move(
         _ => return false,
     };
 
-    player.set_facing(dx, dy);
+    let _ = game::player::reduce(player, PlayerIntent::SetFacing { dx, dy });
 
     if !player.can_move(map, dx, dy) {
         return false;
@@ -80,7 +80,7 @@ fn try_move(
         return false;
     }
 
-    player.move_by(dx, dy);
+    let _ = game::player::reduce(player, PlayerIntent::MoveBy { dx, dy });
     true
 }
 

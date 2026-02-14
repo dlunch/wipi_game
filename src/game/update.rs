@@ -7,8 +7,6 @@ use crate::game::{
     PlayerEffect, PlayerIntent, PlayerState, TileEvent, check_tile_event, has_save_data, load_game,
 };
 
-const MP_REGEN_INTERVAL: u32 = 60;
-
 pub(crate) fn update_loading(state: &mut GameState, data: &mut GameData) {
     let GameState::Loading(step) = *state else {
         return;
@@ -64,12 +62,7 @@ pub(crate) fn update_combat(
     }
 
     let _ = game::player::reduce(player, PlayerIntent::UpdateCooldowns);
-
-    player.mp_regen_timer += 1;
-    if player.mp_regen_timer >= MP_REGEN_INTERVAL {
-        player.mp_regen_timer = 0;
-        let _ = game::player::reduce(player, PlayerIntent::RecoverMp(1));
-    }
+    let _ = game::player::reduce(player, PlayerIntent::TickMpRegen);
 
     let player_x = player.x;
     let player_y = player.y;
@@ -143,8 +136,8 @@ pub(crate) fn use_skill(
     }
 
     for kill in result.kills {
-        player.stats.add_exp(kill.exp);
-        player.stats.gold += kill.gold;
+        let _ = game::player::reduce(player, PlayerIntent::AddExp(kill.exp));
+        let _ = game::player::reduce(player, PlayerIntent::AddGold(kill.gold));
         game::quest::on_enemy_killed(player, data, &kill.enemy_id);
     }
 }
@@ -172,9 +165,16 @@ pub(crate) fn check_tile_events(
             let map_id = player.current_map_id.clone();
             if !player.is_treasure_opened(&map_id, player.x, player.y) {
                 if let Some(potion) = data.find_item("potion").cloned() {
-                    player.add_item(potion);
+                    let _ = game::player::reduce(player, PlayerIntent::AddItem(potion));
                 }
-                player.open_treasure(&map_id, player.x, player.y);
+                let _ = game::player::reduce(
+                    player,
+                    PlayerIntent::OpenTreasure {
+                        map_id,
+                        x: player.x,
+                        y: player.y,
+                    },
+                );
             }
         }
     }
@@ -190,11 +190,15 @@ pub(crate) fn change_map(
         return;
     };
 
-    player.current_map_id = map.id.clone();
-    if let Some((x, y)) = map.find_player_start() {
-        player.x = x;
-        player.y = y;
-    }
+    let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
+    let _ = game::player::reduce(
+        player,
+        PlayerIntent::ChangeMap {
+            map_id: map.id.clone(),
+            x,
+            y,
+        },
+    );
     let _ = game::combat::reduce(
         combat,
         CombatIntent::SpawnEnemies {
@@ -214,21 +218,29 @@ pub(crate) fn start_new_game(
 
     if let Some(sword) = data.find_item("wooden_sword").cloned() {
         let idx = player.inventory.len();
-        player.add_item(sword);
-        player.equipped_weapon = Some(idx);
+        let _ = game::player::reduce(player, PlayerIntent::AddItem(sword));
+        let _ = game::player::reduce(player, PlayerIntent::EquipWeapon(idx));
     }
     if let Some(armor) = data.find_item("cloth").cloned() {
         let idx = player.inventory.len();
-        player.add_item(armor);
-        player.equipped_armor = Some(idx);
+        let _ = game::player::reduce(player, PlayerIntent::AddItem(armor));
+        let _ = game::player::reduce(player, PlayerIntent::EquipArmor(idx));
     }
     if let Some(potion) = data.find_item("potion").cloned() {
-        player.add_item(potion.clone());
-        player.add_item(potion);
+        let _ = game::player::reduce(player, PlayerIntent::AddItem(potion.clone()));
+        let _ = game::player::reduce(player, PlayerIntent::AddItem(potion));
     }
 
     if let Some(map) = data.find_map("village") {
-        player.spawn_at_map(map);
+        let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
+        let _ = game::player::reduce(
+            player,
+            PlayerIntent::ChangeMap {
+                map_id: map.id.clone(),
+                x,
+                y,
+            },
+        );
         let _ = game::combat::reduce(
             combat,
             CombatIntent::SpawnEnemies {
@@ -256,14 +268,22 @@ pub(crate) fn continue_game(
     match load_game(player) {
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
-                player.current_map_id = String::from("village");
+                let _ = game::player::reduce(
+                    player,
+                    PlayerIntent::ChangeMap {
+                        map_id: String::from("village"),
+                        x: player.x,
+                        y: player.y,
+                    },
+                );
             }
             if let Some(map) = data.find_map(&player.current_map_id) {
-                if map.get_tile(player.x, player.y) == Tile::Wall
+                if (map.get_tile(player.x, player.y) == Tile::Wall
                     || player.x >= map.width
-                    || player.y >= map.height
+                    || player.y >= map.height)
+                    && let Some((x, y)) = map.find_player_start()
                 {
-                    player.spawn_at_map(map);
+                    let _ = game::player::reduce(player, PlayerIntent::SpawnAtMap { x, y });
                 }
                 let _ = game::combat::reduce(
                     combat,

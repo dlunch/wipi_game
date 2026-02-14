@@ -1,8 +1,50 @@
+use alloc::string::String;
+
+use crate::data::Item;
 use crate::data::ItemKind;
 use crate::game::PlayerState;
 
-#[derive(Debug, Clone, Copy)]
+const MP_REGEN_INTERVAL: u32 = 60;
+
+#[derive(Debug, Clone)]
 pub enum PlayerIntent {
+    AddExp(i32),
+    AddGold(i32),
+    FullHeal,
+    AddItem(Item),
+    RemoveItem(String),
+    RemoveItemAt(usize),
+    EquipWeapon(usize),
+    EquipArmor(usize),
+    SetFacing {
+        dx: i32,
+        dy: i32,
+    },
+    MoveBy {
+        dx: i32,
+        dy: i32,
+    },
+    ChangeMap {
+        map_id: String,
+        x: usize,
+        y: usize,
+    },
+    SpawnAtMap {
+        x: usize,
+        y: usize,
+    },
+    OpenTreasure {
+        map_id: String,
+        x: usize,
+        y: usize,
+    },
+    AddQuest(String),
+    MarkQuestRewarded(String),
+    UpdateQuestProgress {
+        quest_id: String,
+        target_count: i32,
+    },
+    TickMpRegen,
     UpdateCooldowns,
     UseSkill {
         slot: usize,
@@ -17,16 +59,100 @@ pub enum PlayerIntent {
     RecoverMp(i32),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum PlayerEvent {
     None,
     ItemUsed,
     SkillUsed,
     Died,
+    ItemRemoved(Option<Item>),
 }
 
 pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
     match intent {
+        PlayerIntent::AddExp(exp) => {
+            player.stats.add_exp(exp);
+            PlayerEvent::None
+        }
+        PlayerIntent::AddGold(amount) => {
+            player.stats.gold = (player.stats.gold + amount).max(0);
+            PlayerEvent::None
+        }
+        PlayerIntent::FullHeal => {
+            player.stats.current_hp = player.stats.max_hp;
+            player.stats.current_mp = player.stats.max_mp;
+            PlayerEvent::None
+        }
+        PlayerIntent::AddItem(item) => {
+            player.add_item(item);
+            PlayerEvent::None
+        }
+        PlayerIntent::RemoveItem(id) => {
+            player.remove_item(&id);
+            PlayerEvent::None
+        }
+        PlayerIntent::RemoveItemAt(index) => PlayerEvent::ItemRemoved(player.remove_item_at(index)),
+        PlayerIntent::EquipWeapon(idx) => {
+            player.equipped_weapon = Some(idx);
+            PlayerEvent::None
+        }
+        PlayerIntent::EquipArmor(idx) => {
+            player.equipped_armor = Some(idx);
+            PlayerEvent::None
+        }
+        PlayerIntent::SetFacing { dx, dy } => {
+            player.set_facing(dx, dy);
+            PlayerEvent::None
+        }
+        PlayerIntent::MoveBy { dx, dy } => {
+            player.move_by(dx, dy);
+            PlayerEvent::None
+        }
+        PlayerIntent::ChangeMap { map_id, x, y } => {
+            player.current_map_id = map_id;
+            player.x = x;
+            player.y = y;
+            PlayerEvent::None
+        }
+        PlayerIntent::SpawnAtMap { x, y } => {
+            player.x = x;
+            player.y = y;
+            PlayerEvent::None
+        }
+        PlayerIntent::OpenTreasure { map_id, x, y } => {
+            player.open_treasure(&map_id, x, y);
+            PlayerEvent::None
+        }
+        PlayerIntent::AddQuest(id) => {
+            player.add_quest(&id);
+            PlayerEvent::None
+        }
+        PlayerIntent::MarkQuestRewarded(id) => {
+            player.mark_quest_rewarded(&id);
+            PlayerEvent::None
+        }
+        PlayerIntent::UpdateQuestProgress {
+            quest_id,
+            target_count,
+        } => {
+            for progress in &mut player.quests {
+                if progress.quest_id == quest_id && !progress.completed {
+                    progress.current_count += 1;
+                    if progress.current_count >= target_count {
+                        progress.completed = true;
+                    }
+                }
+            }
+            PlayerEvent::None
+        }
+        PlayerIntent::TickMpRegen => {
+            player.mp_regen_timer += 1;
+            if player.mp_regen_timer >= MP_REGEN_INTERVAL {
+                player.mp_regen_timer = 0;
+                let _ = reduce(player, PlayerIntent::RecoverMp(1));
+            }
+            PlayerEvent::None
+        }
         PlayerIntent::UpdateCooldowns => {
             update_cooldowns(player);
             PlayerEvent::None

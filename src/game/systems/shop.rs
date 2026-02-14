@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use crate::game::{GameState, PlayerState, ShopMode};
+use crate::game::{self, GameState, PlayerEvent, PlayerIntent, PlayerState, ShopMode};
 
 const VISIBLE_ITEMS: usize = 8;
 
@@ -50,8 +50,8 @@ pub fn reduce(state: &mut GameState, player: &mut PlayerState, intent: ShopInten
                 if let Some(item) = shop_state.items.get(shop_state.selected).cloned()
                     && player.stats.gold >= item.price
                 {
-                    player.stats.gold -= item.price;
-                    player.add_item(item);
+                    let _ = game::player::reduce(player, PlayerIntent::AddGold(-item.price));
+                    let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
                 }
             }
             ShopIntent::Back => {
@@ -63,8 +63,10 @@ pub fn reduce(state: &mut GameState, player: &mut PlayerState, intent: ShopInten
             ShopIntent::MoveUp => shop_state.move_up(),
             ShopIntent::MoveDown => shop_state.move_down(player.inventory.len(), VISIBLE_ITEMS),
             ShopIntent::Confirm => {
-                if let Some(item) = player.remove_item_at(shop_state.selected) {
-                    player.stats.gold += item.price / 2;
+                let event =
+                    game::player::reduce(player, PlayerIntent::RemoveItemAt(shop_state.selected));
+                if let PlayerEvent::ItemRemoved(Some(item)) = event {
+                    let _ = game::player::reduce(player, PlayerIntent::AddGold(item.price / 2));
 
                     let inv_len = player.inventory.len();
                     if shop_state.selected >= inv_len && shop_state.selected > 0 {

@@ -2,7 +2,7 @@ use crate::data::Skill;
 use crate::game::{
     self, CombatIntent, CombatState, DialogIntent, ExploreIntent, GameData, GameState,
     InventoryIntent, InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState,
-    PauseMenuIntent, PlayerState, ShopIntent, has_save_data, save_game, update,
+    PauseMenuIntent, PlayerIntent, PlayerState, ShopIntent, has_save_data, save_game, update,
 };
 
 pub(crate) fn handle_menu_input(
@@ -58,8 +58,8 @@ pub(crate) fn handle_explore_input(
                     facing: player.facing,
                 },
             ) {
-                player.stats.add_exp(reward.exp);
-                player.stats.gold += reward.gold;
+                let _ = game::player::reduce(player, PlayerIntent::AddExp(reward.exp));
+                let _ = game::player::reduce(player, PlayerIntent::AddGold(reward.gold));
                 game::quest::on_enemy_killed(player, data, &reward.enemy_id);
             }
         }

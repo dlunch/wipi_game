@@ -15,9 +15,9 @@ use wipi::graphics::repaint;
 use wipi::wipi_main;
 
 use crate::game::{
-    AppAction, AppEffect, CombatState, DialogIntent, GameData, GameState,
-    InventoryIntent, InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent,
-    PlayerState, ShopIntent, explore_intents_for_key, has_save_data, render,
+    AppAction, AppEffect, CombatState, DialogIntent, GameData, GameState, InventoryIntent,
+    InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent, PlayerState, ShopIntent,
+    explore_intents_for_key, has_save_data, render,
 };
 
 pub struct RpgGame {
