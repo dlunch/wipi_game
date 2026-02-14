@@ -54,15 +54,6 @@ impl PlayerState {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn spawn_at_map(&mut self, map: &Map) {
-        if let Some((x, y)) = map.find_player_start() {
-            self.x = x;
-            self.y = y;
-        }
-        self.current_map_id = map.id.clone();
-    }
-
     pub fn get_weapon(&self) -> Option<&Item> {
         self.equipped_weapon.and_then(|i| self.inventory.get(i))
     }
