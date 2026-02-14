@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use crate::game::{GameState, InventoryState, MenuAction, PlayerState, has_save_data, save_game};
+use crate::game::{save_game, GameState, InventoryState, MenuAction, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {
@@ -65,7 +65,7 @@ pub fn reduce(state: &mut GameState, intent: MenuIntent) -> MenuEvent {
             MenuEvent::None
         }
         MenuIntent::Select => {
-            let action = if has_save_data() {
+            let action = if menu.has_save {
                 match menu.selected {
                     0 => MenuAction::NewGame,
                     1 => MenuAction::Continue,

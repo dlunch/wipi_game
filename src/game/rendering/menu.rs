@@ -1,10 +1,10 @@
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
-    draw_selection_cursor, draw_text, fill_rect,
+    clear_screen, draw_rect, draw_selection_cursor, draw_text, fill_rect, COLOR_DARK_GRAY,
+    COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW,
 };
-use crate::game::{MenuState, has_save_data};
+use crate::game::MenuState;
 
 pub fn draw_menu(fb: &mut Framebuffer, state: &MenuState) {
     clear_screen(fb);
@@ -18,7 +18,7 @@ pub fn draw_menu(fb: &mut Framebuffer, state: &MenuState) {
     let menu_y_start: i32 = 50;
     let menu_spacing: i32 = 18;
 
-    let items: &[&str] = if has_save_data() {
+    let items: &[&str] = if state.has_save {
         &["NEW GAME", "CONTINUE", "EXIT"]
     } else {
         &["NEW GAME", "EXIT"]

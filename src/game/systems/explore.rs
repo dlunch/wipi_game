@@ -5,8 +5,8 @@ use wipi::event::KeyCode;
 
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
-    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerIntent,
-    PlayerState, save_game,
+    self, has_save_data, save_game, CombatIntent, CombatState, GameData, GameState, MenuState,
+    MovementState, PlayerIntent, PlayerState,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -119,7 +119,7 @@ pub fn reduce(
         ExploreIntent::Pause => *state = GameState::PauseMenu(0),
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
-            *state = GameState::Menu(MenuState { selected: 0 });
+            *state = GameState::Menu(MenuState::new(has_save_data()));
         }
     }
 }

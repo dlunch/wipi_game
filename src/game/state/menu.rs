@@ -1,11 +1,23 @@
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MenuState {
     pub selected: usize,
+    pub has_save: bool,
 }
 
 impl MenuState {
+    pub fn new(has_save: bool) -> Self {
+        Self {
+            selected: 0,
+            has_save,
+        }
+    }
+
     pub fn menu_count(&self) -> usize {
-        if crate::game::has_save_data() { 3 } else { 2 }
+        if self.has_save {
+            3
+        } else {
+            2
+        }
     }
 }
 
