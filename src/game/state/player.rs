@@ -48,12 +48,6 @@ impl PlayerState {
             .any(|(m, tx, ty)| m == map_id && *tx == x && *ty == y)
     }
 
-    pub fn open_treasure(&mut self, map_id: &str, x: usize, y: usize) {
-        if !self.is_treasure_opened(map_id, x, y) {
-            self.opened_treasures.push((map_id.into(), x, y));
-        }
-    }
-
     pub fn get_weapon(&self) -> Option<&Item> {
         self.equipped_weapon.and_then(|i| self.inventory.get(i))
     }
@@ -75,34 +69,6 @@ impl PlayerState {
         self.stats.total_def(self.get_armor(), self.get_accessory())
     }
 
-    pub fn add_item(&mut self, item: Item) {
-        self.inventory.push(item);
-    }
-
-    pub fn fix_equipped_indices(&mut self, removed: usize) {
-        if let Some(ref mut i) = self.equipped_weapon {
-            if *i > removed {
-                *i -= 1;
-            } else if *i == removed {
-                self.equipped_weapon = None;
-            }
-        }
-        if let Some(ref mut i) = self.equipped_armor {
-            if *i > removed {
-                *i -= 1;
-            } else if *i == removed {
-                self.equipped_armor = None;
-            }
-        }
-        if let Some(ref mut i) = self.equipped_accessory {
-            if *i > removed {
-                *i -= 1;
-            } else if *i == removed {
-                self.equipped_accessory = None;
-            }
-        }
-    }
-
     pub fn can_move(&self, map: &Map, dx: i32, dy: i32) -> bool {
         let Some(new_x) = self.x.checked_add_signed(dx as isize) else {
             return false;
@@ -111,26 +77,6 @@ impl PlayerState {
             return false;
         };
         map.get_tile(new_x, new_y).is_passable()
-    }
-
-    pub fn move_by(&mut self, dx: i32, dy: i32) {
-        if let Some(new_x) = self.x.checked_add_signed(dx as isize) {
-            self.x = new_x;
-        }
-        if let Some(new_y) = self.y.checked_add_signed(dy as isize) {
-            self.y = new_y;
-        }
-        self.set_facing(dx, dy);
-    }
-
-    pub fn set_facing(&mut self, dx: i32, dy: i32) {
-        self.facing = match (dx, dy) {
-            (0, -1) => Direction::Up,
-            (0, 1) => Direction::Down,
-            (-1, 0) => Direction::Left,
-            (1, 0) => Direction::Right,
-            _ => self.facing,
-        };
     }
 
     pub fn has_quest(&self, quest_id: &str) -> bool {
@@ -145,52 +91,15 @@ impl PlayerState {
             .any(|q| q.quest_id == quest_id && q.completed)
     }
 
-    pub fn add_quest(&mut self, quest_id: &str) {
-        if !self.has_quest(quest_id) {
-            self.quests.push(QuestProgress {
-                quest_id: quest_id.into(),
-                current_count: 0,
-                completed: false,
-                rewarded: false,
-            });
-        }
-    }
-
-    pub fn mark_quest_rewarded(&mut self, quest_id: &str) {
-        if let Some(q) = self.quests.iter_mut().find(|q| q.quest_id == quest_id) {
-            q.rewarded = true;
-        }
-    }
-
     pub fn has_item(&self, item_id: &str) -> bool {
         self.inventory.iter().any(|i| i.id == item_id)
-    }
-
-    pub fn remove_item(&mut self, item_id: &str) -> bool {
-        if let Some(idx) = self.inventory.iter().position(|i| i.id == item_id) {
-            self.inventory.remove(idx);
-            self.fix_equipped_indices(idx);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn remove_item_at(&mut self, index: usize) -> Option<Item> {
-        if index >= self.inventory.len() {
-            return None;
-        }
-        let item = self.inventory.remove(index);
-        self.fix_equipped_indices(index);
-        Some(item)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::{Item, ItemKind};
-    use crate::game::systems::player::{can_use_skill, update_cooldowns, use_item, use_skill};
+    use crate::data::{Item, ItemKind, QuestProgress};
 
     fn make_item(id: &str, kind: ItemKind) -> Item {
         Item {
@@ -227,99 +136,36 @@ mod tests {
     }
 
     #[test]
-    fn equip_weapon_via_use_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_item("sword", ItemKind::Weapon));
-        assert!(use_item(&mut player, 0));
-        assert_eq!(player.equipped_weapon, Some(0));
-    }
-
-    #[test]
-    fn equip_armor_via_use_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_item("armor", ItemKind::Armor));
-        assert!(use_item(&mut player, 0));
-        assert_eq!(player.equipped_armor, Some(0));
-    }
-
-    #[test]
-    fn use_consumable_heals_and_removes() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.stats.current_hp = 20;
-        player.add_item(make_potion());
-        assert!(use_item(&mut player, 0));
-        assert_eq!(player.stats.current_hp, 50);
-        assert!(player.inventory.is_empty());
-    }
-
-    #[test]
-    fn fix_equipped_indices_on_remove() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_potion());
-        player.add_item(make_item("sword", ItemKind::Weapon));
-        player.add_item(make_item("armor", ItemKind::Armor));
-        player.equipped_weapon = Some(1);
-        player.equipped_armor = Some(2);
-
-        use_item(&mut player, 0); // remove potion at index 0
-        assert_eq!(player.equipped_weapon, Some(0)); // shifted from 1 to 0
-        assert_eq!(player.equipped_armor, Some(1)); // shifted from 2 to 1
-    }
-
-    #[test]
-    fn fix_equipped_clears_on_exact_removal() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_item("sword", ItemKind::Weapon));
-        player.equipped_weapon = Some(0);
-
-        player.remove_item("sword");
-        assert_eq!(player.equipped_weapon, None);
-    }
-
-    #[test]
-    fn use_item_out_of_bounds() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        assert!(!use_item(&mut player, 0));
-        assert!(!use_item(&mut player, 99));
-    }
-
-    #[test]
-    fn remove_item_at_returns_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_potion());
-        let removed = player.remove_item_at(0);
-        assert_eq!(removed.as_ref().map(|i| i.id.as_str()), Some("potion"));
-        assert!(player.inventory.is_empty());
-    }
-
-    #[test]
-    fn remove_item_at_out_of_bounds() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        assert!(player.remove_item_at(0).is_none());
-    }
-
-    #[test]
     fn quest_lifecycle() {
         let mut player = PlayerState::new(String::from("H"), "v");
         assert!(!player.has_quest("q1"));
 
-        player.add_quest("q1");
+        player.quests.push(QuestProgress {
+            quest_id: String::from("q1"),
+            current_count: 0,
+            completed: false,
+            rewarded: false,
+        });
         assert!(player.has_quest("q1"));
         assert!(!player.is_quest_complete("q1"));
 
         player.quests[0].completed = true;
         assert!(player.is_quest_complete("q1"));
 
-        player.mark_quest_rewarded("q1");
+        player.quests[0].rewarded = true;
         assert!(!player.has_quest("q1")); // rewarded quests are not "active"
     }
 
     #[test]
-    fn add_quest_no_duplicates() {
+    fn has_quest_ignores_rewarded_quest() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_quest("q1");
-        player.add_quest("q1");
-        assert_eq!(player.quests.len(), 1);
+        player.quests.push(QuestProgress {
+            quest_id: String::from("q1"),
+            current_count: 0,
+            completed: false,
+            rewarded: true,
+        });
+        assert!(!player.has_quest("q1"));
     }
 
     #[test]
@@ -327,36 +173,10 @@ mod tests {
         let mut player = PlayerState::new(String::from("H"), "v");
         assert!(!player.is_treasure_opened("map1", 3, 4));
 
-        player.open_treasure("map1", 3, 4);
+        player.opened_treasures.push((String::from("map1"), 3, 4));
         assert!(player.is_treasure_opened("map1", 3, 4));
         assert!(!player.is_treasure_opened("map1", 3, 5));
         assert!(!player.is_treasure_opened("map2", 3, 4));
-
-        player.open_treasure("map1", 3, 4); // duplicate
-        assert_eq!(player.opened_treasures.len(), 1);
-    }
-
-    #[test]
-    fn skill_cooldowns() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        assert!(can_use_skill(&player, 0, 10));
-
-        use_skill(&mut player, 0, 10, 30);
-        assert!(!can_use_skill(&player, 0, 10)); // on cooldown
-        assert_eq!(player.skill_cooldowns[0], 30);
-        assert_eq!(player.stats.current_mp, 20); // 30 - 10
-
-        for _ in 0..30 {
-            update_cooldowns(&mut player);
-        }
-        assert!(can_use_skill(&player, 0, 10)); // cooldown expired
-    }
-
-    #[test]
-    fn skill_insufficient_mp() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.stats.current_mp = 5;
-        assert!(!can_use_skill(&player, 0, 10));
     }
 
     #[test]
@@ -367,23 +187,20 @@ mod tests {
         assert_eq!(player.total_atk(), base_atk);
         assert_eq!(player.total_def(), base_def);
 
-        player.add_item(make_item("sword", ItemKind::Weapon));
+        player.inventory.push(make_item("sword", ItemKind::Weapon));
         player.equipped_weapon = Some(0);
         assert_eq!(player.total_atk(), base_atk + 10);
 
-        player.add_item(make_item("armor", ItemKind::Armor));
+        player.inventory.push(make_item("armor", ItemKind::Armor));
         player.equipped_armor = Some(1);
         assert_eq!(player.total_def(), base_def + 10);
     }
 
     #[test]
-    fn has_item_and_remove_item() {
+    fn has_item_query() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        player.add_item(make_potion());
+        player.inventory.push(make_potion());
         assert!(player.has_item("potion"));
-
-        assert!(player.remove_item("potion"));
-        assert!(!player.has_item("potion"));
-        assert!(!player.remove_item("potion")); // already removed
+        assert!(!player.has_item("ether"));
     }
 }
