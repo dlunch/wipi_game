@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogAction, DialogLine};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DialogState {
     pub npc_name: String,
     pub lines: Vec<DialogLine>,

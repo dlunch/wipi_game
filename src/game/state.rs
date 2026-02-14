@@ -12,7 +12,7 @@ pub use shop::{ShopMode, ShopState};
 
 use alloc::string::String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum GameState {
     Loading(usize),
     Menu(MenuState),

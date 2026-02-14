@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use crate::data::{Item, Shop};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ShopState {
     pub shop: Shop,
     pub items: Vec<Item>,

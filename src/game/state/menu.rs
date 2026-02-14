@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct MenuState {
     pub selected: usize,
     pub has_save: bool,

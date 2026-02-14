@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use crate::data::{Item, Map, PlayerStats, QuestProgress};
 use crate::game::Direction;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlayerState {
     pub name: String,
     pub stats: PlayerStats,
