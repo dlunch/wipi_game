@@ -2,6 +2,7 @@ mod game_data;
 mod intent;
 mod rendering;
 mod save;
+mod session;
 mod state;
 mod systems;
 
@@ -13,6 +14,7 @@ pub use rendering::{
     draw_stats, draw_text, fill_rect, render,
 };
 pub use save::{has_save_data, load_game, save_game};
+pub use session::SessionState;
 pub use state::{
     DialogState, GameState, InventoryState, MenuAction, MenuState, PlayerState, ShopMode, ShopState,
 };

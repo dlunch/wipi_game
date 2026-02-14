@@ -15,18 +15,15 @@ use wipi::graphics::repaint;
 use wipi::wipi_main;
 
 use crate::game::{
-    AppAction, AppEffect, CombatState, DialogIntent, ExploreIntent, GameData, GameState,
-    InventoryIntent, InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState,
-    PauseMenuIntent, PlayerState, ShopIntent, has_save_data, render,
+    AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
+    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, SessionState, ShopIntent,
+    has_save_data, render,
 };
 
 pub struct RpgGame {
     state: GameState,
-    player: PlayerState,
     data: GameData,
-    inventory_state: InventoryState,
-    combat: CombatState,
-    movement: MovementState,
+    session: Option<SessionState>,
 }
 
 impl Default for RpgGame {
@@ -39,11 +36,8 @@ impl RpgGame {
     pub fn new() -> Self {
         Self {
             state: GameState::Loading(0),
-            player: PlayerState::new(String::from("Hero"), "village"),
             data: GameData::default(),
-            inventory_state: InventoryState::default(),
-            combat: CombatState::default(),
-            movement: MovementState::default(),
+            session: None,
         }
     }
 
@@ -114,60 +108,107 @@ impl RpgGame {
     }
 
     fn apply_effect(&mut self, effect: AppEffect) {
-        let Self {
-            state,
-            player,
-            data,
-            inventory_state,
-            combat,
-            movement,
-        } = self;
-
         match effect {
-            AppEffect::UpdateLoading => game::lifecycle::update_loading(state, data),
+            AppEffect::UpdateLoading => {
+                game::lifecycle::update_loading(&mut self.state, &mut self.data);
+            }
             AppEffect::UpdateMovement => {
-                game::movement::update(state, movement, player, combat, data);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::movement::update(
+                    &self.state,
+                    &mut s.movement,
+                    &mut s.player,
+                    &mut s.combat,
+                    &self.data,
+                );
             }
             AppEffect::UpdateCombat => {
-                game::combat::update_combat(state, player, combat, data);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::combat::update_combat(
+                    &mut self.state,
+                    &mut s.player,
+                    &mut s.combat,
+                    &self.data,
+                );
             }
             AppEffect::ApplyMenuIntent(intent) => {
-                if let MenuEvent::Action(action) = game::menu::reduce(state, intent) {
+                if let MenuEvent::Action(action) = game::menu::reduce(&mut self.state, intent) {
                     match action {
                         MenuAction::NewGame => {
-                            game::lifecycle::start_new_game(state, player, combat, data);
+                            let (state, session) = game::lifecycle::start_new_game(&self.data);
+                            self.state = state;
+                            self.session = Some(session);
                         }
                         MenuAction::Continue => {
-                            game::lifecycle::continue_game(state, player, combat, data);
+                            let (state, session) = game::lifecycle::continue_game(&self.data);
+                            self.state = state;
+                            self.session = Some(session);
                         }
                         MenuAction::Exit => wipi::kernel::exit(0),
                     }
                 }
             }
             AppEffect::ApplyExploreIntent(intent) => {
-                game::explore::reduce(state, movement, player, combat, data, intent);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::explore::reduce(
+                    &mut self.state,
+                    &mut s.movement,
+                    &mut s.player,
+                    &mut s.combat,
+                    &self.data,
+                    intent,
+                );
             }
             AppEffect::ApplyInventoryIntent(intent) => {
-                game::inventory::reduce(state, player, inventory_state, intent);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::inventory::reduce(&mut self.state, &mut s.player, &mut s.inventory, intent);
             }
             AppEffect::ApplyDialogIntent(intent) => {
-                game::dialog::reduce(state, player, data, intent);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::dialog::reduce(&mut self.state, &mut s.player, &self.data, intent);
             }
             AppEffect::ApplyShopIntent(intent) => {
-                game::shop::reduce(state, player, intent);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::shop::reduce(&mut self.state, &mut s.player, intent);
             }
             AppEffect::ApplyPauseMenuIntent(intent) => {
-                game::menu::reduce_pause(state, player, inventory_state, intent);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::menu::reduce_pause(&mut self.state, &s.player, &mut s.inventory, intent);
             }
-            AppEffect::ReturnToExplore => *state = GameState::Explore,
+            AppEffect::ReturnToExplore => self.state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {
-                *state = GameState::Menu(MenuState {
+                self.state = GameState::Menu(MenuState {
                     selected: 0,
                     has_save: has_save_data(),
                 });
             }
             AppEffect::ReleaseMovementKey(key) => {
-                game::movement::on_key_released(movement, key);
+                let Some(s) = self.session.as_mut() else {
+                    self.state = GameState::Error(String::from("No active session"));
+                    return;
+                };
+                game::movement::on_key_released(&mut s.movement, key);
             }
             AppEffect::Exit(code) => wipi::kernel::exit(code),
         }
@@ -181,14 +222,7 @@ impl RpgGame {
     }
 
     fn render(&self, fb: &mut Framebuffer) {
-        render(
-            &self.state,
-            &self.player,
-            &self.combat,
-            &self.data,
-            &self.inventory_state,
-            fb,
-        );
+        render(&self.state, self.session.as_ref(), &self.data, fb);
     }
 }
 

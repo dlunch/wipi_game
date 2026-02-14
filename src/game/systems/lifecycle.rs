@@ -3,8 +3,8 @@ use alloc::string::String;
 
 use crate::data::Tile;
 use crate::game::{
-    self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, PlayerIntent,
-    PlayerState, has_save_data, load_game,
+    self, CombatIntent, CombatState, DialogState, GameData, GameState, InventoryState, MenuState,
+    MovementState, PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
 };
 
 pub fn update_loading(state: &mut GameState, data: &mut GameData) {
@@ -28,33 +28,29 @@ pub fn update_loading(state: &mut GameState, data: &mut GameData) {
     }
 }
 
-pub fn start_new_game(
-    state: &mut GameState,
-    player: &mut PlayerState,
-    combat: &mut CombatState,
-    data: &GameData,
-) {
-    *player = PlayerState::new(String::from("Hero"), "village");
+pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
+    let mut player = PlayerState::new(String::from("Hero"), "village");
+    let mut combat = CombatState::default();
 
     if let Some(sword) = data.find_item("wooden_sword").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::reduce(player, PlayerIntent::AddItem(sword));
-        let _ = game::player::reduce(player, PlayerIntent::EquipWeapon(idx));
+        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(sword));
+        let _ = game::player::reduce(&mut player, PlayerIntent::EquipWeapon(idx));
     }
     if let Some(armor) = data.find_item("cloth").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::reduce(player, PlayerIntent::AddItem(armor));
-        let _ = game::player::reduce(player, PlayerIntent::EquipArmor(idx));
+        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(armor));
+        let _ = game::player::reduce(&mut player, PlayerIntent::EquipArmor(idx));
     }
     if let Some(potion) = data.find_item("potion").cloned() {
-        let _ = game::player::reduce(player, PlayerIntent::AddItem(potion.clone()));
-        let _ = game::player::reduce(player, PlayerIntent::AddItem(potion));
+        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(potion.clone()));
+        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(potion));
     }
 
     if let Some(map) = data.find_map("village") {
         let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
         let _ = game::player::reduce(
-            player,
+            &mut player,
             PlayerIntent::ChangeMap {
                 map_id: map.id.clone(),
                 x,
@@ -62,7 +58,7 @@ pub fn start_new_game(
             },
         );
         let _ = game::combat::reduce(
-            combat,
+            &mut combat,
             CombatIntent::SpawnEnemies {
                 map,
                 enemy_data: &data.enemies,
@@ -70,30 +66,36 @@ pub fn start_new_game(
         );
     }
 
-    if let Some(dialog) = data.find_dialog("dialog_guide") {
-        *state = GameState::Dialog(DialogState::new(String::from("마을 안내원"), dialog));
+    let state = if let Some(dialog) = data.find_dialog("dialog_guide") {
+        GameState::Dialog(DialogState::new(String::from("마을 안내원"), dialog))
     } else {
-        *state = GameState::Explore;
-    }
+        GameState::Explore
+    };
+
+    let session = SessionState {
+        player,
+        combat,
+        movement: MovementState::default(),
+        inventory: InventoryState::default(),
+    };
+
+    (state, session)
 }
 
-pub fn continue_game(
-    state: &mut GameState,
-    player: &mut PlayerState,
-    combat: &mut CombatState,
-    data: &GameData,
-) {
-    *player = PlayerState::new(String::from("Hero"), "village");
+pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
+    let mut player = PlayerState::new(String::from("Hero"), "village");
+    let mut combat = CombatState::default();
 
-    match load_game(player) {
+    match load_game(&mut player) {
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
+                let (x, y) = (player.x, player.y);
                 let _ = game::player::reduce(
-                    player,
+                    &mut player,
                     PlayerIntent::ChangeMap {
                         map_id: String::from("village"),
-                        x: player.x,
-                        y: player.y,
+                        x,
+                        y,
                     },
                 );
             }
@@ -103,23 +105,26 @@ pub fn continue_game(
                     || player.y >= map.height)
                     && let Some((x, y)) = map.find_player_start()
                 {
-                    let _ = game::player::reduce(player, PlayerIntent::SpawnAtMap { x, y });
+                    let _ = game::player::reduce(&mut player, PlayerIntent::SpawnAtMap { x, y });
                 }
                 let _ = game::combat::reduce(
-                    combat,
+                    &mut combat,
                     CombatIntent::SpawnEnemies {
                         map,
                         enemy_data: &data.enemies,
                     },
                 );
             }
-            *state = GameState::Explore;
+
+            let session = SessionState {
+                player,
+                combat,
+                movement: MovementState::default(),
+                inventory: InventoryState::default(),
+            };
+
+            (GameState::Explore, session)
         }
-        Ok(false) => {
-            start_new_game(state, player, combat, data);
-        }
-        Err(_) => {
-            start_new_game(state, player, combat, data);
-        }
+        Ok(false) | Err(_) => start_new_game(data),
     }
 }

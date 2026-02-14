@@ -1,43 +1,77 @@
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, GameData,
-    GameState, InventoryState, PlayerState, clear_screen, draw_dialog, draw_explore,
-    draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats,
-    draw_text, fill_rect,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, GameData, GameState,
+    SessionState, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu,
+    draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
 };
+
+fn require_session<'a>(
+    session: Option<&'a SessionState>,
+    fb: &mut Framebuffer,
+) -> Option<&'a SessionState> {
+    if session.is_some() {
+        return session;
+    }
+    clear_screen(fb);
+    draw_text(fb, 16, 16, "ERR: No session", COLOR_RED);
+    None
+}
 
 pub fn render(
     state: &GameState,
-    player: &PlayerState,
-    combat: &CombatState,
+    session: Option<&SessionState>,
     data: &GameData,
-    inventory_state: &InventoryState,
     fb: &mut Framebuffer,
 ) {
     match state {
         GameState::Loading(step) => draw_loading(fb, *step),
         GameState::Menu(menu_state) => draw_menu(fb, menu_state),
         GameState::Explore => {
-            if let Some(map) = data.find_map(&player.current_map_id) {
-                draw_explore(fb, map, player, combat, &data.npcs);
+            let Some(s) = require_session(session, fb) else {
+                return;
+            };
+            if let Some(map) = data.find_map(&s.player.current_map_id) {
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
             }
         }
         GameState::Inventory => {
-            draw_inventory(fb, player, inventory_state);
+            let Some(s) = require_session(session, fb) else {
+                return;
+            };
+            draw_inventory(fb, &s.player, &s.inventory);
         }
-        GameState::Stats => draw_stats(fb, player),
+        GameState::Stats => {
+            let Some(s) = require_session(session, fb) else {
+                return;
+            };
+            draw_stats(fb, &s.player);
+        }
         GameState::Dialog(dialog_state) => {
-            if let Some(map) = data.find_map(&player.current_map_id) {
-                draw_explore(fb, map, player, combat, &data.npcs);
+            if let Some(s) = session
+                && let Some(map) = data.find_map(&s.player.current_map_id)
+            {
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
             }
             draw_dialog(fb, dialog_state);
         }
-        GameState::Shop(shop_state) => draw_shop(fb, shop_state, player),
-        GameState::QuestLog => draw_quest_log(fb, player, &data.quests),
+        GameState::Shop(shop_state) => {
+            let Some(s) = require_session(session, fb) else {
+                return;
+            };
+            draw_shop(fb, shop_state, &s.player);
+        }
+        GameState::QuestLog => {
+            let Some(s) = require_session(session, fb) else {
+                return;
+            };
+            draw_quest_log(fb, &s.player, &data.quests);
+        }
         GameState::PauseMenu(selected) => {
-            if let Some(map) = data.find_map(&player.current_map_id) {
-                draw_explore(fb, map, player, combat, &data.npcs);
+            if let Some(s) = session
+                && let Some(map) = data.find_map(&s.player.current_map_id)
+            {
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
             }
             draw_pause_menu(fb, *selected);
         }
