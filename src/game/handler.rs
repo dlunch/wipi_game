@@ -3,7 +3,7 @@ use crate::game::{
     MenuAction, MenuEvent, MenuIntent, PauseMenuIntent, PlayerState, ShopIntent, update,
 };
 
-pub(crate) fn handle_menu_input(
+pub fn handle_menu_input(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -19,7 +19,7 @@ pub(crate) fn handle_menu_input(
     }
 }
 
-pub(crate) fn handle_inventory_input(
+pub fn handle_inventory_input(
     state: &mut GameState,
     player: &mut PlayerState,
     inventory_state: &mut InventoryState,
@@ -28,7 +28,7 @@ pub(crate) fn handle_inventory_input(
     game::inventory::reduce(state, player, inventory_state, intent);
 }
 
-pub(crate) fn handle_dialog_input(
+pub fn handle_dialog_input(
     state: &mut GameState,
     player: &mut PlayerState,
     data: &GameData,
@@ -37,15 +37,11 @@ pub(crate) fn handle_dialog_input(
     game::dialog::reduce(state, player, data, intent);
 }
 
-pub(crate) fn handle_shop_input(
-    state: &mut GameState,
-    player: &mut PlayerState,
-    intent: ShopIntent,
-) {
+pub fn handle_shop_input(state: &mut GameState, player: &mut PlayerState, intent: ShopIntent) {
     game::shop::reduce(state, player, intent);
 }
 
-pub(crate) fn handle_pause_menu_input(
+pub fn handle_pause_menu_input(
     state: &mut GameState,
     player: &PlayerState,
     inventory_state: &mut InventoryState,

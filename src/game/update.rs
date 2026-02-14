@@ -39,7 +39,7 @@ fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     }
 }
 
-pub(crate) fn update_loading(state: &mut GameState, data: &mut GameData) {
+pub fn update_loading(state: &mut GameState, data: &mut GameData) {
     let GameState::Loading(step) = *state else {
         return;
     };
@@ -60,7 +60,7 @@ pub(crate) fn update_loading(state: &mut GameState, data: &mut GameData) {
     }
 }
 
-pub(crate) fn update_movement(
+pub fn update_movement(
     state: &GameState,
     movement: &mut MovementState,
     player: &mut PlayerState,
@@ -83,7 +83,7 @@ pub(crate) fn update_movement(
     }
 }
 
-pub(crate) fn update_combat(
+pub fn update_combat(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -126,7 +126,7 @@ pub(crate) fn update_combat(
     }
 }
 
-pub(crate) fn use_skill(
+pub fn use_skill(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
@@ -174,11 +174,7 @@ pub(crate) fn use_skill(
     }
 }
 
-pub(crate) fn check_tile_events(
-    player: &mut PlayerState,
-    combat: &mut CombatState,
-    data: &GameData,
-) {
+pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, data: &GameData) {
     let event = data
         .find_map(&player.current_map_id)
         .and_then(|map| check_tile_event(map, player));
@@ -212,7 +208,7 @@ pub(crate) fn check_tile_events(
     }
 }
 
-pub(crate) fn change_map(
+pub fn change_map(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
@@ -240,7 +236,7 @@ pub(crate) fn change_map(
     );
 }
 
-pub(crate) fn start_new_game(
+pub fn start_new_game(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,
@@ -289,7 +285,7 @@ pub(crate) fn start_new_game(
     }
 }
 
-pub(crate) fn continue_game(
+pub fn continue_game(
     state: &mut GameState,
     player: &mut PlayerState,
     combat: &mut CombatState,

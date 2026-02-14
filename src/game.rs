@@ -1,11 +1,11 @@
 mod game_data;
-pub(crate) mod handler;
+pub mod handler;
 mod intent;
 mod rendering;
 mod save;
 mod state;
 mod systems;
-pub(crate) mod update;
+pub mod update;
 
 pub use game_data::GameData;
 pub use intent::{AppAction, AppEffect};
