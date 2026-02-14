@@ -1,22 +1,32 @@
+use alloc::vec;
+use alloc::vec::Vec;
+
 #[derive(Debug)]
 pub struct MenuState {
+    pub title: &'static str,
+    pub items: Vec<(&'static str, MenuAction)>,
     pub selected: usize,
-    pub has_save: bool,
 }
 
 impl MenuState {
     pub fn new(has_save: bool) -> Self {
-        Self {
-            selected: 0,
-            has_save,
-        }
-    }
-
-    pub fn menu_count(&self) -> usize {
-        if self.has_save {
-            3
+        let items = if has_save {
+            vec![
+                ("NEW GAME", MenuAction::NewGame),
+                ("CONTINUE", MenuAction::Continue),
+                ("EXIT", MenuAction::Exit),
+            ]
         } else {
-            2
+            vec![
+                ("NEW GAME", MenuAction::NewGame),
+                ("EXIT", MenuAction::Exit),
+            ]
+        };
+
+        Self {
+            title: "LOST KINGDOM",
+            items,
+            selected: 0,
         }
     }
 }
@@ -26,4 +36,19 @@ pub enum MenuAction {
     NewGame,
     Continue,
     Exit,
+}
+
+#[derive(Debug)]
+pub struct PauseMenuState {
+    pub items: Vec<&'static str>,
+    pub selected: usize,
+}
+
+impl PauseMenuState {
+    pub fn new() -> Self {
+        Self {
+            items: vec!["Inventory", "Stats", "Quests", "Save"],
+            selected: 0,
+        }
+    }
 }

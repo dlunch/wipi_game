@@ -6,7 +6,7 @@ use wipi::event::KeyCode;
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
     self, has_save_data, save_game, CombatIntent, CombatState, GameData, GameState, MenuState,
-    MovementState, PlayerIntent, PlayerState,
+    MovementState, PauseMenuState, PlayerIntent, PlayerState,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -116,7 +116,7 @@ pub fn reduce(
         | ExploreIntent::Skill1
         | ExploreIntent::Skill2
         | ExploreIntent::Skill3 => {}
-        ExploreIntent::Pause => *state = GameState::PauseMenu(0),
+        ExploreIntent::Pause => *state = GameState::PauseMenu(PauseMenuState::new()),
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
             *state = GameState::Menu(MenuState::new(has_save_data()));

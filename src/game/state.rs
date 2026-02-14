@@ -6,7 +6,7 @@ mod shop;
 
 pub use dialog::DialogState;
 pub use inventory::InventoryState;
-pub use menu::{MenuAction, MenuState};
+pub use menu::{MenuAction, MenuState, PauseMenuState};
 pub use player::PlayerState;
 pub use shop::{ShopMode, ShopState};
 
@@ -22,7 +22,7 @@ pub enum GameState {
     Dialog(DialogState),
     Shop(ShopState),
     QuestLog,
-    PauseMenu(usize),
+    PauseMenu(PauseMenuState),
     GameOver,
     Error(String),
 }

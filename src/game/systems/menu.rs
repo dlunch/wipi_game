@@ -59,24 +59,13 @@ pub fn reduce(state: &mut GameState, intent: MenuIntent) -> MenuEvent {
             MenuEvent::None
         }
         MenuIntent::MoveDown => {
-            if menu.selected < menu.menu_count() - 1 {
+            if menu.selected < menu.items.len() - 1 {
                 menu.selected += 1;
             }
             MenuEvent::None
         }
         MenuIntent::Select => {
-            let action = if menu.has_save {
-                match menu.selected {
-                    0 => MenuAction::NewGame,
-                    1 => MenuAction::Continue,
-                    _ => MenuAction::Exit,
-                }
-            } else {
-                match menu.selected {
-                    0 => MenuAction::NewGame,
-                    _ => MenuAction::Exit,
-                }
-            };
+            let (_, action) = menu.items[menu.selected];
             MenuEvent::Action(action)
         }
     }
@@ -88,14 +77,14 @@ pub fn reduce_pause(
     inventory_state: &mut InventoryState,
     intent: PauseMenuIntent,
 ) {
-    let GameState::PauseMenu(ref mut selected) = *state else {
+    let GameState::PauseMenu(ref mut pause) = *state else {
         return;
     };
 
     match intent {
-        PauseMenuIntent::MoveUp if *selected > 0 => *selected -= 1,
-        PauseMenuIntent::MoveDown if *selected < 3 => *selected += 1,
-        PauseMenuIntent::Select => match *selected {
+        PauseMenuIntent::MoveUp if pause.selected > 0 => pause.selected -= 1,
+        PauseMenuIntent::MoveDown if pause.selected < pause.items.len() - 1 => pause.selected += 1,
+        PauseMenuIntent::Select => match pause.selected {
             0 => {
                 *inventory_state = InventoryState::default();
                 *state = GameState::Inventory;

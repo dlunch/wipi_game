@@ -67,13 +67,13 @@ pub fn render(
             };
             draw_quest_log(fb, &s.player, &data.quests);
         }
-        GameState::PauseMenu(selected) => {
+        GameState::PauseMenu(pause) => {
             if let Some(s) = session
                 && let Some(map) = data.find_map(&s.player.current_map_id)
             {
                 draw_explore(fb, map, &s.player, &s.combat, &data.npcs, s);
             }
-            draw_pause_menu(fb, *selected);
+            draw_pause_menu(fb, pause);
         }
         GameState::GameOver => {
             clear_screen(fb);
