@@ -30,11 +30,24 @@ pub fn reduce(
     intent: InventoryIntent,
 ) {
     match intent {
-        InventoryIntent::MoveUp => inventory_state.move_up(),
+        InventoryIntent::MoveUp => {
+            if inventory_state.selected > 0 {
+                inventory_state.selected -= 1;
+                if inventory_state.selected < inventory_state.scroll {
+                    inventory_state.scroll = inventory_state.selected;
+                }
+            }
+        }
         InventoryIntent::MoveDown => {
             let fb = Framebuffer::screen_framebuffer();
             let visible = ((fb.height() as i32 - 50) / 14).max(1) as usize;
-            inventory_state.move_down(player.inventory.len(), visible);
+            if !player.inventory.is_empty() && inventory_state.selected < player.inventory.len() - 1
+            {
+                inventory_state.selected += 1;
+                if inventory_state.selected >= inventory_state.scroll + visible {
+                    inventory_state.scroll = inventory_state.selected - visible + 1;
+                }
+            }
         }
         InventoryIntent::UseSelected => {
             let _ = super::player::reduce(

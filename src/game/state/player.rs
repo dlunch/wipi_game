@@ -1,8 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::data::{Item, Map, PlayerStats, QuestProgress};
-use crate::game::Direction;
+use crate::data::{Direction, Item, PlayerStats, QuestProgress};
 
 #[derive(Debug)]
 pub struct PlayerState {
@@ -18,8 +17,6 @@ pub struct PlayerState {
     pub facing: Direction,
     pub quests: Vec<QuestProgress>,
     pub opened_treasures: Vec<(String, usize, usize)>,
-    pub skill_cooldowns: [u32; 3],
-    pub mp_regen_timer: u32,
 }
 
 impl PlayerState {
@@ -37,8 +34,6 @@ impl PlayerState {
             facing: Direction::Down,
             quests: Vec::new(),
             opened_treasures: Vec::new(),
-            skill_cooldowns: [0; 3],
-            mp_regen_timer: 0,
         }
     }
 
@@ -67,16 +62,6 @@ impl PlayerState {
 
     pub fn total_def(&self) -> i32 {
         self.stats.total_def(self.get_armor(), self.get_accessory())
-    }
-
-    pub fn can_move(&self, map: &Map, dx: i32, dy: i32) -> bool {
-        let Some(new_x) = self.x.checked_add_signed(dx as isize) else {
-            return false;
-        };
-        let Some(new_y) = self.y.checked_add_signed(dy as isize) else {
-            return false;
-        };
-        map.get_tile(new_x, new_y).is_passable()
     }
 
     pub fn has_quest(&self, quest_id: &str) -> bool {

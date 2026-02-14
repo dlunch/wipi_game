@@ -81,6 +81,29 @@ pub enum Tile {
     Tree,        // * - 나무
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Direction {
+    pub fn apply(&self, x: usize, y: usize) -> (usize, usize) {
+        self.apply_distance(x, y, 1)
+    }
+
+    pub fn apply_distance(&self, x: usize, y: usize, dist: usize) -> (usize, usize) {
+        match self {
+            Direction::Up => (x, y.saturating_sub(dist)),
+            Direction::Down => (x, y.saturating_add(dist)),
+            Direction::Left => (x.saturating_sub(dist), y),
+            Direction::Right => (x.saturating_add(dist), y),
+        }
+    }
+}
+
 impl Tile {
     pub fn from_char(c: char) -> Self {
         match c {

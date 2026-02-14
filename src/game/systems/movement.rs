@@ -67,6 +67,16 @@ pub fn tick(
     moved
 }
 
+pub fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
+    let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
+        return false;
+    };
+    let Some(new_y) = player.y.checked_add_signed(dy as isize) else {
+        return false;
+    };
+    map.get_tile(new_x, new_y).is_passable()
+}
+
 fn try_move(
     player: &mut PlayerState,
     map: &Map,
@@ -84,7 +94,7 @@ fn try_move(
 
     let _ = game::player::reduce(player, PlayerIntent::SetFacing { dx, dy });
 
-    if !player.can_move(map, dx, dy) {
+    if !can_move(player, map, dx, dy) {
         return false;
     }
 

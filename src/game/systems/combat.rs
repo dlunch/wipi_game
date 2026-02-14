@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::data::{Enemy, Map, Skill, SkillType, Tile};
+use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
 
 const HIT_FLASH_DURATION: u32 = 10;
@@ -10,6 +10,7 @@ const PLAYER_ATTACK_COOLDOWN: u32 = 15;
 const ATTACK_EFFECT_DURATION: u32 = 6;
 const SKILL_EFFECT_DURATION: u32 = 8;
 const HEAL_EFFECT_DURATION: u32 = 15;
+const MP_REGEN_INTERVAL: u32 = 60;
 
 #[derive(Debug)]
 pub enum CombatIntent<'a> {
@@ -188,7 +189,7 @@ pub fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent 
     }
 }
 
-pub fn spawn_enemies(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
+fn spawn_enemies(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
     state.enemies.clear();
     state.respawn_positions.clear();
     state.respawn_timer = 0;
@@ -338,7 +339,7 @@ fn try_respawn(
     }
 }
 
-pub fn player_attack(
+fn player_attack(
     state: &mut CombatState,
     player_x: usize,
     player_y: usize,
@@ -387,7 +388,7 @@ pub fn enemy_at(state: &CombatState, x: usize, y: usize) -> bool {
         .any(|e| e.x == x && e.y == y && !e.is_dead())
 }
 
-pub fn use_skill(
+fn use_skill(
     state: &mut CombatState,
     skill: &Skill,
     player_x: usize,
@@ -496,32 +497,11 @@ pub struct KillReward {
     pub gold: i32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl Direction {
-    pub fn apply(&self, x: usize, y: usize) -> (usize, usize) {
-        self.apply_distance(x, y, 1)
-    }
-
-    pub fn apply_distance(&self, x: usize, y: usize, dist: usize) -> (usize, usize) {
-        match self {
-            Direction::Up => (x, y.saturating_sub(dist)),
-            Direction::Down => (x, y.saturating_add(dist)),
-            Direction::Left => (x.saturating_sub(dist), y),
-            Direction::Right => (x.saturating_add(dist), y),
-        }
-    }
-}
-
 pub fn update_combat(
     state: &mut GameState,
     player: &mut PlayerState,
+    skill_cooldowns: &mut [u32; 3],
+    mp_regen_timer: &mut u32,
     combat: &mut CombatState,
     data: &GameData,
 ) {
@@ -529,8 +509,17 @@ pub fn update_combat(
         return;
     }
 
-    let _ = game::player::reduce(player, PlayerIntent::UpdateCooldowns);
-    let _ = game::player::reduce(player, PlayerIntent::TickMpRegen);
+    for cooldown in skill_cooldowns {
+        if *cooldown > 0 {
+            *cooldown -= 1;
+        }
+    }
+
+    *mp_regen_timer += 1;
+    if *mp_regen_timer >= MP_REGEN_INTERVAL {
+        *mp_regen_timer = 0;
+        player.stats.recover_mp(1);
+    }
 
     let player_x = player.x;
     let player_y = player.y;
@@ -564,12 +553,13 @@ pub fn update_combat(
 
 pub fn use_skill_action(
     player: &mut PlayerState,
+    cooldowns: &mut [u32; 3],
     combat: &mut CombatState,
     data: &GameData,
     slot: usize,
     skill: &Skill,
 ) {
-    if !game::player::can_use_skill(player, slot, skill.mp_cost) {
+    if !game::player::can_use_skill(player, cooldowns, slot, skill.mp_cost) {
         return;
     }
 
@@ -586,14 +576,8 @@ pub fn use_skill_action(
         return;
     };
 
-    let _ = game::player::reduce(
-        player,
-        PlayerIntent::UseSkill {
-            slot,
-            mp_cost: skill.mp_cost,
-            cooldown: skill.cooldown,
-        },
-    );
+    cooldowns[slot] = skill.cooldown;
+    player.stats.current_mp = (player.stats.current_mp - skill.mp_cost).max(0);
 
     for effect in &result.player_effects {
         match effect {
@@ -606,6 +590,12 @@ pub fn use_skill_action(
     for kill in result.kills {
         let _ = game::player::reduce(player, PlayerIntent::AddExp(kill.exp));
         let _ = game::player::reduce(player, PlayerIntent::AddGold(kill.gold));
-        game::quest::on_enemy_killed(player, data, &kill.enemy_id);
+        game::quest::reduce(
+            player,
+            data,
+            game::QuestIntent::EnemyKilled {
+                enemy_id: &kill.enemy_id,
+            },
+        );
     }
 }

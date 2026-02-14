@@ -5,4 +5,6 @@ pub struct SessionState {
     pub combat: CombatState,
     pub movement: MovementState,
     pub inventory: InventoryState,
+    pub skill_cooldowns: [u32; 3],
+    pub mp_regen_timer: u32,
 }

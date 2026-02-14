@@ -17,7 +17,7 @@ use wipi::wipi_main;
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, SessionState, ShopIntent,
-    has_save_data, render,
+    render,
 };
 
 pub struct RpgGame {
@@ -133,6 +133,8 @@ impl RpgGame {
                 game::combat::update_combat(
                     &mut self.state,
                     &mut s.player,
+                    &mut s.skill_cooldowns,
+                    &mut s.mp_regen_timer,
                     &mut s.combat,
                     &self.data,
                 );
@@ -163,6 +165,7 @@ impl RpgGame {
                     &mut self.state,
                     &mut s.movement,
                     &mut s.player,
+                    &mut s.skill_cooldowns,
                     &mut s.combat,
                     &self.data,
                     intent,
@@ -198,10 +201,7 @@ impl RpgGame {
             }
             AppEffect::ReturnToExplore => self.state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {
-                self.state = GameState::Menu(MenuState {
-                    selected: 0,
-                    has_save: has_save_data(),
-                });
+                self.state = GameState::Menu(MenuState { selected: 0 });
             }
             AppEffect::ReleaseMovementKey(key) => {
                 let Some(s) = self.session.as_mut() else {

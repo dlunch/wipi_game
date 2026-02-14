@@ -30,7 +30,7 @@ pub use systems::player;
 pub use systems::quest;
 pub use systems::shop;
 pub use systems::{
-    CombatEvent, CombatIntent, CombatState, DialogIntent, Direction, ExploreIntent,
-    InventoryIntent, MenuEvent, MenuIntent, MovementState, NpcIntent, PauseMenuIntent, PlayerEvent,
-    PlayerIntent, ShopIntent,
+    CombatEvent, CombatIntent, CombatState, DialogIntent, ExploreIntent, InventoryIntent,
+    MenuEvent, MenuIntent, MovementState, NpcIntent, PauseMenuIntent, PlayerEvent, PlayerIntent,
+    QuestIntent, ShopIntent,
 };

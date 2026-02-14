@@ -6,7 +6,7 @@ use wipi::event::KeyCode;
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
     self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerIntent,
-    PlayerState, has_save_data, save_game,
+    PlayerState, save_game,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -48,6 +48,7 @@ pub fn reduce(
     state: &mut GameState,
     movement: &mut MovementState,
     player: &mut PlayerState,
+    skill_cooldowns: &mut [u32; 3],
     combat: &mut CombatState,
     data: &GameData,
     intent: ExploreIntent,
@@ -83,18 +84,34 @@ pub fn reduce(
             ) {
                 let _ = game::player::reduce(player, PlayerIntent::AddExp(reward.exp));
                 let _ = game::player::reduce(player, PlayerIntent::AddGold(reward.gold));
-                game::quest::on_enemy_killed(player, data, &reward.enemy_id);
+                game::quest::reduce(
+                    player,
+                    data,
+                    game::QuestIntent::EnemyKilled {
+                        enemy_id: &reward.enemy_id,
+                    },
+                );
             }
         }
-        ExploreIntent::Skill1 if !is_peaceful => {
-            game::combat::use_skill_action(player, combat, data, 0, &Skill::FIREBALL)
-        }
+        ExploreIntent::Skill1 if !is_peaceful => game::combat::use_skill_action(
+            player,
+            skill_cooldowns,
+            combat,
+            data,
+            0,
+            &Skill::FIREBALL,
+        ),
         ExploreIntent::Skill2 if !is_peaceful => {
-            game::combat::use_skill_action(player, combat, data, 1, &Skill::HEAL)
+            game::combat::use_skill_action(player, skill_cooldowns, combat, data, 1, &Skill::HEAL)
         }
-        ExploreIntent::Skill3 if !is_peaceful => {
-            game::combat::use_skill_action(player, combat, data, 2, &Skill::SPIN_ATTACK)
-        }
+        ExploreIntent::Skill3 if !is_peaceful => game::combat::use_skill_action(
+            player,
+            skill_cooldowns,
+            combat,
+            data,
+            2,
+            &Skill::SPIN_ATTACK,
+        ),
         ExploreIntent::Attack
         | ExploreIntent::Skill1
         | ExploreIntent::Skill2
@@ -102,10 +119,7 @@ pub fn reduce(
         ExploreIntent::Pause => *state = GameState::PauseMenu(0),
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
-            *state = GameState::Menu(MenuState {
-                selected: 0,
-                has_save: has_save_data(),
-            });
+            *state = GameState::Menu(MenuState { selected: 0 });
         }
     }
 }

@@ -28,7 +28,12 @@ pub fn reduce(
     match intent {
         DialogIntent::Confirm => {
             if let GameState::Dialog(ref dialog_state) = *state
-                && let Some(action) = dialog_state.current_action().cloned()
+                && let Some(dialog) = data.find_dialog(&dialog_state.dialog_id)
+                && let Some(action) = dialog
+                    .lines
+                    .get(dialog_state.current_line)
+                    .and_then(|line| line.action.as_ref())
+                    .cloned()
                 && let Some(new_state) = npc::reduce(
                     player,
                     data,
@@ -43,7 +48,13 @@ pub fn reduce(
             }
 
             if let GameState::Dialog(ref mut dialog_state) = *state
-                && !dialog_state.advance()
+                && let Some(dialog) = data.find_dialog(&dialog_state.dialog_id)
+                && !(if dialog_state.current_line + 1 < dialog.lines.len() {
+                    dialog_state.current_line += 1;
+                    true
+                } else {
+                    false
+                })
             {
                 *state = GameState::Explore;
             }

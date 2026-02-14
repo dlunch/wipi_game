@@ -31,21 +31,50 @@ pub fn reduce(state: &mut GameState, player: &mut PlayerState, intent: ShopInten
 
     match shop_state.mode {
         ShopMode::Select => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(2, 2),
+            ShopIntent::MoveUp => {
+                if shop_state.selected > 0 {
+                    shop_state.selected -= 1;
+                    if shop_state.selected < shop_state.scroll {
+                        shop_state.scroll = shop_state.selected;
+                    }
+                }
+            }
+            ShopIntent::MoveDown => {
+                if shop_state.selected + 1 < 2 {
+                    shop_state.selected += 1;
+                    if shop_state.selected >= shop_state.scroll + 2 {
+                        shop_state.scroll = shop_state.selected - 2 + 1;
+                    }
+                }
+            }
             ShopIntent::Confirm => {
                 shop_state.mode = if shop_state.selected == 0 {
                     ShopMode::Buy
                 } else {
                     ShopMode::Sell
                 };
-                shop_state.reset_selection();
+                shop_state.selected = 0;
+                shop_state.scroll = 0;
             }
             ShopIntent::Back => *state = GameState::Explore,
         },
         ShopMode::Buy => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(shop_state.items.len(), VISIBLE_ITEMS),
+            ShopIntent::MoveUp => {
+                if shop_state.selected > 0 {
+                    shop_state.selected -= 1;
+                    if shop_state.selected < shop_state.scroll {
+                        shop_state.scroll = shop_state.selected;
+                    }
+                }
+            }
+            ShopIntent::MoveDown => {
+                if shop_state.selected + 1 < shop_state.items.len() {
+                    shop_state.selected += 1;
+                    if shop_state.selected >= shop_state.scroll + VISIBLE_ITEMS {
+                        shop_state.scroll = shop_state.selected - VISIBLE_ITEMS + 1;
+                    }
+                }
+            }
             ShopIntent::Confirm => {
                 if let Some(item) = shop_state.items.get(shop_state.selected).cloned()
                     && player.stats.gold >= item.price
@@ -56,12 +85,27 @@ pub fn reduce(state: &mut GameState, player: &mut PlayerState, intent: ShopInten
             }
             ShopIntent::Back => {
                 shop_state.mode = ShopMode::Select;
-                shop_state.reset_selection();
+                shop_state.selected = 0;
+                shop_state.scroll = 0;
             }
         },
         ShopMode::Sell => match intent {
-            ShopIntent::MoveUp => shop_state.move_up(),
-            ShopIntent::MoveDown => shop_state.move_down(player.inventory.len(), VISIBLE_ITEMS),
+            ShopIntent::MoveUp => {
+                if shop_state.selected > 0 {
+                    shop_state.selected -= 1;
+                    if shop_state.selected < shop_state.scroll {
+                        shop_state.scroll = shop_state.selected;
+                    }
+                }
+            }
+            ShopIntent::MoveDown => {
+                if shop_state.selected + 1 < player.inventory.len() {
+                    shop_state.selected += 1;
+                    if shop_state.selected >= shop_state.scroll + VISIBLE_ITEMS {
+                        shop_state.scroll = shop_state.selected - VISIBLE_ITEMS + 1;
+                    }
+                }
+            }
             ShopIntent::Confirm => {
                 let event =
                     game::player::reduce(player, PlayerIntent::RemoveItemAt(shop_state.selected));
@@ -81,7 +125,8 @@ pub fn reduce(state: &mut GameState, player: &mut PlayerState, intent: ShopInten
             }
             ShopIntent::Back => {
                 shop_state.mode = ShopMode::Select;
-                shop_state.reset_selection();
+                shop_state.selected = 0;
+                shop_state.scroll = 0;
             }
         },
     }

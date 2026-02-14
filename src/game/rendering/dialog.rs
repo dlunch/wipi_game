@@ -3,9 +3,9 @@ use wipi::framebuffer::Framebuffer;
 use super::renderer::{
     COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, draw_rect, draw_text, fill_rect,
 };
-use crate::game::DialogState;
+use crate::game::{DialogState, GameData};
 
-pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
+pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, data: &GameData) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
 
@@ -17,7 +17,12 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
 
     draw_text(fb, 8, box_y + 2, &state.npc_name, COLOR_YELLOW);
 
-    if let Some(text) = state.current_text() {
+    if let Some(dialog) = data.find_dialog(&state.dialog_id)
+        && let Some(text) = dialog
+            .lines
+            .get(state.current_line)
+            .map(|line| line.text.as_str())
+    {
         let max_chars = ((screen_w - 16) / 6) as usize;
         let lines = wrap_text(text, max_chars);
 
@@ -26,8 +31,12 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState) {
         }
     }
 
-    let indicator = if state.current_line + 1 < state.lines.len() {
-        "OK:Next"
+    let indicator = if let Some(dialog) = data.find_dialog(&state.dialog_id) {
+        if state.current_line + 1 < dialog.lines.len() {
+            "OK:Next"
+        } else {
+            "OK:Close"
+        }
     } else {
         "OK:Close"
     };

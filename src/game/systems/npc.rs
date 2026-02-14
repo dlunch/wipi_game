@@ -1,5 +1,4 @@
-use super::combat::Direction;
-use crate::data::{Dialog, DialogAction, DialogCondition, NpcType};
+use crate::data::{Dialog, DialogAction, DialogCondition, Direction, NpcType};
 use crate::game::{self, DialogState, GameData, GameState, PlayerIntent, PlayerState, ShopState};
 
 #[derive(Debug)]

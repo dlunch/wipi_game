@@ -28,27 +28,4 @@ impl ShopState {
             mode: ShopMode::Select,
         }
     }
-
-    pub fn move_up(&mut self) {
-        if self.selected > 0 {
-            self.selected -= 1;
-            if self.selected < self.scroll {
-                self.scroll = self.selected;
-            }
-        }
-    }
-
-    pub fn move_down(&mut self, max: usize, visible: usize) {
-        if self.selected + 1 < max {
-            self.selected += 1;
-            if self.selected >= self.scroll + visible {
-                self.scroll = self.selected - visible + 1;
-            }
-        }
-    }
-
-    pub fn reset_selection(&mut self) {
-        self.selected = 0;
-        self.scroll = 0;
-    }
 }

@@ -1,10 +1,7 @@
 use alloc::string::String;
 
-use crate::data::{Item, ItemKind, QuestProgress};
-use crate::game::Direction;
+use crate::data::{Direction, Item, ItemKind, QuestProgress};
 use crate::game::PlayerState;
-
-const MP_REGEN_INTERVAL: u32 = 60;
 
 #[derive(Debug, Clone)]
 pub enum PlayerIntent {
@@ -16,54 +13,23 @@ pub enum PlayerIntent {
     RemoveItemAt(usize),
     EquipWeapon(usize),
     EquipArmor(usize),
-    SetFacing {
-        dx: i32,
-        dy: i32,
-    },
-    MoveBy {
-        dx: i32,
-        dy: i32,
-    },
-    ChangeMap {
-        map_id: String,
-        x: usize,
-        y: usize,
-    },
-    SpawnAtMap {
-        x: usize,
-        y: usize,
-    },
-    OpenTreasure {
-        map_id: String,
-        x: usize,
-        y: usize,
-    },
+    SetFacing { dx: i32, dy: i32 },
+    MoveBy { dx: i32, dy: i32 },
+    ChangeMap { map_id: String, x: usize, y: usize },
+    SpawnAtMap { x: usize, y: usize },
+    OpenTreasure { map_id: String, x: usize, y: usize },
     AddQuest(String),
     MarkQuestRewarded(String),
-    UpdateQuestProgress {
-        quest_id: String,
-        target_count: i32,
-    },
-    TickMpRegen,
-    UpdateCooldowns,
-    UseSkill {
-        slot: usize,
-        mp_cost: i32,
-        cooldown: u32,
-    },
-    UseItem {
-        index: usize,
-    },
+    UpdateQuestProgress { quest_id: String, target_count: i32 },
+    UseItem { index: usize },
     TakeDamage(i32),
     Heal(i32),
-    RecoverMp(i32),
 }
 
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
     None,
     ItemUsed,
-    SkillUsed,
     Died,
     ItemRemoved(Option<Item>),
 }
@@ -147,30 +113,6 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
             }
             PlayerEvent::None
         }
-        PlayerIntent::TickMpRegen => {
-            player.mp_regen_timer += 1;
-            if player.mp_regen_timer >= MP_REGEN_INTERVAL {
-                player.mp_regen_timer = 0;
-                let _ = reduce(player, PlayerIntent::RecoverMp(1));
-            }
-            PlayerEvent::None
-        }
-        PlayerIntent::UpdateCooldowns => {
-            update_cooldowns(player);
-            PlayerEvent::None
-        }
-        PlayerIntent::UseSkill {
-            slot,
-            mp_cost,
-            cooldown,
-        } => {
-            if can_use_skill(player, slot, mp_cost) {
-                use_skill(player, slot, mp_cost, cooldown);
-                PlayerEvent::SkillUsed
-            } else {
-                PlayerEvent::None
-            }
-        }
         PlayerIntent::UseItem { index } => {
             if use_item(player, index) {
                 PlayerEvent::ItemUsed
@@ -190,30 +132,16 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
             player.stats.heal(amount);
             PlayerEvent::None
         }
-        PlayerIntent::RecoverMp(amount) => {
-            player.stats.recover_mp(amount);
-            PlayerEvent::None
-        }
     }
 }
 
-fn update_cooldowns(player: &mut PlayerState) {
-    for cd in &mut player.skill_cooldowns {
-        if *cd > 0 {
-            *cd -= 1;
-        }
-    }
-}
-
-pub fn can_use_skill(player: &PlayerState, slot: usize, mp_cost: i32) -> bool {
-    slot < 3 && player.skill_cooldowns[slot] == 0 && player.stats.current_mp >= mp_cost
-}
-
-fn use_skill(player: &mut PlayerState, slot: usize, mp_cost: i32, cooldown: u32) {
-    if slot < 3 {
-        player.skill_cooldowns[slot] = cooldown;
-        player.stats.current_mp = (player.stats.current_mp - mp_cost).max(0);
-    }
+pub fn can_use_skill(
+    player: &PlayerState,
+    cooldowns: &[u32; 3],
+    slot: usize,
+    mp_cost: i32,
+) -> bool {
+    slot < 3 && cooldowns[slot] == 0 && player.stats.current_mp >= mp_cost
 }
 
 fn use_item(player: &mut PlayerState, index: usize) -> bool {
@@ -524,23 +452,21 @@ mod tests {
     #[test]
     fn skill_cooldowns() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        assert!(can_use_skill(&player, 0, 10));
+        let mut cooldowns = [0; 3];
+        assert!(can_use_skill(&player, &cooldowns, 0, 10));
 
-        use_skill(&mut player, 0, 10, 30);
-        assert!(!can_use_skill(&player, 0, 10));
-        assert_eq!(player.skill_cooldowns[0], 30);
-        assert_eq!(player.stats.current_mp, 20);
+        cooldowns[0] = 30;
+        player.stats.current_mp = 20;
+        assert!(!can_use_skill(&player, &cooldowns, 0, 10));
 
-        for _ in 0..30 {
-            update_cooldowns(&mut player);
-        }
-        assert!(can_use_skill(&player, 0, 10));
+        cooldowns[0] = 0;
+        assert!(can_use_skill(&player, &cooldowns, 0, 10));
     }
 
     #[test]
     fn skill_insufficient_mp() {
         let mut player = PlayerState::new(String::from("H"), "v");
         player.stats.current_mp = 5;
-        assert!(!can_use_skill(&player, 0, 10));
+        assert!(!can_use_skill(&player, &[0; 3], 0, 10));
     }
 }

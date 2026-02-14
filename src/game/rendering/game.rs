@@ -32,7 +32,7 @@ pub fn render(
                 return;
             };
             if let Some(map) = data.find_map(&s.player.current_map_id) {
-                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs, s);
             }
         }
         GameState::Inventory => {
@@ -51,9 +51,9 @@ pub fn render(
             if let Some(s) = session
                 && let Some(map) = data.find_map(&s.player.current_map_id)
             {
-                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs, s);
             }
-            draw_dialog(fb, dialog_state);
+            draw_dialog(fb, dialog_state, data);
         }
         GameState::Shop(shop_state) => {
             let Some(s) = require_session(session, fb) else {
@@ -71,7 +71,7 @@ pub fn render(
             if let Some(s) = session
                 && let Some(map) = data.find_map(&s.player.current_map_id)
             {
-                draw_explore(fb, map, &s.player, &s.combat, &data.npcs);
+                draw_explore(fb, map, &s.player, &s.combat, &data.npcs, s);
             }
             draw_pause_menu(fb, *selected);
         }

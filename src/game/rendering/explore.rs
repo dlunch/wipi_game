@@ -6,8 +6,8 @@ use super::renderer::{
     COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
     draw_rect, draw_text, fill_rect,
 };
-use crate::data::{Map, Npc, Skill, SkillType, Tile};
-use crate::game::{CombatState, Direction, PlayerState};
+use crate::data::{Direction, Map, Npc, Skill, SkillType, Tile};
+use crate::game::{CombatState, PlayerState, SessionState};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
@@ -15,11 +15,12 @@ pub fn draw_explore(
     player: &PlayerState,
     combat: &CombatState,
     npcs: &[Npc],
+    session: &SessionState,
 ) {
     clear_screen(fb);
     let screen_h = fb.height() as i32;
     draw_map_with_entities(fb, map, player, combat, npcs, screen_h);
-    draw_hud(fb, map, player, combat, screen_h, map.peaceful);
+    draw_hud(fb, map, player, combat, session, screen_h, map.peaceful);
 }
 
 fn draw_map_with_entities(
@@ -226,6 +227,7 @@ fn draw_hud(
     map: &Map,
     player: &PlayerState,
     combat: &CombatState,
+    session: &SessionState,
     screen_h: i32,
     peaceful: bool,
 ) {
@@ -255,11 +257,17 @@ fn draw_hud(
     }
 
     if !peaceful {
-        draw_skill_bar(fb, hud_y + 14, screen_w, player);
+        draw_skill_bar(fb, hud_y + 14, screen_w, player, session);
     }
 }
 
-fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &PlayerState) {
+fn draw_skill_bar(
+    fb: &mut Framebuffer,
+    y: i32,
+    screen_w: i32,
+    player: &PlayerState,
+    session: &SessionState,
+) {
     let skills: [(&Skill, &str); 3] = [
         (&Skill::FIREBALL, "1"),
         (&Skill::HEAL, "2"),
@@ -270,7 +278,7 @@ fn draw_skill_bar(fb: &mut Framebuffer, y: i32, screen_w: i32, player: &PlayerSt
 
     for (i, (skill, key)) in skills.iter().enumerate() {
         let x = i as i32 * slot_width + 4;
-        let cd = player.skill_cooldowns[i];
+        let cd = session.skill_cooldowns[i];
         let is_ready = cd == 0 && player.stats.current_mp >= skill.mp_cost;
 
         let color = if is_ready { COLOR_WHITE } else { COLOR_GRAY };

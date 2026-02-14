@@ -10,7 +10,9 @@ pub mod player;
 pub mod quest;
 pub mod shop;
 
-pub use combat::{CombatEvent, CombatIntent, CombatState, Direction};
+#[allow(unused_imports)]
+pub use crate::data::Direction;
+pub use combat::{CombatEvent, CombatIntent, CombatState};
 pub use dialog::DialogIntent;
 pub use explore::ExploreIntent;
 pub use inventory::InventoryIntent;
@@ -18,4 +20,5 @@ pub use menu::{MenuEvent, MenuIntent, PauseMenuIntent};
 pub use movement::MovementState;
 pub use npc::NpcIntent;
 pub use player::{PlayerEvent, PlayerIntent};
+pub use quest::QuestIntent;
 pub use shop::ShopIntent;

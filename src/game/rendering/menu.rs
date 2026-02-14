@@ -4,7 +4,7 @@ use super::renderer::{
     COLOR_DARK_GRAY, COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
     draw_selection_cursor, draw_text, fill_rect,
 };
-use crate::game::MenuState;
+use crate::game::{MenuState, has_save_data};
 
 pub fn draw_menu(fb: &mut Framebuffer, state: &MenuState) {
     clear_screen(fb);
@@ -18,7 +18,7 @@ pub fn draw_menu(fb: &mut Framebuffer, state: &MenuState) {
     let menu_y_start: i32 = 50;
     let menu_spacing: i32 = 18;
 
-    let items: &[&str] = if state.has_save {
+    let items: &[&str] = if has_save_data() {
         &["NEW GAME", "CONTINUE", "EXIT"]
     } else {
         &["NEW GAME", "EXIT"]
