@@ -16,8 +16,8 @@ use wipi::wipi_main;
 
 use crate::game::{
     AppAction, AppEffect, CombatState, DialogIntent, ExploreIntent, GameData, GameState,
-    InventoryIntent, InventoryState, MenuIntent, MenuState, MovementState, PauseMenuIntent,
-    PlayerState, ShopIntent, has_save_data, render,
+    InventoryIntent, InventoryState, MenuAction, MenuEvent, MenuIntent, MenuState, MovementState,
+    PauseMenuIntent, PlayerState, ShopIntent, has_save_data, render,
 };
 
 pub struct RpgGame {
@@ -124,7 +124,7 @@ impl RpgGame {
         } = self;
 
         match effect {
-            AppEffect::UpdateLoading => game::update::update_loading(state, data),
+            AppEffect::UpdateLoading => game::lifecycle::update_loading(state, data),
             AppEffect::UpdateMovement => {
                 game::movement::update(state, movement, player, combat, data);
             }
@@ -132,22 +132,32 @@ impl RpgGame {
                 game::combat::update_combat(state, player, combat, data);
             }
             AppEffect::ApplyMenuIntent(intent) => {
-                game::handler::handle_menu_input(state, player, combat, data, intent);
+                if let MenuEvent::Action(action) = game::menu::reduce(state, intent) {
+                    match action {
+                        MenuAction::NewGame => {
+                            game::lifecycle::start_new_game(state, player, combat, data);
+                        }
+                        MenuAction::Continue => {
+                            game::lifecycle::continue_game(state, player, combat, data);
+                        }
+                        MenuAction::Exit => wipi::kernel::exit(0),
+                    }
+                }
             }
             AppEffect::ApplyExploreIntent(intent) => {
                 game::explore::reduce(state, movement, player, combat, data, intent);
             }
             AppEffect::ApplyInventoryIntent(intent) => {
-                game::handler::handle_inventory_input(state, player, inventory_state, intent);
+                game::inventory::reduce(state, player, inventory_state, intent);
             }
             AppEffect::ApplyDialogIntent(intent) => {
-                game::handler::handle_dialog_input(state, player, data, intent);
+                game::dialog::reduce(state, player, data, intent);
             }
             AppEffect::ApplyShopIntent(intent) => {
-                game::handler::handle_shop_input(state, player, intent);
+                game::shop::reduce(state, player, intent);
             }
             AppEffect::ApplyPauseMenuIntent(intent) => {
-                game::handler::handle_pause_menu_input(state, player, inventory_state, intent);
+                game::menu::reduce_pause(state, player, inventory_state, intent);
             }
             AppEffect::ReturnToExplore => *state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {

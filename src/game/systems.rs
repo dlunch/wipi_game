@@ -2,6 +2,7 @@ pub mod combat;
 pub mod dialog;
 pub mod explore;
 pub mod inventory;
+pub mod lifecycle;
 pub mod menu;
 pub mod movement;
 pub mod npc;

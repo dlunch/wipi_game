@@ -1,11 +1,9 @@
 mod game_data;
-pub mod handler;
 mod intent;
 mod rendering;
 mod save;
 mod state;
 mod systems;
-pub mod update;
 
 pub use game_data::GameData;
 pub use intent::{AppAction, AppEffect};
@@ -22,6 +20,7 @@ pub use systems::combat;
 pub use systems::dialog;
 pub use systems::explore;
 pub use systems::inventory;
+pub use systems::lifecycle;
 pub use systems::menu;
 pub use systems::movement;
 pub use systems::npc;
