@@ -506,7 +506,7 @@ pub struct KillReward {
     pub gold: i32,
 }
 
-pub fn reduce_update(
+pub fn reduce_tick(
     state: &GameState,
     _player: &PlayerState,
     skill_cooldowns: &[u32; 3],
@@ -537,7 +537,7 @@ pub fn reduce_update(
     }
 }
 
-pub fn apply_update(
+pub fn apply_tick(
     state: &mut GameState,
     player: &mut PlayerState,
     skill_cooldowns: &mut [u32; 3],
@@ -1067,8 +1067,8 @@ mod tests {
             Vec::new(),
         ));
 
-        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
-        apply_update(
+        let event = reduce_tick(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_tick(
             &mut game_state,
             &mut player,
             &mut cooldowns,
@@ -1114,8 +1114,8 @@ mod tests {
             Vec::new(),
         ));
 
-        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
-        apply_update(
+        let event = reduce_tick(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_tick(
             &mut game_state,
             &mut player,
             &mut cooldowns,
@@ -1146,8 +1146,8 @@ mod tests {
             Vec::new(),
         ));
 
-        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
-        apply_update(
+        let event = reduce_tick(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_tick(
             &mut game_state,
             &mut player,
             &mut cooldowns,

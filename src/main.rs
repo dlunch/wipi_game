@@ -144,13 +144,13 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                let event = game::combat::reduce_update(
+                let event = game::combat::reduce_tick(
                     &self.state,
                     &s.player,
                     &s.skill_cooldowns,
                     s.mp_regen_timer,
                 );
-                game::combat::apply_update(
+                game::combat::apply_tick(
                     &mut self.state,
                     &mut s.player,
                     &mut s.skill_cooldowns,
