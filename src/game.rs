@@ -31,8 +31,9 @@ pub use systems::quest;
 pub use systems::shop;
 pub use systems::{
     CombatEvent, CombatIntent, CombatState, DialogEvent, DialogIntent, ExploreEvent,
-    ExploreIntent, InventoryIntent, MenuEvent, MenuIntent, MovementState, NpcEvent, NpcIntent,
-    PauseMenuIntent, PlayerEvent, PlayerIntent, QuestIntent, ShopIntent,
+    ExploreIntent, InventoryEvent, InventoryIntent, MenuEvent, MenuIntent, MovementState,
+    NpcEvent, NpcIntent, PauseMenuEvent, PauseMenuIntent, PlayerEvent, PlayerIntent, QuestIntent,
+    ShopEvent, ShopIntent,
 };
 pub use ui::{
     DialogState, INVENTORY_VISIBLE_ITEMS, InventoryUiState, MenuAction, MenuState, MenuUiState,
