@@ -1,7 +1,5 @@
 use wipi::event::KeyCode;
 
-use crate::game::{GameState, InventoryUiState};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InventoryIntent {
     MoveUp,
@@ -29,29 +27,20 @@ impl InventoryIntent {
     }
 }
 
-pub fn reduce(
-    state: &GameState,
-    inventory_state: &InventoryUiState,
-    inventory_len: usize,
-    intent: InventoryIntent,
-) -> InventoryEvent {
-    if !matches!(*state, GameState::Inventory) {
-        return InventoryEvent::None;
-    }
-
+pub fn reduce(selected: usize, inventory_len: usize, intent: InventoryIntent) -> InventoryEvent {
     match intent {
         InventoryIntent::MoveUp => {
-            if inventory_state.selected > 0 {
-                return InventoryEvent::SetSelected(inventory_state.selected - 1);
+            if selected > 0 {
+                return InventoryEvent::SetSelected(selected - 1);
             }
         }
         InventoryIntent::MoveDown => {
-            if inventory_len > 0 && inventory_state.selected < inventory_len - 1 {
-                return InventoryEvent::SetSelected(inventory_state.selected + 1);
+            if inventory_len > 0 && selected < inventory_len - 1 {
+                return InventoryEvent::SetSelected(selected + 1);
             }
         }
         InventoryIntent::UseSelected => {
-            return InventoryEvent::UseSelected(inventory_state.selected);
+            return InventoryEvent::UseSelected(selected);
         }
         InventoryIntent::Back => return InventoryEvent::CloseToExplore,
     }
@@ -95,49 +84,31 @@ mod tests {
 
     #[test]
     fn test_move_up_decrements_selected() {
-        let state = GameState::Inventory;
-        let mut inventory_state = InventoryUiState::default();
-        inventory_state.selected = 2;
-
-        let event = reduce(&state, &inventory_state, 3, InventoryIntent::MoveUp);
+        let event = reduce(2, 3, InventoryIntent::MoveUp);
         assert!(matches!(event, InventoryEvent::SetSelected(1)));
     }
 
     #[test]
     fn test_move_up_clamps_at_zero() {
-        let state = GameState::Inventory;
-        let mut inventory_state = InventoryUiState::default();
-        inventory_state.selected = 0;
-
-        let event = reduce(&state, &inventory_state, 3, InventoryIntent::MoveUp);
+        let event = reduce(0, 3, InventoryIntent::MoveUp);
         assert!(matches!(event, InventoryEvent::None));
     }
 
     #[test]
     fn test_move_up_decrements_only_selected() {
-        let state = GameState::Inventory;
-        let mut inventory_state = InventoryUiState::default();
-        inventory_state.selected = 3;
-
-        let event = reduce(&state, &inventory_state, 4, InventoryIntent::MoveUp);
+        let event = reduce(3, 4, InventoryIntent::MoveUp);
         assert!(matches!(event, InventoryEvent::SetSelected(2)));
     }
 
     #[test]
     fn test_use_selected_heals_player() {
-        let state = GameState::Inventory;
-        let mut inventory_state = InventoryUiState::default();
-        inventory_state.selected = 0;
-
-        let event = reduce(&state, &inventory_state, 1, InventoryIntent::UseSelected);
+        let event = reduce(0, 1, InventoryIntent::UseSelected);
         assert!(matches!(event, InventoryEvent::UseSelected(0)));
     }
 
     #[test]
     fn test_back_changes_state_to_explore() {
-        let state = GameState::Inventory;
-        let inventory_state = InventoryUiState::default();
-        let event = reduce(&state, &inventory_state, 0, InventoryIntent::Back);
+        let event = reduce(0, 0, InventoryIntent::Back);
         assert!(matches!(event, InventoryEvent::CloseToExplore));
     }
 }

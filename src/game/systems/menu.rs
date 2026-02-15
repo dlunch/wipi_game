@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use crate::game::{GameState, MenuAction, MenuUiState, PauseMenuUiState};
+use crate::game::MenuAction;
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {
@@ -57,48 +57,37 @@ impl PauseMenuIntent {
     }
 }
 
-pub fn reduce(state: &GameState, menu_ui: &MenuUiState, intent: MenuIntent) -> MenuEvent {
-    let GameState::Menu = *state else {
-        return MenuEvent::None;
-    };
-
+pub fn reduce(selected: usize, items: &[(&str, MenuAction)], intent: MenuIntent) -> MenuEvent {
     match intent {
         MenuIntent::MoveUp => {
-            if menu_ui.selected > 0 {
-                return MenuEvent::SetSelected(menu_ui.selected - 1);
+            if selected > 0 {
+                return MenuEvent::SetSelected(selected - 1);
             }
         }
         MenuIntent::MoveDown => {
-            if menu_ui.selected < menu_ui.state.items.len() - 1 {
-                return MenuEvent::SetSelected(menu_ui.selected + 1);
+            if selected + 1 < items.len() {
+                return MenuEvent::SetSelected(selected + 1);
             }
         }
         MenuIntent::Select => {
-            let (_, action) = menu_ui.state.items[menu_ui.selected];
-            return MenuEvent::Action(action);
+            if let Some((_, action)) = items.get(selected).copied() {
+                return MenuEvent::Action(action);
+            }
         }
     }
 
     MenuEvent::None
 }
 
-pub fn reduce_pause(
-    state: &GameState,
-    pause_ui: &PauseMenuUiState,
-    intent: PauseMenuIntent,
-) -> PauseMenuEvent {
-    let GameState::PauseMenu = *state else {
-        return PauseMenuEvent::None;
-    };
-
+pub fn reduce_pause(selected: usize, item_count: usize, intent: PauseMenuIntent) -> PauseMenuEvent {
     match intent {
-        PauseMenuIntent::MoveUp if pause_ui.selected > 0 => {
-            return PauseMenuEvent::SetSelected(pause_ui.selected - 1);
+        PauseMenuIntent::MoveUp if selected > 0 => {
+            return PauseMenuEvent::SetSelected(selected - 1);
         }
-        PauseMenuIntent::MoveDown if pause_ui.selected < pause_ui.state.items.len() - 1 => {
-            return PauseMenuEvent::SetSelected(pause_ui.selected + 1);
+        PauseMenuIntent::MoveDown if selected + 1 < item_count => {
+            return PauseMenuEvent::SetSelected(selected + 1);
         }
-        PauseMenuIntent::Select => match pause_ui.selected {
+        PauseMenuIntent::Select => match selected {
             0 => return PauseMenuEvent::OpenInventory,
             1 => return PauseMenuEvent::OpenStats,
             2 => return PauseMenuEvent::OpenQuestLog,
@@ -115,46 +104,43 @@ pub fn reduce_pause(
 #[cfg(test)]
 mod tests {
     use super::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent, reduce, reduce_pause};
-    use crate::game::{GameState, MenuAction, MenuState, MenuUiState, PauseMenuUiState};
+    use crate::game::{MenuAction, MenuState};
 
     #[test]
     fn menu_reduce_returns_selection_and_action_events() {
-        let state = GameState::Menu;
-        let mut ui = MenuUiState {
-            state: MenuState::new(true),
-            selected: 0,
-        };
+        let items = MenuState::new(true).items;
+        let mut selected = 0;
 
-        let event = reduce(&state, &ui, MenuIntent::MoveDown);
+        let event = reduce(selected, &items, MenuIntent::MoveDown);
         assert!(matches!(event, MenuEvent::SetSelected(1)));
-        ui.selected = 1;
+        selected = 1;
 
-        let event = reduce(&state, &ui, MenuIntent::MoveDown);
+        let event = reduce(selected, &items, MenuIntent::MoveDown);
         assert!(matches!(event, MenuEvent::SetSelected(2)));
-        ui.selected = 2;
+        selected = 2;
 
-        let event = reduce(&state, &ui, MenuIntent::Select);
+        let event = reduce(selected, &items, MenuIntent::Select);
         assert!(matches!(event, MenuEvent::Action(MenuAction::Exit)));
     }
 
     #[test]
     fn pause_reduce_returns_expected_events() {
-        let state = GameState::PauseMenu;
-        let mut ui = PauseMenuUiState::default();
+        let mut selected = 0;
+        let item_count = 4;
 
-        let event = reduce_pause(&state, &ui, PauseMenuIntent::Select);
+        let event = reduce_pause(selected, item_count, PauseMenuIntent::Select);
         assert!(matches!(event, PauseMenuEvent::OpenInventory));
 
-        ui.selected = 1;
-        let event = reduce_pause(&state, &ui, PauseMenuIntent::Select);
+        selected = 1;
+        let event = reduce_pause(selected, item_count, PauseMenuIntent::Select);
         assert!(matches!(event, PauseMenuEvent::OpenStats));
 
-        ui.selected = 2;
-        let event = reduce_pause(&state, &ui, PauseMenuIntent::Select);
+        selected = 2;
+        let event = reduce_pause(selected, item_count, PauseMenuIntent::Select);
         assert!(matches!(event, PauseMenuEvent::OpenQuestLog));
 
-        ui.selected = 3;
-        let event = reduce_pause(&state, &ui, PauseMenuIntent::Select);
+        selected = 3;
+        let event = reduce_pause(selected, item_count, PauseMenuIntent::Select);
         assert!(matches!(event, PauseMenuEvent::SaveAndReturnExplore));
     }
 }

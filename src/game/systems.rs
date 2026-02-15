@@ -11,9 +11,7 @@ pub mod quest;
 pub mod reward;
 pub mod shop;
 
-pub use combat::{
-    CombatEvent, CombatIntent, CombatState, CombatTickApplyEvent, PlayerEffect,
-};
+pub use combat::{CombatEvent, CombatIntent, CombatState, CombatTickApplyEvent, PlayerEffect};
 pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
 pub use explore::{ExploreEvent, ExploreIntent};
 pub use inventory::{InventoryEvent, InventoryIntent};

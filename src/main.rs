@@ -56,7 +56,12 @@ impl GameInner {
                     }
                 }
                 GameState::Explore => {
-                    for intent in ExploreIntent::intent_for_key(&self.ui.explore, key) {
+                    let facing = self
+                        .session
+                        .as_ref()
+                        .map(|s| s.player.facing)
+                        .unwrap_or(crate::data::Direction::Down);
+                    for intent in ExploreIntent::intent_for_key(&self.ui.explore, facing, key) {
                         effects.push(AppEffect::ApplyExploreIntent(intent));
                     }
                 }
@@ -173,7 +178,10 @@ impl GameInner {
     }
 
     fn apply_menu_intent(&mut self, intent: MenuIntent) {
-        let event = game::menu::reduce(&self.state, &self.ui.menu, intent);
+        if !matches!(self.state, GameState::Menu) {
+            return;
+        }
+        let event = game::menu::reduce(self.ui.menu.selected, &self.ui.menu.state.items, intent);
         match event {
             MenuEvent::None => {}
             MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
@@ -213,7 +221,11 @@ impl GameInner {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::explore::reduce(&self.state, &s.player, &self.data, intent);
+        let is_peaceful = self
+            .data
+            .find_map(&s.player.current_map_id)
+            .is_some_and(|map| map.peaceful);
+        let event = game::explore::reduce(is_peaceful, intent);
         match event {
             game::ExploreEvent::None => {}
             game::ExploreEvent::MoveDirection(key) => {
@@ -309,16 +321,15 @@ impl GameInner {
     }
 
     fn apply_inventory_intent(&mut self, intent: InventoryIntent) {
+        if !matches!(self.state, GameState::Inventory) {
+            return;
+        }
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::inventory::reduce(
-            &self.state,
-            &self.ui.inventory,
-            s.player.inventory.len(),
-            intent,
-        );
+        let event =
+            game::inventory::reduce(self.ui.inventory.selected, s.player.inventory.len(), intent);
         match event {
             game::InventoryEvent::None => {}
             game::InventoryEvent::SetSelected(selected) => self.ui.inventory.set_selected(selected),
@@ -334,12 +345,10 @@ impl GameInner {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::dialog::reduce(
-            &self.state,
-            self.ui.dialog.state.as_ref(),
-            &self.data,
-            intent,
-        );
+        if matches!(intent, DialogIntent::Confirm) && !matches!(self.state, GameState::Dialog) {
+            return;
+        }
+        let event = game::dialog::reduce(self.ui.dialog.state.as_ref(), &self.data, intent);
         match event {
             game::DialogEvent::None => {}
             game::DialogEvent::Transition(transition) => match transition {
@@ -376,11 +385,27 @@ impl GameInner {
     }
 
     fn apply_shop_intent(&mut self, intent: ShopIntent) {
+        if !matches!(self.state, GameState::Shop) {
+            return;
+        }
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::shop::reduce(&self.state, &s.player, &self.ui.shop, intent);
+        let event = game::shop::reduce(
+            self.ui.shop.mode,
+            self.ui.shop.selected,
+            self.ui.shop.state.as_ref(),
+            s.player.stats.gold,
+            s.player.inventory.len(),
+            self.ui
+                .shop
+                .state
+                .as_ref()
+                .map(|state| state.items.as_slice())
+                .unwrap_or(&[]),
+            intent,
+        );
         match event {
             game::ShopEvent::None => {}
             game::ShopEvent::ErrorNoActiveShop => {
@@ -414,11 +439,18 @@ impl GameInner {
     }
 
     fn apply_pause_menu_intent(&mut self, intent: PauseMenuIntent) {
+        if !matches!(self.state, GameState::PauseMenu) {
+            return;
+        }
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::menu::reduce_pause(&self.state, &self.ui.pause_menu, intent);
+        let event = game::menu::reduce_pause(
+            self.ui.pause_menu.selected,
+            self.ui.pause_menu.state.items.len(),
+            intent,
+        );
         match event {
             game::PauseMenuEvent::None => {}
             game::PauseMenuEvent::SetSelected(selected) => {

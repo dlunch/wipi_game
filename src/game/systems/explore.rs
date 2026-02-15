@@ -4,12 +4,12 @@ use alloc::vec::Vec;
 use wipi::event::KeyCode;
 
 use crate::data::{Direction, Map, Tile};
-use crate::game::{ExploreAction, ExploreUiState, GameData, GameState, PlayerState};
+use crate::game::{ExploreAction, ExploreUiState, GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
     MoveDirection(KeyCode),
-    TryNpcInteract,
+    TryNpcInteract { facing: Direction },
     UseAction(ExploreAction),
     Pause,
     BackToMenu,
@@ -25,14 +25,18 @@ pub enum ExploreEvent {
 }
 
 impl ExploreIntent {
-    pub fn intent_for_key(ui: &ExploreUiState, key: KeyCode) -> Vec<ExploreIntent> {
+    pub fn intent_for_key(
+        ui: &ExploreUiState,
+        facing: Direction,
+        key: KeyCode,
+    ) -> Vec<ExploreIntent> {
         let mut intents = Vec::new();
         match key {
             KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
                 intents.push(ExploreIntent::MoveDirection(key));
             }
             KeyCode::Ok => {
-                intents.push(ExploreIntent::TryNpcInteract);
+                intents.push(ExploreIntent::TryNpcInteract { facing });
             }
             KeyCode::Key0 => intents.push(ExploreIntent::Pause),
             KeyCode::Back => intents.push(ExploreIntent::BackToMenu),
@@ -47,28 +51,11 @@ impl ExploreIntent {
     }
 }
 
-pub fn reduce(
-    state: &GameState,
-    player: &PlayerState,
-    data: &GameData,
-    intent: ExploreIntent,
-) -> ExploreEvent {
-    let is_peaceful = data
-        .find_map(&player.current_map_id)
-        .is_some_and(|m| m.peaceful);
-
+pub fn reduce(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
     match intent {
         ExploreIntent::MoveDirection(key) => ExploreEvent::MoveDirection(key),
-        ExploreIntent::TryNpcInteract => ExploreEvent::TryNpcInteract {
-            facing: player.facing,
-        },
-        ExploreIntent::UseAction(action) if !is_peaceful => {
-            if matches!(*state, GameState::Dialog) {
-                ExploreEvent::None
-            } else {
-                ExploreEvent::UseAction(action)
-            }
-        }
+        ExploreIntent::TryNpcInteract { facing } => ExploreEvent::TryNpcInteract { facing },
+        ExploreIntent::UseAction(action) if !is_peaceful => ExploreEvent::UseAction(action),
         ExploreIntent::UseAction(_) => ExploreEvent::None,
         ExploreIntent::Pause => ExploreEvent::EnterPauseMenu,
         ExploreIntent::BackToMenu => ExploreEvent::EnterMenu,
@@ -292,7 +279,7 @@ mod tests {
     fn intent_for_key_direction_keys_map_to_move_direction() {
         let ui = ExploreUiState::default();
         for key in [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right] {
-            let intents = ExploreIntent::intent_for_key(&ui, key);
+            let intents = ExploreIntent::intent_for_key(&ui, Direction::Down, key);
             assert_eq!(intents.len(), 1);
             assert!(matches!(intents.as_slice(), [ExploreIntent::MoveDirection(k)] if *k == key));
         }
@@ -301,11 +288,13 @@ mod tests {
     #[test]
     fn intent_for_key_ok_returns_interact_then_attack() {
         let ui = ExploreUiState::default();
-        let intents = ExploreIntent::intent_for_key(&ui, KeyCode::Ok);
+        let intents = ExploreIntent::intent_for_key(&ui, Direction::Up, KeyCode::Ok);
         assert!(matches!(
             intents.as_slice(),
             [
-                ExploreIntent::TryNpcInteract,
+                ExploreIntent::TryNpcInteract {
+                    facing: Direction::Up
+                },
                 ExploreIntent::UseAction(ExploreAction::BasicAttack)
             ]
         ));
@@ -315,15 +304,15 @@ mod tests {
     fn intent_for_key_skill_keys_map_to_skills() {
         let ui = ExploreUiState::default();
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, KeyCode::Key1).as_slice(),
+            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key1).as_slice(),
             [ExploreIntent::UseAction(ExploreAction::Fireball)]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, KeyCode::Key2).as_slice(),
+            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key2).as_slice(),
             [ExploreIntent::UseAction(ExploreAction::Heal)]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, KeyCode::Key3).as_slice(),
+            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key3).as_slice(),
             [ExploreIntent::UseAction(ExploreAction::SpinAttack)]
         ));
     }
@@ -332,11 +321,11 @@ mod tests {
     fn intent_for_key_pause_and_back_keys_map_to_menu_intents() {
         let ui = ExploreUiState::default();
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, KeyCode::Key0).as_slice(),
+            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key0).as_slice(),
             [ExploreIntent::Pause]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, KeyCode::Back).as_slice(),
+            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Back).as_slice(),
             [ExploreIntent::BackToMenu]
         ));
     }
@@ -454,27 +443,14 @@ mod tests {
 
     #[test]
     fn reduce_pause_switches_to_pause_menu_state() {
-        let data = make_game_data();
-        let state = GameState::Explore;
-        let player = make_player("field", 0, 0);
-
-        let event = reduce(&state, &player, &data, ExploreIntent::Pause);
+        let event = reduce(false, ExploreIntent::Pause);
 
         assert!(matches!(event, ExploreEvent::EnterPauseMenu));
     }
 
     #[test]
     fn reduce_attack_has_no_effect_in_peaceful_zone() {
-        let data = make_game_data();
-        let state = GameState::Explore;
-        let mut player = make_player("safe_zone", 0, 0);
-        player.facing = Direction::Right;
-        let event = reduce(
-            &state,
-            &player,
-            &data,
-            ExploreIntent::UseAction(ExploreAction::BasicAttack),
-        );
+        let event = reduce(true, ExploreIntent::UseAction(ExploreAction::BasicAttack));
 
         assert!(matches!(event, ExploreEvent::None));
     }

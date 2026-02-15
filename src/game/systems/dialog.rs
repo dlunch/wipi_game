@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
 use crate::data::DialogAction;
-use crate::game::{DialogState, GameData, GameState, PlayerState, ShopState};
+use crate::game::{DialogState, GameData, PlayerState, ShopState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -99,15 +99,13 @@ pub fn apply_action(
 }
 
 pub fn reduce(
-    state: &GameState,
     dialog_state: Option<&DialogState>,
     data: &GameData,
     intent: DialogIntent,
 ) -> DialogEvent {
     match intent {
         DialogIntent::Confirm => {
-            if let GameState::Dialog = *state
-                && let Some(dialog_state_ref) = dialog_state
+            if let Some(dialog_state_ref) = dialog_state
                 && let Some(dialog) = data.find_dialog(&dialog_state_ref.dialog_id)
             {
                 let transition = if dialog_state_ref.current_line + 1 < dialog.lines.len() {
@@ -145,7 +143,7 @@ mod tests {
 
     use super::{DialogEvent, DialogIntent, DialogTransition, reduce};
     use crate::data::{Dialog, DialogAction, Shop, parse_dialogs};
-    use crate::game::{DialogState, GameData, GameState};
+    use crate::game::{DialogState, GameData};
 
     fn make_dialog(id: &str, lines_count: usize) -> Dialog {
         let mut raw = alloc::format!("@DIALOG:{id}\n");
@@ -200,9 +198,8 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let dialog_state = DialogState::new(String::from("NPC"), &dialog);
-        let state = GameState::Dialog;
 
-        let event = reduce(&state, Some(&dialog_state), &data, DialogIntent::Back);
+        let event = reduce(Some(&dialog_state), &data, DialogIntent::Back);
 
         assert!(matches!(
             event,
@@ -217,9 +214,8 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let dialog_state = DialogState::new(String::from("NPC"), &dialog);
-        let state = GameState::Dialog;
 
-        let event = reduce(&state, Some(&dialog_state), &data, DialogIntent::Confirm);
+        let event = reduce(Some(&dialog_state), &data, DialogIntent::Confirm);
 
         let DialogEvent::Transition(DialogTransition::Set(dialog_state)) = event else {
             panic!("expected dialog state");
@@ -234,9 +230,8 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let dialog_state = DialogState::new(String::from("NPC"), &dialog);
-        let state = GameState::Dialog;
 
-        let event = reduce(&state, Some(&dialog_state), &data, DialogIntent::Confirm);
+        let event = reduce(Some(&dialog_state), &data, DialogIntent::Confirm);
 
         assert!(matches!(
             event,
@@ -257,9 +252,8 @@ mod tests {
         });
 
         let dialog_state = DialogState::new(String::from("NPC"), &dialog);
-        let state = GameState::Dialog;
 
-        let event = reduce(&state, Some(&dialog_state), &data, DialogIntent::Confirm);
+        let event = reduce(Some(&dialog_state), &data, DialogIntent::Confirm);
 
         let DialogEvent::Action(DialogAction::OpenShop(shop_id), DialogTransition::CloseToExplore) =
             event
@@ -277,9 +271,8 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let dialog_state = DialogState::new(String::from("NPC"), &dialog);
-        let state = GameState::Dialog;
 
-        let event = reduce(&state, Some(&dialog_state), &data, DialogIntent::Confirm);
+        let event = reduce(Some(&dialog_state), &data, DialogIntent::Confirm);
 
         assert!(matches!(
             event,
