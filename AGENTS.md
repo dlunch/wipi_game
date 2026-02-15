@@ -47,33 +47,33 @@ Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 
 ```
 src/
-├── main.rs              # Entry point, App trait impl (thin — delegates to game/app)
+├── main.rs              # Entry point + GameInner orchestration (collect effects, reduce/apply, timer tick)
 ├── data.rs              # Re-exports from data module
 ├── data/
 │   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
 │   └── parser.rs        # Text file parsers for .dat resources
-├── game.rs              # Re-exports from game module (state, systems, rendering, app)
+├── game.rs              # Re-exports from game module (state, systems, rendering, ui)
 └── game/
-    ├── app.rs           # RpgGame struct, dispatch pipeline, effect application
-    ├── app/
-    │   ├── intent.rs    # AppAction, AppEffect, ExploreIntent enums
-    │   ├── handler.rs   # Input handler free functions (per-state intent handling)
-    │   └── update.rs    # Game loop free functions (loading, movement, combat tick)
-    ├── state.rs         # GameState enum + re-exports from state sub-modules
+    ├── intent.rs        # AppAction, AppEffect enums
+    ├── state.rs         # GameState enum + state module re-exports
     ├── state/
-    │   ├── player.rs    # PlayerState struct + inventory/equipment/quest methods
-    │   ├── dialog.rs    # DialogState, DialogIntent
-    │   ├── shop.rs      # ShopState, ShopMode, ShopIntent
-    │   ├── menu.rs      # MenuState, MenuAction, MenuIntent, PauseMenuIntent
-    │   ├── inventory.rs # InventoryState, InventoryIntent
-    │   └── tile_event.rs # TileEvent enum, check_tile_event
+    │   └── player.rs    # PlayerState (persistent world data)
+    ├── ui.rs            # UiState + UI-only states (menu/dialog/shop/inventory/pause/explore bindings)
+    ├── session.rs       # SessionState (player + runtime system state)
     ├── systems.rs       # Re-exports from systems sub-modules
     ├── systems/
-    │   ├── combat.rs    # CombatState, CombatIntent/Event, stateless combat logic
-    │   ├── movement.rs  # MovementState, tick/key press/release free functions
-    │   ├── npc.rs       # NPC interaction free functions
-    │   ├── player.rs    # PlayerIntent/Event, reduce free function
-    │   └── quest.rs     # Quest progression free functions
+    │   ├── combat.rs    # Combat state machine + reduce_tick/apply_tick + combat actions
+    │   ├── movement.rs  # Movement reduce_tick/apply_tick + input state
+    │   ├── explore.rs   # Explore intent reduction + map/tile helpers
+    │   ├── dialog.rs    # Dialog reduction + dialog action application
+    │   ├── shop.rs      # Shop intent reduction
+    │   ├── menu.rs      # Menu/pause intent reduction
+    │   ├── inventory.rs # Inventory intent reduction
+    │   ├── player.rs    # Player mutation applier (apply)
+    │   ├── quest.rs     # Quest mutation applier (apply)
+    │   ├── npc.rs       # NPC interaction applier (apply)
+    │   ├── reward.rs    # Combat reward applier helpers
+    │   └── lifecycle.rs # Loading/new-game/continue-game lifecycle reducers/helpers
     ├── rendering.rs     # Re-exports from rendering sub-modules
     ├── rendering/
     │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
@@ -95,12 +95,18 @@ resources/
 
 The codebase follows a **state + stateless systems + rendering** pattern:
 
-- **State** (`state/`): Pure data structs (`PlayerState`, `DialogState`, etc.). All state struct names end with `State`.
-- **Systems** (`systems/`): Stateless free functions that operate on state. Each system owns its runtime state (e.g. `CombatState`) but logic is free functions, not methods.
+- **State** (`state/`): Pure persistent world data (`PlayerState`).
+- **UI State** (`ui.rs`): UI-only interaction state (`MenuUiState`, `DialogUiState`, `ShopUiState`, etc.).
+- **Session State** (`session.rs`): Active gameplay container (`player`, `combat`, `movement`, cooldown timers).
+- **Systems** (`systems/`): Reducers and appliers. Prefer `reduce_*` for decision events and `apply_*` for mutation.
 - **Rendering** (`rendering/`): Pure draw functions. No game logic — only reads state and draws to framebuffer.
-- **App** (`app/`): Orchestration layer. `RpgGame` struct holds all state. Input → `AppAction` → `AppEffect` → apply via free functions taking individual fields.
+- **App** (`main.rs` / `GameInner`): Orchestration layer. Input → intent/effect collection → system reduce/apply coordination → render state build.
 
-Input flow: `key → intent_for_key() → AppEffect → apply_effect() → system free fn(state fields) → state mutation → render(state fields)`
+Input flow: `key → intent_for_key(ui) → AppEffect → system reduce(...) -> Event → app-layer apply(...) → build_render_state(...) → render(...)`
+
+Update flow (timer tick): `Tick → UpdateLoading/UpdateMovement/UpdateCombat effects → reduce_tick + apply_tick → build_render_state`.
+
+Architecture rule: reducers inside `systems/` should not orchestrate other systems. Cross-system orchestration belongs in `GameInner` apply handlers.
 
 ## Code Style Guidelines
 
@@ -171,14 +177,14 @@ if matches!(self.state, GameState::Explore) { ... }
 
 ### Module Organization
 - Each system has its own file under `game/systems/`
-- State structs live under `game/state/`, rendering under `game/rendering/`
+- Persistent world state lives under `game/state/`, UI state lives in `game/ui.rs`, rendering under `game/rendering/`
 - Module file (`game.rs`, `data.rs`, `state.rs`, etc.) only contains `mod` and `pub use`
 - Prefer functions over methods when logic doesn't need `self`
 
 ### Functions
 - Keep functions small and focused
 - Use descriptive names over comments
-- Prefer returning `Option<GameState>` for state changes
+- Prefer `reduce`/`reduce_*` returning events and separate `apply`/`apply_*` mutation functions
 
 ## Key Constraints
 
