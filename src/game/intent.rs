@@ -12,16 +12,16 @@ pub enum AppAction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AppEffect {
+pub enum AppIntent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    ApplyMenuIntent(MenuIntent),
-    ApplyExploreIntent(ExploreIntent),
-    ApplyInventoryIntent(InventoryIntent),
-    ApplyDialogIntent(DialogIntent),
-    ApplyShopIntent(ShopIntent),
-    ApplyPauseMenuIntent(PauseMenuIntent),
+    Menu(MenuIntent),
+    Explore(ExploreIntent),
+    Inventory(InventoryIntent),
+    Dialog(DialogIntent),
+    Shop(ShopIntent),
+    PauseMenu(PauseMenuIntent),
     ReturnToExplore,
     ReturnToMenuFromGameOver,
     ReleaseMovementKey(KeyCode),

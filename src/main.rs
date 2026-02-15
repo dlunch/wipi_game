@@ -20,10 +20,27 @@ use wipi::wipi_main;
 
 use crate::data::{DialogAction, Direction};
 use crate::game::{
-    AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
+    AppAction, AppIntent, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
     ShopIntent, UiState, build_render_state, has_save_data, render,
 };
+
+#[derive(Debug, Clone, Copy)]
+enum AppEvent {
+    UpdateLoading,
+    UpdateMovement,
+    UpdateCombat,
+    Menu(MenuIntent),
+    Explore(ExploreIntent),
+    Inventory(InventoryIntent),
+    Dialog(DialogIntent),
+    Shop(ShopIntent),
+    PauseMenu(PauseMenuIntent),
+    ReturnToExplore,
+    ReturnToMenuFromGameOver,
+    ReleaseMovementKey(KeyCode),
+    Exit(i32),
+}
 
 struct GameInner {
     state: GameState,
@@ -47,15 +64,15 @@ impl GameInner {
         self.dispatch(AppAction::Tick);
     }
 
-    fn collect_effects(&self, action: AppAction) -> Vec<AppEffect> {
-        let mut effects = Vec::new();
+    fn collect_intents(&self, action: AppAction) -> Vec<AppIntent> {
+        let mut intents = Vec::new();
 
         match action {
             AppAction::Tick => match self.state {
-                GameState::Loading(_) => effects.push(AppEffect::UpdateLoading),
+                GameState::Loading(_) => intents.push(AppIntent::UpdateLoading),
                 GameState::Explore => {
-                    effects.push(AppEffect::UpdateMovement);
-                    effects.push(AppEffect::UpdateCombat);
+                    intents.push(AppIntent::UpdateMovement);
+                    intents.push(AppIntent::UpdateCombat);
                 }
                 _ => {}
             },
@@ -63,7 +80,7 @@ impl GameInner {
                 GameState::Loading(_) => {}
                 GameState::Menu => {
                     if let Some(intent) = MenuIntent::intent_for_key(key) {
-                        effects.push(AppEffect::ApplyMenuIntent(intent));
+                        intents.push(AppIntent::Menu(intent));
                     }
                 }
                 GameState::Explore => {
@@ -78,42 +95,42 @@ impl GameInner {
                         self.ui.explore.ok_action,
                         self.ui.explore.key_actions,
                     ) {
-                        effects.push(AppEffect::ApplyExploreIntent(intent));
+                        intents.push(AppIntent::Explore(intent));
                     }
                 }
                 GameState::Inventory => {
                     if let Some(intent) = InventoryIntent::intent_for_key(key) {
-                        effects.push(AppEffect::ApplyInventoryIntent(intent));
+                        intents.push(AppIntent::Inventory(intent));
                     }
                 }
                 GameState::Stats | GameState::QuestLog => {
                     if matches!(key, KeyCode::Back | KeyCode::Ok) {
-                        effects.push(AppEffect::ReturnToExplore);
+                        intents.push(AppIntent::ReturnToExplore);
                     }
                 }
                 GameState::Dialog => {
                     if let Some(intent) = DialogIntent::intent_for_key(key) {
-                        effects.push(AppEffect::ApplyDialogIntent(intent));
+                        intents.push(AppIntent::Dialog(intent));
                     }
                 }
                 GameState::Shop => {
                     if let Some(intent) = ShopIntent::intent_for_key(key) {
-                        effects.push(AppEffect::ApplyShopIntent(intent));
+                        intents.push(AppIntent::Shop(intent));
                     }
                 }
                 GameState::PauseMenu => {
                     if let Some(intent) = PauseMenuIntent::intent_for_key(key) {
-                        effects.push(AppEffect::ApplyPauseMenuIntent(intent));
+                        intents.push(AppIntent::PauseMenu(intent));
                     }
                 }
                 GameState::GameOver => {
                     if matches!(key, KeyCode::Ok) {
-                        effects.push(AppEffect::ReturnToMenuFromGameOver);
+                        intents.push(AppIntent::ReturnToMenuFromGameOver);
                     }
                 }
                 GameState::Error(_) => {
                     if matches!(key, KeyCode::Ok) {
-                        effects.push(AppEffect::Exit(1));
+                        intents.push(AppIntent::Exit(1));
                     }
                 }
             },
@@ -122,7 +139,7 @@ impl GameInner {
                     && self.session.is_some()
                     && let Some(direction) = direction_for_key(key)
                 {
-                    effects.push(AppEffect::ReleaseMovementKey(match direction {
+                    intents.push(AppIntent::ReleaseMovementKey(match direction {
                         Direction::Up => KeyCode::Up,
                         Direction::Down => KeyCode::Down,
                         Direction::Left => KeyCode::Left,
@@ -132,7 +149,7 @@ impl GameInner {
             }
         }
 
-        effects
+        intents
     }
 
     fn apply_update_loading(&mut self) {
@@ -443,7 +460,7 @@ impl GameInner {
                     let (state, session, intro) = game::lifecycle::continue_game(&self.data);
                     self.enter_session(state, session, intro);
                 }
-                MenuAction::Exit => self.apply_effect(AppEffect::Exit(0)),
+                MenuAction::Exit => self.apply_event(AppEvent::Exit(0)),
             },
         }
     }
@@ -677,31 +694,50 @@ impl GameInner {
         }
     }
 
-    fn apply_effect(&mut self, effect: AppEffect) {
-        match effect {
-            AppEffect::UpdateLoading => self.apply_update_loading(),
-            AppEffect::UpdateMovement => self.apply_update_movement(),
-            AppEffect::UpdateCombat => self.apply_update_combat(),
-            AppEffect::ApplyMenuIntent(intent) => self.apply_menu_intent(intent),
-            AppEffect::ApplyExploreIntent(intent) => self.apply_explore_intent(intent),
-            AppEffect::ApplyInventoryIntent(intent) => self.apply_inventory_intent(intent),
-            AppEffect::ApplyDialogIntent(intent) => self.apply_dialog_intent(intent),
-            AppEffect::ApplyShopIntent(intent) => self.apply_shop_intent(intent),
-            AppEffect::ApplyPauseMenuIntent(intent) => self.apply_pause_menu_intent(intent),
-            AppEffect::ReturnToExplore => self.state = GameState::Explore,
-            AppEffect::ReturnToMenuFromGameOver => {
+    fn reduce_intent(&self, intent: AppIntent) -> AppEvent {
+        match intent {
+            AppIntent::UpdateLoading => AppEvent::UpdateLoading,
+            AppIntent::UpdateMovement => AppEvent::UpdateMovement,
+            AppIntent::UpdateCombat => AppEvent::UpdateCombat,
+            AppIntent::Menu(intent) => AppEvent::Menu(intent),
+            AppIntent::Explore(intent) => AppEvent::Explore(intent),
+            AppIntent::Inventory(intent) => AppEvent::Inventory(intent),
+            AppIntent::Dialog(intent) => AppEvent::Dialog(intent),
+            AppIntent::Shop(intent) => AppEvent::Shop(intent),
+            AppIntent::PauseMenu(intent) => AppEvent::PauseMenu(intent),
+            AppIntent::ReturnToExplore => AppEvent::ReturnToExplore,
+            AppIntent::ReturnToMenuFromGameOver => AppEvent::ReturnToMenuFromGameOver,
+            AppIntent::ReleaseMovementKey(key) => AppEvent::ReleaseMovementKey(key),
+            AppIntent::Exit(code) => AppEvent::Exit(code),
+        }
+    }
+
+    fn apply_event(&mut self, event: AppEvent) {
+        match event {
+            AppEvent::UpdateLoading => self.apply_update_loading(),
+            AppEvent::UpdateMovement => self.apply_update_movement(),
+            AppEvent::UpdateCombat => self.apply_update_combat(),
+            AppEvent::Menu(intent) => self.apply_menu_intent(intent),
+            AppEvent::Explore(intent) => self.apply_explore_intent(intent),
+            AppEvent::Inventory(intent) => self.apply_inventory_intent(intent),
+            AppEvent::Dialog(intent) => self.apply_dialog_intent(intent),
+            AppEvent::Shop(intent) => self.apply_shop_intent(intent),
+            AppEvent::PauseMenu(intent) => self.apply_pause_menu_intent(intent),
+            AppEvent::ReturnToExplore => self.state = GameState::Explore,
+            AppEvent::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu;
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
-            AppEffect::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
-            AppEffect::Exit(code) => wipi::kernel::exit(code),
+            AppEvent::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
+            AppEvent::Exit(code) => wipi::kernel::exit(code),
         }
     }
 
     fn dispatch(&mut self, action: AppAction) {
-        let effects = self.collect_effects(action);
-        for effect in effects {
-            self.apply_effect(effect);
+        let intents = self.collect_intents(action);
+        for intent in intents {
+            let event = self.reduce_intent(intent);
+            self.apply_event(event);
         }
     }
 }
