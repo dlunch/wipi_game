@@ -1,6 +1,4 @@
 use crate::data::{Dialog, DialogCondition, Direction, NpcType};
-#[cfg(test)]
-use crate::data::DialogAction;
 use crate::game::{self, DialogState, GameData, PlayerIntent, PlayerState, ShopState};
 
 #[derive(Debug)]
@@ -93,62 +91,6 @@ pub fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
 }
 
 #[cfg(test)]
-pub fn process_action(
-    player: &mut PlayerState,
-    data: &GameData,
-    action: &DialogAction,
-) -> Option<NpcEvent> {
-    match action {
-        DialogAction::GiveQuest(id) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddQuest(id.clone()));
-        }
-        DialogAction::CompleteQuest(id) => {
-            let can_reward = player
-                .quests
-                .iter()
-                .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
-
-            if can_reward && let Some(quest) = data.find_quest(id) {
-                let _ = game::player::reduce(player, PlayerIntent::AddExp(quest.reward_exp));
-                let _ = game::player::reduce(player, PlayerIntent::AddGold(quest.reward_gold));
-
-                if let Some(item_id) = &quest.reward_item
-                    && let Some(item) = data.find_item(item_id).cloned()
-                {
-                    let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
-                }
-
-                let _ = game::player::reduce(player, PlayerIntent::MarkQuestRewarded(id.clone()));
-            }
-        }
-        DialogAction::GiveItem(id) => {
-            if let Some(item) = data.find_item(id).cloned() {
-                let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
-            }
-        }
-        DialogAction::TakeItem(id) => {
-            let _ = game::player::reduce(player, PlayerIntent::RemoveItem(id.clone()));
-        }
-        DialogAction::GiveGold(amount) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddGold(*amount));
-        }
-        DialogAction::TakeGold(amount) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddGold(-*amount));
-        }
-        DialogAction::OpenShop(id) => {
-            if let Some(shop) = data.find_shop(id).cloned() {
-                let shop_items = data.get_shop_items(&shop);
-                return Some(NpcEvent::OpenShop(ShopState::new(shop, shop_items)));
-            }
-        }
-        DialogAction::Heal => {
-            let _ = game::player::reduce(player, PlayerIntent::FullHeal);
-        }
-    }
-    None
-}
-
-#[cfg(test)]
 mod tests {
     use alloc::string::String;
     use alloc::vec;
@@ -192,18 +134,6 @@ mod tests {
             npcs: vec![npc],
             dialogs: vec![dialog],
             ..GameData::default()
-        }
-    }
-
-    fn make_item(id: &str) -> Item {
-        Item {
-            id: String::from(id),
-            name: String::from(id),
-            kind: ItemKind::Consumable,
-            param1: 10,
-            param2: 0,
-            param3: 0,
-            price: 20,
         }
     }
 
@@ -333,88 +263,5 @@ mod tests {
 
         assert_eq!(filtered.lines.len(), 1);
         assert_eq!(filtered.lines[0].text, "cheap");
-    }
-
-    #[test]
-    fn process_action_give_quest_adds_quest() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let data = GameData::default();
-
-        let next_state = process_action(
-            &mut player,
-            &data,
-            &DialogAction::GiveQuest(String::from("q1")),
-        );
-
-        assert!(next_state.is_none());
-        assert!(player.has_quest("q1"));
-    }
-
-    #[test]
-    fn process_action_give_item_adds_item_when_present_in_data() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let data = GameData {
-            items: vec![make_item("potion")],
-            ..GameData::default()
-        };
-
-        let next_state = process_action(
-            &mut player,
-            &data,
-            &DialogAction::GiveItem(String::from("potion")),
-        );
-
-        assert!(next_state.is_none());
-        assert!(player.has_item("potion"));
-    }
-
-    #[test]
-    fn process_action_give_gold_and_take_gold_modify_gold() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let data = GameData::default();
-        let starting_gold = player.stats.gold;
-
-        let _ = process_action(&mut player, &data, &DialogAction::GiveGold(25));
-        assert_eq!(player.stats.gold, starting_gold + 25);
-
-        let _ = process_action(&mut player, &data, &DialogAction::TakeGold(15));
-        assert_eq!(player.stats.gold, starting_gold + 10);
-    }
-
-    #[test]
-    fn process_action_heal_fully_heals_player() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let data = GameData::default();
-        player.stats.current_hp = 2;
-        player.stats.current_mp = 1;
-
-        let next_state = process_action(&mut player, &data, &DialogAction::Heal);
-
-        assert!(next_state.is_none());
-        assert_eq!(player.stats.current_hp, player.stats.max_hp);
-        assert_eq!(player.stats.current_mp, player.stats.max_mp);
-    }
-
-    #[test]
-    fn process_action_open_shop_returns_shop_state() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let data = GameData {
-            items: vec![make_item("potion")],
-            shops: vec![make_shop("s1", vec![String::from("potion")])],
-            ..GameData::default()
-        };
-
-        let next_state = process_action(
-            &mut player,
-            &data,
-            &DialogAction::OpenShop(String::from("s1")),
-        );
-
-        let Some(NpcEvent::OpenShop(shop_state)) = next_state else {
-            panic!("expected shop state");
-        };
-        assert_eq!(shop_state.shop.id, "s1");
-        assert_eq!(shop_state.items.len(), 1);
-        assert_eq!(shop_state.items[0].id, "potion");
     }
 }

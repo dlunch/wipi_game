@@ -109,18 +109,6 @@ pub fn reduce(
 }
 
 #[cfg(test)]
-fn scroll_for_selection(selected: usize, total: usize) -> usize {
-    if total <= crate::game::SHOP_VISIBLE_ITEMS {
-        return 0;
-    }
-
-    let max_scroll = total.saturating_sub(crate::game::SHOP_VISIBLE_ITEMS);
-    selected
-        .saturating_sub(crate::game::SHOP_VISIBLE_ITEMS - 1)
-        .min(max_scroll)
-}
-
-#[cfg(test)]
 mod tests {
     use alloc::string::String;
     use alloc::vec;
@@ -143,7 +131,7 @@ mod tests {
         }
     }
 
-    fn make_shop_state(_items: Vec<Item>) -> (GameState, PlayerState) {
+    fn make_shop_state() -> (GameState, PlayerState) {
         (
             GameState::Shop,
             PlayerState::new(String::from("Hero"), "village"),
@@ -152,7 +140,7 @@ mod tests {
 
     #[test]
     fn select_mode_confirm_enters_buy_or_sell() {
-        let (state, player) = make_shop_state(vec![]);
+        let (state, player) = make_shop_state();
         let mut ui = ShopUiState::default();
         ui.state = Some(ShopState::new(
             Shop {
@@ -174,7 +162,7 @@ mod tests {
 
     #[test]
     fn buy_mode_confirm_buys_with_enough_gold() {
-        let (state, mut player) = make_shop_state(vec![make_item("potion", 10)]);
+        let (state, mut player) = make_shop_state();
         let mut ui = ShopUiState {
             state: None,
             mode: ShopMode::Buy,
@@ -196,7 +184,7 @@ mod tests {
 
     #[test]
     fn sell_mode_confirm_sells_item() {
-        let (state, player) = make_shop_state(vec![]);
+        let (state, player) = make_shop_state();
         let mut ui = ShopUiState {
             state: None,
             mode: ShopMode::Sell,
@@ -216,7 +204,7 @@ mod tests {
 
     #[test]
     fn back_in_buy_or_sell_returns_to_select() {
-        let (state, player) = make_shop_state(vec![make_item("potion", 10)]);
+        let (state, player) = make_shop_state();
         let mut ui = ShopUiState {
             state: None,
             mode: ShopMode::Buy,
@@ -235,11 +223,4 @@ mod tests {
         assert!(matches!(event, ShopEvent::SetMode(ShopMode::Select)));
     }
 
-    #[test]
-    fn scroll_for_selection_is_derived() {
-        assert_eq!(scroll_for_selection(0, 20), 0);
-        assert_eq!(scroll_for_selection(7, 20), 0);
-        assert_eq!(scroll_for_selection(8, 20), 1);
-        assert_eq!(scroll_for_selection(19, 20), 12);
-    }
 }
