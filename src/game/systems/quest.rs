@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::QuestType;
-use crate::game::{self, GameData, PlayerIntent, PlayerState};
+use crate::game::{GameData, PlayerState};
 
 pub enum QuestIntent<'a> {
     EnemyKilled { enemy_id: &'a str },
@@ -25,13 +25,12 @@ pub fn reduce(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>
             }
 
             for (quest_id, target_count) in updates {
-                let _ = game::player::reduce(
-                    player,
-                    PlayerIntent::UpdateQuestProgress {
-                        quest_id,
-                        target_count,
-                    },
-                );
+                if let Some(progress) = player.quests.iter_mut().find(|q| q.quest_id == quest_id) {
+                    progress.current_count = (progress.current_count + 1).min(target_count);
+                    if progress.current_count >= target_count {
+                        progress.completed = true;
+                    }
+                }
             }
         }
     }

@@ -20,7 +20,6 @@ pub enum PlayerIntent {
     OpenTreasure { map_id: String, x: usize, y: usize },
     AddQuest(String),
     MarkQuestRewarded(String),
-    UpdateQuestProgress { quest_id: String, target_count: i32 },
     UseItem { index: usize },
     TakeDamage(i32),
     Heal(i32),
@@ -97,20 +96,6 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
         }
         PlayerIntent::MarkQuestRewarded(id) => {
             mark_quest_rewarded(player, &id);
-            PlayerEvent::None
-        }
-        PlayerIntent::UpdateQuestProgress {
-            quest_id,
-            target_count,
-        } => {
-            for progress in &mut player.quests {
-                if progress.quest_id == quest_id && !progress.completed {
-                    progress.current_count += 1;
-                    if progress.current_count >= target_count {
-                        progress.completed = true;
-                    }
-                }
-            }
             PlayerEvent::None
         }
         PlayerIntent::UseItem { index } => {

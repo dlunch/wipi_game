@@ -1,5 +1,5 @@
 use crate::data::{Dialog, DialogCondition, Direction, NpcType};
-use crate::game::{self, DialogState, GameData, PlayerIntent, PlayerState, ShopState};
+use crate::game::{DialogState, GameData, PlayerState, ShopState};
 
 #[derive(Debug)]
 pub enum NpcEvent {
@@ -29,7 +29,8 @@ pub fn try_interact(
 
     match npc.npc_type {
         NpcType::Healer => {
-            let _ = game::player::reduce(player, PlayerIntent::FullHeal);
+            player.stats.current_hp = player.stats.max_hp;
+            player.stats.current_mp = player.stats.max_mp;
 
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
                 let filtered = filter_lines(player, dialog);
