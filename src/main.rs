@@ -5,8 +5,10 @@ extern crate alloc;
 mod data;
 mod game;
 
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::time::Duration;
 
 use wipi::app::App;
@@ -18,33 +20,17 @@ use wipi::wipi_main;
 
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
-    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
-    ShopIntent, build_render_state, has_save_data, render,
+    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, SessionState, ShopIntent,
+    build_render_state, has_save_data, render,
 };
 
-pub struct RpgGame {
+struct GameInner {
     state: GameState,
     data: GameData,
     session: Option<SessionState>,
-    timer: Option<Timer>,
 }
 
-impl Default for RpgGame {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl RpgGame {
-    pub fn new() -> Self {
-        Self {
-            state: GameState::Loading(0),
-            data: GameData::default(),
-            session: None,
-            timer: None,
-        }
-    }
-
+impl GameInner {
     fn update(&mut self) {
         self.dispatch(AppAction::Tick);
     }
@@ -228,16 +214,36 @@ impl RpgGame {
             self.apply_effect(effect);
         }
     }
+}
 
-    fn render(&self, fb: &mut Framebuffer) {
-        let render_state: RenderState<'_> =
-            build_render_state(&self.state, self.session.as_ref(), &self.data);
-        render(&render_state, fb);
+pub struct RpgGame {
+    inner: Rc<RefCell<GameInner>>,
+    _timer: Option<Timer>,
+}
+
+impl Default for RpgGame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RpgGame {
+    pub fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(GameInner {
+                state: GameState::Loading(0),
+                data: GameData::default(),
+                session: None,
+            })),
+            _timer: None,
+        }
     }
 
     fn ensure_timer(&mut self) {
-        if self.timer.is_none() {
-            self.timer = Some(Timer::periodic(Duration::from_millis(33), || {
+        if self._timer.is_none() {
+            let inner = Rc::clone(&self.inner);
+            self._timer = Some(Timer::periodic(Duration::from_millis(33), move || {
+                inner.borrow_mut().update();
                 repaint(0, 0, 0, 240, 320);
             }));
         }
@@ -246,19 +252,21 @@ impl RpgGame {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        self.update();
-
+        let inner = self.inner.borrow();
         let mut fb = Framebuffer::screen_framebuffer();
-        self.render(&mut fb);
+        let render_state = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
+        render(&render_state, &mut fb);
+        drop(inner);
+
         self.ensure_timer();
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
-        self.dispatch(AppAction::KeyDown(key));
+        self.inner.borrow_mut().dispatch(AppAction::KeyDown(key));
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
-        self.dispatch(AppAction::KeyUp(key));
+        self.inner.borrow_mut().dispatch(AppAction::KeyUp(key));
     }
 }
 
