@@ -5,8 +5,8 @@ use anyhow::{Context, Result, ensure};
 use wipi::resource::Resource;
 
 use crate::data::{
-    Dialog, Enemy, Item, Map, Npc, Quest, Shop, parse_dialogs, parse_enemies, parse_items,
-    parse_maps, parse_npcs, parse_quests, parse_shops,
+    Dialog, Enemy, Item, Map, NewGameConfig, Npc, Quest, Shop, parse_dialogs, parse_enemies,
+    parse_items, parse_maps, parse_newgame, parse_npcs, parse_quests, parse_shops,
 };
 
 #[derive(Default)]
@@ -18,12 +18,13 @@ pub struct GameData {
     pub dialogs: Vec<Dialog>,
     pub quests: Vec<Quest>,
     pub shops: Vec<Shop>,
+    pub newgame: NewGameConfig,
 }
 
 impl GameData {
-    pub const LOAD_STEPS: usize = 7;
-    pub const LOAD_LABELS: [&str; 7] = [
-        "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops",
+    pub const LOAD_STEPS: usize = 8;
+    pub const LOAD_LABELS: [&str; 8] = [
+        "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops", "Config",
     ];
 
     pub fn load_step(&mut self, step: usize) -> Result<bool> {
@@ -38,6 +39,7 @@ impl GameData {
             4 => self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?,
             5 => self.quests = Self::load_resource("data/quests.dat", parse_quests)?,
             6 => self.shops = Self::load_resource("data/shops.dat", parse_shops)?,
+            7 => self.newgame = Self::load_resource("data/newgame.dat", parse_newgame)?,
             _ => return Ok(true),
         }
         Ok(false)

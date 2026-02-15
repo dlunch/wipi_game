@@ -371,6 +371,37 @@ pub struct Skill {
     pub cooldown: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct StartItem {
+    pub item_id: String,
+    pub count: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewGameConfig {
+    pub player_name: String,
+    pub start_map: String,
+    pub fallback_map: String,
+    pub intro_dialog: Option<(String, String)>,
+    pub equip_weapon: Option<String>,
+    pub equip_armor: Option<String>,
+    pub items: Vec<StartItem>,
+}
+
+impl Default for NewGameConfig {
+    fn default() -> Self {
+        Self {
+            player_name: String::from("Hero"),
+            start_map: String::from("village"),
+            fallback_map: String::from("village"),
+            intro_dialog: None,
+            equip_weapon: None,
+            equip_armor: None,
+            items: Vec::new(),
+        }
+    }
+}
+
 impl Skill {
     pub const FIREBALL: Skill = Skill {
         name: "Fireball",

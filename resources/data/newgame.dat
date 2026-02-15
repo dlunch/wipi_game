@@ -1,0 +1,8 @@
+# New Game Configuration
+player_name:Hero
+start_map:village
+fallback_map:village
+intro_dialog:dialog_guide:마을 안내원
+equip_weapon:wooden_sword
+equip_armor:cloth
+item:potion:2

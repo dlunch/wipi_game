@@ -42,25 +42,33 @@ pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
 }
 
 pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
-    let mut player = PlayerState::new(String::from("Hero"), "village");
+    let config = &data.newgame;
+    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let mut combat = CombatState::default();
 
-    if let Some(sword) = data.find_item("wooden_sword").cloned() {
+    if let Some(ref weapon_id) = config.equip_weapon
+        && let Some(weapon) = data.find_item(weapon_id).cloned()
+    {
         let idx = player.inventory.len();
-        player.inventory.push(sword);
+        player.inventory.push(weapon);
         player.equipped_weapon = Some(idx);
     }
-    if let Some(armor) = data.find_item("cloth").cloned() {
+    if let Some(ref armor_id) = config.equip_armor
+        && let Some(armor) = data.find_item(armor_id).cloned()
+    {
         let idx = player.inventory.len();
         player.inventory.push(armor);
         player.equipped_armor = Some(idx);
     }
-    if let Some(potion) = data.find_item("potion").cloned() {
-        player.inventory.push(potion.clone());
-        player.inventory.push(potion);
+    for start_item in &config.items {
+        if let Some(item) = data.find_item(&start_item.item_id).cloned() {
+            for _ in 0..start_item.count {
+                player.inventory.push(item.clone());
+            }
+        }
     }
 
-    if let Some(map) = data.find_map("village") {
+    if let Some(map) = data.find_map(&config.start_map) {
         let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
         player.current_map_id = map.id.clone();
         player.x = x;
@@ -68,10 +76,12 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
         combat::spawn_for_map(&mut combat, map, &data.enemies);
     }
 
-    let (state, dialog_state) = if let Some(dialog) = data.find_dialog("dialog_guide") {
+    let (state, dialog_state) = if let Some((ref dialog_id, ref npc_name)) = config.intro_dialog
+        && let Some(dialog) = data.find_dialog(dialog_id)
+    {
         (
             GameState::Dialog,
-            Some(DialogState::new(String::from("마을 안내원"), dialog)),
+            Some(DialogState::new(npc_name.clone(), dialog)),
         )
     } else {
         (GameState::Explore, None)
@@ -89,14 +99,15 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
 }
 
 pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
-    let mut player = PlayerState::new(String::from("Hero"), "village");
+    let config = &data.newgame;
+    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let mut combat = CombatState::default();
 
     match load_game(&mut player) {
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
                 let (x, y) = (player.x, player.y);
-                player.current_map_id = String::from("village");
+                player.current_map_id = config.fallback_map.clone();
                 player.x = x;
                 player.y = y;
             }

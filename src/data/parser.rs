@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use anyhow::{Result, bail, ensure};
 
 use super::types::{
-    Dialog, DialogAction, DialogCondition, DialogLine, Enemy, Item, ItemKind, Map, Npc, NpcType,
-    Quest, QuestType, Shop, Tile,
+    Dialog, DialogAction, DialogCondition, DialogLine, Enemy, Item, ItemKind, Map, NewGameConfig,
+    Npc, NpcType, Quest, QuestType, Shop, StartItem, Tile,
 };
 
 fn parse_int(s: &str, field: &str, line: &str) -> Result<i32> {
@@ -319,6 +319,65 @@ pub fn parse_shops(data: &str) -> Result<Vec<Shop>> {
     }
 
     Ok(shops)
+}
+
+pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
+    let mut config = NewGameConfig::default();
+
+    for raw_line in data.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        ensure!(!parts.is_empty(), "empty directive in newgame config");
+
+        match parts[0] {
+            "player_name" => {
+                ensure!(parts.len() >= 2, "missing value for player_name");
+                config.player_name = parts[1].to_string();
+            }
+            "start_map" => {
+                ensure!(parts.len() >= 2, "missing value for start_map");
+                config.start_map = parts[1].to_string();
+            }
+            "fallback_map" => {
+                ensure!(parts.len() >= 2, "missing value for fallback_map");
+                config.fallback_map = parts[1].to_string();
+            }
+            "intro_dialog" => {
+                ensure!(
+                    parts.len() >= 3,
+                    "intro_dialog requires dialog_id and npc_name"
+                );
+                config.intro_dialog = Some((parts[1].to_string(), parts[2].to_string()));
+            }
+            "equip_weapon" => {
+                ensure!(parts.len() >= 2, "missing value for equip_weapon");
+                config.equip_weapon = Some(parts[1].to_string());
+            }
+            "equip_armor" => {
+                ensure!(parts.len() >= 2, "missing value for equip_armor");
+                config.equip_armor = Some(parts[1].to_string());
+            }
+            "item" => {
+                ensure!(parts.len() >= 3, "item requires item_id and count");
+                let count = parse_int(parts[2], "item count", line)?;
+                config.items.push(StartItem {
+                    item_id: parts[1].to_string(),
+                    count,
+                });
+            }
+            _ => bail!(
+                "unknown directive '{}' in newgame config: {}",
+                parts[0],
+                line
+            ),
+        }
+    }
+
+    Ok(config)
 }
 
 struct DialogBuilder {
@@ -772,5 +831,58 @@ GIVE_QUEST=slay:Kill the slimes!
     fn parse_npcs_rejects_unknown_type() {
         let data = "npc1:Test:Z:dialog\n";
         assert!(parse_npcs(data).is_err());
+    }
+
+    #[test]
+    fn parse_newgame_full_config() -> Result<()> {
+        let data = "player_name:Hero\nstart_map:village\nfallback_map:village\nintro_dialog:dialog_guide:Guide NPC\nequip_weapon:wooden_sword\nequip_armor:cloth\nitem:potion:2\nitem:elixir:1\n";
+        let config = parse_newgame(data)?;
+        assert_eq!(config.player_name, "Hero");
+        assert_eq!(config.start_map, "village");
+        assert_eq!(config.fallback_map, "village");
+        assert_eq!(
+            config.intro_dialog,
+            Some(("dialog_guide".into(), "Guide NPC".into()))
+        );
+        assert_eq!(config.equip_weapon.as_deref(), Some("wooden_sword"));
+        assert_eq!(config.equip_armor.as_deref(), Some("cloth"));
+        assert_eq!(config.items.len(), 2);
+        assert_eq!(config.items[0].item_id, "potion");
+        assert_eq!(config.items[0].count, 2);
+        assert_eq!(config.items[1].item_id, "elixir");
+        assert_eq!(config.items[1].count, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_newgame_defaults() -> Result<()> {
+        let data = "";
+        let config = parse_newgame(data)?;
+        assert_eq!(config.player_name, "Hero");
+        assert_eq!(config.start_map, "village");
+        assert!(config.intro_dialog.is_none());
+        assert!(config.equip_weapon.is_none());
+        assert!(config.items.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_newgame_skips_comments_and_empty() -> Result<()> {
+        let data = "# comment\n\nplayer_name:Test\n";
+        let config = parse_newgame(data)?;
+        assert_eq!(config.player_name, "Test");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_newgame_rejects_unknown_directive() {
+        let data = "unknown_key:value\n";
+        assert!(parse_newgame(data).is_err());
+    }
+
+    #[test]
+    fn parse_newgame_rejects_bad_item_count() {
+        let data = "item:potion:abc\n";
+        assert!(parse_newgame(data).is_err());
     }
 }
