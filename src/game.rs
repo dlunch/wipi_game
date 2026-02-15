@@ -9,9 +9,10 @@ mod systems;
 pub use game_data::GameData;
 pub use intent::{AppAction, AppEffect};
 pub use rendering::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_dialog,
-    draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
-    draw_stats, draw_text, fill_rect, render,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, RenderState,
+    build_render_state, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu,
+    draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    render,
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;

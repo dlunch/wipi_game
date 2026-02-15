@@ -7,23 +7,26 @@ mod game;
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::time::Duration;
 
 use wipi::app::App;
 use wipi::event::KeyCode;
 use wipi::framebuffer::Framebuffer;
 use wipi::graphics::repaint;
+use wipi::timer::Timer;
 use wipi::wipi_main;
 
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
-    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, SessionState, ShopIntent,
-    has_save_data, render,
+    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
+    ShopIntent, build_render_state, has_save_data, render,
 };
 
 pub struct RpgGame {
     state: GameState,
     data: GameData,
     session: Option<SessionState>,
+    timer: Option<Timer>,
 }
 
 impl Default for RpgGame {
@@ -38,7 +41,12 @@ impl RpgGame {
             state: GameState::Loading(0),
             data: GameData::default(),
             session: None,
+            timer: None,
         }
+    }
+
+    fn update(&mut self) {
+        self.dispatch(AppAction::Tick);
     }
 
     fn collect_effects(&self, action: AppAction) -> Vec<AppEffect> {
@@ -222,18 +230,27 @@ impl RpgGame {
     }
 
     fn render(&self, fb: &mut Framebuffer) {
-        render(&self.state, self.session.as_ref(), &self.data, fb);
+        let render_state: RenderState<'_> =
+            build_render_state(&self.state, self.session.as_ref(), &self.data);
+        render(&render_state, fb);
+    }
+
+    fn ensure_timer(&mut self) {
+        if self.timer.is_none() {
+            self.timer = Some(Timer::periodic(Duration::from_millis(33), || {
+                repaint(0, 0, 0, 240, 320);
+            }));
+        }
     }
 }
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        self.dispatch(AppAction::Tick);
+        self.update();
 
         let mut fb = Framebuffer::screen_framebuffer();
         self.render(&mut fb);
-
-        repaint(0, 0, 0, fb.width() as i32, fb.height() as i32);
+        self.ensure_timer();
     }
 
     fn on_keydown(&mut self, key: KeyCode) {

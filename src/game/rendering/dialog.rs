@@ -3,9 +3,10 @@ use wipi::framebuffer::Framebuffer;
 use super::renderer::{
     COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, draw_rect, draw_text, fill_rect,
 };
-use crate::game::{DialogState, GameData};
+use crate::data::Dialog;
+use crate::game::DialogState;
 
-pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, data: &GameData) {
+pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, dialogs: &[Dialog]) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
 
@@ -17,7 +18,7 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, data: &GameData) {
 
     draw_text(fb, 8, box_y + 2, &state.npc_name, COLOR_YELLOW);
 
-    if let Some(dialog) = data.find_dialog(&state.dialog_id)
+    if let Some(dialog) = find_dialog(dialogs, &state.dialog_id)
         && let Some(text) = dialog
             .lines
             .get(state.current_line)
@@ -31,7 +32,7 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, data: &GameData) {
         }
     }
 
-    let indicator = if let Some(dialog) = data.find_dialog(&state.dialog_id) {
+    let indicator = if let Some(dialog) = find_dialog(dialogs, &state.dialog_id) {
         if state.current_line + 1 < dialog.lines.len() {
             "OK:Next"
         } else {
@@ -41,6 +42,10 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, data: &GameData) {
         "OK:Close"
     };
     draw_text(fb, screen_w - 50, box_y + box_h - 10, indicator, COLOR_GRAY);
+}
+
+fn find_dialog<'a>(dialogs: &'a [Dialog], dialog_id: &str) -> Option<&'a Dialog> {
+    dialogs.iter().find(|dialog| dialog.id == dialog_id)
 }
 
 fn wrap_text(text: &str, max_chars: usize) -> alloc::vec::Vec<&str> {

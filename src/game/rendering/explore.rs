@@ -7,7 +7,7 @@ use super::renderer::{
     draw_rect, draw_text, fill_rect,
 };
 use crate::data::{Direction, Map, Npc, Skill, SkillType, Tile};
-use crate::game::{CombatState, PlayerState, SessionState};
+use crate::game::{CombatState, PlayerState};
 
 pub fn draw_explore(
     fb: &mut Framebuffer,
@@ -15,12 +15,20 @@ pub fn draw_explore(
     player: &PlayerState,
     combat: &CombatState,
     npcs: &[Npc],
-    session: &SessionState,
+    skill_cooldowns: &[u32; 3],
 ) {
     clear_screen(fb);
     let screen_h = fb.height() as i32;
     draw_map_with_entities(fb, map, player, combat, npcs, screen_h);
-    draw_hud(fb, map, player, combat, session, screen_h, map.peaceful);
+    draw_hud(
+        fb,
+        map,
+        player,
+        combat,
+        skill_cooldowns,
+        screen_h,
+        map.peaceful,
+    );
 }
 
 fn draw_map_with_entities(
@@ -227,7 +235,7 @@ fn draw_hud(
     map: &Map,
     player: &PlayerState,
     combat: &CombatState,
-    session: &SessionState,
+    skill_cooldowns: &[u32; 3],
     screen_h: i32,
     peaceful: bool,
 ) {
@@ -257,7 +265,7 @@ fn draw_hud(
     }
 
     if !peaceful {
-        draw_skill_bar(fb, hud_y + 14, screen_w, player, session);
+        draw_skill_bar(fb, hud_y + 14, screen_w, player, skill_cooldowns);
     }
 }
 
@@ -266,7 +274,7 @@ fn draw_skill_bar(
     y: i32,
     screen_w: i32,
     player: &PlayerState,
-    session: &SessionState,
+    skill_cooldowns: &[u32; 3],
 ) {
     let skills: [(&Skill, &str); 3] = [
         (&Skill::FIREBALL, "1"),
@@ -278,7 +286,7 @@ fn draw_skill_bar(
 
     for (i, (skill, key)) in skills.iter().enumerate() {
         let x = i as i32 * slot_width + 4;
-        let cd = session.skill_cooldowns[i];
+        let cd = skill_cooldowns[i];
         let is_ready = cd == 0 && player.stats.current_mp >= skill.mp_cost;
 
         let color = if is_ready { COLOR_WHITE } else { COLOR_GRAY };
