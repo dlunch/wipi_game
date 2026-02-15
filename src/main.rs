@@ -238,6 +238,12 @@ impl RpgGame {
         let timer_inner = Rc::clone(&inner);
         let timer = Timer::periodic(Duration::from_millis(33), move || {
             timer_inner.borrow_mut().update();
+            {
+                let inner = timer_inner.borrow();
+                let mut fb = Framebuffer::screen_framebuffer();
+                let rs = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
+                render(&rs, &mut fb);
+            }
             repaint(0, 0, 0, 240, 320);
         });
 
