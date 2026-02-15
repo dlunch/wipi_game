@@ -1,26 +1,20 @@
-mod dialog;
-mod menu;
 mod player;
-mod shop;
 
-pub use dialog::DialogState;
-pub use menu::{MenuAction, MenuState, PauseMenuState};
 pub use player::PlayerState;
-pub use shop::{ShopMode, ShopState};
 
 use alloc::string::String;
 
 #[derive(Debug)]
 pub enum GameState {
     Loading(usize),
-    Menu(MenuState),
+    Menu,
     Explore,
     Inventory,
     Stats,
-    Dialog(DialogState),
-    Shop(ShopState),
+    Dialog,
+    Shop,
     QuestLog,
-    PauseMenu(PauseMenuState),
+    PauseMenu,
     GameOver,
     Error(String),
 }

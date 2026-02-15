@@ -5,8 +5,8 @@ use wipi::event::KeyCode;
 
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
-    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PauseMenuState,
-    PlayerIntent, PlayerState, has_save_data, save_game,
+    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerIntent,
+    PlayerState, UiState, has_save_data, save_game,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -19,6 +19,13 @@ pub enum ExploreIntent {
     Skill3,
     Pause,
     BackToMenu,
+}
+
+pub struct ExploreRuntime<'a> {
+    pub movement: &'a mut MovementState,
+    pub player: &'a mut PlayerState,
+    pub skill_cooldowns: &'a mut [u32; 3],
+    pub combat: &'a mut CombatState,
 }
 
 impl ExploreIntent {
@@ -46,13 +53,18 @@ impl ExploreIntent {
 
 pub fn reduce(
     state: &mut GameState,
-    movement: &mut MovementState,
-    player: &mut PlayerState,
-    skill_cooldowns: &mut [u32; 3],
-    combat: &mut CombatState,
+    ui: &mut UiState,
+    runtime: ExploreRuntime<'_>,
     data: &GameData,
     intent: ExploreIntent,
 ) {
+    let ExploreRuntime {
+        movement,
+        player,
+        skill_cooldowns,
+        combat,
+    } = runtime;
+
     let is_peaceful = data
         .find_map(&player.current_map_id)
         .is_some_and(|m| m.peaceful);
@@ -64,13 +76,13 @@ pub fn reduce(
         ExploreIntent::TryNpcInteract => {
             let facing = player.facing;
             if let Some(new_state) =
-                game::npc::reduce(player, data, game::NpcIntent::Interact { facing })
+                game::npc::reduce(player, ui, data, game::NpcIntent::Interact { facing })
             {
                 *state = new_state;
             }
         }
         ExploreIntent::Attack if !is_peaceful => {
-            if matches!(*state, GameState::Dialog(_)) {
+            if matches!(*state, GameState::Dialog) {
                 return;
             }
             if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
@@ -116,10 +128,15 @@ pub fn reduce(
         | ExploreIntent::Skill1
         | ExploreIntent::Skill2
         | ExploreIntent::Skill3 => {}
-        ExploreIntent::Pause => *state = GameState::PauseMenu(PauseMenuState::new()),
+        ExploreIntent::Pause => {
+            ui.pause_menu.selected = 0;
+            *state = GameState::PauseMenu;
+        }
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
-            *state = GameState::Menu(MenuState::new(has_save_data()));
+            ui.menu.state = MenuState::new(has_save_data());
+            ui.menu.selected = 0;
+            *state = GameState::Menu;
         }
     }
 }
@@ -515,6 +532,7 @@ mod tests {
     fn reduce_pause_switches_to_pause_menu_state() {
         let data = make_game_data();
         let mut state = GameState::Explore;
+        let mut ui = UiState::default();
         let mut movement = MovementState::default();
         let mut player = make_player("field", 0, 0);
         let mut skill_cooldowns = [0; 3];
@@ -522,24 +540,25 @@ mod tests {
 
         reduce(
             &mut state,
-            &mut movement,
-            &mut player,
-            &mut skill_cooldowns,
-            &mut combat,
+            &mut ui,
+            ExploreRuntime {
+                movement: &mut movement,
+                player: &mut player,
+                skill_cooldowns: &mut skill_cooldowns,
+                combat: &mut combat,
+            },
             &data,
             ExploreIntent::Pause,
         );
 
-        let GameState::PauseMenu(menu) = &state else {
-            panic!("expected GameState::PauseMenu");
-        };
-        assert_eq!(menu.items.len(), 4);
+        assert!(matches!(state, GameState::PauseMenu));
     }
 
     #[test]
     fn reduce_attack_has_no_effect_in_peaceful_zone() {
         let data = make_game_data();
         let mut state = GameState::Explore;
+        let mut ui = UiState::default();
         let mut movement = MovementState::default();
         let mut player = make_player("safe_zone", 0, 0);
         player.facing = Direction::Right;
@@ -561,10 +580,13 @@ mod tests {
 
         reduce(
             &mut state,
-            &mut movement,
-            &mut player,
-            &mut skill_cooldowns,
-            &mut combat,
+            &mut ui,
+            ExploreRuntime {
+                movement: &mut movement,
+                player: &mut player,
+                skill_cooldowns: &mut skill_cooldowns,
+                combat: &mut combat,
+            },
             &data,
             ExploreIntent::Attack,
         );

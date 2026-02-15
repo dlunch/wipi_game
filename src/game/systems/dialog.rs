@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
 use super::npc;
-use crate::game::{GameData, GameState, NpcIntent, PlayerState};
+use crate::game::{GameData, GameState, NpcIntent, PlayerState, UiState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -21,13 +21,15 @@ impl DialogIntent {
 
 pub fn reduce(
     state: &mut GameState,
+    ui: &mut UiState,
     player: &mut PlayerState,
     data: &GameData,
     intent: DialogIntent,
 ) {
     match intent {
         DialogIntent::Confirm => {
-            if let GameState::Dialog(ref dialog_state) = *state
+            if let GameState::Dialog = *state
+                && let Some(dialog_state) = ui.dialog.state.as_ref()
                 && let Some(dialog) = data.find_dialog(&dialog_state.dialog_id)
                 && let Some(action) = dialog
                     .lines
@@ -36,6 +38,7 @@ pub fn reduce(
                     .cloned()
                 && let Some(new_state) = npc::reduce(
                     player,
+                    ui,
                     data,
                     NpcIntent::ProcessDialogAction { action: &action },
                 )
@@ -43,11 +46,12 @@ pub fn reduce(
                 *state = new_state;
             }
 
-            if matches!(*state, GameState::Shop(_)) {
+            if matches!(*state, GameState::Shop) {
                 return;
             }
 
-            if let GameState::Dialog(ref mut dialog_state) = *state
+            if let GameState::Dialog = *state
+                && let Some(dialog_state) = ui.dialog.state.as_mut()
                 && let Some(dialog) = data.find_dialog(&dialog_state.dialog_id)
                 && !(if dialog_state.current_line + 1 < dialog.lines.len() {
                     dialog_state.current_line += 1;
@@ -56,10 +60,14 @@ pub fn reduce(
                     false
                 })
             {
+                ui.dialog.state = None;
                 *state = GameState::Explore;
             }
         }
-        DialogIntent::Back => *state = GameState::Explore,
+        DialogIntent::Back => {
+            ui.dialog.state = None;
+            *state = GameState::Explore;
+        }
     }
 }
 
@@ -72,7 +80,7 @@ mod tests {
 
     use super::{DialogIntent, reduce};
     use crate::data::{Dialog, DialogAction, Shop, parse_dialogs};
-    use crate::game::{DialogState, GameData, GameState, PlayerState};
+    use crate::game::{DialogState, GameData, GameState, PlayerState, UiState};
 
     fn make_dialog(id: &str, lines_count: usize) -> Dialog {
         let mut raw = alloc::format!("@DIALOG:{id}\n");
@@ -131,9 +139,11 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let mut player = make_player();
-        let mut state = GameState::Dialog(DialogState::new(String::from("NPC"), &dialog));
+        let mut ui = UiState::default();
+        ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
+        let mut state = GameState::Dialog;
 
-        reduce(&mut state, &mut player, &data, DialogIntent::Back);
+        reduce(&mut state, &mut ui, &mut player, &data, DialogIntent::Back);
 
         assert!(matches!(state, GameState::Explore));
     }
@@ -145,14 +155,23 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let mut player = make_player();
-        let mut state = GameState::Dialog(DialogState::new(String::from("NPC"), &dialog));
+        let mut ui = UiState::default();
+        ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
+        let mut state = GameState::Dialog;
 
-        reduce(&mut state, &mut player, &data, DialogIntent::Confirm);
+        reduce(
+            &mut state,
+            &mut ui,
+            &mut player,
+            &data,
+            DialogIntent::Confirm,
+        );
 
-        match state {
-            GameState::Dialog(dialog_state) => assert_eq!(dialog_state.current_line, 1),
-            _ => panic!("expected dialog state"),
-        }
+        assert!(matches!(state, GameState::Dialog));
+        let Some(dialog_state) = ui.dialog.state.as_ref() else {
+            panic!("expected dialog state");
+        };
+        assert_eq!(dialog_state.current_line, 1);
     }
 
     #[test]
@@ -162,9 +181,17 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let mut player = make_player();
-        let mut state = GameState::Dialog(DialogState::new(String::from("NPC"), &dialog));
+        let mut ui = UiState::default();
+        ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
+        let mut state = GameState::Dialog;
 
-        reduce(&mut state, &mut player, &data, DialogIntent::Confirm);
+        reduce(
+            &mut state,
+            &mut ui,
+            &mut player,
+            &data,
+            DialogIntent::Confirm,
+        );
 
         assert!(matches!(state, GameState::Explore));
     }
@@ -182,14 +209,23 @@ mod tests {
         });
 
         let mut player = make_player();
-        let mut state = GameState::Dialog(DialogState::new(String::from("NPC"), &dialog));
+        let mut ui = UiState::default();
+        ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
+        let mut state = GameState::Dialog;
 
-        reduce(&mut state, &mut player, &data, DialogIntent::Confirm);
+        reduce(
+            &mut state,
+            &mut ui,
+            &mut player,
+            &data,
+            DialogIntent::Confirm,
+        );
 
-        match state {
-            GameState::Shop(shop_state) => assert_eq!(shop_state.shop.id, "s1"),
-            _ => panic!("expected shop state"),
-        }
+        assert!(matches!(state, GameState::Shop));
+        let Some(shop_state) = ui.shop.state.as_ref() else {
+            panic!("expected shop state");
+        };
+        assert_eq!(shop_state.shop.id, "s1");
     }
 
     #[test]
@@ -200,9 +236,17 @@ mod tests {
         data.dialogs.push(dialog.clone());
 
         let mut player = make_player();
-        let mut state = GameState::Dialog(DialogState::new(String::from("NPC"), &dialog));
+        let mut ui = UiState::default();
+        ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
+        let mut state = GameState::Dialog;
 
-        reduce(&mut state, &mut player, &data, DialogIntent::Confirm);
+        reduce(
+            &mut state,
+            &mut ui,
+            &mut player,
+            &data,
+            DialogIntent::Confirm,
+        );
 
         assert!(player.has_quest("q1"));
         assert!(matches!(state, GameState::Explore));

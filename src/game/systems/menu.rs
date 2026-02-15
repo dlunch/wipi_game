@@ -50,7 +50,7 @@ impl PauseMenuIntent {
 }
 
 pub fn reduce(state: &mut GameState, menu_ui: &mut MenuUiState, intent: MenuIntent) -> MenuEvent {
-    let GameState::Menu(ref menu) = *state else {
+    let GameState::Menu = *state else {
         return MenuEvent::None;
     };
 
@@ -62,13 +62,13 @@ pub fn reduce(state: &mut GameState, menu_ui: &mut MenuUiState, intent: MenuInte
             MenuEvent::None
         }
         MenuIntent::MoveDown => {
-            if menu_ui.selected < menu.items.len() - 1 {
+            if menu_ui.selected < menu_ui.state.items.len() - 1 {
                 menu_ui.selected += 1;
             }
             MenuEvent::None
         }
         MenuIntent::Select => {
-            let (_, action) = menu.items[menu_ui.selected];
+            let (_, action) = menu_ui.state.items[menu_ui.selected];
             MenuEvent::Action(action)
         }
     }
@@ -82,13 +82,13 @@ pub fn reduce_pause(
     shop_ui: &mut ShopUiState,
     intent: PauseMenuIntent,
 ) {
-    let GameState::PauseMenu(ref pause) = *state else {
+    let GameState::PauseMenu = *state else {
         return;
     };
 
     match intent {
         PauseMenuIntent::MoveUp if pause_ui.selected > 0 => pause_ui.selected -= 1,
-        PauseMenuIntent::MoveDown if pause_ui.selected < pause.items.len() - 1 => {
+        PauseMenuIntent::MoveDown if pause_ui.selected < pause_ui.state.items.len() - 1 => {
             pause_ui.selected += 1
         }
         PauseMenuIntent::Select => match pause_ui.selected {
@@ -116,14 +116,17 @@ mod tests {
 
     use super::{MenuEvent, MenuIntent, PauseMenuIntent, reduce, reduce_pause};
     use crate::game::{
-        GameState, InventoryUiState, MenuAction, MenuState, MenuUiState, PauseMenuState,
-        PauseMenuUiState, PlayerState, ShopUiState,
+        GameState, InventoryUiState, MenuAction, MenuState, MenuUiState, PauseMenuUiState,
+        PlayerState, ShopUiState,
     };
 
     #[test]
     fn reduce_move_and_select_uses_menu_ui_state() {
-        let mut state = GameState::Menu(MenuState::new(true));
-        let mut ui = MenuUiState::default();
+        let mut state = GameState::Menu;
+        let mut ui = MenuUiState {
+            state: MenuState::new(true),
+            selected: 0,
+        };
 
         let _ = reduce(&mut state, &mut ui, MenuIntent::MoveDown);
         let _ = reduce(&mut state, &mut ui, MenuIntent::MoveDown);
@@ -145,7 +148,7 @@ mod tests {
 
     #[test]
     fn reduce_pause_select_inventory_resets_inventory_ui() {
-        let mut state = GameState::PauseMenu(PauseMenuState::new());
+        let mut state = GameState::PauseMenu;
         let player = PlayerState::new(String::from("H"), "v");
         let mut pause_ui = PauseMenuUiState::default();
         let mut inventory_ui = InventoryUiState { selected: 5 };
@@ -169,9 +172,10 @@ mod tests {
         let player = PlayerState::new(String::from("H"), "v");
         let mut inventory_ui = InventoryUiState::default();
         let mut shop_ui = ShopUiState::default();
-        let mut pause_ui = PauseMenuUiState { selected: 1 };
+        let mut pause_ui = PauseMenuUiState::default();
+        pause_ui.selected = 1;
 
-        let mut state = GameState::PauseMenu(PauseMenuState::new());
+        let mut state = GameState::PauseMenu;
         reduce_pause(
             &mut state,
             &player,
@@ -182,7 +186,7 @@ mod tests {
         );
         assert!(matches!(state, GameState::Stats));
 
-        state = GameState::PauseMenu(PauseMenuState::new());
+        state = GameState::PauseMenu;
         pause_ui.selected = 2;
         reduce_pause(
             &mut state,
@@ -194,7 +198,7 @@ mod tests {
         );
         assert!(matches!(state, GameState::QuestLog));
 
-        state = GameState::PauseMenu(PauseMenuState::new());
+        state = GameState::PauseMenu;
         pause_ui.selected = 3;
         reduce_pause(
             &mut state,

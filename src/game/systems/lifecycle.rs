@@ -5,10 +5,10 @@ use alloc::string::String;
 use crate::data::Tile;
 use crate::game::{
     self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
-    PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
+    PlayerIntent, PlayerState, SessionState, UiState, has_save_data, load_game,
 };
 
-pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) {
+pub fn update_loading(state: &mut GameState, ui: &mut UiState, data: &mut Rc<GameData>) {
     let GameState::Loading(step) = *state else {
         return;
     };
@@ -20,7 +20,9 @@ pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) {
 
     match data_mut.load_step(step) {
         Ok(true) => {
-            *state = GameState::Menu(MenuState::new(has_save_data()));
+            *state = GameState::Menu;
+            ui.menu.state = MenuState::new(has_save_data());
+            ui.menu.selected = 0;
         }
         Ok(false) => {
             *state = GameState::Loading(step + 1);
@@ -31,7 +33,7 @@ pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) {
     }
 }
 
-pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
+pub fn start_new_game(data: &GameData) -> (GameState, SessionState, UiState) {
     let mut player = PlayerState::new(String::from("Hero"), "village");
     let mut combat = CombatState::default();
 
@@ -69,8 +71,10 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
         );
     }
 
+    let mut ui = UiState::default();
     let state = if let Some(dialog) = data.find_dialog("dialog_guide") {
-        GameState::Dialog(DialogState::new(String::from("마을 안내원"), dialog))
+        ui.dialog.state = Some(DialogState::new(String::from("마을 안내원"), dialog));
+        GameState::Dialog
     } else {
         GameState::Explore
     };
@@ -83,10 +87,10 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
         mp_regen_timer: 0,
     };
 
-    (state, session)
+    (state, session, ui)
 }
 
-pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
+pub fn continue_game(data: &GameData) -> (GameState, SessionState, UiState) {
     let mut player = PlayerState::new(String::from("Hero"), "village");
     let mut combat = CombatState::default();
 
@@ -128,7 +132,7 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
                 mp_regen_timer: 0,
             };
 
-            (GameState::Explore, session)
+            (GameState::Explore, session, UiState::default())
         }
         Ok(false) | Err(_) => start_new_game(data),
     }

@@ -28,7 +28,12 @@ pub fn reduce(
     ui: &mut ShopUiState,
     intent: ShopIntent,
 ) {
-    let GameState::Shop(ref shop_state) = *state else {
+    let GameState::Shop = *state else {
+        return;
+    };
+
+    let Some(shop_state) = ui.state.as_ref() else {
+        *state = GameState::Error(alloc::string::String::from("No active shop state"));
         return;
     };
 
@@ -143,15 +148,9 @@ mod tests {
         }
     }
 
-    fn make_shop_state(items: Vec<Item>) -> (GameState, PlayerState) {
-        let shop = Shop {
-            id: String::from("shop"),
-            name: String::from("Shop"),
-            items: items.iter().map(|item| item.id.clone()).collect(),
-        };
-
+    fn make_shop_state(_items: Vec<Item>) -> (GameState, PlayerState) {
         (
-            GameState::Shop(ShopState::new(shop, items)),
+            GameState::Shop,
             PlayerState::new(String::from("Hero"), "village"),
         )
     }
@@ -160,6 +159,14 @@ mod tests {
     fn select_mode_confirm_enters_buy_or_sell() {
         let (mut state, mut player) = make_shop_state(vec![]);
         let mut ui = ShopUiState::default();
+        ui.state = Some(ShopState::new(
+            Shop {
+                id: String::from("shop"),
+                name: String::from("Shop"),
+                items: vec![],
+            },
+            vec![],
+        ));
 
         reduce(&mut state, &mut player, &mut ui, Confirm);
         assert!(matches!(ui.mode, ShopMode::Buy));
@@ -174,9 +181,18 @@ mod tests {
     fn buy_mode_confirm_buys_with_enough_gold() {
         let (mut state, mut player) = make_shop_state(vec![make_item("potion", 10)]);
         let mut ui = ShopUiState {
+            state: None,
             mode: ShopMode::Buy,
             selected: 0,
         };
+        ui.state = Some(ShopState::new(
+            Shop {
+                id: String::from("shop"),
+                name: String::from("Shop"),
+                items: vec![String::from("potion")],
+            },
+            vec![make_item("potion", 10)],
+        ));
 
         player.stats.gold = 50;
         reduce(&mut state, &mut player, &mut ui, Confirm);
@@ -189,9 +205,18 @@ mod tests {
     fn sell_mode_confirm_sells_item() {
         let (mut state, mut player) = make_shop_state(vec![]);
         let mut ui = ShopUiState {
+            state: None,
             mode: ShopMode::Sell,
             selected: 0,
         };
+        ui.state = Some(ShopState::new(
+            Shop {
+                id: String::from("shop"),
+                name: String::from("Shop"),
+                items: vec![],
+            },
+            vec![],
+        ));
         player.inventory.push(make_item("potion", 20));
 
         reduce(&mut state, &mut player, &mut ui, Confirm);
@@ -204,9 +229,18 @@ mod tests {
     fn back_in_buy_or_sell_returns_to_select() {
         let (mut state, mut player) = make_shop_state(vec![make_item("potion", 10)]);
         let mut ui = ShopUiState {
+            state: None,
             mode: ShopMode::Buy,
             selected: 2,
         };
+        ui.state = Some(ShopState::new(
+            Shop {
+                id: String::from("shop"),
+                name: String::from("Shop"),
+                items: vec![String::from("potion")],
+            },
+            vec![make_item("potion", 10)],
+        ));
 
         reduce(&mut state, &mut player, &mut ui, Back);
         assert!(matches!(ui.mode, ShopMode::Select));

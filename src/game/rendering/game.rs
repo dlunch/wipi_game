@@ -214,9 +214,9 @@ pub fn build_render_state(
 ) -> RenderState {
     match state {
         GameState::Loading(step) => RenderState::Loading { step: *step },
-        GameState::Menu(menu_state) => RenderState::Menu {
-            title: menu_state.title,
-            items: menu_state.items.clone(),
+        GameState::Menu => RenderState::Menu {
+            title: ui.menu.state.title,
+            items: ui.menu.state.items.clone(),
             selected: ui.menu.selected,
         },
         GameState::Explore => {
@@ -269,7 +269,10 @@ pub fn build_render_state(
                 gold: as_u32(s.player.stats.gold),
             })
         }
-        GameState::Dialog(dialog_state) => {
+        GameState::Dialog => {
+            let Some(dialog_state) = ui.dialog.state.as_ref() else {
+                return RenderState::Error(String::from("No dialog state"));
+            };
             let current_text = data
                 .find_dialog(&dialog_state.dialog_id)
                 .and_then(|dialog| dialog.lines.get(dialog_state.current_line))
@@ -287,9 +290,12 @@ pub fn build_render_state(
                 has_next,
             }
         }
-        GameState::Shop(shop_state) => {
+        GameState::Shop => {
             let Some(s) = session else {
                 return RenderState::NoSession;
+            };
+            let Some(shop_state) = ui.shop.state.as_ref() else {
+                return RenderState::Error(String::from("No shop state"));
             };
             RenderState::Shop(ShopRender {
                 shop_name: shop_state.shop.name.clone(),
@@ -346,9 +352,9 @@ pub fn build_render_state(
                 .collect();
             RenderState::QuestLog(QuestLogRender { quests })
         }
-        GameState::PauseMenu(state) => RenderState::PauseMenu {
+        GameState::PauseMenu => RenderState::PauseMenu {
             explore: session.and_then(|s| build_explore_render(s, data)),
-            items: state.items.clone(),
+            items: ui.pause_menu.state.items.clone(),
             selected: ui.pause_menu.selected,
         },
         GameState::GameOver => RenderState::GameOver,
