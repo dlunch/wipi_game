@@ -221,7 +221,7 @@ impl GameInner {
 
         if damage_taken > 0
             && matches!(
-                game::player::apply(&mut s.player, game::PlayerIntent::TakeDamage(damage_taken)),
+                game::player::apply(&mut s.player, game::PlayerAction::TakeDamage(damage_taken)),
                 game::PlayerEvent::Died
             )
         {
@@ -278,7 +278,7 @@ impl GameInner {
 
             let combat_event = game::combat::apply(
                 &mut s.combat,
-                game::CombatIntent::UseSkill {
+                game::CombatAction::UseSkill {
                     skill,
                     player_x: s.player.x,
                     player_y: s.player.y,
@@ -297,7 +297,7 @@ impl GameInner {
                 match effect {
                     game::PlayerEffect::Heal(amount) => {
                         let _ =
-                            game::player::apply(&mut s.player, game::PlayerIntent::Heal(*amount));
+                            game::player::apply(&mut s.player, game::PlayerAction::Heal(*amount));
                     }
                 }
             }
@@ -317,7 +317,7 @@ impl GameInner {
 
         if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
             &mut s.combat,
-            game::CombatIntent::PlayerAttack {
+            game::CombatAction::PlayerAttack {
                 player_x: s.player.x,
                 player_y: s.player.y,
                 player_atk: s.player.total_atk(),
@@ -363,14 +363,14 @@ impl GameInner {
                     s.player.stats.add_exp(quest.reward_exp);
                     let _ = game::player::apply(
                         &mut s.player,
-                        game::PlayerIntent::AddGold(quest.reward_gold),
+                        game::PlayerAction::AddGold(quest.reward_gold),
                     );
 
                     if let Some(item_id) = &quest.reward_item
                         && let Some(item) = data.find_item(item_id).cloned()
                     {
                         let _ =
-                            game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
+                            game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
                     }
 
                     if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
@@ -380,20 +380,20 @@ impl GameInner {
             }
             DialogAction::GiveItem(id) => {
                 if let Some(item) = data.find_item(id).cloned() {
-                    let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
+                    let _ = game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
                 }
             }
             DialogAction::TakeItem(id) => {
                 if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
                     let _ =
-                        game::player::apply(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
+                        game::player::apply(&mut s.player, game::PlayerAction::RemoveItemAt(index));
                 }
             }
             DialogAction::GiveGold(amount) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddGold(*amount));
+                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddGold(*amount));
             }
             DialogAction::TakeGold(amount) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddGold(-*amount));
+                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddGold(-*amount));
             }
             DialogAction::OpenShop(shop_id) => {
                 let Some(shop) = data.find_shop(shop_id).cloned() else {
@@ -486,7 +486,7 @@ impl GameInner {
             game::InventoryEvent::None => {}
             game::InventoryEvent::SetSelected(selected) => self.ui.inventory.set_selected(selected),
             game::InventoryEvent::UseSelected(index) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerIntent::UseItem { index });
+                let _ = game::player::apply(&mut s.player, game::PlayerAction::UseItem { index });
             }
             game::InventoryEvent::CloseToExplore => self.state = GameState::Explore,
         }
@@ -551,16 +551,16 @@ impl GameInner {
             game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
             game::ShopEvent::BuyItem(item) => {
                 let _ =
-                    game::player::apply(&mut s.player, game::PlayerIntent::AddGold(-item.price));
-                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
+                    game::player::apply(&mut s.player, game::PlayerAction::AddGold(-item.price));
+                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
             }
             game::ShopEvent::SellSelected(index) => {
                 let event =
-                    game::player::apply(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
+                    game::player::apply(&mut s.player, game::PlayerAction::RemoveItemAt(index));
                 if let game::PlayerEvent::ItemRemoved(Some(item)) = event {
                     let _ = game::player::apply(
                         &mut s.player,
-                        game::PlayerIntent::AddGold(item.price / 2),
+                        game::PlayerAction::AddGold(item.price / 2),
                     );
                     let inv_len = s.player.inventory.len();
                     if self.ui.shop.selected >= inv_len && self.ui.shop.selected > 0 {

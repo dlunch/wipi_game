@@ -11,7 +11,7 @@ pub mod quest;
 pub mod reward;
 pub mod shop;
 
-pub use combat::{CombatEvent, CombatIntent, CombatState, PlayerEffect};
+pub use combat::{CombatAction, CombatEvent, CombatState, PlayerEffect};
 pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
 pub use explore::{ExploreEvent, ExploreIntent};
 pub use inventory::{InventoryEvent, InventoryIntent};
@@ -19,5 +19,5 @@ pub use lifecycle::LoadingEvent;
 pub use menu::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
 pub use movement::MovementState;
 pub use npc::{NpcEvent, NpcIntent};
-pub use player::{PlayerEvent, PlayerIntent};
+pub use player::{PlayerAction, PlayerEvent};
 pub use shop::{ShopEvent, ShopIntent};

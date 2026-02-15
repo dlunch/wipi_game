@@ -2,7 +2,7 @@ use crate::data::{Item, ItemKind};
 use crate::game::PlayerState;
 
 #[derive(Debug, Clone)]
-pub enum PlayerIntent {
+pub enum PlayerAction {
     AddGold(i32),
     AddItem(Item),
     RemoveItemAt(usize),
@@ -19,27 +19,27 @@ pub enum PlayerEvent {
     ItemRemoved(Option<Item>),
 }
 
-pub fn apply(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
-    match intent {
-        PlayerIntent::AddGold(amount) => {
+pub fn apply(player: &mut PlayerState, action: PlayerAction) -> PlayerEvent {
+    match action {
+        PlayerAction::AddGold(amount) => {
             player.stats.gold = (player.stats.gold + amount).max(0);
             PlayerEvent::None
         }
-        PlayerIntent::AddItem(item) => {
+        PlayerAction::AddItem(item) => {
             add_item(player, item);
             PlayerEvent::None
         }
-        PlayerIntent::RemoveItemAt(index) => {
+        PlayerAction::RemoveItemAt(index) => {
             PlayerEvent::ItemRemoved(remove_item_at(player, index))
         }
-        PlayerIntent::UseItem { index } => {
+        PlayerAction::UseItem { index } => {
             if use_item(player, index) {
                 PlayerEvent::ItemUsed
             } else {
                 PlayerEvent::None
             }
         }
-        PlayerIntent::TakeDamage(amount) => {
+        PlayerAction::TakeDamage(amount) => {
             player.stats.take_damage(amount);
             if player.stats.is_dead() {
                 PlayerEvent::Died
@@ -47,7 +47,7 @@ pub fn apply(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
                 PlayerEvent::None
             }
         }
-        PlayerIntent::Heal(amount) => {
+        PlayerAction::Heal(amount) => {
             player.stats.heal(amount);
             PlayerEvent::None
         }
@@ -166,7 +166,7 @@ mod tests {
         let mut player = PlayerState::new(String::from("H"), "v");
         let _ = apply(
             &mut player,
-            PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
+            PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)),
         );
         assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_weapon, Some(0));
@@ -177,7 +177,7 @@ mod tests {
         let mut player = PlayerState::new(String::from("H"), "v");
         let _ = apply(
             &mut player,
-            PlayerIntent::AddItem(make_item("armor", ItemKind::Armor)),
+            PlayerAction::AddItem(make_item("armor", ItemKind::Armor)),
         );
         assert!(use_item(&mut player, 0));
         assert_eq!(player.equipped_armor, Some(0));
@@ -187,7 +187,7 @@ mod tests {
     fn use_consumable_heals_and_removes() {
         let mut player = PlayerState::new(String::from("H"), "v");
         player.stats.current_hp = 20;
-        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
+        let _ = apply(&mut player, PlayerAction::AddItem(make_potion()));
         assert!(use_item(&mut player, 0));
         assert_eq!(player.stats.current_hp, 50);
         assert!(player.inventory.is_empty());
@@ -196,14 +196,14 @@ mod tests {
     #[test]
     fn fix_equipped_indices_on_remove() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
+        let _ = apply(&mut player, PlayerAction::AddItem(make_potion()));
         let _ = apply(
             &mut player,
-            PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
+            PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)),
         );
         let _ = apply(
             &mut player,
-            PlayerIntent::AddItem(make_item("armor", ItemKind::Armor)),
+            PlayerAction::AddItem(make_item("armor", ItemKind::Armor)),
         );
         player.equipped_weapon = Some(1);
         player.equipped_armor = Some(2);
@@ -218,7 +218,7 @@ mod tests {
         let mut player = PlayerState::new(String::from("H"), "v");
         let _ = apply(
             &mut player,
-            PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
+            PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)),
         );
         player.equipped_weapon = Some(0);
 
@@ -237,8 +237,8 @@ mod tests {
     #[test]
     fn remove_item_at_returns_item() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
-        let event = apply(&mut player, PlayerIntent::RemoveItemAt(0));
+        let _ = apply(&mut player, PlayerAction::AddItem(make_potion()));
+        let event = apply(&mut player, PlayerAction::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
             panic!("expected ItemRemoved event");
         };
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn remove_item_at_out_of_bounds() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let event = apply(&mut player, PlayerIntent::RemoveItemAt(0));
+        let event = apply(&mut player, PlayerAction::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
             panic!("expected ItemRemoved event");
         };

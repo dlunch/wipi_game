@@ -31,10 +31,10 @@ pub use systems::quest;
 pub use systems::reward;
 pub use systems::shop;
 pub use systems::{
-    CombatEvent, CombatIntent, CombatState, DialogEvent, DialogIntent, DialogTransition,
+    CombatAction, CombatEvent, CombatState, DialogEvent, DialogIntent, DialogTransition,
     ExploreEvent, ExploreIntent, InventoryEvent, InventoryIntent, LoadingEvent, MenuEvent,
-    MenuIntent, MovementState, NpcEvent, NpcIntent, PauseMenuEvent, PauseMenuIntent, PlayerEffect,
-    PlayerEvent, PlayerIntent, ShopEvent, ShopIntent,
+    MenuIntent, MovementState, NpcEvent, NpcIntent, PauseMenuEvent, PauseMenuIntent, PlayerAction,
+    PlayerEffect, PlayerEvent, ShopEvent, ShopIntent,
 };
 pub use ui::{
     DialogState, ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, MenuState, SHOP_VISIBLE_ITEMS,

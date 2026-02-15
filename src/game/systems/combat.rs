@@ -14,7 +14,7 @@ const HEAL_EFFECT_DURATION: u32 = 15;
 const MP_REGEN_INTERVAL: u32 = 60;
 
 #[derive(Debug)]
-pub enum CombatIntent<'a> {
+pub enum CombatAction<'a> {
     PlayerAttack {
         player_x: usize,
         player_y: usize,
@@ -164,15 +164,15 @@ pub struct CombatState {
     pub respawn_positions: Vec<(usize, usize, usize)>,
 }
 
-pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
-    match intent {
-        CombatIntent::PlayerAttack {
+pub fn apply(state: &mut CombatState, action: CombatAction<'_>) -> CombatEvent {
+    match action {
+        CombatAction::PlayerAttack {
             player_x,
             player_y,
             player_atk,
             facing,
         } => CombatEvent::Attack(player_attack(state, player_x, player_y, player_atk, facing)),
-        CombatIntent::UseSkill {
+        CombatAction::UseSkill {
             skill,
             player_x,
             player_y,
@@ -751,7 +751,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            CombatAction::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
@@ -772,7 +772,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            CombatAction::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
@@ -800,7 +800,7 @@ mod tests {
 
         let first = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            CombatAction::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
@@ -811,7 +811,7 @@ mod tests {
 
         let second = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            CombatAction::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
@@ -831,7 +831,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            CombatAction::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
@@ -852,7 +852,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            CombatAction::UseSkill {
                 skill: &crate::data::Skill::FIREBALL,
                 player_x: 1,
                 player_y: 1,
@@ -886,7 +886,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            CombatAction::UseSkill {
                 skill: &crate::data::Skill::SPIN_ATTACK,
                 player_x: 2,
                 player_y: 2,
@@ -907,7 +907,7 @@ mod tests {
 
         let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            CombatAction::UseSkill {
                 skill: &crate::data::Skill::HEAL,
                 player_x: 4,
                 player_y: 5,
@@ -990,7 +990,7 @@ mod tests {
         if damage_taken > 0 {
             let _ = crate::game::player::apply(
                 &mut player,
-                crate::game::PlayerIntent::TakeDamage(damage_taken),
+                crate::game::PlayerAction::TakeDamage(damage_taken),
             );
         }
 
@@ -1048,7 +1048,7 @@ mod tests {
             && matches!(
                 crate::game::player::apply(
                     &mut player,
-                    crate::game::PlayerIntent::TakeDamage(damage_taken)
+                    crate::game::PlayerAction::TakeDamage(damage_taken)
                 ),
                 crate::game::PlayerEvent::Died
             )
