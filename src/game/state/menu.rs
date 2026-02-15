@@ -5,7 +5,6 @@ use alloc::vec::Vec;
 pub struct MenuState {
     pub title: &'static str,
     pub items: Vec<(&'static str, MenuAction)>,
-    pub selected: usize,
 }
 
 impl MenuState {
@@ -26,7 +25,6 @@ impl MenuState {
         Self {
             title: "LOST KINGDOM",
             items,
-            selected: 0,
         }
     }
 }
@@ -41,14 +39,12 @@ pub enum MenuAction {
 #[derive(Debug)]
 pub struct PauseMenuState {
     pub items: Vec<&'static str>,
-    pub selected: usize,
 }
 
 impl PauseMenuState {
     pub fn new() -> Self {
         Self {
             items: vec!["Inventory", "Stats", "Quests", "Save"],
-            selected: 0,
         }
     }
 }

@@ -7,9 +7,9 @@ use wipi::framebuffer::Framebuffer;
 use crate::data::{Direction, ItemKind, SkillType};
 use crate::game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, GameData, GameState,
-    MenuAction, SessionState, ShopMode, clear_screen, draw_dialog, draw_explore, draw_inventory,
-    draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text,
-    fill_rect,
+    INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, SessionState, ShopMode, UiState,
+    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
+    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
 };
 
 pub enum RenderState {
@@ -135,6 +135,15 @@ fn as_u32(value: i32) -> u32 {
     value.max(0) as u32
 }
 
+fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize {
+    if total <= visible {
+        return 0;
+    }
+
+    let max_scroll = total.saturating_sub(visible);
+    selected.saturating_sub(visible - 1).min(max_scroll)
+}
+
 fn build_explore_render(session: &SessionState, data: &Rc<GameData>) -> Option<ExploreRender> {
     let map = data.find_map(&session.player.current_map_id)?;
 
@@ -200,6 +209,7 @@ fn build_explore_render(session: &SessionState, data: &Rc<GameData>) -> Option<E
 pub fn build_render_state(
     state: &GameState,
     session: Option<&SessionState>,
+    ui: &UiState,
     data: &Rc<GameData>,
 ) -> RenderState {
     match state {
@@ -207,7 +217,7 @@ pub fn build_render_state(
         GameState::Menu(menu_state) => RenderState::Menu {
             title: menu_state.title,
             items: menu_state.items.clone(),
-            selected: menu_state.selected,
+            selected: ui.menu.selected,
         },
         GameState::Explore => {
             let Some(s) = session else {
@@ -235,8 +245,12 @@ pub fn build_render_state(
                 equipped_weapon: s.player.equipped_weapon,
                 equipped_armor: s.player.equipped_armor,
                 equipped_accessory: s.player.equipped_accessory,
-                selected: s.inventory.selected,
-                scroll: s.inventory.scroll,
+                selected: ui.inventory.selected,
+                scroll: scroll_for_selection(
+                    ui.inventory.selected,
+                    s.player.inventory.len(),
+                    INVENTORY_VISIBLE_ITEMS,
+                ),
             })
         }
         GameState::Stats => {
@@ -279,9 +293,17 @@ pub fn build_render_state(
             };
             RenderState::Shop(ShopRender {
                 shop_name: shop_state.shop.name.clone(),
-                mode: shop_state.mode,
-                selected: shop_state.selected,
-                scroll: shop_state.scroll,
+                mode: ui.shop.mode,
+                selected: ui.shop.selected,
+                scroll: scroll_for_selection(
+                    ui.shop.selected,
+                    match ui.shop.mode {
+                        ShopMode::Select => 2,
+                        ShopMode::Buy => shop_state.items.len(),
+                        ShopMode::Sell => s.player.inventory.len(),
+                    },
+                    SHOP_VISIBLE_ITEMS,
+                ),
                 buy_items: shop_state
                     .items
                     .iter()
@@ -327,7 +349,7 @@ pub fn build_render_state(
         GameState::PauseMenu(state) => RenderState::PauseMenu {
             explore: session.and_then(|s| build_explore_render(s, data)),
             items: state.items.clone(),
-            selected: state.selected,
+            selected: ui.pause_menu.selected,
         },
         GameState::GameOver => RenderState::GameOver,
         GameState::Error(msg) => RenderState::Error(msg.clone()),

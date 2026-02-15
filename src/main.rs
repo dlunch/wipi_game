@@ -21,13 +21,14 @@ use wipi::wipi_main;
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
-    ShopIntent, build_render_state, has_save_data, render,
+    ShopIntent, UiState, build_render_state, has_save_data, render,
 };
 
 struct GameInner {
     state: GameState,
     data: Rc<GameData>,
     session: Option<SessionState>,
+    ui: UiState,
 }
 
 impl GameInner {
@@ -134,7 +135,9 @@ impl GameInner {
                 );
             }
             AppEffect::ApplyMenuIntent(intent) => {
-                if let MenuEvent::Action(action) = game::menu::reduce(&mut self.state, intent) {
+                if let MenuEvent::Action(action) =
+                    game::menu::reduce(&mut self.state, &mut self.ui.menu, intent)
+                {
                     match action {
                         MenuAction::NewGame => {
                             let (state, session) = game::lifecycle::start_new_game(&self.data);
@@ -155,6 +158,8 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
+                let was_pause_menu = matches!(self.state, GameState::PauseMenu(_));
+                let was_shop = matches!(self.state, GameState::Shop(_));
                 game::explore::reduce(
                     &mut self.state,
                     &mut s.movement,
@@ -164,38 +169,64 @@ impl GameInner {
                     &self.data,
                     intent,
                 );
+                if !was_pause_menu && matches!(self.state, GameState::PauseMenu(_)) {
+                    self.ui.pause_menu.selected = 0;
+                }
+                if matches!(self.state, GameState::Menu(_)) {
+                    self.ui.menu.selected = 0;
+                }
+                if !was_shop && matches!(self.state, GameState::Shop(_)) {
+                    self.ui.shop = game::ShopUiState::default();
+                }
             }
             AppEffect::ApplyInventoryIntent(intent) => {
                 let Some(s) = self.session.as_mut() else {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::inventory::reduce(&mut self.state, &mut s.player, &mut s.inventory, intent);
+                game::inventory::reduce(
+                    &mut self.state,
+                    &mut s.player,
+                    &mut self.ui.inventory,
+                    intent,
+                );
             }
             AppEffect::ApplyDialogIntent(intent) => {
                 let Some(s) = self.session.as_mut() else {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
+                let was_shop = matches!(self.state, GameState::Shop(_));
                 game::dialog::reduce(&mut self.state, &mut s.player, &self.data, intent);
+                if !was_shop && matches!(self.state, GameState::Shop(_)) {
+                    self.ui.shop = game::ShopUiState::default();
+                }
             }
             AppEffect::ApplyShopIntent(intent) => {
                 let Some(s) = self.session.as_mut() else {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::shop::reduce(&mut self.state, &mut s.player, intent);
+                game::shop::reduce(&mut self.state, &mut s.player, &mut self.ui.shop, intent);
             }
             AppEffect::ApplyPauseMenuIntent(intent) => {
                 let Some(s) = self.session.as_mut() else {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::menu::reduce_pause(&mut self.state, &s.player, &mut s.inventory, intent);
+                game::menu::reduce_pause(
+                    &mut self.state,
+                    &s.player,
+                    &mut self.ui.pause_menu,
+                    &mut self.ui.inventory,
+                    &mut self.ui.shop,
+                    intent,
+                );
             }
             AppEffect::ReturnToExplore => self.state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu(MenuState::new(has_save_data()));
+                self.ui.menu.selected = 0;
             }
             AppEffect::ReleaseMovementKey(key) => {
                 let Some(s) = self.session.as_mut() else {
@@ -232,7 +263,7 @@ impl RpgGame {
     fn tick(inner: &Rc<RefCell<GameInner>>, render_state: &Rc<RefCell<RenderState>>) {
         let mut inner = inner.borrow_mut();
         inner.update();
-        let rs = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
+        let rs = build_render_state(&inner.state, inner.session.as_ref(), &inner.ui, &inner.data);
         *render_state.borrow_mut() = rs;
         drop(inner);
         repaint(0, 0, 0, 240, 320);
@@ -243,6 +274,7 @@ impl RpgGame {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
             session: None,
+            ui: UiState::default(),
         }));
 
         let render_state = Rc::new(RefCell::new(RenderState::Loading { step: 0 }));

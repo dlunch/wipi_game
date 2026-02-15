@@ -5,6 +5,7 @@ mod save;
 mod session;
 mod state;
 mod systems;
+mod ui;
 
 pub use game_data::GameData;
 pub use intent::{AppAction, AppEffect};
@@ -17,8 +18,7 @@ pub use rendering::{
 pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;
 pub use state::{
-    DialogState, GameState, InventoryState, MenuAction, MenuState, PauseMenuState, PlayerState,
-    ShopMode, ShopState,
+    DialogState, GameState, MenuAction, MenuState, PauseMenuState, PlayerState, ShopMode, ShopState,
 };
 pub use systems::combat;
 pub use systems::dialog;
@@ -35,4 +35,8 @@ pub use systems::{
     CombatEvent, CombatIntent, CombatState, DialogIntent, ExploreIntent, InventoryIntent,
     MenuEvent, MenuIntent, MovementState, NpcIntent, PauseMenuIntent, PlayerEvent, PlayerIntent,
     QuestIntent, ShopIntent,
+};
+pub use ui::{
+    INVENTORY_VISIBLE_ITEMS, InventoryUiState, MenuUiState, PauseMenuUiState, SHOP_VISIBLE_ITEMS,
+    ShopUiState, UiState,
 };

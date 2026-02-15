@@ -533,7 +533,7 @@ mod tests {
         let GameState::PauseMenu(menu) = &state else {
             panic!("expected GameState::PauseMenu");
         };
-        assert_eq!(menu.selected, 0);
+        assert_eq!(menu.items.len(), 4);
     }
 
     #[test]

@@ -1,8 +1,6 @@
 use wipi::event::KeyCode;
 
-use crate::game::{GameState, InventoryState, PlayerIntent, PlayerState};
-
-const VISIBLE_ITEMS: usize = 8;
+use crate::game::{GameState, InventoryUiState, PlayerIntent, PlayerState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InventoryIntent {
@@ -27,25 +25,19 @@ impl InventoryIntent {
 pub fn reduce(
     state: &mut GameState,
     player: &mut PlayerState,
-    inventory_state: &mut InventoryState,
+    inventory_state: &mut InventoryUiState,
     intent: InventoryIntent,
 ) {
     match intent {
         InventoryIntent::MoveUp => {
             if inventory_state.selected > 0 {
                 inventory_state.selected -= 1;
-                if inventory_state.selected < inventory_state.scroll {
-                    inventory_state.scroll = inventory_state.selected;
-                }
             }
         }
         InventoryIntent::MoveDown => {
             if !player.inventory.is_empty() && inventory_state.selected < player.inventory.len() - 1
             {
                 inventory_state.selected += 1;
-                if inventory_state.selected >= inventory_state.scroll + VISIBLE_ITEMS {
-                    inventory_state.scroll = inventory_state.selected - VISIBLE_ITEMS + 1;
-                }
             }
         }
         InventoryIntent::UseSelected => {
@@ -113,7 +105,7 @@ mod tests {
     fn test_move_up_decrements_selected() {
         let mut state = GameState::Inventory;
         let mut player = PlayerState::new(String::from("Hero"), "v");
-        let mut inventory_state = InventoryState::default();
+        let mut inventory_state = InventoryUiState::default();
         inventory_state.selected = 2;
 
         reduce(
@@ -130,7 +122,7 @@ mod tests {
     fn test_move_up_clamps_at_zero() {
         let mut state = GameState::Inventory;
         let mut player = PlayerState::new(String::from("Hero"), "v");
-        let mut inventory_state = InventoryState::default();
+        let mut inventory_state = InventoryUiState::default();
         inventory_state.selected = 0;
 
         reduce(
@@ -144,12 +136,11 @@ mod tests {
     }
 
     #[test]
-    fn test_move_up_adjusts_scroll() {
+    fn test_move_up_decrements_only_selected() {
         let mut state = GameState::Inventory;
         let mut player = PlayerState::new(String::from("Hero"), "v");
-        let mut inventory_state = InventoryState::default();
+        let mut inventory_state = InventoryUiState::default();
         inventory_state.selected = 3;
-        inventory_state.scroll = 3;
 
         reduce(
             &mut state,
@@ -159,7 +150,6 @@ mod tests {
         );
 
         assert_eq!(inventory_state.selected, 2);
-        assert_eq!(inventory_state.scroll, 2);
     }
 
     #[test]
@@ -169,7 +159,7 @@ mod tests {
         player.stats.current_hp = 50;
         player.stats.max_hp = 80;
         player.inventory.push(make_potion());
-        let mut inventory_state = InventoryState::default();
+        let mut inventory_state = InventoryUiState::default();
         inventory_state.selected = 0;
 
         reduce(
@@ -187,7 +177,7 @@ mod tests {
     fn test_back_changes_state_to_explore() {
         let mut state = GameState::Inventory;
         let mut player = PlayerState::new(String::from("Hero"), "v");
-        let mut inventory_state = InventoryState::default();
+        let mut inventory_state = InventoryUiState::default();
 
         reduce(
             &mut state,

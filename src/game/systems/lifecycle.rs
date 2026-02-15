@@ -4,8 +4,8 @@ use alloc::string::String;
 
 use crate::data::Tile;
 use crate::game::{
-    self, CombatIntent, CombatState, DialogState, GameData, GameState, InventoryState, MenuState,
-    MovementState, PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
+    self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
+    PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
 };
 
 pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) {
@@ -79,7 +79,6 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
         player,
         combat,
         movement: MovementState::default(),
-        inventory: InventoryState::default(),
         skill_cooldowns: [0; 3],
         mp_regen_timer: 0,
     };
@@ -125,7 +124,6 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
                 player,
                 combat,
                 movement: MovementState::default(),
-                inventory: InventoryState::default(),
                 skill_cooldowns: [0; 3],
                 mp_regen_timer: 0,
             };
