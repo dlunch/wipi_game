@@ -30,7 +30,11 @@ pub enum DialogTransition {
     CloseToExplore,
 }
 
-pub fn apply_action(player: &mut PlayerState, data: &GameData, action: &DialogAction) -> Option<ShopState> {
+pub fn apply_action(
+    player: &mut PlayerState,
+    data: &GameData,
+    action: &DialogAction,
+) -> Option<ShopState> {
     match action {
         DialogAction::GiveQuest(id) => {
             let _ = game::player::reduce(player, PlayerIntent::AddQuest(id.clone()));

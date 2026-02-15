@@ -108,8 +108,7 @@ impl GameInner {
                 if let Some(menu_state) =
                     game::lifecycle::update_loading(&mut self.state, &mut self.data)
                 {
-                    self.ui.menu.state = menu_state;
-                    self.ui.menu.selected = 0;
+                    self.ui.menu.set_menu(menu_state);
                 }
             }
             AppEffect::UpdateMovement => {
@@ -143,7 +142,7 @@ impl GameInner {
                 let event = game::menu::reduce(&self.state, &self.ui.menu, intent);
                 match event {
                     MenuEvent::None => {}
-                    MenuEvent::SetSelected(selected) => self.ui.menu.selected = selected,
+                    MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
                     MenuEvent::Action(action) => match action {
                         MenuAction::NewGame => {
                             let (state, session, dialog_state) =
@@ -151,7 +150,7 @@ impl GameInner {
                             self.state = state;
                             self.session = Some(session);
                             self.ui = UiState::default();
-                            self.ui.dialog.state = dialog_state;
+                            self.ui.dialog.set(dialog_state);
                         }
                         MenuAction::Continue => {
                             let (state, session, dialog_state) =
@@ -159,7 +158,7 @@ impl GameInner {
                             self.state = state;
                             self.session = Some(session);
                             self.ui = UiState::default();
-                            self.ui.dialog.state = dialog_state;
+                            self.ui.dialog.set(dialog_state);
                         }
                         MenuAction::Exit => wipi::kernel::exit(0),
                     },
@@ -184,22 +183,19 @@ impl GameInner {
                 match event {
                     game::ExploreEvent::None => {}
                     game::ExploreEvent::OpenDialog(dialog_state) => {
-                        self.ui.dialog.state = Some(dialog_state);
+                        self.ui.dialog.open(dialog_state);
                         self.state = GameState::Dialog;
                     }
                     game::ExploreEvent::OpenShop(shop_state) => {
-                        self.ui.shop.state = Some(shop_state);
-                        self.ui.shop.mode = game::ShopMode::Select;
-                        self.ui.shop.selected = 0;
+                        self.ui.shop.open(shop_state);
                         self.state = GameState::Shop;
                     }
                     game::ExploreEvent::EnterPauseMenu => {
-                        self.ui.pause_menu.selected = 0;
+                        self.ui.pause_menu.reset();
                         self.state = GameState::PauseMenu;
                     }
                     game::ExploreEvent::EnterMenu => {
-                        self.ui.menu.state = MenuState::new(has_save_data());
-                        self.ui.menu.selected = 0;
+                        self.ui.menu.set_menu(MenuState::new(has_save_data()));
                         self.state = GameState::Menu;
                     }
                 }
@@ -218,7 +214,7 @@ impl GameInner {
                 match event {
                     game::InventoryEvent::None => {}
                     game::InventoryEvent::SetSelected(selected) => {
-                        self.ui.inventory.selected = selected
+                        self.ui.inventory.set_selected(selected)
                     }
                     game::InventoryEvent::UseSelected(index) => {
                         let _ = game::player::reduce(
@@ -244,30 +240,30 @@ impl GameInner {
                     game::DialogEvent::None => {}
                     game::DialogEvent::Transition(transition) => match transition {
                         game::DialogTransition::Set(dialog_state) => {
-                            self.ui.dialog.state = Some(dialog_state);
+                            self.ui.dialog.open(dialog_state);
                             self.state = GameState::Dialog;
                         }
                         game::DialogTransition::CloseToExplore => {
-                            self.ui.dialog.state = None;
+                            self.ui.dialog.close();
                             self.state = GameState::Explore;
                         }
                     },
                     game::DialogEvent::Action(action, transition) => {
-                        if let Some(shop_state) = game::dialog::apply_action(&mut s.player, &self.data, &action) {
-                            self.ui.shop.state = Some(shop_state);
-                            self.ui.shop.mode = game::ShopMode::Select;
-                            self.ui.shop.selected = 0;
+                        if let Some(shop_state) =
+                            game::dialog::apply_action(&mut s.player, &self.data, &action)
+                        {
+                            self.ui.shop.open(shop_state);
                             self.state = GameState::Shop;
                             return;
                         }
 
                         match transition {
                             game::DialogTransition::Set(dialog_state) => {
-                                self.ui.dialog.state = Some(dialog_state);
+                                self.ui.dialog.open(dialog_state);
                                 self.state = GameState::Dialog;
                             }
                             game::DialogTransition::CloseToExplore => {
-                                self.ui.dialog.state = None;
+                                self.ui.dialog.close();
                                 self.state = GameState::Explore;
                             }
                         }
@@ -286,10 +282,9 @@ impl GameInner {
                         self.state = GameState::Error(String::from("No active shop state"));
                     }
                     game::ShopEvent::SetMode(mode) => {
-                        self.ui.shop.mode = mode;
-                        self.ui.shop.selected = 0;
+                        self.ui.shop.set_mode(mode);
                     }
-                    game::ShopEvent::SetSelected(selected) => self.ui.shop.selected = selected,
+                    game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
                     game::ShopEvent::BuyItem(item) => {
                         let _ = game::player::reduce(
                             &mut s.player,
@@ -310,7 +305,7 @@ impl GameInner {
                             );
                             let inv_len = s.player.inventory.len();
                             if self.ui.shop.selected >= inv_len && self.ui.shop.selected > 0 {
-                                self.ui.shop.selected -= 1;
+                                self.ui.shop.set_selected(self.ui.shop.selected - 1);
                             }
                         }
                     }
@@ -326,17 +321,17 @@ impl GameInner {
                 match event {
                     game::PauseMenuEvent::None => {}
                     game::PauseMenuEvent::SetSelected(selected) => {
-                        self.ui.pause_menu.selected = selected
+                        self.ui.pause_menu.set_selected(selected)
                     }
                     game::PauseMenuEvent::OpenInventory => {
-                        self.ui.inventory = game::InventoryUiState::default();
+                        self.ui.inventory.reset();
                         self.state = GameState::Inventory;
                     }
                     game::PauseMenuEvent::OpenStats => self.state = GameState::Stats,
                     game::PauseMenuEvent::OpenQuestLog => self.state = GameState::QuestLog,
                     game::PauseMenuEvent::SaveAndReturnExplore => {
                         let _ = game::save_game(&s.player);
-                        self.ui.shop = game::ShopUiState::default();
+                        self.ui.shop.reset();
                         self.state = GameState::Explore;
                     }
                     game::PauseMenuEvent::BackToExplore => self.state = GameState::Explore,
@@ -345,8 +340,7 @@ impl GameInner {
             AppEffect::ReturnToExplore => self.state = GameState::Explore,
             AppEffect::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu;
-                self.ui.menu.state = MenuState::new(has_save_data());
-                self.ui.menu.selected = 0;
+                self.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
             AppEffect::ReleaseMovementKey(key) => {
                 let Some(s) = self.session.as_mut() else {

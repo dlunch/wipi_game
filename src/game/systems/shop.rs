@@ -222,5 +222,4 @@ mod tests {
         let event = reduce(&state, &player, &ui, Back);
         assert!(matches!(event, ShopEvent::SetMode(ShopMode::Select)));
     }
-
 }

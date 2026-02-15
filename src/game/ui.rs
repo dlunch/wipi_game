@@ -31,6 +31,17 @@ impl Default for MenuUiState {
     }
 }
 
+impl MenuUiState {
+    pub fn set_menu(&mut self, state: MenuState) {
+        self.state = state;
+        self.selected = 0;
+    }
+
+    pub fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+    }
+}
+
 #[derive(Debug)]
 pub struct PauseMenuUiState {
     pub state: PauseMenuState,
@@ -46,9 +57,29 @@ impl Default for PauseMenuUiState {
     }
 }
 
+impl PauseMenuUiState {
+    pub fn reset(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct InventoryUiState {
     pub selected: usize,
+}
+
+impl InventoryUiState {
+    pub fn reset(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+    }
 }
 
 #[derive(Debug)]
@@ -68,9 +99,44 @@ impl Default for ShopUiState {
     }
 }
 
+impl ShopUiState {
+    pub fn open(&mut self, state: ShopState) {
+        self.state = Some(state);
+        self.mode = ShopMode::Select;
+        self.selected = 0;
+    }
+
+    pub fn set_mode(&mut self, mode: ShopMode) {
+        self.mode = mode;
+        self.selected = 0;
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct DialogUiState {
     pub state: Option<DialogState>,
+}
+
+impl DialogUiState {
+    pub fn open(&mut self, state: DialogState) {
+        self.state = Some(state);
+    }
+
+    pub fn close(&mut self) {
+        self.state = None;
+    }
+
+    pub fn set(&mut self, state: Option<DialogState>) {
+        self.state = state;
+    }
 }
 
 #[derive(Debug)]
