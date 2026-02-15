@@ -218,7 +218,7 @@ impl GameInner {
 
 pub struct RpgGame {
     inner: Rc<RefCell<GameInner>>,
-    _timer: Option<Timer>,
+    _timer: Timer,
 }
 
 impl Default for RpgGame {
@@ -229,23 +229,21 @@ impl Default for RpgGame {
 
 impl RpgGame {
     pub fn new() -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(GameInner {
-                state: GameState::Loading(0),
-                data: GameData::default(),
-                session: None,
-            })),
-            _timer: None,
-        }
-    }
+        let inner = Rc::new(RefCell::new(GameInner {
+            state: GameState::Loading(0),
+            data: GameData::default(),
+            session: None,
+        }));
 
-    fn ensure_timer(&mut self) {
-        if self._timer.is_none() {
-            let inner = Rc::clone(&self.inner);
-            self._timer = Some(Timer::periodic(Duration::from_millis(33), move || {
-                inner.borrow_mut().update();
-                repaint(0, 0, 0, 240, 320);
-            }));
+        let timer_inner = Rc::clone(&inner);
+        let timer = Timer::periodic(Duration::from_millis(33), move || {
+            timer_inner.borrow_mut().update();
+            repaint(0, 0, 0, 240, 320);
+        });
+
+        Self {
+            inner,
+            _timer: timer,
         }
     }
 }
@@ -256,9 +254,6 @@ impl App for RpgGame {
         let mut fb = Framebuffer::screen_framebuffer();
         let render_state = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
         render(&render_state, &mut fb);
-        drop(inner);
-
-        self.ensure_timer();
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
