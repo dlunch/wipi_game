@@ -18,6 +18,7 @@ use wipi::graphics::repaint;
 use wipi::timer::Timer;
 use wipi::wipi_main;
 
+use crate::data::{DialogAction, Direction};
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
@@ -29,6 +30,16 @@ struct GameInner {
     data: Rc<GameData>,
     session: Option<SessionState>,
     ui: UiState,
+}
+
+fn direction_for_key(key: KeyCode) -> Option<Direction> {
+    match key {
+        KeyCode::Up => Some(Direction::Up),
+        KeyCode::Down => Some(Direction::Down),
+        KeyCode::Left => Some(Direction::Left),
+        KeyCode::Right => Some(Direction::Right),
+        _ => None,
+    }
 }
 
 impl GameInner {
@@ -61,7 +72,12 @@ impl GameInner {
                         .as_ref()
                         .map(|s| s.player.facing)
                         .unwrap_or(crate::data::Direction::Down);
-                    for intent in ExploreIntent::intent_for_key(&self.ui.explore, facing, key) {
+                    for intent in ExploreIntent::intent_for_key(
+                        key,
+                        facing,
+                        self.ui.explore.ok_action,
+                        self.ui.explore.key_actions,
+                    ) {
                         effects.push(AppEffect::ApplyExploreIntent(intent));
                     }
                 }
@@ -101,24 +117,35 @@ impl GameInner {
                     }
                 }
             },
-            AppAction::KeyUp(key) => effects.push(AppEffect::ReleaseMovementKey(key)),
+            AppAction::KeyUp(key) => {
+                if matches!(self.state, GameState::Explore)
+                    && self.session.is_some()
+                    && let Some(direction) = direction_for_key(key)
+                {
+                    effects.push(AppEffect::ReleaseMovementKey(match direction {
+                        Direction::Up => KeyCode::Up,
+                        Direction::Down => KeyCode::Down,
+                        Direction::Left => KeyCode::Left,
+                        Direction::Right => KeyCode::Right,
+                    }));
+                }
+            }
         }
 
         effects
     }
 
     fn apply_update_loading(&mut self) {
-        let load_result = if let GameState::Loading(step) = self.state {
-            game::lifecycle::load_step(&mut self.data, step)
-        } else {
-            Ok(false)
+        let GameState::Loading(step) = self.state else {
+            return;
         };
-        match game::lifecycle::reduce_loading(&self.state, load_result, has_save_data()) {
-            game::LoadingEvent::None => {}
+
+        let load_result = game::lifecycle::load_step(&mut self.data, step);
+        match game::lifecycle::reduce_loading(step, load_result) {
             game::LoadingEvent::Advance(step) => self.state = GameState::Loading(step),
-            game::LoadingEvent::Loaded(menu_state) => {
+            game::LoadingEvent::Loaded => {
                 self.state = GameState::Menu;
-                self.ui.menu.set_menu(menu_state);
+                self.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
             game::LoadingEvent::Error(msg) => self.state = GameState::Error(msg),
         }
@@ -129,14 +156,33 @@ impl GameInner {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
+
+        if !matches!(self.state, GameState::Explore) {
+            return;
+        }
+
         let map = self.data.find_map(&s.player.current_map_id);
+        let enemy_positions: Vec<(usize, usize)> = s
+            .combat
+            .enemies
+            .iter()
+            .filter(|enemy| !enemy.is_dead())
+            .map(|enemy| (enemy.x, enemy.y))
+            .collect();
+        let npc_positions: Vec<(usize, usize)> = self
+            .data
+            .npcs
+            .iter()
+            .filter(|npc| npc.map_id == s.player.current_map_id)
+            .map(|npc| (npc.x, npc.y))
+            .collect();
+
         let event = game::movement::reduce_tick(
-            &self.state,
             &s.movement,
             &s.player,
             map,
-            &s.combat,
-            &self.data.npcs,
+            &enemy_positions,
+            &npc_positions,
         );
         let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, event);
         if moved && let Some(tile_event) = game::explore::reduce_tile_event(&s.player, &self.data) {
@@ -155,26 +201,228 @@ impl GameInner {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event =
-            game::combat::reduce_tick(&self.state, &s.player, &s.skill_cooldowns, s.mp_regen_timer);
-        let apply_event = game::combat::apply_tick(
-            &mut self.state,
+
+        if !matches!(self.state, GameState::Explore) {
+            return;
+        }
+
+        let event = game::combat::reduce_tick(&s.skill_cooldowns, s.mp_regen_timer);
+        game::combat::apply_tick(
             &mut s.player,
             &mut s.skill_cooldowns,
             &mut s.mp_regen_timer,
-            &mut s.combat,
-            &self.data,
             event,
         );
 
-        if let game::CombatTickApplyEvent::Damage(amount) = apply_event
+        let Some(map) = self.data.find_map(&s.player.current_map_id) else {
+            return;
+        };
+        let combat_event = game::combat::apply(
+            &mut s.combat,
+            game::CombatIntent::Tick {
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_def: s.player.total_def(),
+                map,
+                enemy_data: &self.data.enemies,
+            },
+        );
+        if let game::CombatEvent::Tick(result) = combat_event
+            && result.damage_taken > 0
             && matches!(
-                game::player::apply(&mut s.player, game::PlayerIntent::TakeDamage(amount)),
+                game::player::apply(
+                    &mut s.player,
+                    game::PlayerIntent::TakeDamage(result.damage_taken)
+                ),
                 game::PlayerEvent::Died
             )
         {
             self.state = GameState::GameOver;
         }
+    }
+
+    fn spawn_current_map_enemies(&mut self) {
+        let Some(s) = self.session.as_mut() else {
+            return;
+        };
+        if let Some(map) = self.data.find_map(&s.player.current_map_id) {
+            game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+        }
+    }
+
+    fn dialog_state_from_intro(
+        &self,
+        intro: Option<game::lifecycle::IntroDialogSpec>,
+    ) -> Option<game::DialogState> {
+        let spec = intro?;
+        let dialog = self.data.find_dialog(&spec.dialog_id)?;
+        Some(game::DialogState::from_dialog(spec.npc_name, dialog))
+    }
+
+    fn enter_session(
+        &mut self,
+        state: GameState,
+        session: SessionState,
+        intro: Option<game::lifecycle::IntroDialogSpec>,
+    ) {
+        self.state = state;
+        self.session = Some(session);
+        self.spawn_current_map_enemies();
+        self.ui = UiState::default();
+        self.ui.dialog.set(self.dialog_state_from_intro(intro));
+    }
+
+    fn open_shop_by_id(&mut self, shop_id: &str) -> bool {
+        let Some(shop) = self.data.find_shop(shop_id).cloned() else {
+            return false;
+        };
+        let shop_items = self.data.get_shop_items(&shop);
+        self.ui.shop.open(game::ShopState::new(shop, shop_items));
+        self.state = GameState::Shop;
+        true
+    }
+
+    fn apply_explore_action(s: &mut SessionState, data: &GameData, action: game::ExploreAction) {
+        if let Some((slot, skill)) = action.skill() {
+            if !game::player::can_use_skill(&s.player, &s.skill_cooldowns, slot, skill.mp_cost) {
+                return;
+            }
+
+            let combat_event = game::combat::apply(
+                &mut s.combat,
+                game::CombatIntent::UseSkill {
+                    skill,
+                    player_x: s.player.x,
+                    player_y: s.player.y,
+                    player_atk: s.player.total_atk(),
+                    facing: s.player.facing,
+                },
+            );
+            let game::CombatEvent::Skill(result) = combat_event else {
+                return;
+            };
+
+            s.skill_cooldowns[slot] = skill.cooldown;
+            s.player.stats.current_mp = (s.player.stats.current_mp - skill.mp_cost).max(0);
+
+            for effect in &result.player_effects {
+                match effect {
+                    game::PlayerEffect::Heal(amount) => {
+                        let _ =
+                            game::player::apply(&mut s.player, game::PlayerIntent::Heal(*amount));
+                    }
+                }
+            }
+
+            game::reward::apply_kill_rewards(&mut s.player, &result.kills);
+            for reward in &result.kills {
+                game::quest::apply(
+                    &mut s.player,
+                    data,
+                    game::quest::QuestIntent::EnemyKilled {
+                        enemy_id: &reward.enemy_id,
+                    },
+                );
+            }
+            return;
+        }
+
+        if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
+            &mut s.combat,
+            game::CombatIntent::PlayerAttack {
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_atk: s.player.total_atk(),
+                facing: s.player.facing,
+            },
+        ) {
+            game::reward::apply_kill_reward(&mut s.player, &reward);
+            game::quest::apply(
+                &mut s.player,
+                data,
+                game::quest::QuestIntent::EnemyKilled {
+                    enemy_id: &reward.enemy_id,
+                },
+            );
+        }
+    }
+
+    fn apply_dialog_action(
+        s: &mut SessionState,
+        data: &GameData,
+        ui: &mut UiState,
+        state: &mut GameState,
+        action: &DialogAction,
+    ) -> bool {
+        match action {
+            DialogAction::GiveQuest(id) => {
+                if !s.player.quests.iter().any(|q| q.quest_id == *id) {
+                    s.player.quests.push(crate::data::QuestProgress {
+                        quest_id: id.clone(),
+                        current_count: 0,
+                        completed: false,
+                        rewarded: false,
+                    });
+                }
+            }
+            DialogAction::CompleteQuest(id) => {
+                let can_reward = s
+                    .player
+                    .quests
+                    .iter()
+                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+                if can_reward && let Some(quest) = data.find_quest(id) {
+                    s.player.stats.add_exp(quest.reward_exp);
+                    let _ = game::player::apply(
+                        &mut s.player,
+                        game::PlayerIntent::AddGold(quest.reward_gold),
+                    );
+
+                    if let Some(item_id) = &quest.reward_item
+                        && let Some(item) = data.find_item(item_id).cloned()
+                    {
+                        let _ =
+                            game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
+                    }
+
+                    if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
+                        progress.rewarded = true;
+                    }
+                }
+            }
+            DialogAction::GiveItem(id) => {
+                if let Some(item) = data.find_item(id).cloned() {
+                    let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
+                }
+            }
+            DialogAction::TakeItem(id) => {
+                if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
+                    let _ =
+                        game::player::apply(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
+                }
+            }
+            DialogAction::GiveGold(amount) => {
+                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddGold(*amount));
+            }
+            DialogAction::TakeGold(amount) => {
+                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddGold(-*amount));
+            }
+            DialogAction::OpenShop(shop_id) => {
+                let Some(shop) = data.find_shop(shop_id).cloned() else {
+                    return false;
+                };
+                let shop_items = data.get_shop_items(&shop);
+                ui.shop.open(game::ShopState::new(shop, shop_items));
+                *state = GameState::Shop;
+                return true;
+            }
+            DialogAction::Heal => {
+                s.player.stats.current_hp = s.player.stats.max_hp;
+                s.player.stats.current_mp = s.player.stats.max_mp;
+            }
+        }
+
+        false
     }
 
     fn apply_menu_intent(&mut self, intent: MenuIntent) {
@@ -187,36 +435,23 @@ impl GameInner {
             MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
             MenuEvent::Action(action) => match action {
                 MenuAction::NewGame => {
-                    let (state, session, dialog_state) =
-                        game::lifecycle::start_new_game(&self.data);
-                    self.state = state;
-                    self.session = Some(session);
-                    if let Some(s) = self.session.as_mut()
-                        && let Some(map) = self.data.find_map(&s.player.current_map_id)
-                    {
-                        game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
-                    }
-                    self.ui = UiState::default();
-                    self.ui.dialog.set(dialog_state);
+                    let (state, session, intro) = game::lifecycle::start_new_game(&self.data);
+                    self.enter_session(state, session, intro);
                 }
                 MenuAction::Continue => {
-                    let (state, session, dialog_state) = game::lifecycle::continue_game(&self.data);
-                    self.state = state;
-                    self.session = Some(session);
-                    if let Some(s) = self.session.as_mut()
-                        && let Some(map) = self.data.find_map(&s.player.current_map_id)
-                    {
-                        game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
-                    }
-                    self.ui = UiState::default();
-                    self.ui.dialog.set(dialog_state);
+                    let (state, session, intro) = game::lifecycle::continue_game(&self.data);
+                    self.enter_session(state, session, intro);
                 }
-                MenuAction::Exit => wipi::kernel::exit(0),
+                MenuAction::Exit => self.apply_effect(AppEffect::Exit(0)),
             },
         }
     }
 
     fn apply_explore_intent(&mut self, intent: ExploreIntent) {
+        if !matches!(self.state, GameState::Explore) {
+            return;
+        }
+
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
@@ -228,85 +463,42 @@ impl GameInner {
         let event = game::explore::reduce(is_peaceful, intent);
         match event {
             game::ExploreEvent::None => {}
-            game::ExploreEvent::MoveDirection(key) => {
-                game::movement::on_direction_pressed(&mut s.movement, key);
+            game::ExploreEvent::MoveDirection(direction) => {
+                game::movement::on_direction_pressed(&mut s.movement, direction);
             }
-            game::ExploreEvent::TryNpcInteract { facing } => {
+            game::ExploreEvent::TryNpcInteract {
+                facing,
+                fallback_action,
+            } => {
                 if let Some(npc_event) =
                     game::npc::reduce(&s.player, &self.data, game::NpcIntent::Interact { facing })
                 {
                     match npc_event {
-                        game::NpcEvent::OpenDialog {
-                            dialog_state,
-                            restore,
-                        } => {
-                            if restore {
+                        game::NpcEvent::OpenDialog(dialog_spec) => {
+                            if dialog_spec.restore {
                                 s.player.stats.current_hp = s.player.stats.max_hp;
                                 s.player.stats.current_mp = s.player.stats.max_mp;
                             }
-                            self.ui.dialog.open(dialog_state);
+                            self.ui.dialog.open(game::DialogState::new(
+                                dialog_spec.npc_name,
+                                dialog_spec.lines,
+                            ));
                             self.state = GameState::Dialog;
                         }
-                        game::NpcEvent::OpenShop(shop_state) => {
-                            self.ui.shop.open(shop_state);
-                            self.state = GameState::Shop;
+                        game::NpcEvent::OpenShop(shop_id) => {
+                            let _ = self.open_shop_by_id(&shop_id);
                         }
                         game::NpcEvent::RestoreStats => {
                             s.player.stats.current_hp = s.player.stats.max_hp;
                             s.player.stats.current_mp = s.player.stats.max_mp;
                         }
                     }
+                } else if let Some(action) = fallback_action {
+                    Self::apply_explore_action(s, &self.data, action);
                 }
             }
             game::ExploreEvent::UseAction(action) => {
-                if let Some((slot, skill)) = action.skill() {
-                    let result = game::combat::use_skill_action(
-                        &mut s.player,
-                        &mut s.skill_cooldowns,
-                        &mut s.combat,
-                        slot,
-                        skill,
-                    );
-
-                    for effect in &result.player_effects {
-                        match effect {
-                            game::PlayerEffect::Heal(amount) => {
-                                let _ = game::player::apply(
-                                    &mut s.player,
-                                    game::PlayerIntent::Heal(*amount),
-                                );
-                            }
-                        }
-                    }
-
-                    game::reward::apply_kill_rewards(&mut s.player, &result.kills);
-                    for reward in &result.kills {
-                        game::quest::apply(
-                            &mut s.player,
-                            &self.data,
-                            game::quest::QuestIntent::EnemyKilled {
-                                enemy_id: &reward.enemy_id,
-                            },
-                        );
-                    }
-                } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
-                    &mut s.combat,
-                    game::combat::reduce(game::CombatIntent::PlayerAttack {
-                        player_x: s.player.x,
-                        player_y: s.player.y,
-                        player_atk: s.player.total_atk(),
-                        facing: s.player.facing,
-                    }),
-                ) {
-                    game::reward::apply_kill_reward(&mut s.player, &reward);
-                    game::quest::apply(
-                        &mut s.player,
-                        &self.data,
-                        game::quest::QuestIntent::EnemyKilled {
-                            enemy_id: &reward.enemy_id,
-                        },
-                    );
-                }
+                Self::apply_explore_action(s, &self.data, action);
             }
             game::ExploreEvent::EnterPauseMenu => {
                 self.ui.pause_menu.reset();
@@ -341,19 +533,21 @@ impl GameInner {
     }
 
     fn apply_dialog_intent(&mut self, intent: DialogIntent) {
+        if !matches!(self.state, GameState::Dialog) {
+            return;
+        }
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        if matches!(intent, DialogIntent::Confirm) && !matches!(self.state, GameState::Dialog) {
-            return;
-        }
-        let event = game::dialog::reduce(self.ui.dialog.state.as_ref(), &self.data, intent);
+        let event = game::dialog::reduce(self.ui.dialog.state.as_ref(), intent);
         match event {
             game::DialogEvent::None => {}
             game::DialogEvent::Transition(transition) => match transition {
-                game::DialogTransition::Set(dialog_state) => {
-                    self.ui.dialog.open(dialog_state);
+                game::DialogTransition::SetLine(line) => {
+                    if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
+                        dialog_state.current_line = line;
+                    }
                     self.state = GameState::Dialog;
                 }
                 game::DialogTransition::CloseToExplore => {
@@ -362,17 +556,16 @@ impl GameInner {
                 }
             },
             game::DialogEvent::Action(action, transition) => {
-                if let Some(shop_state) =
-                    game::dialog::apply_action(&mut s.player, &self.data, &action)
+                if Self::apply_dialog_action(s, &self.data, &mut self.ui, &mut self.state, &action)
                 {
-                    self.ui.shop.open(shop_state);
-                    self.state = GameState::Shop;
                     return;
                 }
 
                 match transition {
-                    game::DialogTransition::Set(dialog_state) => {
-                        self.ui.dialog.open(dialog_state);
+                    game::DialogTransition::SetLine(line) => {
+                        if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
+                            dialog_state.current_line = line;
+                        }
                         self.state = GameState::Dialog;
                     }
                     game::DialogTransition::CloseToExplore => {
@@ -395,7 +588,7 @@ impl GameInner {
         let event = game::shop::reduce(
             self.ui.shop.mode,
             self.ui.shop.selected,
-            self.ui.shop.state.as_ref(),
+            self.ui.shop.state.is_some(),
             s.player.stats.gold,
             s.player.inventory.len(),
             self.ui
@@ -472,11 +665,15 @@ impl GameInner {
     }
 
     fn apply_release_movement_key(&mut self, key: KeyCode) {
+        if !matches!(self.state, GameState::Explore) {
+            return;
+        }
         let Some(s) = self.session.as_mut() else {
-            self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        game::movement::on_key_released(&mut s.movement, key);
+        if let Some(direction) = direction_for_key(key) {
+            game::movement::on_direction_released(&mut s.movement, direction);
+        }
     }
 
     fn apply_effect(&mut self, effect: AppEffect) {

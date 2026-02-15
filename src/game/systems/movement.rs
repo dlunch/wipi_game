@@ -1,14 +1,11 @@
-use wipi::event::KeyCode;
-
-use super::combat::{CombatState, enemy_at};
-use crate::data::{Direction, Map, Npc};
-use crate::game::{GameState, PlayerState};
+use crate::data::{Direction, Map};
+use crate::game::PlayerState;
 
 const MOVE_COOLDOWN: u32 = 5;
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
-    pub pressed_direction: Option<KeyCode>,
+    pub pressed_direction: Option<Direction>,
     pub move_cooldown: u32,
 }
 
@@ -19,22 +16,13 @@ pub struct MovementTickEvent {
 }
 
 pub fn reduce_tick(
-    game_state: &GameState,
     state: &MovementState,
     player: &PlayerState,
     map: Option<&Map>,
-    combat: &CombatState,
-    npcs: &[Npc],
+    enemy_positions: &[(usize, usize)],
+    npc_positions: &[(usize, usize)],
 ) -> MovementTickEvent {
     let mut next_state = *state;
-
-    if !matches!(game_state, GameState::Explore) {
-        return MovementTickEvent {
-            next_state,
-            facing: None,
-            step: None,
-        };
-    }
 
     let Some(map) = map else {
         return MovementTickEvent {
@@ -62,17 +50,10 @@ pub fn reduce_tick(
     };
 
     let (dx, dy) = match key {
-        KeyCode::Up => (0, -1),
-        KeyCode::Down => (0, 1),
-        KeyCode::Left => (-1, 0),
-        KeyCode::Right => (1, 0),
-        _ => {
-            return MovementTickEvent {
-                next_state,
-                facing: None,
-                step: None,
-            };
-        }
+        Direction::Up => (0, -1),
+        Direction::Down => (0, 1),
+        Direction::Left => (-1, 0),
+        Direction::Right => (1, 0),
     };
 
     next_state.move_cooldown = MOVE_COOLDOWN;
@@ -81,8 +62,8 @@ pub fn reduce_tick(
     if can_move(player, map, dx, dy)
         && let Some(new_x) = player.x.checked_add_signed(dx as isize)
         && let Some(new_y) = player.y.checked_add_signed(dy as isize)
-        && !enemy_at(combat, new_x, new_y)
-        && !npc_at(npcs, &player.current_map_id, new_x, new_y)
+        && !position_occupied(enemy_positions, new_x, new_y)
+        && !position_occupied(npc_positions, new_x, new_y)
     {
         step = Some((dx, dy));
     }
@@ -113,13 +94,13 @@ pub fn apply_tick(
     false
 }
 
-pub fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {
-    state.pressed_direction = Some(key);
+pub fn on_direction_pressed(state: &mut MovementState, direction: Direction) {
+    state.pressed_direction = Some(direction);
     state.move_cooldown = 0;
 }
 
-pub fn on_key_released(state: &mut MovementState, key: KeyCode) {
-    if state.pressed_direction == Some(key) {
+pub fn on_direction_released(state: &mut MovementState, direction: Direction) {
+    if state.pressed_direction == Some(direction) {
         state.pressed_direction = None;
     }
 }
@@ -129,10 +110,10 @@ fn tick(
     state: &mut MovementState,
     player: &mut PlayerState,
     map: &Map,
-    combat: &CombatState,
-    npcs: &[Npc],
+    enemy_positions: &[(usize, usize)],
+    npc_positions: &[(usize, usize)],
 ) -> bool {
-    let event = reduce_tick(&GameState::Explore, state, player, Some(map), combat, npcs);
+    let event = reduce_tick(state, player, Some(map), enemy_positions, npc_positions);
     apply_tick(state, player, event)
 }
 
@@ -165,9 +146,8 @@ fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
     }
 }
 
-fn npc_at(npcs: &[Npc], map_id: &str, x: usize, y: usize) -> bool {
-    npcs.iter()
-        .any(|npc| npc.map_id == map_id && npc.x == x && npc.y == y)
+fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
+    positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
 }
 
 #[cfg(test)]
@@ -176,11 +156,9 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
-    use wipi::event::KeyCode;
-
     use super::*;
-    use crate::data::{Direction, Enemy, Map, Npc, NpcType, Tile};
-    use crate::game::{PlayerState, combat::FieldEnemy};
+    use crate::data::{Direction, Map, Tile};
+    use crate::game::PlayerState;
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {
@@ -204,18 +182,6 @@ mod tests {
         player
     }
 
-    fn make_enemy() -> Enemy {
-        Enemy {
-            id: String::from("slime"),
-            name: String::from("Slime"),
-            hp: 10,
-            atk: 3,
-            def: 1,
-            exp: 5,
-            gold: 2,
-        }
-    }
-
     #[test]
     fn on_direction_pressed_sets_direction_and_resets_cooldown() {
         let mut state = MovementState {
@@ -223,20 +189,20 @@ mod tests {
             move_cooldown: 3,
         };
 
-        on_direction_pressed(&mut state, KeyCode::Left);
+        on_direction_pressed(&mut state, Direction::Left);
 
-        assert!(state.pressed_direction == Some(KeyCode::Left));
+        assert!(state.pressed_direction == Some(Direction::Left));
         assert!(state.move_cooldown == 0);
     }
 
     #[test]
     fn on_key_released_clears_when_matching_key() {
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
 
-        on_key_released(&mut state, KeyCode::Right);
+        on_direction_released(&mut state, Direction::Right);
 
         assert!(state.pressed_direction.is_none());
     }
@@ -244,13 +210,13 @@ mod tests {
     #[test]
     fn on_key_released_keeps_direction_when_different_key() {
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Up),
+            pressed_direction: Some(Direction::Up),
             move_cooldown: 0,
         };
 
-        on_key_released(&mut state, KeyCode::Down);
+        on_direction_released(&mut state, Direction::Down);
 
-        assert!(state.pressed_direction == Some(KeyCode::Up));
+        assert!(state.pressed_direction == Some(Direction::Up));
     }
 
     #[test]
@@ -337,14 +303,20 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let combat = CombatState::default();
-        let npcs: Vec<Npc> = Vec::new();
+        let enemy_positions: Vec<(usize, usize)> = Vec::new();
+        let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 2,
         };
 
-        let moved = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved);
         assert!(state.move_cooldown == 1);
@@ -369,11 +341,17 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let combat = CombatState::default();
-        let npcs: Vec<Npc> = Vec::new();
+        let enemy_positions: Vec<(usize, usize)> = Vec::new();
+        let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState::default();
 
-        let moved = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved);
         assert!(state.move_cooldown == 0);
@@ -398,15 +376,27 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let combat = CombatState::default();
-        let npcs: Vec<Npc> = Vec::new();
+        let enemy_positions: Vec<(usize, usize)> = Vec::new();
+        let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 1,
         };
 
-        let moved_while_cooling = tick(&mut state, &mut player, &map, &combat, &npcs);
-        let moved_after_cooling = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved_while_cooling = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
+        let moved_after_cooling = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved_while_cooling);
         assert!(moved_after_cooling);
@@ -433,14 +423,20 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let combat = CombatState::default();
-        let npcs: Vec<Npc> = Vec::new();
+        let enemy_positions: Vec<(usize, usize)> = Vec::new();
+        let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
 
-        let moved = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved);
         assert!(player.x == 1 && player.y == 1);
@@ -465,18 +461,20 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let enemy = FieldEnemy::new(make_enemy(), 2, 1);
-        let combat = CombatState {
-            enemies: vec![enemy],
-            ..CombatState::default()
-        };
-        let npcs: Vec<Npc> = Vec::new();
+        let enemy_positions: Vec<(usize, usize)> = vec![(2, 1)];
+        let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
 
-        let moved = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved);
         assert!(player.x == 1 && player.y == 1);
@@ -501,23 +499,20 @@ mod tests {
             ],
         );
         let mut player = make_player_at(1, 1, "test_map");
-        let combat = CombatState::default();
-        let npcs = vec![Npc {
-            id: String::from("npc_1"),
-            name: String::from("Guide"),
-            map_id: String::from("test_map"),
-            x: 2,
-            y: 1,
-            npc_type: NpcType::Villager,
-            dialog_id: String::from("dialog_1"),
-            shop_id: None,
-        }];
+        let enemy_positions: Vec<(usize, usize)> = Vec::new();
+        let npc_positions: Vec<(usize, usize)> = vec![(2, 1)];
         let mut state = MovementState {
-            pressed_direction: Some(KeyCode::Right),
+            pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
 
-        let moved = tick(&mut state, &mut player, &map, &combat, &npcs);
+        let moved = tick(
+            &mut state,
+            &mut player,
+            &map,
+            &enemy_positions,
+            &npc_positions,
+        );
 
         assert!(!moved);
         assert!(player.x == 1 && player.y == 1);

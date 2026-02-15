@@ -81,7 +81,7 @@ pub enum Tile {
     Tree,        // * - 나무
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
@@ -385,6 +385,7 @@ pub struct NewGameConfig {
     pub intro_dialog: Option<(String, String)>,
     pub equip_weapon: Option<String>,
     pub equip_armor: Option<String>,
+    pub treasure_item: Option<String>,
     pub items: Vec<StartItem>,
 }
 
@@ -397,6 +398,7 @@ impl Default for NewGameConfig {
             intro_dialog: None,
             equip_weapon: None,
             equip_armor: None,
+            treasure_item: Some(String::from("potion")),
             items: Vec::new(),
         }
     }

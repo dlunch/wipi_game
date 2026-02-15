@@ -279,15 +279,12 @@ pub fn build_render_state(
             let Some(dialog_state) = ui.dialog.state.as_ref() else {
                 return RenderState::Error(String::from("No dialog state"));
             };
-            let current_text = data
-                .find_dialog(&dialog_state.dialog_id)
-                .and_then(|dialog| dialog.lines.get(dialog_state.current_line))
+            let current_text = dialog_state
+                .lines
+                .get(dialog_state.current_line)
                 .map(|line| line.text.clone());
 
-            let has_next = data
-                .find_dialog(&dialog_state.dialog_id)
-                .map(|dialog| dialog_state.current_line + 1 < dialog.lines.len())
-                .unwrap_or(false);
+            let has_next = dialog_state.current_line + 1 < dialog_state.lines.len();
 
             RenderState::Dialog {
                 explore: session.and_then(|s| build_explore_render(s, ui, data)),

@@ -361,6 +361,10 @@ pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
                 ensure!(parts.len() >= 2, "missing value for equip_armor");
                 config.equip_armor = Some(parts[1].to_string());
             }
+            "treasure_item" => {
+                ensure!(parts.len() >= 2, "missing value for treasure_item");
+                config.treasure_item = Some(parts[1].to_string());
+            }
             "item" => {
                 ensure!(parts.len() >= 3, "item requires item_id and count");
                 let count = parse_int(parts[2], "item count", line)?;
@@ -835,7 +839,7 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_newgame_full_config() -> Result<()> {
-        let data = "player_name:Hero\nstart_map:village\nfallback_map:village\nintro_dialog:dialog_guide:Guide NPC\nequip_weapon:wooden_sword\nequip_armor:cloth\nitem:potion:2\nitem:elixir:1\n";
+        let data = "player_name:Hero\nstart_map:village\nfallback_map:village\nintro_dialog:dialog_guide:Guide NPC\nequip_weapon:wooden_sword\nequip_armor:cloth\ntreasure_item:elixir\nitem:potion:2\nitem:elixir:1\n";
         let config = parse_newgame(data)?;
         assert_eq!(config.player_name, "Hero");
         assert_eq!(config.start_map, "village");
@@ -846,6 +850,7 @@ GIVE_QUEST=slay:Kill the slimes!
         );
         assert_eq!(config.equip_weapon.as_deref(), Some("wooden_sword"));
         assert_eq!(config.equip_armor.as_deref(), Some("cloth"));
+        assert_eq!(config.treasure_item.as_deref(), Some("elixir"));
         assert_eq!(config.items.len(), 2);
         assert_eq!(config.items[0].item_id, "potion");
         assert_eq!(config.items[0].count, 2);
@@ -862,6 +867,7 @@ GIVE_QUEST=slay:Kill the slimes!
         assert_eq!(config.start_map, "village");
         assert!(config.intro_dialog.is_none());
         assert!(config.equip_weapon.is_none());
+        assert_eq!(config.treasure_item.as_deref(), Some("potion"));
         assert!(config.items.is_empty());
         Ok(())
     }

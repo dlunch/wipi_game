@@ -1,13 +1,20 @@
-use crate::data::{Dialog, DialogCondition, Direction, NpcType};
-use crate::game::{DialogState, GameData, PlayerState, ShopState};
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
+use crate::game::{GameData, PlayerState};
+
+#[derive(Debug)]
+pub struct DialogSpec {
+    pub npc_name: String,
+    pub lines: Vec<DialogLine>,
+    pub restore: bool,
+}
 
 #[derive(Debug)]
 pub enum NpcEvent {
-    OpenDialog {
-        dialog_state: DialogState,
-        restore: bool,
-    },
-    OpenShop(ShopState),
+    OpenDialog(DialogSpec),
+    OpenShop(String),
     RestoreStats,
 }
 
@@ -30,12 +37,13 @@ fn try_interact(player: &PlayerState, data: &GameData, facing: Direction) -> Opt
     match npc.npc_type {
         NpcType::Healer => {
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-                let filtered = filter_lines(player, dialog);
-                if !filtered.lines.is_empty() {
-                    return Some(NpcEvent::OpenDialog {
-                        dialog_state: DialogState::new(npc.name.clone(), &filtered),
+                let lines = filter_lines(player, dialog);
+                if !lines.is_empty() {
+                    return Some(NpcEvent::OpenDialog(DialogSpec {
+                        npc_name: npc.name.clone(),
+                        lines,
                         restore: true,
-                    });
+                    }));
                 }
             }
 
@@ -50,28 +58,28 @@ fn try_interact(player: &PlayerState, data: &GameData, facing: Direction) -> Opt
                 .cloned();
 
             if let Some(shop) = shop {
-                let shop_items = data.get_shop_items(&shop);
-                return Some(NpcEvent::OpenShop(ShopState::new(shop, shop_items)));
+                return Some(NpcEvent::OpenShop(shop.id));
             }
         }
         NpcType::QuestGiver | NpcType::Villager => {}
     }
 
     if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-        let filtered = filter_lines(player, dialog);
-        if !filtered.lines.is_empty() {
-            return Some(NpcEvent::OpenDialog {
-                dialog_state: DialogState::new(npc.name.clone(), &filtered),
+        let lines = filter_lines(player, dialog);
+        if !lines.is_empty() {
+            return Some(NpcEvent::OpenDialog(DialogSpec {
+                npc_name: npc.name.clone(),
+                lines,
                 restore: false,
-            });
+            }));
         }
     }
 
     None
 }
 
-fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
-    let filtered = dialog
+fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Vec<DialogLine> {
+    dialog
         .lines
         .iter()
         .filter(|line| match &line.condition {
@@ -82,12 +90,7 @@ fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
             Some(DialogCondition::HasGold(amount)) => player.stats.gold >= *amount,
         })
         .cloned()
-        .collect();
-
-    Dialog {
-        id: dialog.id.clone(),
-        lines: filtered,
-    }
+        .collect()
 }
 
 #[cfg(test)]
@@ -164,16 +167,12 @@ mod tests {
 
         let next_state = try_interact(&player, &data, Direction::Right);
 
-        let Some(NpcEvent::OpenDialog {
-            dialog_state,
-            restore,
-        }) = next_state
-        else {
+        let Some(NpcEvent::OpenDialog(dialog_spec)) = next_state else {
             panic!("expected dialog state");
         };
-        assert!(!restore);
-        assert_eq!(dialog_state.npc_name, "NPC");
-        assert_eq!(dialog_state.dialog_id, "d1");
+        assert!(!dialog_spec.restore);
+        assert_eq!(dialog_spec.npc_name, "NPC");
+        assert_eq!(dialog_spec.lines[0].text, "Hello");
     }
 
     #[test]
@@ -192,7 +191,7 @@ mod tests {
         assert_eq!(player.stats.current_mp, before_mp);
         assert!(matches!(
             next_state,
-            Some(NpcEvent::OpenDialog { restore: true, .. })
+            Some(NpcEvent::OpenDialog(DialogSpec { restore: true, .. }))
         ));
     }
 
@@ -226,10 +225,10 @@ mod tests {
 
         let next_state = try_interact(&player, &data, Direction::Right);
 
-        let Some(NpcEvent::OpenShop(shop_state)) = next_state else {
+        let Some(NpcEvent::OpenShop(shop_id)) = next_state else {
             panic!("expected shop state");
         };
-        assert_eq!(shop_state.shop.id, "s1");
+        assert_eq!(shop_id, "s1");
     }
 
     #[test]
@@ -239,7 +238,7 @@ mod tests {
 
         let filtered = filter_lines(&player, &dialog);
 
-        assert_eq!(filtered.lines.len(), 3);
+        assert_eq!(filtered.len(), 3);
     }
 
     #[test]
@@ -255,8 +254,8 @@ mod tests {
 
         let filtered = filter_lines(&player, &dialog);
 
-        assert_eq!(filtered.lines.len(), 1);
-        assert_eq!(filtered.lines[0].text, "q1");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].text, "q1");
     }
 
     #[test]
@@ -275,8 +274,8 @@ mod tests {
 
         let filtered = filter_lines(&player, &dialog);
 
-        assert_eq!(filtered.lines.len(), 1);
-        assert_eq!(filtered.lines[0].text, "done");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].text, "done");
     }
 
     #[test]
@@ -289,7 +288,7 @@ mod tests {
 
         let filtered = filter_lines(&player, &dialog);
 
-        assert_eq!(filtered.lines.len(), 1);
-        assert_eq!(filtered.lines[0].text, "cheap");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].text, "cheap");
     }
 }

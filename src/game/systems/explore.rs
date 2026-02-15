@@ -4,12 +4,15 @@ use alloc::vec::Vec;
 use wipi::event::KeyCode;
 
 use crate::data::{Direction, Map, Tile};
-use crate::game::{ExploreAction, ExploreUiState, GameData, PlayerState};
+use crate::game::{ExploreAction, GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
-    MoveDirection(KeyCode),
-    TryNpcInteract { facing: Direction },
+    MoveDirection(Direction),
+    TryNpcInteract {
+        facing: Direction,
+        fallback_action: Option<ExploreAction>,
+    },
     UseAction(ExploreAction),
     Pause,
     BackToMenu,
@@ -17,8 +20,11 @@ pub enum ExploreIntent {
 
 pub enum ExploreEvent {
     None,
-    MoveDirection(KeyCode),
-    TryNpcInteract { facing: Direction },
+    MoveDirection(Direction),
+    TryNpcInteract {
+        facing: Direction,
+        fallback_action: Option<ExploreAction>,
+    },
     UseAction(ExploreAction),
     EnterPauseMenu,
     EnterMenu,
@@ -26,25 +32,41 @@ pub enum ExploreEvent {
 
 impl ExploreIntent {
     pub fn intent_for_key(
-        ui: &ExploreUiState,
-        facing: Direction,
         key: KeyCode,
+        facing: Direction,
+        ok_action: ExploreAction,
+        key_actions: [Option<ExploreAction>; 3],
     ) -> Vec<ExploreIntent> {
         let mut intents = Vec::new();
         match key {
-            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
-                intents.push(ExploreIntent::MoveDirection(key));
-            }
+            KeyCode::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
+            KeyCode::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
+            KeyCode::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
+            KeyCode::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
             KeyCode::Ok => {
-                intents.push(ExploreIntent::TryNpcInteract { facing });
+                intents.push(ExploreIntent::TryNpcInteract {
+                    facing,
+                    fallback_action: Some(ok_action),
+                });
+            }
+            KeyCode::Key1 => {
+                if let Some(action) = key_actions[0] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
+            }
+            KeyCode::Key2 => {
+                if let Some(action) = key_actions[1] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
+            }
+            KeyCode::Key3 => {
+                if let Some(action) = key_actions[2] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
             }
             KeyCode::Key0 => intents.push(ExploreIntent::Pause),
             KeyCode::Back => intents.push(ExploreIntent::BackToMenu),
             _ => {}
-        }
-
-        if let Some(action) = ui.action_for_key(key) {
-            intents.push(ExploreIntent::UseAction(action));
         }
 
         intents
@@ -53,8 +75,14 @@ impl ExploreIntent {
 
 pub fn reduce(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
     match intent {
-        ExploreIntent::MoveDirection(key) => ExploreEvent::MoveDirection(key),
-        ExploreIntent::TryNpcInteract { facing } => ExploreEvent::TryNpcInteract { facing },
+        ExploreIntent::MoveDirection(direction) => ExploreEvent::MoveDirection(direction),
+        ExploreIntent::TryNpcInteract {
+            facing,
+            fallback_action,
+        } => ExploreEvent::TryNpcInteract {
+            facing,
+            fallback_action,
+        },
         ExploreIntent::UseAction(action) if !is_peaceful => ExploreEvent::UseAction(action),
         ExploreIntent::UseAction(_) => ExploreEvent::None,
         ExploreIntent::Pause => ExploreEvent::EnterPauseMenu,
@@ -121,8 +149,10 @@ pub fn apply_tile_event(
         TileEvent::Treasure => {
             let map_id = player.current_map_id.clone();
             if !player.is_treasure_opened(&map_id, player.x, player.y) {
-                if let Some(potion) = data.find_item("potion").cloned() {
-                    player.inventory.push(potion);
+                if let Some(item_id) = data.newgame.treasure_item.as_deref()
+                    && let Some(item) = data.find_item(item_id).cloned()
+                {
+                    player.inventory.push(item);
                 }
                 player.opened_treasures.push((map_id, player.x, player.y));
             }
@@ -277,55 +307,114 @@ mod tests {
 
     #[test]
     fn intent_for_key_direction_keys_map_to_move_direction() {
-        let ui = ExploreUiState::default();
+        let key_actions = [
+            Some(ExploreAction::Fireball),
+            Some(ExploreAction::Heal),
+            Some(ExploreAction::SpinAttack),
+        ];
         for key in [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right] {
-            let intents = ExploreIntent::intent_for_key(&ui, Direction::Down, key);
+            let intents = ExploreIntent::intent_for_key(
+                key,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions,
+            );
             assert_eq!(intents.len(), 1);
-            assert!(matches!(intents.as_slice(), [ExploreIntent::MoveDirection(k)] if *k == key));
+            assert!(matches!(
+                intents.as_slice(),
+                [ExploreIntent::MoveDirection(Direction::Up)]
+                    | [ExploreIntent::MoveDirection(Direction::Down)]
+                    | [ExploreIntent::MoveDirection(Direction::Left)]
+                    | [ExploreIntent::MoveDirection(Direction::Right)]
+            ));
         }
     }
 
     #[test]
-    fn intent_for_key_ok_returns_interact_then_attack() {
-        let ui = ExploreUiState::default();
-        let intents = ExploreIntent::intent_for_key(&ui, Direction::Up, KeyCode::Ok);
+    fn intent_for_key_ok_returns_interact_with_fallback_action() {
+        let intents = ExploreIntent::intent_for_key(
+            KeyCode::Ok,
+            Direction::Up,
+            ExploreAction::BasicAttack,
+            [
+                Some(ExploreAction::Fireball),
+                Some(ExploreAction::Heal),
+                Some(ExploreAction::SpinAttack),
+            ],
+        );
         assert!(matches!(
             intents.as_slice(),
-            [
-                ExploreIntent::TryNpcInteract {
-                    facing: Direction::Up
-                },
-                ExploreIntent::UseAction(ExploreAction::BasicAttack)
-            ]
+            [ExploreIntent::TryNpcInteract {
+                facing: Direction::Up,
+                fallback_action: Some(ExploreAction::BasicAttack)
+            }]
         ));
     }
 
     #[test]
     fn intent_for_key_skill_keys_map_to_skills() {
-        let ui = ExploreUiState::default();
+        let key_actions = [
+            Some(ExploreAction::Fireball),
+            Some(ExploreAction::Heal),
+            Some(ExploreAction::SpinAttack),
+        ];
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key1).as_slice(),
+            ExploreIntent::intent_for_key(
+                KeyCode::Key1,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions
+            )
+            .as_slice(),
             [ExploreIntent::UseAction(ExploreAction::Fireball)]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key2).as_slice(),
+            ExploreIntent::intent_for_key(
+                KeyCode::Key2,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions
+            )
+            .as_slice(),
             [ExploreIntent::UseAction(ExploreAction::Heal)]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key3).as_slice(),
+            ExploreIntent::intent_for_key(
+                KeyCode::Key3,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions
+            )
+            .as_slice(),
             [ExploreIntent::UseAction(ExploreAction::SpinAttack)]
         ));
     }
 
     #[test]
     fn intent_for_key_pause_and_back_keys_map_to_menu_intents() {
-        let ui = ExploreUiState::default();
+        let key_actions = [
+            Some(ExploreAction::Fireball),
+            Some(ExploreAction::Heal),
+            Some(ExploreAction::SpinAttack),
+        ];
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Key0).as_slice(),
+            ExploreIntent::intent_for_key(
+                KeyCode::Key0,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions
+            )
+            .as_slice(),
             [ExploreIntent::Pause]
         ));
         assert!(matches!(
-            ExploreIntent::intent_for_key(&ui, Direction::Down, KeyCode::Back).as_slice(),
+            ExploreIntent::intent_for_key(
+                KeyCode::Back,
+                Direction::Down,
+                ExploreAction::BasicAttack,
+                key_actions
+            )
+            .as_slice(),
             [ExploreIntent::BackToMenu]
         ));
     }

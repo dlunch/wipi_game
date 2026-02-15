@@ -6,6 +6,7 @@ pub use parser::{
     parse_shops,
 };
 pub use types::{
-    Dialog, DialogAction, DialogCondition, Direction, Enemy, Item, ItemKind, Map, NewGameConfig,
-    Npc, NpcType, PlayerStats, Quest, QuestProgress, QuestType, Shop, Skill, SkillType, Tile,
+    Dialog, DialogAction, DialogCondition, DialogLine, Direction, Enemy, Item, ItemKind, Map,
+    NewGameConfig, Npc, NpcType, PlayerStats, Quest, QuestProgress, QuestType, Shop, Skill,
+    SkillType, Tile,
 };

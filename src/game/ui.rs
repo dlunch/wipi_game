@@ -2,9 +2,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
-use crate::data::{Dialog, Item, Shop, Skill};
+use crate::data::{Dialog, DialogLine, Item, Shop, Skill};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -62,18 +60,6 @@ impl Default for ExploreUiState {
                 Some(ExploreAction::Heal),
                 Some(ExploreAction::SpinAttack),
             ],
-        }
-    }
-}
-
-impl ExploreUiState {
-    pub fn action_for_key(&self, key: KeyCode) -> Option<ExploreAction> {
-        match key {
-            KeyCode::Ok => Some(self.ok_action),
-            KeyCode::Key1 => self.key_actions[0],
-            KeyCode::Key2 => self.key_actions[1],
-            KeyCode::Key3 => self.key_actions[2],
-            _ => None,
         }
     }
 }
@@ -252,15 +238,19 @@ impl PauseMenuState {
 #[derive(Debug)]
 pub struct DialogState {
     pub npc_name: String,
-    pub dialog_id: String,
+    pub lines: Vec<DialogLine>,
     pub current_line: usize,
 }
 
 impl DialogState {
-    pub fn new(npc_name: String, dialog: &Dialog) -> Self {
+    pub fn from_dialog(npc_name: String, dialog: &Dialog) -> Self {
+        Self::new(npc_name, dialog.lines.clone())
+    }
+
+    pub fn new(npc_name: String, lines: Vec<DialogLine>) -> Self {
         Self {
             npc_name,
-            dialog_id: dialog.id.clone(),
+            lines,
             current_line: 0,
         }
     }

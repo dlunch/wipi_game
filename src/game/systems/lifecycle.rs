@@ -4,28 +4,23 @@ use alloc::string::String;
 
 use crate::data::Tile;
 use crate::game::{
-    CombatState, DialogState, GameData, GameState, MenuState, MovementState, PlayerState,
-    SessionState, load_game,
+    CombatState, GameData, GameState, MovementState, PlayerState, SessionState, load_game,
 };
 
+pub struct IntroDialogSpec {
+    pub dialog_id: String,
+    pub npc_name: String,
+}
+
 pub enum LoadingEvent {
-    None,
     Advance(usize),
-    Loaded(MenuState),
+    Loaded,
     Error(String),
 }
 
-pub fn reduce_loading(
-    state: &GameState,
-    load_result: Result<bool, String>,
-    has_save: bool,
-) -> LoadingEvent {
-    let GameState::Loading(step) = *state else {
-        return LoadingEvent::None;
-    };
-
+pub fn reduce_loading(step: usize, load_result: Result<bool, String>) -> LoadingEvent {
     match load_result {
-        Ok(true) => LoadingEvent::Loaded(MenuState::new(has_save)),
+        Ok(true) => LoadingEvent::Loaded,
         Ok(false) => LoadingEvent::Advance(step + 1),
         Err(e) => LoadingEvent::Error(e),
     }
@@ -41,7 +36,7 @@ pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
         .map_err(|e| format!("Load error: {}", e))
 }
 
-pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
+pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<IntroDialogSpec>) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();
@@ -80,7 +75,10 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
     {
         (
             GameState::Dialog,
-            Some(DialogState::new(npc_name.clone(), dialog)),
+            Some(IntroDialogSpec {
+                dialog_id: dialog.id.clone(),
+                npc_name: npc_name.clone(),
+            }),
         )
     } else {
         (GameState::Explore, None)
@@ -97,7 +95,7 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
     (state, session, dialog_state)
 }
 
-pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
+pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<IntroDialogSpec>) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();

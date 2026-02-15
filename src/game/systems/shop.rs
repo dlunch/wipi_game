@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
 use crate::data::Item;
-use crate::game::{ShopMode, ShopState};
+use crate::game::ShopMode;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShopIntent {
@@ -36,15 +36,15 @@ impl ShopIntent {
 pub fn reduce(
     mode: ShopMode,
     selected: usize,
-    shop_state: Option<&ShopState>,
+    shop_open: bool,
     player_gold: i32,
     player_inventory_len: usize,
     shop_items: &[Item],
     intent: ShopIntent,
 ) -> ShopEvent {
-    let Some(_) = shop_state else {
+    if !shop_open {
         return ShopEvent::ErrorNoActiveShop;
-    };
+    }
 
     match mode {
         ShopMode::Select => match intent {
@@ -144,26 +144,10 @@ mod tests {
     fn select_mode_confirm_enters_buy_or_sell() {
         let shop_state = make_shop_state();
 
-        let event = reduce(
-            ShopMode::Select,
-            0,
-            Some(&shop_state),
-            0,
-            0,
-            &shop_state.items,
-            Confirm,
-        );
+        let event = reduce(ShopMode::Select, 0, true, 0, 0, &shop_state.items, Confirm);
         assert!(matches!(event, ShopEvent::SetMode(ShopMode::Buy)));
 
-        let event = reduce(
-            ShopMode::Select,
-            1,
-            Some(&shop_state),
-            0,
-            0,
-            &shop_state.items,
-            Confirm,
-        );
+        let event = reduce(ShopMode::Select, 1, true, 0, 0, &shop_state.items, Confirm);
         assert!(matches!(event, ShopEvent::SetMode(ShopMode::Sell)));
     }
 
@@ -178,15 +162,7 @@ mod tests {
             vec![make_item("potion", 10)],
         );
 
-        let event = reduce(
-            ShopMode::Buy,
-            0,
-            Some(&shop_state),
-            50,
-            0,
-            &shop_state.items,
-            Confirm,
-        );
+        let event = reduce(ShopMode::Buy, 0, true, 50, 0, &shop_state.items, Confirm);
         assert!(matches!(event, ShopEvent::BuyItem(_)));
     }
 
@@ -200,15 +176,7 @@ mod tests {
             },
             vec![],
         );
-        let event = reduce(
-            ShopMode::Sell,
-            0,
-            Some(&shop_state),
-            0,
-            1,
-            &shop_state.items,
-            Confirm,
-        );
+        let event = reduce(ShopMode::Sell, 0, true, 0, 1, &shop_state.items, Confirm);
         assert!(matches!(event, ShopEvent::SellSelected(0)));
     }
 
@@ -223,15 +191,7 @@ mod tests {
             vec![make_item("potion", 10)],
         );
 
-        let event = reduce(
-            ShopMode::Buy,
-            2,
-            Some(&shop_state),
-            0,
-            0,
-            &shop_state.items,
-            Back,
-        );
+        let event = reduce(ShopMode::Buy, 2, true, 0, 0, &shop_state.items, Back);
         assert!(matches!(event, ShopEvent::SetMode(ShopMode::Select)));
     }
 }
