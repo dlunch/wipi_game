@@ -21,12 +21,14 @@ impl DialogIntent {
 
 pub enum DialogEvent {
     None,
+    Set(DialogState),
+    CloseToExplore,
     OpenShop(ShopState),
 }
 
 pub fn reduce(
-    state: &mut GameState,
-    dialog_state: &mut Option<DialogState>,
+    state: &GameState,
+    dialog_state: Option<&DialogState>,
     player: &mut PlayerState,
     data: &GameData,
     intent: DialogIntent,
@@ -34,7 +36,7 @@ pub fn reduce(
     match intent {
         DialogIntent::Confirm => {
             if let GameState::Dialog = *state
-                && let Some(dialog_state_ref) = dialog_state.as_ref()
+                && let Some(dialog_state_ref) = dialog_state
                 && let Some(dialog) = data.find_dialog(&dialog_state_ref.dialog_id)
                 && let Some(action) = dialog
                     .lines
@@ -49,38 +51,28 @@ pub fn reduce(
             {
                 match event {
                     npc::NpcEvent::OpenShop(shop_state) => {
-                        *state = GameState::Shop;
                         return DialogEvent::OpenShop(shop_state);
                     }
                     npc::NpcEvent::OpenDialog(new_dialog_state) => {
-                        *dialog_state = Some(new_dialog_state);
-                        *state = GameState::Dialog;
+                        return DialogEvent::Set(new_dialog_state);
                     }
                 }
             }
 
-            if matches!(*state, GameState::Shop) {
-                return DialogEvent::None;
-            }
-
             if let GameState::Dialog = *state
-                && let Some(dialog_state_ref) = dialog_state.as_mut()
+                && let Some(dialog_state_ref) = dialog_state
                 && let Some(dialog) = data.find_dialog(&dialog_state_ref.dialog_id)
-                && !(if dialog_state_ref.current_line + 1 < dialog.lines.len() {
-                    dialog_state_ref.current_line += 1;
-                    true
-                } else {
-                    false
-                })
             {
-                *dialog_state = None;
-                *state = GameState::Explore;
+                if dialog_state_ref.current_line + 1 < dialog.lines.len() {
+                    let mut next = DialogState::new(dialog_state_ref.npc_name.clone(), dialog);
+                    next.current_line = dialog_state_ref.current_line + 1;
+                    return DialogEvent::Set(next);
+                }
+
+                return DialogEvent::CloseToExplore;
             }
         }
-        DialogIntent::Back => {
-            *dialog_state = None;
-            *state = GameState::Explore;
-        }
+        DialogIntent::Back => return DialogEvent::CloseToExplore,
     }
 
     DialogEvent::None
@@ -156,17 +148,17 @@ mod tests {
         let mut player = make_player();
         let mut ui = UiState::default();
         ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
-        let mut state = GameState::Dialog;
+        let state = GameState::Dialog;
 
-        let _ = reduce(
-            &mut state,
-            &mut ui.dialog.state,
+        let event = reduce(
+            &state,
+            ui.dialog.state.as_ref(),
             &mut player,
             &data,
             DialogIntent::Back,
         );
 
-        assert!(matches!(state, GameState::Explore));
+        assert!(matches!(event, DialogEvent::CloseToExplore));
     }
 
     #[test]
@@ -178,18 +170,17 @@ mod tests {
         let mut player = make_player();
         let mut ui = UiState::default();
         ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
-        let mut state = GameState::Dialog;
+        let state = GameState::Dialog;
 
-        let _ = reduce(
-            &mut state,
-            &mut ui.dialog.state,
+        let event = reduce(
+            &state,
+            ui.dialog.state.as_ref(),
             &mut player,
             &data,
             DialogIntent::Confirm,
         );
 
-        assert!(matches!(state, GameState::Dialog));
-        let Some(dialog_state) = ui.dialog.state.as_ref() else {
+        let DialogEvent::Set(dialog_state) = event else {
             panic!("expected dialog state");
         };
         assert_eq!(dialog_state.current_line, 1);
@@ -204,17 +195,17 @@ mod tests {
         let mut player = make_player();
         let mut ui = UiState::default();
         ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
-        let mut state = GameState::Dialog;
+        let state = GameState::Dialog;
 
-        let _ = reduce(
-            &mut state,
-            &mut ui.dialog.state,
+        let event = reduce(
+            &state,
+            ui.dialog.state.as_ref(),
             &mut player,
             &data,
             DialogIntent::Confirm,
         );
 
-        assert!(matches!(state, GameState::Explore));
+        assert!(matches!(event, DialogEvent::CloseToExplore));
     }
 
     #[test]
@@ -232,17 +223,16 @@ mod tests {
         let mut player = make_player();
         let mut ui = UiState::default();
         ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
-        let mut state = GameState::Dialog;
+        let state = GameState::Dialog;
 
         let event = reduce(
-            &mut state,
-            &mut ui.dialog.state,
+            &state,
+            ui.dialog.state.as_ref(),
             &mut player,
             &data,
             DialogIntent::Confirm,
         );
 
-        assert!(matches!(state, GameState::Shop));
         let DialogEvent::OpenShop(shop_state) = event else {
             panic!("expected shop state");
         };
@@ -259,18 +249,17 @@ mod tests {
         let mut player = make_player();
         let mut ui = UiState::default();
         ui.dialog.state = Some(DialogState::new(String::from("NPC"), &dialog));
-        let mut state = GameState::Dialog;
+        let state = GameState::Dialog;
 
         let _ = reduce(
-            &mut state,
-            &mut ui.dialog.state,
+            &state,
+            ui.dialog.state.as_ref(),
             &mut player,
             &data,
             DialogIntent::Confirm,
         );
 
         assert!(player.has_quest("q1"));
-        assert!(matches!(state, GameState::Explore));
     }
 
     #[test]

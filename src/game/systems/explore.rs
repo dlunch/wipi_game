@@ -60,7 +60,7 @@ impl ExploreIntent {
 }
 
 pub fn reduce(
-    state: &mut GameState,
+    state: &GameState,
     runtime: ExploreRuntime<'_>,
     data: &GameData,
     intent: ExploreIntent,
@@ -87,11 +87,9 @@ pub fn reduce(
             {
                 match event {
                     game::NpcEvent::OpenDialog(dialog_state) => {
-                        *state = GameState::Dialog;
                         return ExploreEvent::OpenDialog(dialog_state);
                     }
                     game::NpcEvent::OpenShop(shop_state) => {
-                        *state = GameState::Shop;
                         return ExploreEvent::OpenShop(shop_state);
                     }
                 }
@@ -147,12 +145,10 @@ pub fn reduce(
             return ExploreEvent::None;
         }
         ExploreIntent::Pause => {
-            *state = GameState::PauseMenu;
             return ExploreEvent::EnterPauseMenu;
         }
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
-            *state = GameState::Menu;
             return ExploreEvent::EnterMenu;
         }
     }
@@ -550,14 +546,14 @@ mod tests {
     #[test]
     fn reduce_pause_switches_to_pause_menu_state() {
         let data = make_game_data();
-        let mut state = GameState::Explore;
+        let state = GameState::Explore;
         let mut movement = MovementState::default();
         let mut player = make_player("field", 0, 0);
         let mut skill_cooldowns = [0; 3];
         let mut combat = CombatState::default();
 
-        reduce(
-            &mut state,
+        let event = reduce(
+            &state,
             ExploreRuntime {
                 movement: &mut movement,
                 player: &mut player,
@@ -568,13 +564,13 @@ mod tests {
             ExploreIntent::Pause,
         );
 
-        assert!(matches!(state, GameState::PauseMenu));
+        assert!(matches!(event, ExploreEvent::EnterPauseMenu));
     }
 
     #[test]
     fn reduce_attack_has_no_effect_in_peaceful_zone() {
         let data = make_game_data();
-        let mut state = GameState::Explore;
+        let state = GameState::Explore;
         let mut movement = MovementState::default();
         let mut player = make_player("safe_zone", 0, 0);
         player.facing = Direction::Right;
@@ -594,8 +590,8 @@ mod tests {
             0,
         ));
 
-        reduce(
-            &mut state,
+        let event = reduce(
+            &state,
             ExploreRuntime {
                 movement: &mut movement,
                 player: &mut player,
@@ -606,7 +602,7 @@ mod tests {
             ExploreIntent::Attack,
         );
 
-        assert!(matches!(state, GameState::Explore));
+        assert!(matches!(event, ExploreEvent::None));
         assert_eq!(combat.enemies[0].hp, 10);
         assert_eq!(combat.player_attack_cooldown, 0);
         assert!(combat.skill_effects.is_empty());
