@@ -6,10 +6,10 @@ use wipi::framebuffer::Framebuffer;
 
 use crate::data::{Direction, ItemKind, SkillType};
 use crate::game::{
-    clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
-    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, ExploreAction,
-    GameData, GameState, MenuAction, SessionState, ShopMode, UiState, COLOR_CYAN, COLOR_DARK_GRAY,
-    COLOR_GREEN, COLOR_RED, COLOR_WHITE, INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreAction, GameData,
+    GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, SessionState, ShopMode,
+    UiState, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
+    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
 };
 
 pub enum RenderState {

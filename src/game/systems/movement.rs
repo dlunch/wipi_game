@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use super::combat::{enemy_at, CombatState};
+use super::combat::{CombatState, enemy_at};
 use crate::data::{Direction, Map, Npc};
 use crate::game::{GameState, PlayerState};
 
@@ -132,14 +132,7 @@ fn tick(
     combat: &CombatState,
     npcs: &[Npc],
 ) -> bool {
-    let event = reduce_tick(
-        &GameState::Explore,
-        state,
-        player,
-        Some(map),
-        combat,
-        npcs,
-    );
+    let event = reduce_tick(&GameState::Explore, state, player, Some(map), combat, npcs);
     apply_tick(state, player, event)
 }
 
@@ -228,7 +221,7 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Enemy, Map, Npc, NpcType, Tile};
-    use crate::game::{combat::FieldEnemy, PlayerState};
+    use crate::game::{PlayerState, combat::FieldEnemy};
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {

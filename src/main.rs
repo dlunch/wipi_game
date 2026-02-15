@@ -136,11 +136,7 @@ impl GameInner {
                 );
                 let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, event);
                 if moved {
-                    game::explore::check_tile_events(
-                        &mut s.player,
-                        &mut s.combat,
-                        &self.data,
-                    );
+                    game::explore::check_tile_events(&mut s.player, &mut s.combat, &self.data);
                 }
             }
             AppEffect::UpdateCombat => {
@@ -202,9 +198,11 @@ impl GameInner {
                         game::movement::on_direction_pressed(&mut s.movement, key);
                     }
                     game::ExploreEvent::TryNpcInteract { facing } => {
-                        if let Some(npc_event) =
-                            game::npc::reduce(&mut s.player, &self.data, game::NpcIntent::Interact { facing })
-                        {
+                        if let Some(npc_event) = game::npc::reduce(
+                            &mut s.player,
+                            &self.data,
+                            game::NpcIntent::Interact { facing },
+                        ) {
                             match npc_event {
                                 game::NpcEvent::OpenDialog(dialog_state) => {
                                     self.ui.dialog.open(dialog_state);
