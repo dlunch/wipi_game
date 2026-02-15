@@ -37,6 +37,30 @@ pub enum CombatIntent<'a> {
 }
 
 #[derive(Debug)]
+pub enum CombatAction<'a> {
+    Tick {
+        player_x: usize,
+        player_y: usize,
+        player_def: i32,
+        map: &'a Map,
+        enemy_data: &'a [Enemy],
+    },
+    PlayerAttack {
+        player_x: usize,
+        player_y: usize,
+        player_atk: i32,
+        facing: Direction,
+    },
+    UseSkill {
+        skill: &'a Skill,
+        player_x: usize,
+        player_y: usize,
+        player_atk: i32,
+        facing: Direction,
+    },
+}
+
+#[derive(Debug)]
 pub enum CombatEvent {
     Tick(CombatResult),
     Attack(Option<KillReward>),
@@ -165,9 +189,51 @@ pub struct CombatState {
     pub respawn_positions: Vec<(usize, usize, usize)>,
 }
 
-pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
+pub fn reduce(intent: CombatIntent<'_>) -> CombatAction<'_> {
     match intent {
         CombatIntent::Tick {
+            player_x,
+            player_y,
+            player_def,
+            map,
+            enemy_data,
+        } => CombatAction::Tick {
+            player_x,
+            player_y,
+            player_def,
+            map,
+            enemy_data,
+        },
+        CombatIntent::PlayerAttack {
+            player_x,
+            player_y,
+            player_atk,
+            facing,
+        } => CombatAction::PlayerAttack {
+            player_x,
+            player_y,
+            player_atk,
+            facing,
+        },
+        CombatIntent::UseSkill {
+            skill,
+            player_x,
+            player_y,
+            player_atk,
+            facing,
+        } => CombatAction::UseSkill {
+            skill,
+            player_x,
+            player_y,
+            player_atk,
+            facing,
+        },
+    }
+}
+
+pub fn apply(state: &mut CombatState, action: CombatAction<'_>) -> CombatEvent {
+    match action {
+        CombatAction::Tick {
             player_x,
             player_y,
             player_def,
@@ -176,13 +242,13 @@ pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
         } => CombatEvent::Tick(update(
             state, player_x, player_y, player_def, map, enemy_data,
         )),
-        CombatIntent::PlayerAttack {
+        CombatAction::PlayerAttack {
             player_x,
             player_y,
             player_atk,
             facing,
         } => CombatEvent::Attack(player_attack(state, player_x, player_y, player_atk, facing)),
-        CombatIntent::UseSkill {
+        CombatAction::UseSkill {
             skill,
             player_x,
             player_y,
@@ -192,10 +258,6 @@ pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
             state, skill, player_x, player_y, player_atk, facing,
         )),
     }
-}
-
-fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
-    apply(state, intent)
 }
 
 pub fn spawn_for_map(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
@@ -571,16 +633,14 @@ pub fn apply_tick(
     let map_id = player.current_map_id.clone();
 
     if let Some(map) = data.find_map(&map_id) {
-        let CombatEvent::Tick(result) = reduce(
-            combat,
-            CombatIntent::Tick {
-                player_x,
-                player_y,
-                player_def,
-                map,
-                enemy_data: &data.enemies,
-            },
-        ) else {
+        let action = reduce(CombatIntent::Tick {
+            player_x,
+            player_y,
+            player_def,
+            map,
+            enemy_data: &data.enemies,
+        });
+        let CombatEvent::Tick(result) = apply(combat, action) else {
             return CombatTickApplyEvent::None;
         };
 
@@ -608,16 +668,14 @@ pub fn use_skill_action(
         };
     }
 
-    let CombatEvent::Skill(result) = reduce(
-        combat,
-        CombatIntent::UseSkill {
-            skill,
-            player_x: player.x,
-            player_y: player.y,
-            player_atk: player.total_atk(),
-            facing: player.facing,
-        },
-    ) else {
+    let action = reduce(CombatIntent::UseSkill {
+        skill,
+        player_x: player.x,
+        player_y: player.y,
+        player_atk: player.total_atk(),
+        facing: player.facing,
+    });
+    let CombatEvent::Skill(result) = apply(combat, action) else {
         return SkillResult {
             player_effects: Vec::new(),
             kills: Vec::new(),
@@ -824,14 +882,14 @@ mod tests {
             .enemies
             .push(FieldEnemy::new(make_enemy("slime", 20, 4, 0, 5, 2), 2, 1));
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            reduce(CombatIntent::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
 
         assert!(matches!(event, CombatEvent::Attack(None)));
@@ -845,14 +903,14 @@ mod tests {
             .enemies
             .push(FieldEnemy::new(make_enemy("slime", 5, 4, 0, 11, 7), 2, 1));
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            reduce(CombatIntent::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
 
         let CombatEvent::Attack(reward) = event else {
@@ -873,25 +931,25 @@ mod tests {
             .enemies
             .push(FieldEnemy::new(make_enemy("slime", 30, 4, 0, 5, 2), 2, 1));
 
-        let first = reduce(
+        let first = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            reduce(CombatIntent::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
         let hp_after_first = state.enemies[0].hp;
 
-        let second = reduce(
+        let second = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            reduce(CombatIntent::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
 
         assert!(matches!(first, CombatEvent::Attack(None)));
@@ -904,14 +962,14 @@ mod tests {
     fn reduce_player_attack_miss_returns_none() {
         let mut state = CombatState::default();
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::PlayerAttack {
+            reduce(CombatIntent::PlayerAttack {
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
 
         assert!(matches!(event, CombatEvent::Attack(None)));
@@ -925,15 +983,15 @@ mod tests {
             .enemies
             .push(FieldEnemy::new(make_enemy("slime", 20, 4, 0, 5, 2), 3, 1));
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            reduce(CombatIntent::UseSkill {
                 skill: &crate::data::Skill::FIREBALL,
                 player_x: 1,
                 player_y: 1,
                 player_atk: 10,
                 facing: Direction::Right,
-            },
+            }),
         );
 
         let CombatEvent::Skill(result) = event else {
@@ -959,15 +1017,15 @@ mod tests {
             .enemies
             .push(FieldEnemy::new(make_enemy("right", 15, 4, 0, 1, 1), 3, 2));
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            reduce(CombatIntent::UseSkill {
                 skill: &crate::data::Skill::SPIN_ATTACK,
                 player_x: 2,
                 player_y: 2,
                 player_atk: 10,
                 facing: Direction::Up,
-            },
+            }),
         );
 
         let CombatEvent::Skill(result) = event else {
@@ -980,15 +1038,15 @@ mod tests {
     fn reduce_use_skill_heal_adds_player_heal_effect() {
         let mut state = CombatState::default();
 
-        let event = reduce(
+        let event = apply(
             &mut state,
-            CombatIntent::UseSkill {
+            reduce(CombatIntent::UseSkill {
                 skill: &crate::data::Skill::HEAL,
                 player_x: 4,
                 player_y: 5,
                 player_atk: 10,
                 facing: Direction::Left,
-            },
+            }),
         );
 
         let CombatEvent::Skill(result) = event else {

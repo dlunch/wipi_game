@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use wipi::event::KeyCode;
 
 use crate::data::{Direction, Map, Tile};
-use crate::game::{CombatState, ExploreAction, ExploreUiState, GameData, GameState, PlayerState};
+use crate::game::{ExploreAction, ExploreUiState, GameData, GameState, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -75,11 +75,17 @@ pub fn reduce(
     }
 }
 
-#[derive(Debug, Clone)]
-enum TileEvent {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TileEvent {
     Treasure,
     MapExit(String),
     DungeonEntrance(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileApplyEvent {
+    None,
+    MapChanged,
 }
 
 fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
@@ -107,19 +113,22 @@ fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     }
 }
 
-pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, data: &GameData) {
-    let event = data
-        .find_map(&player.current_map_id)
-        .and_then(|map| check_tile_event(map, player));
+pub fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
+    data.find_map(&player.current_map_id)
+        .and_then(|map| check_tile_event(map, player))
+}
 
-    let Some(event) = event else {
-        return;
-    };
-
+pub fn apply_tile_event(
+    player: &mut PlayerState,
+    data: &GameData,
+    event: TileEvent,
+) -> TileApplyEvent {
     match event {
         TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-            if !target.is_empty() {
-                change_map(player, combat, data, &target);
+            if !target.is_empty() && change_map(player, data, &target) {
+                TileApplyEvent::MapChanged
+            } else {
+                TileApplyEvent::None
             }
         }
         TileEvent::Treasure => {
@@ -130,25 +139,21 @@ pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, dat
                 }
                 player.opened_treasures.push((map_id, player.x, player.y));
             }
+            TileApplyEvent::None
         }
     }
 }
 
-fn change_map(
-    player: &mut PlayerState,
-    combat: &mut CombatState,
-    data: &GameData,
-    target_id: &str,
-) {
+fn change_map(player: &mut PlayerState, data: &GameData, target_id: &str) -> bool {
     let Some(map) = data.find_map(target_id) else {
-        return;
+        return false;
     };
 
     let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
     player.current_map_id = map.id.clone();
     player.x = x;
     player.y = y;
-    crate::game::combat::spawn_for_map(combat, map, &data.enemies);
+    true
 }
 
 #[cfg(test)]
@@ -160,7 +165,7 @@ mod tests {
     use wipi::event::KeyCode;
 
     use super::*;
-    use crate::data::{Direction, Enemy, Item, ItemKind, Map, Tile};
+    use crate::data::{Direction, Item, ItemKind, Map, Tile};
 
     fn make_test_map(
         id: &str,
@@ -197,16 +202,6 @@ mod tests {
             param2: 0,
             param3: 0,
             price: 50,
-        });
-
-        data.enemies.push(Enemy {
-            id: "slime".into(),
-            name: "Slime".into(),
-            hp: 10,
-            atk: 4,
-            def: 1,
-            exp: 5,
-            gold: 2,
         });
 
         data.maps.push(make_test_map(
@@ -269,27 +264,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            false,
-        ));
-
-        data.maps.push(make_test_map(
-            "battlefield",
-            3,
-            3,
-            vec![
-                Tile::Enemy,
-                Tile::PlayerStart,
-                Tile::Floor,
-                Tile::Floor,
-                Tile::Floor,
-                Tile::Floor,
-                Tile::Floor,
-                Tile::Floor,
-                Tile::Floor,
-            ],
-            Vec::new(),
-            Vec::new(),
-            vec![("slime".into(), 1)],
             false,
         ));
 
@@ -368,13 +342,23 @@ mod tests {
     }
 
     #[test]
-    fn check_tile_events_treasure_adds_potion_and_records_opened() {
+    fn reduce_tile_event_treasure_returns_treasure_event() {
+        let data = make_game_data();
+        let player = make_player("field", 1, 1);
+
+        let event = reduce_tile_event(&player, &data);
+
+        assert!(matches!(event, Some(TileEvent::Treasure)));
+    }
+
+    #[test]
+    fn apply_tile_event_treasure_adds_potion_and_records_opened() {
         let data = make_game_data();
         let mut player = make_player("field", 1, 1);
-        let mut combat = CombatState::default();
 
-        check_tile_events(&mut player, &mut combat, &data);
+        let apply_event = apply_tile_event(&mut player, &data, TileEvent::Treasure);
 
+        assert!(matches!(apply_event, TileApplyEvent::None));
         assert_eq!(player.inventory.len(), 1);
         assert_eq!(player.inventory[0].id, "potion");
         assert_eq!(player.opened_treasures.len(), 1);
@@ -382,72 +366,90 @@ mod tests {
     }
 
     #[test]
-    fn check_tile_events_already_opened_treasure_has_no_duplicate_rewards() {
+    fn apply_tile_event_already_opened_treasure_has_no_duplicate_rewards() {
         let data = make_game_data();
         let mut player = make_player("field", 1, 1);
-        let mut combat = CombatState::default();
 
-        check_tile_events(&mut player, &mut combat, &data);
-        check_tile_events(&mut player, &mut combat, &data);
+        apply_tile_event(&mut player, &data, TileEvent::Treasure);
+        apply_tile_event(&mut player, &data, TileEvent::Treasure);
 
         assert_eq!(player.inventory.len(), 1);
         assert_eq!(player.opened_treasures.len(), 1);
     }
 
     #[test]
-    fn check_tile_events_exit_tile_changes_map_when_exit_matches_position() {
+    fn reduce_tile_event_exit_tile_returns_map_exit_event() {
+        let data = make_game_data();
+        let player = make_player("field", 2, 1);
+
+        let event = reduce_tile_event(&player, &data);
+
+        assert!(matches!(event, Some(TileEvent::MapExit(target)) if target == "town"));
+    }
+
+    #[test]
+    fn apply_tile_event_map_exit_changes_map_when_exit_matches_position() {
         let data = make_game_data();
         let mut player = make_player("field", 2, 1);
-        let mut combat = CombatState::default();
 
-        check_tile_events(&mut player, &mut combat, &data);
+        let apply_event = apply_tile_event(&mut player, &data, TileEvent::MapExit("town".into()));
 
+        assert!(matches!(apply_event, TileApplyEvent::MapChanged));
         assert_eq!(player.current_map_id, "town");
         assert_eq!(player.x, 0);
         assert_eq!(player.y, 0);
     }
 
     #[test]
-    fn check_tile_events_dungeon_tile_changes_map_when_dungeon_matches_position() {
+    fn reduce_tile_event_dungeon_tile_returns_dungeon_event() {
+        let data = make_game_data();
+        let player = make_player("field", 1, 2);
+
+        let event = reduce_tile_event(&player, &data);
+
+        assert!(matches!(event, Some(TileEvent::DungeonEntrance(target)) if target == "cave"));
+    }
+
+    #[test]
+    fn apply_tile_event_dungeon_tile_changes_map_when_dungeon_matches_position() {
         let data = make_game_data();
         let mut player = make_player("field", 1, 2);
-        let mut combat = CombatState::default();
 
-        check_tile_events(&mut player, &mut combat, &data);
+        let apply_event = apply_tile_event(
+            &mut player,
+            &data,
+            TileEvent::DungeonEntrance("cave".into()),
+        );
 
+        assert!(matches!(apply_event, TileApplyEvent::MapChanged));
         assert_eq!(player.current_map_id, "cave");
         assert_eq!(player.x, 2);
         assert_eq!(player.y, 2);
     }
 
     #[test]
-    fn check_tile_events_floor_tile_does_nothing() {
+    fn reduce_tile_event_floor_tile_returns_none() {
         let data = make_game_data();
-        let mut player = make_player("field", 1, 0);
-        let mut combat = CombatState::default();
+        let player = make_player("field", 1, 0);
 
-        check_tile_events(&mut player, &mut combat, &data);
+        let event = reduce_tile_event(&player, &data);
 
-        assert_eq!(player.current_map_id, "field");
-        assert!(player.inventory.is_empty());
-        assert!(player.opened_treasures.is_empty());
-        assert!(combat.enemies.is_empty());
+        assert!(event.is_none());
     }
 
     #[test]
-    fn change_map_changes_player_map_and_position_and_spawns_enemies() {
+    fn apply_tile_event_map_exit_with_missing_target_does_nothing() {
         let data = make_game_data();
-        let mut player = make_player("field", 0, 0);
-        let mut combat = CombatState::default();
+        let mut player = make_player("field", 2, 1);
 
-        change_map(&mut player, &mut combat, &data, "battlefield");
+        let apply_event = apply_tile_event(
+            &mut player,
+            &data,
+            TileEvent::MapExit(String::from("missing")),
+        );
 
-        assert_eq!(player.current_map_id, "battlefield");
-        assert_eq!(player.x, 1);
-        assert_eq!(player.y, 0);
-        assert_eq!(combat.enemies.len(), 1);
-        assert_eq!(combat.enemies[0].x, 0);
-        assert_eq!(combat.enemies[0].y, 0);
+        assert!(matches!(apply_event, TileApplyEvent::None));
+        assert_eq!(player.current_map_id, "field");
     }
 
     #[test]

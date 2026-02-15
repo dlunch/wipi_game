@@ -134,8 +134,14 @@ impl GameInner {
             &self.data.npcs,
         );
         let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, event);
-        if moved {
-            game::explore::check_tile_events(&mut s.player, &mut s.combat, &self.data);
+        if moved && let Some(tile_event) = game::explore::reduce_tile_event(&s.player, &self.data) {
+            let apply_event =
+                game::explore::apply_tile_event(&mut s.player, &self.data, tile_event);
+            if matches!(apply_event, game::explore::TileApplyEvent::MapChanged)
+                && let Some(map) = self.data.find_map(&s.player.current_map_id)
+            {
+                game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+            }
         }
     }
 
@@ -177,6 +183,11 @@ impl GameInner {
                         game::lifecycle::start_new_game(&self.data);
                     self.state = state;
                     self.session = Some(session);
+                    if let Some(s) = self.session.as_mut()
+                        && let Some(map) = self.data.find_map(&s.player.current_map_id)
+                    {
+                        game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+                    }
                     self.ui = UiState::default();
                     self.ui.dialog.set(dialog_state);
                 }
@@ -184,6 +195,11 @@ impl GameInner {
                     let (state, session, dialog_state) = game::lifecycle::continue_game(&self.data);
                     self.state = state;
                     self.session = Some(session);
+                    if let Some(s) = self.session.as_mut()
+                        && let Some(map) = self.data.find_map(&s.player.current_map_id)
+                    {
+                        game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+                    }
                     self.ui = UiState::default();
                     self.ui.dialog.set(dialog_state);
                 }
@@ -204,19 +220,28 @@ impl GameInner {
                 game::movement::on_direction_pressed(&mut s.movement, key);
             }
             game::ExploreEvent::TryNpcInteract { facing } => {
-                if let Some(npc_event) = game::npc::apply(
-                    &mut s.player,
-                    &self.data,
-                    game::NpcIntent::Interact { facing },
-                ) {
+                if let Some(npc_event) =
+                    game::npc::reduce(&s.player, &self.data, game::NpcIntent::Interact { facing })
+                {
                     match npc_event {
-                        game::NpcEvent::OpenDialog(dialog_state) => {
+                        game::NpcEvent::OpenDialog {
+                            dialog_state,
+                            restore,
+                        } => {
+                            if restore {
+                                s.player.stats.current_hp = s.player.stats.max_hp;
+                                s.player.stats.current_mp = s.player.stats.max_mp;
+                            }
                             self.ui.dialog.open(dialog_state);
                             self.state = GameState::Dialog;
                         }
                         game::NpcEvent::OpenShop(shop_state) => {
                             self.ui.shop.open(shop_state);
                             self.state = GameState::Shop;
+                        }
+                        game::NpcEvent::RestoreStats => {
+                            s.player.stats.current_hp = s.player.stats.max_hp;
+                            s.player.stats.current_mp = s.player.stats.max_mp;
                         }
                     }
                 }
@@ -254,12 +279,12 @@ impl GameInner {
                     }
                 } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
                     &mut s.combat,
-                    game::CombatIntent::PlayerAttack {
+                    game::combat::reduce(game::CombatIntent::PlayerAttack {
                         player_x: s.player.x,
                         player_y: s.player.y,
                         player_atk: s.player.total_atk(),
                         facing: s.player.facing,
-                    },
+                    }),
                 ) {
                     game::reward::apply_kill_reward(&mut s.player, &reward);
                     game::quest::apply(

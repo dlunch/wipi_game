@@ -3,8 +3,12 @@ use crate::game::{DialogState, GameData, PlayerState, ShopState};
 
 #[derive(Debug)]
 pub enum NpcEvent {
-    OpenDialog(DialogState),
+    OpenDialog {
+        dialog_state: DialogState,
+        restore: bool,
+    },
     OpenShop(ShopState),
+    RestoreStats,
 }
 
 #[derive(Debug)]
@@ -12,31 +16,30 @@ pub enum NpcIntent {
     Interact { facing: Direction },
 }
 
-pub fn apply(player: &mut PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
+pub fn reduce(player: &PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
     }
 }
 
-fn try_interact(player: &mut PlayerState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
+fn try_interact(player: &PlayerState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
 
     match npc.npc_type {
         NpcType::Healer => {
-            player.stats.current_hp = player.stats.max_hp;
-            player.stats.current_mp = player.stats.max_mp;
-
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
                 let filtered = filter_lines(player, dialog);
                 if !filtered.lines.is_empty() {
-                    return Some(NpcEvent::OpenDialog(DialogState::new(
-                        npc.name.clone(),
-                        &filtered,
-                    )));
+                    return Some(NpcEvent::OpenDialog {
+                        dialog_state: DialogState::new(npc.name.clone(), &filtered),
+                        restore: true,
+                    });
                 }
             }
+
+            return Some(NpcEvent::RestoreStats);
         }
         NpcType::ShopKeeper => {
             let shop = npc
@@ -57,10 +60,10 @@ fn try_interact(player: &mut PlayerState, data: &GameData, facing: Direction) ->
     if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
         let filtered = filter_lines(player, dialog);
         if !filtered.lines.is_empty() {
-            return Some(NpcEvent::OpenDialog(DialogState::new(
-                npc.name.clone(),
-                &filtered,
-            )));
+            return Some(NpcEvent::OpenDialog {
+                dialog_state: DialogState::new(npc.name.clone(), &filtered),
+                restore: false,
+            });
         }
     }
 
@@ -144,56 +147,84 @@ mod tests {
 
     #[test]
     fn try_interact_returns_none_when_no_npc_at_facing_position() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let player = PlayerState::new(String::from("H"), "v");
         let data = GameData::default();
 
-        let next_state = try_interact(&mut player, &data, Direction::Right);
+        let next_state = try_interact(&player, &data, Direction::Right);
 
         assert!(next_state.is_none());
     }
 
     #[test]
     fn try_interact_with_villager_returns_dialog_state() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let player = PlayerState::new(String::from("H"), "v");
         let npc = make_npc(NpcType::Villager);
         let dialog = make_dialog(vec!["Hello"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&mut player, &data, Direction::Right);
+        let next_state = try_interact(&player, &data, Direction::Right);
 
-        let Some(NpcEvent::OpenDialog(dialog_state)) = next_state else {
+        let Some(NpcEvent::OpenDialog {
+            dialog_state,
+            restore,
+        }) = next_state
+        else {
             panic!("expected dialog state");
         };
+        assert!(!restore);
         assert_eq!(dialog_state.npc_name, "NPC");
         assert_eq!(dialog_state.dialog_id, "d1");
     }
 
     #[test]
-    fn try_interact_with_healer_fully_heals_and_returns_dialog_state() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        player.stats.current_hp = 7;
-        player.stats.current_mp = 3;
+    fn try_interact_with_healer_requests_restore_and_returns_dialog_state() {
+        let player = PlayerState::new(String::from("H"), "v");
+        let before_hp = player.stats.current_hp;
+        let before_mp = player.stats.current_mp;
 
         let npc = make_npc(NpcType::Healer);
         let dialog = make_dialog(vec!["Be healed"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&mut player, &data, Direction::Right);
+        let next_state = try_interact(&player, &data, Direction::Right);
 
-        assert_eq!(player.stats.current_hp, player.stats.max_hp);
-        assert_eq!(player.stats.current_mp, player.stats.max_mp);
-        assert!(matches!(next_state, Some(NpcEvent::OpenDialog(_))));
+        assert_eq!(player.stats.current_hp, before_hp);
+        assert_eq!(player.stats.current_mp, before_mp);
+        assert!(matches!(
+            next_state,
+            Some(NpcEvent::OpenDialog { restore: true, .. })
+        ));
+    }
+
+    #[test]
+    fn try_interact_with_healer_without_dialog_still_requests_restore() {
+        let mut player = PlayerState::new(String::from("H"), "v");
+
+        player.stats.current_hp = 7;
+        player.stats.current_mp = 3;
+        let before_hp = player.stats.current_hp;
+        let before_mp = player.stats.current_mp;
+
+        let npc = make_npc(NpcType::Healer);
+        let dialog = make_dialog(Vec::new());
+        let data = make_game_data_with_npc(npc, dialog);
+
+        let next_state = try_interact(&player, &data, Direction::Right);
+
+        assert_eq!(player.stats.current_hp, before_hp);
+        assert_eq!(player.stats.current_mp, before_mp);
+        assert!(matches!(next_state, Some(NpcEvent::RestoreStats)));
     }
 
     #[test]
     fn try_interact_with_shopkeeper_returns_shop_state() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let player = PlayerState::new(String::from("H"), "v");
         let npc = make_npc(NpcType::ShopKeeper);
         let dialog = make_dialog(vec!["Welcome"]);
         let mut data = make_game_data_with_npc(npc, dialog);
         data.shops = vec![make_shop("s1", Vec::new())];
 
-        let next_state = try_interact(&mut player, &data, Direction::Right);
+        let next_state = try_interact(&player, &data, Direction::Right);
 
         let Some(NpcEvent::OpenShop(shop_state)) = next_state else {
             panic!("expected shop state");

@@ -5,7 +5,7 @@ use alloc::string::String;
 use crate::data::Tile;
 use crate::game::{
     CombatState, DialogState, GameData, GameState, MenuState, MovementState, PlayerState,
-    SessionState, combat, load_game,
+    SessionState, load_game,
 };
 
 pub enum LoadingEvent {
@@ -44,7 +44,7 @@ pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
 pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let mut combat = CombatState::default();
+    let combat = CombatState::default();
 
     if let Some(ref weapon_id) = config.equip_weapon
         && let Some(weapon) = data.find_item(weapon_id).cloned()
@@ -73,7 +73,6 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
         player.current_map_id = map.id.clone();
         player.x = x;
         player.y = y;
-        combat::spawn_for_map(&mut combat, map, &data.enemies);
     }
 
     let (state, dialog_state) = if let Some((ref dialog_id, ref npc_name)) = config.intro_dialog
@@ -101,7 +100,7 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
 pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let mut combat = CombatState::default();
+    let combat = CombatState::default();
 
     match load_game(&mut player) {
         Ok(true) => {
@@ -111,16 +110,14 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<Dialog
                 player.x = x;
                 player.y = y;
             }
-            if let Some(map) = data.find_map(&player.current_map_id) {
-                if (map.get_tile(player.x, player.y) == Tile::Wall
+            if let Some(map) = data.find_map(&player.current_map_id)
+                && (map.get_tile(player.x, player.y) == Tile::Wall
                     || player.x >= map.width
                     || player.y >= map.height)
-                    && let Some((x, y)) = map.find_player_start()
-                {
-                    player.x = x;
-                    player.y = y;
-                }
-                combat::spawn_for_map(&mut combat, map, &data.enemies);
+                && let Some((x, y)) = map.find_player_start()
+            {
+                player.x = x;
+                player.y = y;
             }
 
             let session = SessionState {
