@@ -1,7 +1,11 @@
 use crate::data::{Dialog, DialogAction, DialogCondition, Direction, NpcType};
-use crate::game::{
-    self, DialogState, GameData, GameState, PlayerIntent, PlayerState, ShopState, UiState,
-};
+use crate::game::{self, DialogState, GameData, PlayerIntent, PlayerState, ShopState};
+
+#[derive(Debug)]
+pub enum NpcEvent {
+    OpenDialog(DialogState),
+    OpenShop(ShopState),
+}
 
 #[derive(Debug)]
 pub enum NpcIntent<'a> {
@@ -11,22 +15,20 @@ pub enum NpcIntent<'a> {
 
 pub fn reduce(
     player: &mut PlayerState,
-    ui: &mut UiState,
     data: &GameData,
     intent: NpcIntent<'_>,
-) -> Option<GameState> {
+) -> Option<NpcEvent> {
     match intent {
-        NpcIntent::Interact { facing } => try_interact(player, ui, data, facing),
-        NpcIntent::ProcessDialogAction { action } => process_action(player, ui, data, action),
+        NpcIntent::Interact { facing } => try_interact(player, data, facing),
+        NpcIntent::ProcessDialogAction { action } => process_action(player, data, action),
     }
 }
 
 pub fn try_interact(
     player: &mut PlayerState,
-    ui: &mut UiState,
     data: &GameData,
     facing: Direction,
-) -> Option<GameState> {
+) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
@@ -38,8 +40,10 @@ pub fn try_interact(
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
                 let filtered = filter_lines(player, dialog);
                 if !filtered.lines.is_empty() {
-                    ui.dialog.state = Some(DialogState::new(npc.name.clone(), &filtered));
-                    return Some(GameState::Dialog);
+                    return Some(NpcEvent::OpenDialog(DialogState::new(
+                        npc.name.clone(),
+                        &filtered,
+                    )));
                 }
             }
         }
@@ -53,10 +57,7 @@ pub fn try_interact(
 
             if let Some(shop) = shop {
                 let shop_items = data.get_shop_items(&shop);
-                ui.shop.state = Some(ShopState::new(shop, shop_items));
-                ui.shop.mode = crate::game::ShopMode::Select;
-                ui.shop.selected = 0;
-                return Some(GameState::Shop);
+                return Some(NpcEvent::OpenShop(ShopState::new(shop, shop_items)));
             }
         }
         NpcType::QuestGiver | NpcType::Villager => {}
@@ -65,8 +66,10 @@ pub fn try_interact(
     if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
         let filtered = filter_lines(player, dialog);
         if !filtered.lines.is_empty() {
-            ui.dialog.state = Some(DialogState::new(npc.name.clone(), &filtered));
-            return Some(GameState::Dialog);
+            return Some(NpcEvent::OpenDialog(DialogState::new(
+                npc.name.clone(),
+                &filtered,
+            )));
         }
     }
 
@@ -95,10 +98,9 @@ pub fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
 
 pub fn process_action(
     player: &mut PlayerState,
-    ui: &mut UiState,
     data: &GameData,
     action: &DialogAction,
-) -> Option<GameState> {
+) -> Option<NpcEvent> {
     match action {
         DialogAction::GiveQuest(id) => {
             let _ = game::player::reduce(player, PlayerIntent::AddQuest(id.clone()));
@@ -139,10 +141,7 @@ pub fn process_action(
         DialogAction::OpenShop(id) => {
             if let Some(shop) = data.find_shop(id).cloned() {
                 let shop_items = data.get_shop_items(&shop);
-                ui.shop.state = Some(ShopState::new(shop, shop_items));
-                ui.shop.mode = crate::game::ShopMode::Select;
-                ui.shop.selected = 0;
-                return Some(GameState::Shop);
+                return Some(NpcEvent::OpenShop(ShopState::new(shop, shop_items)));
             }
         }
         DialogAction::Heal => {
@@ -222,10 +221,9 @@ mod tests {
     #[test]
     fn try_interact_returns_none_when_no_npc_at_facing_position() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData::default();
 
-        let next_state = try_interact(&mut player, &mut ui, &data, Direction::Right);
+        let next_state = try_interact(&mut player, &data, Direction::Right);
 
         assert!(next_state.is_none());
     }
@@ -233,18 +231,14 @@ mod tests {
     #[test]
     fn try_interact_with_villager_returns_dialog_state() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let npc = make_npc(NpcType::Villager);
         let dialog = make_dialog(vec!["Hello"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&mut player, &mut ui, &data, Direction::Right);
+        let next_state = try_interact(&mut player, &data, Direction::Right);
 
-        let Some(GameState::Dialog) = next_state else {
+        let Some(NpcEvent::OpenDialog(dialog_state)) = next_state else {
             panic!("expected dialog state");
-        };
-        let Some(dialog_state) = ui.dialog.state.as_ref() else {
-            panic!("expected dialog ui state");
         };
         assert_eq!(dialog_state.npc_name, "NPC");
         assert_eq!(dialog_state.dialog_id, "d1");
@@ -253,7 +247,6 @@ mod tests {
     #[test]
     fn try_interact_with_healer_fully_heals_and_returns_dialog_state() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         player.stats.current_hp = 7;
         player.stats.current_mp = 3;
 
@@ -261,29 +254,25 @@ mod tests {
         let dialog = make_dialog(vec!["Be healed"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&mut player, &mut ui, &data, Direction::Right);
+        let next_state = try_interact(&mut player, &data, Direction::Right);
 
         assert_eq!(player.stats.current_hp, player.stats.max_hp);
         assert_eq!(player.stats.current_mp, player.stats.max_mp);
-        assert!(matches!(next_state, Some(GameState::Dialog)));
+        assert!(matches!(next_state, Some(NpcEvent::OpenDialog(_))));
     }
 
     #[test]
     fn try_interact_with_shopkeeper_returns_shop_state() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let npc = make_npc(NpcType::ShopKeeper);
         let dialog = make_dialog(vec!["Welcome"]);
         let mut data = make_game_data_with_npc(npc, dialog);
         data.shops = vec![make_shop("s1", Vec::new())];
 
-        let next_state = try_interact(&mut player, &mut ui, &data, Direction::Right);
+        let next_state = try_interact(&mut player, &data, Direction::Right);
 
-        let Some(GameState::Shop) = next_state else {
+        let Some(NpcEvent::OpenShop(shop_state)) = next_state else {
             panic!("expected shop state");
-        };
-        let Some(shop_state) = ui.shop.state.as_ref() else {
-            panic!("expected shop ui state");
         };
         assert_eq!(shop_state.shop.id, "s1");
     }
@@ -352,12 +341,10 @@ mod tests {
     #[test]
     fn process_action_give_quest_adds_quest() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData::default();
 
         let next_state = process_action(
             &mut player,
-            &mut ui,
             &data,
             &DialogAction::GiveQuest(String::from("q1")),
         );
@@ -369,7 +356,6 @@ mod tests {
     #[test]
     fn process_action_give_item_adds_item_when_present_in_data() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData {
             items: vec![make_item("potion")],
             ..GameData::default()
@@ -377,7 +363,6 @@ mod tests {
 
         let next_state = process_action(
             &mut player,
-            &mut ui,
             &data,
             &DialogAction::GiveItem(String::from("potion")),
         );
@@ -389,26 +374,24 @@ mod tests {
     #[test]
     fn process_action_give_gold_and_take_gold_modify_gold() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData::default();
         let starting_gold = player.stats.gold;
 
-        let _ = process_action(&mut player, &mut ui, &data, &DialogAction::GiveGold(25));
+        let _ = process_action(&mut player, &data, &DialogAction::GiveGold(25));
         assert_eq!(player.stats.gold, starting_gold + 25);
 
-        let _ = process_action(&mut player, &mut ui, &data, &DialogAction::TakeGold(15));
+        let _ = process_action(&mut player, &data, &DialogAction::TakeGold(15));
         assert_eq!(player.stats.gold, starting_gold + 10);
     }
 
     #[test]
     fn process_action_heal_fully_heals_player() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData::default();
         player.stats.current_hp = 2;
         player.stats.current_mp = 1;
 
-        let next_state = process_action(&mut player, &mut ui, &data, &DialogAction::Heal);
+        let next_state = process_action(&mut player, &data, &DialogAction::Heal);
 
         assert!(next_state.is_none());
         assert_eq!(player.stats.current_hp, player.stats.max_hp);
@@ -418,7 +401,6 @@ mod tests {
     #[test]
     fn process_action_open_shop_returns_shop_state() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let mut ui = UiState::default();
         let data = GameData {
             items: vec![make_item("potion")],
             shops: vec![make_shop("s1", vec![String::from("potion")])],
@@ -427,16 +409,12 @@ mod tests {
 
         let next_state = process_action(
             &mut player,
-            &mut ui,
             &data,
             &DialogAction::OpenShop(String::from("s1")),
         );
 
-        let Some(GameState::Shop) = next_state else {
+        let Some(NpcEvent::OpenShop(shop_state)) = next_state else {
             panic!("expected shop state");
-        };
-        let Some(shop_state) = ui.shop.state.as_ref() else {
-            panic!("expected shop ui state");
         };
         assert_eq!(shop_state.shop.id, "s1");
         assert_eq!(shop_state.items.len(), 1);

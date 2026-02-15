@@ -5,8 +5,8 @@ use wipi::event::KeyCode;
 
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
-    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PlayerIntent,
-    PlayerState, UiState, has_save_data, save_game,
+    self, save_game, CombatIntent, CombatState, GameData, GameState, MovementState, PlayerIntent,
+    PlayerState,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -26,6 +26,14 @@ pub struct ExploreRuntime<'a> {
     pub player: &'a mut PlayerState,
     pub skill_cooldowns: &'a mut [u32; 3],
     pub combat: &'a mut CombatState,
+}
+
+pub enum ExploreEvent {
+    None,
+    OpenDialog(crate::game::DialogState),
+    OpenShop(crate::game::ShopState),
+    EnterPauseMenu,
+    EnterMenu,
 }
 
 impl ExploreIntent {
@@ -53,11 +61,10 @@ impl ExploreIntent {
 
 pub fn reduce(
     state: &mut GameState,
-    ui: &mut UiState,
     runtime: ExploreRuntime<'_>,
     data: &GameData,
     intent: ExploreIntent,
-) {
+) -> ExploreEvent {
     let ExploreRuntime {
         movement,
         player,
@@ -75,15 +82,24 @@ pub fn reduce(
         }
         ExploreIntent::TryNpcInteract => {
             let facing = player.facing;
-            if let Some(new_state) =
-                game::npc::reduce(player, ui, data, game::NpcIntent::Interact { facing })
+            if let Some(event) =
+                game::npc::reduce(player, data, game::NpcIntent::Interact { facing })
             {
-                *state = new_state;
+                match event {
+                    game::NpcEvent::OpenDialog(dialog_state) => {
+                        *state = GameState::Dialog;
+                        return ExploreEvent::OpenDialog(dialog_state);
+                    }
+                    game::NpcEvent::OpenShop(shop_state) => {
+                        *state = GameState::Shop;
+                        return ExploreEvent::OpenShop(shop_state);
+                    }
+                }
             }
         }
         ExploreIntent::Attack if !is_peaceful => {
             if matches!(*state, GameState::Dialog) {
-                return;
+                return ExploreEvent::None;
             }
             if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
                 combat,
@@ -127,18 +143,21 @@ pub fn reduce(
         ExploreIntent::Attack
         | ExploreIntent::Skill1
         | ExploreIntent::Skill2
-        | ExploreIntent::Skill3 => {}
+        | ExploreIntent::Skill3 => {
+            return ExploreEvent::None;
+        }
         ExploreIntent::Pause => {
-            ui.pause_menu.selected = 0;
             *state = GameState::PauseMenu;
+            return ExploreEvent::EnterPauseMenu;
         }
         ExploreIntent::BackToMenu => {
             let _ = save_game(player);
-            ui.menu.state = MenuState::new(has_save_data());
-            ui.menu.selected = 0;
             *state = GameState::Menu;
+            return ExploreEvent::EnterMenu;
         }
     }
+
+    ExploreEvent::None
 }
 
 #[derive(Debug, Clone)]
@@ -532,7 +551,6 @@ mod tests {
     fn reduce_pause_switches_to_pause_menu_state() {
         let data = make_game_data();
         let mut state = GameState::Explore;
-        let mut ui = UiState::default();
         let mut movement = MovementState::default();
         let mut player = make_player("field", 0, 0);
         let mut skill_cooldowns = [0; 3];
@@ -540,7 +558,6 @@ mod tests {
 
         reduce(
             &mut state,
-            &mut ui,
             ExploreRuntime {
                 movement: &mut movement,
                 player: &mut player,
@@ -558,7 +575,6 @@ mod tests {
     fn reduce_attack_has_no_effect_in_peaceful_zone() {
         let data = make_game_data();
         let mut state = GameState::Explore;
-        let mut ui = UiState::default();
         let mut movement = MovementState::default();
         let mut player = make_player("safe_zone", 0, 0);
         player.facing = Direction::Right;
@@ -580,7 +596,6 @@ mod tests {
 
         reduce(
             &mut state,
-            &mut ui,
             ExploreRuntime {
                 movement: &mut movement,
                 player: &mut player,

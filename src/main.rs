@@ -105,7 +105,10 @@ impl GameInner {
     fn apply_effect(&mut self, effect: AppEffect) {
         match effect {
             AppEffect::UpdateLoading => {
-                game::lifecycle::update_loading(&mut self.state, &mut self.ui, &mut self.data);
+                if let Some(menu_state) = game::lifecycle::update_loading(&mut self.state, &mut self.data) {
+                    self.ui.menu.state = menu_state;
+                    self.ui.menu.selected = 0;
+                }
             }
             AppEffect::UpdateMovement => {
                 let Some(s) = self.session.as_mut() else {
@@ -140,16 +143,18 @@ impl GameInner {
                 {
                     match action {
                         MenuAction::NewGame => {
-                            let (state, session, ui) = game::lifecycle::start_new_game(&self.data);
+                            let (state, session, dialog_state) = game::lifecycle::start_new_game(&self.data);
                             self.state = state;
                             self.session = Some(session);
-                            self.ui = ui;
+                            self.ui = UiState::default();
+                            self.ui.dialog.state = dialog_state;
                         }
                         MenuAction::Continue => {
-                            let (state, session, ui) = game::lifecycle::continue_game(&self.data);
+                            let (state, session, dialog_state) = game::lifecycle::continue_game(&self.data);
                             self.state = state;
                             self.session = Some(session);
-                            self.ui = ui;
+                            self.ui = UiState::default();
+                            self.ui.dialog.state = dialog_state;
                         }
                         MenuAction::Exit => wipi::kernel::exit(0),
                     }
@@ -160,9 +165,8 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::explore::reduce(
+                let event = game::explore::reduce(
                     &mut self.state,
-                    &mut self.ui,
                     game::explore::ExploreRuntime {
                         movement: &mut s.movement,
                         player: &mut s.player,
@@ -172,6 +176,24 @@ impl GameInner {
                     &self.data,
                     intent,
                 );
+                match event {
+                    game::ExploreEvent::None => {}
+                    game::ExploreEvent::OpenDialog(dialog_state) => {
+                        self.ui.dialog.state = Some(dialog_state);
+                    }
+                    game::ExploreEvent::OpenShop(shop_state) => {
+                        self.ui.shop.state = Some(shop_state);
+                        self.ui.shop.mode = game::ShopMode::Select;
+                        self.ui.shop.selected = 0;
+                    }
+                    game::ExploreEvent::EnterPauseMenu => {
+                        self.ui.pause_menu.selected = 0;
+                    }
+                    game::ExploreEvent::EnterMenu => {
+                        self.ui.menu.state = MenuState::new(has_save_data());
+                        self.ui.menu.selected = 0;
+                    }
+                }
             }
             AppEffect::ApplyInventoryIntent(intent) => {
                 let Some(s) = self.session.as_mut() else {
@@ -190,16 +212,17 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                let was_shop = matches!(self.state, GameState::Shop);
-                game::dialog::reduce(
+                let event = game::dialog::reduce(
                     &mut self.state,
-                    &mut self.ui,
+                    &mut self.ui.dialog.state,
                     &mut s.player,
                     &self.data,
                     intent,
                 );
-                if !was_shop && matches!(self.state, GameState::Shop) {
-                    self.ui.shop = game::ShopUiState::default();
+                if let game::DialogEvent::OpenShop(shop_state) = event {
+                    self.ui.shop.state = Some(shop_state);
+                    self.ui.shop.mode = game::ShopMode::Select;
+                    self.ui.shop.selected = 0;
                 }
             }
             AppEffect::ApplyShopIntent(intent) => {

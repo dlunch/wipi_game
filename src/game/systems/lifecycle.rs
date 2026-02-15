@@ -5,24 +5,23 @@ use alloc::string::String;
 use crate::data::Tile;
 use crate::game::{
     self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
-    PlayerIntent, PlayerState, SessionState, UiState, has_save_data, load_game,
+    PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
 };
 
-pub fn update_loading(state: &mut GameState, ui: &mut UiState, data: &mut Rc<GameData>) {
+pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) -> Option<MenuState> {
     let GameState::Loading(step) = *state else {
-        return;
+        return None;
     };
 
     let Some(data_mut) = Rc::get_mut(data) else {
         *state = GameState::Error(String::from("Load error: data is shared"));
-        return;
+        return None;
     };
 
     match data_mut.load_step(step) {
         Ok(true) => {
             *state = GameState::Menu;
-            ui.menu.state = MenuState::new(has_save_data());
-            ui.menu.selected = 0;
+            return Some(MenuState::new(has_save_data()));
         }
         Ok(false) => {
             *state = GameState::Loading(step + 1);
@@ -31,9 +30,11 @@ pub fn update_loading(state: &mut GameState, ui: &mut UiState, data: &mut Rc<Gam
             *state = GameState::Error(format!("Load error: {}", e));
         }
     }
+
+    None
 }
 
-pub fn start_new_game(data: &GameData) -> (GameState, SessionState, UiState) {
+pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
     let mut player = PlayerState::new(String::from("Hero"), "village");
     let mut combat = CombatState::default();
 
@@ -71,12 +72,13 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, UiState) {
         );
     }
 
-    let mut ui = UiState::default();
-    let state = if let Some(dialog) = data.find_dialog("dialog_guide") {
-        ui.dialog.state = Some(DialogState::new(String::from("마을 안내원"), dialog));
-        GameState::Dialog
+    let (state, dialog_state) = if let Some(dialog) = data.find_dialog("dialog_guide") {
+        (
+            GameState::Dialog,
+            Some(DialogState::new(String::from("마을 안내원"), dialog)),
+        )
     } else {
-        GameState::Explore
+        (GameState::Explore, None)
     };
 
     let session = SessionState {
@@ -87,10 +89,10 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, UiState) {
         mp_regen_timer: 0,
     };
 
-    (state, session, ui)
+    (state, session, dialog_state)
 }
 
-pub fn continue_game(data: &GameData) -> (GameState, SessionState, UiState) {
+pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
     let mut player = PlayerState::new(String::from("Hero"), "village");
     let mut combat = CombatState::default();
 
@@ -132,7 +134,7 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, UiState) {
                 mp_regen_timer: 0,
             };
 
-            (GameState::Explore, session, UiState::default())
+            (GameState::Explore, session, None)
         }
         Ok(false) | Err(_) => start_new_game(data),
     }
