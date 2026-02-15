@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
+#[cfg(test)]
 use crate::game::PlayerState;
 
 const HIT_FLASH_DURATION: u32 = 10;
@@ -538,6 +539,7 @@ fn tick_resource_state(skill_cooldowns: [u32; 3], mp_regen_timer: u32) -> ([u32;
     (next_skill_cooldowns, next_mp_regen_timer, recover_mp)
 }
 
+#[cfg(test)]
 pub fn apply_tick(
     player: &mut PlayerState,
     skill_cooldowns: &mut [u32; 3],

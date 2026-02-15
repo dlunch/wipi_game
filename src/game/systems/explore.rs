@@ -3,7 +3,9 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{Direction, Map, Tile};
+#[cfg(test)]
+use crate::data::Map;
+use crate::data::{Direction, Tile};
 use crate::game::{ExploreAction, GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
@@ -103,6 +105,7 @@ pub enum TileApplyEvent {
     MapChanged,
 }
 
+#[cfg(test)]
 fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     let tile = map.get_tile(player.x, player.y);
 
@@ -128,6 +131,38 @@ fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     }
 }
 
+pub fn tile_event_for_position(
+    map_id: &str,
+    x: usize,
+    y: usize,
+    data: &GameData,
+) -> Option<TileEvent> {
+    let map = data.find_map(map_id)?;
+    let tile = map.get_tile(x, y);
+
+    match tile {
+        Tile::Treasure => Some(TileEvent::Treasure),
+        Tile::Exit => {
+            for (ex, ey, target) in &map.exits {
+                if *ex == x && *ey == y {
+                    return Some(TileEvent::MapExit(target.clone()));
+                }
+            }
+            None
+        }
+        Tile::Dungeon => {
+            for (dx, dy, target) in &map.dungeons {
+                if *dx == x && *dy == y {
+                    return Some(TileEvent::DungeonEntrance(target.clone()));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
 pub fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
     data.find_map(&player.current_map_id)
         .and_then(|map| check_tile_event(map, player))

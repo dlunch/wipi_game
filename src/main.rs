@@ -27,8 +27,8 @@ use crate::game::{
 
 enum AppEvent {
     None,
-    UpdateLoading,
-    UpdateMovement,
+    UpdateLoading(game::LoadingEvent),
+    UpdateMovement(AppMovementEvent),
     UpdateCombat,
     Menu(MenuEvent),
     Explore(AppExploreEvent),
@@ -49,6 +49,13 @@ enum AppExploreEvent {
     UseAction(game::ExploreAction),
     EnterPauseMenu,
     EnterMenu,
+}
+
+enum AppMovementEvent {
+    Tick(
+        game::movement::MovementTickEvent,
+        Option<game::explore::TileEvent>,
+    ),
 }
 
 struct GameInner {
@@ -161,13 +168,8 @@ impl GameInner {
         intents
     }
 
-    fn apply_update_loading(&mut self) {
-        let GameState::Loading(step) = self.state else {
-            return;
-        };
-
-        let load_result = game::lifecycle::load_step(&mut self.data, step);
-        match game::lifecycle::reduce_loading(step, load_result) {
+    fn apply_update_loading(&mut self, event: game::LoadingEvent) {
+        match event {
             game::LoadingEvent::Advance(step) => self.state = GameState::Loading(step),
             game::LoadingEvent::Loaded => {
                 self.state = GameState::Menu;
@@ -177,41 +179,15 @@ impl GameInner {
         }
     }
 
-    fn apply_update_movement(&mut self) {
+    fn apply_update_movement(&mut self, event: AppMovementEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
 
-        if !matches!(self.state, GameState::Explore) {
-            return;
-        }
-
-        let map = self.data.find_map(&s.player.current_map_id);
-        let enemy_positions: Vec<(usize, usize)> = s
-            .combat
-            .enemies
-            .iter()
-            .filter(|enemy| !enemy.is_dead())
-            .map(|enemy| (enemy.x, enemy.y))
-            .collect();
-        let npc_positions: Vec<(usize, usize)> = self
-            .data
-            .npcs
-            .iter()
-            .filter(|npc| npc.map_id == s.player.current_map_id)
-            .map(|npc| (npc.x, npc.y))
-            .collect();
-
-        let event = game::movement::reduce_tick(
-            &s.movement,
-            &s.player,
-            map,
-            &enemy_positions,
-            &npc_positions,
-        );
-        let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, event);
-        if moved && let Some(tile_event) = game::explore::reduce_tile_event(&s.player, &self.data) {
+        let AppMovementEvent::Tick(movement_event, tile_event) = event;
+        let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, movement_event);
+        if moved && let Some(tile_event) = tile_event {
             let apply_event =
                 game::explore::apply_tile_event(&mut s.player, &self.data, tile_event);
             if matches!(apply_event, game::explore::TileApplyEvent::MapChanged)
@@ -248,12 +224,13 @@ impl GameInner {
             },
         );
         if let game::CombatEvent::Tick(result) = combat_event {
-            let damage_taken = game::combat::apply_tick(
-                &mut s.player,
-                &mut s.skill_cooldowns,
-                &mut s.mp_regen_timer,
-                result,
-            );
+            s.skill_cooldowns = result.next_skill_cooldowns;
+            s.mp_regen_timer = result.next_mp_regen_timer;
+            if result.recover_mp > 0 {
+                s.player.stats.recover_mp(result.recover_mp);
+            }
+
+            let damage_taken = result.damage_taken;
             if damage_taken > 0
                 && matches!(
                     game::player::apply(
@@ -649,10 +626,68 @@ impl GameInner {
         }
     }
 
-    fn reduce_intent(&self, intent: AppIntent) -> AppEvent {
+    fn reduce_intent(&mut self, intent: AppIntent) -> AppEvent {
         match intent {
-            AppIntent::UpdateLoading => AppEvent::UpdateLoading,
-            AppIntent::UpdateMovement => AppEvent::UpdateMovement,
+            AppIntent::UpdateLoading => {
+                let GameState::Loading(step) = self.state else {
+                    return AppEvent::None;
+                };
+
+                let load_result = game::lifecycle::load_step(&mut self.data, step);
+                AppEvent::UpdateLoading(game::lifecycle::reduce_loading(step, load_result))
+            }
+            AppIntent::UpdateMovement => {
+                if !matches!(self.state, GameState::Explore) {
+                    return AppEvent::None;
+                }
+                let Some(s) = self.session.as_ref() else {
+                    return AppEvent::Error(String::from("No active session"));
+                };
+
+                let map = self.data.find_map(&s.player.current_map_id);
+                let enemy_positions: Vec<(usize, usize)> = s
+                    .combat
+                    .enemies
+                    .iter()
+                    .filter(|enemy| !enemy.is_dead())
+                    .map(|enemy| (enemy.x, enemy.y))
+                    .collect();
+                let npc_positions: Vec<(usize, usize)> = self
+                    .data
+                    .npcs
+                    .iter()
+                    .filter(|npc| npc.map_id == s.player.current_map_id)
+                    .map(|npc| (npc.x, npc.y))
+                    .collect();
+
+                let movement_event = game::movement::reduce_tick(
+                    &s.movement,
+                    &s.player,
+                    map,
+                    &enemy_positions,
+                    &npc_positions,
+                );
+                let tile_event = if let Some((dx, dy)) = movement_event.step {
+                    if let Some(next_x) = s.player.x.checked_add_signed(dx as isize) {
+                        if let Some(next_y) = s.player.y.checked_add_signed(dy as isize) {
+                            game::explore::tile_event_for_position(
+                                &s.player.current_map_id,
+                                next_x,
+                                next_y,
+                                &self.data,
+                            )
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                AppEvent::UpdateMovement(AppMovementEvent::Tick(movement_event, tile_event))
+            }
             AppIntent::UpdateCombat => AppEvent::UpdateCombat,
             AppIntent::Menu(intent) => {
                 if !matches!(self.state, GameState::Menu) {
@@ -773,8 +808,8 @@ impl GameInner {
     fn apply_event(&mut self, event: AppEvent) {
         match event {
             AppEvent::None => {}
-            AppEvent::UpdateLoading => self.apply_update_loading(),
-            AppEvent::UpdateMovement => self.apply_update_movement(),
+            AppEvent::UpdateLoading(event) => self.apply_update_loading(event),
+            AppEvent::UpdateMovement(event) => self.apply_update_movement(event),
             AppEvent::UpdateCombat => self.apply_update_combat(),
             AppEvent::Menu(event) => self.apply_menu_event(event),
             AppEvent::Explore(event) => self.apply_explore_event(event),
