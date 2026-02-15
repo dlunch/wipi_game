@@ -15,15 +15,6 @@ const MP_REGEN_INTERVAL: u32 = 60;
 
 #[derive(Debug)]
 pub enum CombatIntent<'a> {
-    Tick {
-        player_x: usize,
-        player_y: usize,
-        player_def: i32,
-        skill_cooldowns: [u32; 3],
-        mp_regen_timer: u32,
-        map: &'a Map,
-        enemy_data: &'a [Enemy],
-    },
     PlayerAttack {
         player_x: usize,
         player_y: usize,
@@ -41,9 +32,18 @@ pub enum CombatIntent<'a> {
 
 #[derive(Debug)]
 pub enum CombatEvent {
-    Tick(CombatResult),
     Attack(Option<KillReward>),
     Skill(SkillResult),
+}
+
+pub struct CombatTickInput<'a> {
+    pub player_x: usize,
+    pub player_y: usize,
+    pub player_def: i32,
+    pub skill_cooldowns: [u32; 3],
+    pub mp_regen_timer: u32,
+    pub map: &'a Map,
+    pub enemy_data: &'a [Enemy],
 }
 
 struct TickContext<'a> {
@@ -153,7 +153,7 @@ pub struct SkillEffect {
     pub timer: u32,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CombatState {
     pub enemies: Vec<FieldEnemy>,
     pub player_attack_cooldown: u32,
@@ -166,26 +166,6 @@ pub struct CombatState {
 
 pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
     match intent {
-        CombatIntent::Tick {
-            player_x,
-            player_y,
-            player_def,
-            skill_cooldowns,
-            mp_regen_timer,
-            map,
-            enemy_data,
-        } => CombatEvent::Tick(update(
-            state,
-            TickContext {
-                player_x,
-                player_y,
-                player_def,
-                skill_cooldowns,
-                mp_regen_timer,
-                map,
-                enemy_data,
-            },
-        )),
         CombatIntent::PlayerAttack {
             player_x,
             player_y,
@@ -300,6 +280,7 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatResult {
         next_skill_cooldowns,
         next_mp_regen_timer,
         recover_mp,
+        next_state: state.clone(),
     }
 }
 
@@ -506,12 +487,31 @@ pub enum PlayerEffect {
     Heal(i32),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CombatResult {
     pub damage_taken: i32,
     pub next_skill_cooldowns: [u32; 3],
     pub next_mp_regen_timer: u32,
     pub recover_mp: i32,
+    pub next_state: CombatState,
+}
+
+pub fn reduce_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatResult {
+    let mut next_state = state.clone();
+    let mut result = update(
+        &mut next_state,
+        TickContext {
+            player_x: input.player_x,
+            player_y: input.player_y,
+            player_def: input.player_def,
+            skill_cooldowns: input.skill_cooldowns,
+            mp_regen_timer: input.mp_regen_timer,
+            map: input.map,
+            enemy_data: input.enemy_data,
+        },
+    );
+    result.next_state = next_state;
+    result
 }
 
 #[derive(Debug, Clone)]
@@ -973,9 +973,9 @@ mod tests {
         ));
 
         let map = data.find_map("test_map").expect("map exists");
-        let CombatEvent::Tick(result) = apply(
-            &mut combat,
-            CombatIntent::Tick {
+        let result = reduce_tick(
+            &combat,
+            CombatTickInput {
                 player_x: player.x,
                 player_y: player.y,
                 player_def: player.total_def(),
@@ -984,9 +984,7 @@ mod tests {
                 map,
                 enemy_data: &data.enemies,
             },
-        ) else {
-            panic!("expected combat tick event");
-        };
+        );
 
         let damage_taken = apply_tick(&mut player, &mut cooldowns, &mut mp_regen_timer, result);
         if damage_taken > 0 {
@@ -1031,9 +1029,9 @@ mod tests {
         ));
 
         let map = data.find_map("test_map").expect("map exists");
-        let CombatEvent::Tick(result) = apply(
-            &mut combat,
-            CombatIntent::Tick {
+        let result = reduce_tick(
+            &combat,
+            CombatTickInput {
                 player_x: player.x,
                 player_y: player.y,
                 player_def: player.total_def(),
@@ -1042,9 +1040,7 @@ mod tests {
                 map,
                 enemy_data: &data.enemies,
             },
-        ) else {
-            panic!("expected combat tick event");
-        };
+        );
 
         let damage_taken = apply_tick(&mut player, &mut cooldowns, &mut mp_regen_timer, result);
         let mut game_state = GameState::Explore;
@@ -1076,9 +1072,9 @@ mod tests {
             vec![Tile::Floor, Tile::Floor, Tile::Floor, Tile::Floor],
             Vec::new(),
         );
-        let CombatEvent::Tick(result) = apply(
-            &mut CombatState::default(),
-            CombatIntent::Tick {
+        let result = reduce_tick(
+            &CombatState::default(),
+            CombatTickInput {
                 player_x: player.x,
                 player_y: player.y,
                 player_def: player.total_def(),
@@ -1087,9 +1083,7 @@ mod tests {
                 map: &map,
                 enemy_data: &[],
             },
-        ) else {
-            panic!("expected combat tick event");
-        };
+        );
         let _ = apply_tick(&mut player, &mut cooldowns, &mut mp_regen_timer, result);
 
         assert_eq!(cooldowns, [1, 0, 0]);

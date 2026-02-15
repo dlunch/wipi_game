@@ -204,13 +204,21 @@ impl GameInner {
             return;
         };
 
-        s.skill_cooldowns = result.next_skill_cooldowns;
-        s.mp_regen_timer = result.next_mp_regen_timer;
-        if result.recover_mp > 0 {
-            s.player.stats.recover_mp(result.recover_mp);
+        let game::combat::CombatResult {
+            damage_taken,
+            next_skill_cooldowns,
+            next_mp_regen_timer,
+            recover_mp,
+            next_state,
+        } = result;
+
+        s.combat = next_state;
+        s.skill_cooldowns = next_skill_cooldowns;
+        s.mp_regen_timer = next_mp_regen_timer;
+        if recover_mp > 0 {
+            s.player.stats.recover_mp(recover_mp);
         }
 
-        let damage_taken = result.damage_taken;
         if damage_taken > 0
             && matches!(
                 game::player::apply(&mut s.player, game::PlayerIntent::TakeDamage(damage_taken)),
@@ -675,9 +683,9 @@ impl GameInner {
                     return AppEvent::None;
                 };
 
-                let combat_event = game::combat::apply(
-                    &mut s.combat,
-                    game::CombatIntent::Tick {
+                AppEvent::UpdateCombat(game::combat::reduce_tick(
+                    &s.combat,
+                    game::combat::CombatTickInput {
                         player_x: s.player.x,
                         player_y: s.player.y,
                         player_def: s.player.total_def(),
@@ -686,12 +694,7 @@ impl GameInner {
                         map,
                         enemy_data: &self.data.enemies,
                     },
-                );
-
-                match combat_event {
-                    game::CombatEvent::Tick(result) => AppEvent::UpdateCombat(result),
-                    _ => AppEvent::None,
-                }
+                ))
             }
             AppIntent::Menu(intent) => {
                 if !matches!(self.state, GameState::Menu) {
