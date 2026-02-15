@@ -6,7 +6,9 @@ use wipi::event::KeyCode;
 #[cfg(test)]
 use crate::data::Map;
 use crate::data::{Direction, Tile};
-use crate::game::{ExploreAction, GameData, PlayerState};
+#[cfg(test)]
+use crate::game::PlayerState;
+use crate::game::{ExploreAction, GameData};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -166,14 +168,6 @@ pub fn tile_event_for_position(
 pub fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
     data.find_map(&player.current_map_id)
         .and_then(|map| check_tile_event(map, player))
-}
-
-pub fn apply_tile_event(
-    player: &mut PlayerState,
-    data: &GameData,
-    event: TileEvent,
-) -> TileApplyEvent {
-    player.apply_tile_event(data, event)
 }
 
 #[cfg(test)]
@@ -437,7 +431,7 @@ mod tests {
         let data = make_game_data();
         let mut player = make_player("field", 1, 1);
 
-        let apply_event = apply_tile_event(&mut player, &data, TileEvent::Treasure);
+        let apply_event = player.apply_tile_event(&data, TileEvent::Treasure);
 
         assert!(matches!(apply_event, TileApplyEvent::None));
         assert_eq!(player.inventory.len(), 1);
@@ -451,8 +445,8 @@ mod tests {
         let data = make_game_data();
         let mut player = make_player("field", 1, 1);
 
-        apply_tile_event(&mut player, &data, TileEvent::Treasure);
-        apply_tile_event(&mut player, &data, TileEvent::Treasure);
+        player.apply_tile_event(&data, TileEvent::Treasure);
+        player.apply_tile_event(&data, TileEvent::Treasure);
 
         assert_eq!(player.inventory.len(), 1);
         assert_eq!(player.opened_treasures.len(), 1);
@@ -473,7 +467,7 @@ mod tests {
         let data = make_game_data();
         let mut player = make_player("field", 2, 1);
 
-        let apply_event = apply_tile_event(&mut player, &data, TileEvent::MapExit("town".into()));
+        let apply_event = player.apply_tile_event(&data, TileEvent::MapExit("town".into()));
 
         assert!(matches!(apply_event, TileApplyEvent::MapChanged));
         assert_eq!(player.current_map_id, "town");
@@ -496,11 +490,7 @@ mod tests {
         let data = make_game_data();
         let mut player = make_player("field", 1, 2);
 
-        let apply_event = apply_tile_event(
-            &mut player,
-            &data,
-            TileEvent::DungeonEntrance("cave".into()),
-        );
+        let apply_event = player.apply_tile_event(&data, TileEvent::DungeonEntrance("cave".into()));
 
         assert!(matches!(apply_event, TileApplyEvent::MapChanged));
         assert_eq!(player.current_map_id, "cave");
@@ -523,11 +513,8 @@ mod tests {
         let data = make_game_data();
         let mut player = make_player("field", 2, 1);
 
-        let apply_event = apply_tile_event(
-            &mut player,
-            &data,
-            TileEvent::MapExit(String::from("missing")),
-        );
+        let apply_event =
+            player.apply_tile_event(&data, TileEvent::MapExit(String::from("missing")));
 
         assert!(matches!(apply_event, TileApplyEvent::None));
         assert_eq!(player.current_map_id, "field");

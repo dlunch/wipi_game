@@ -188,8 +188,7 @@ impl GameInner {
         let AppMovementEvent::Tick(movement_event, tile_event) = event;
         let moved = s.movement.apply_tick(&mut s.player, movement_event);
         if moved && let Some(tile_event) = tile_event {
-            let apply_event =
-                game::explore::apply_tile_event(&mut s.player, &self.data, tile_event);
+            let apply_event = s.player.apply_tile_event(&self.data, tile_event);
             if matches!(apply_event, game::explore::TileApplyEvent::MapChanged)
                 && let Some(map) = self.data.find_map(&s.player.current_map_id)
             {
