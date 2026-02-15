@@ -585,11 +585,11 @@ impl GameInner {
         }
     }
 
-    fn reduce_intent_single(&mut self, intent: GameIntent) -> GameEvent {
-        match intent {
+    fn reduce_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
+        let event = match intent {
             GameIntent::UpdateLoading => {
                 let GameState::Loading(step) = self.state else {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 };
 
                 let load_result = game::lifecycle::load_step(&mut self.data, step);
@@ -597,10 +597,10 @@ impl GameInner {
             }
             GameIntent::UpdateMovement => {
                 if !matches!(self.state, GameState::Explore) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 };
 
                 let map = self.data.find_map(&s.player.current_map_id);
@@ -661,13 +661,13 @@ impl GameInner {
             }
             GameIntent::UpdateCombat => {
                 if !matches!(self.state, GameState::Explore) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 let Some(s) = self.session.as_mut() else {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 };
                 let Some(map) = self.data.find_map(&s.player.current_map_id) else {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 };
 
                 GameEvent::UpdateCombat(game::combat::reduce_tick(
@@ -696,10 +696,10 @@ impl GameInner {
             }
             GameIntent::Explore(intent) => {
                 if !matches!(self.state, GameState::Explore) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 };
                 let is_peaceful = self
                     .data
@@ -737,10 +737,10 @@ impl GameInner {
             }
             GameIntent::Inventory(intent) => {
                 if !matches!(self.state, GameState::Inventory) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 };
                 GameEvent::Inventory(game::inventory::reduce(
                     self.ui.inventory.selected,
@@ -750,19 +750,19 @@ impl GameInner {
             }
             GameIntent::Dialog(intent) => {
                 if !matches!(self.state, GameState::Dialog) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 if self.session.is_none() {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 }
                 GameEvent::Dialog(game::dialog::reduce(self.ui.dialog.state.as_ref(), intent))
             }
             GameIntent::Shop(intent) => {
                 if !matches!(self.state, GameState::Shop) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 };
                 GameEvent::Shop(game::shop::reduce(
                     self.ui.shop.mode,
@@ -781,10 +781,10 @@ impl GameInner {
             }
             GameIntent::PauseMenu(intent) => {
                 if !matches!(self.state, GameState::PauseMenu) {
-                    return GameEvent::None;
+                    return vec![GameEvent::None];
                 }
                 if self.session.is_none() {
-                    return GameEvent::Error(String::from("No active session"));
+                    return vec![GameEvent::Error(String::from("No active session"))];
                 }
                 GameEvent::PauseMenu(game::menu::reduce_pause(
                     self.ui.pause_menu.selected,
@@ -796,11 +796,8 @@ impl GameInner {
             GameIntent::ReturnToMenuFromGameOver => GameEvent::ReturnToMenuFromGameOver,
             GameIntent::ReleaseMovementKey(key) => GameEvent::ReleaseMovementKey(key),
             GameIntent::Exit(code) => GameEvent::Exit(code),
-        }
-    }
+        };
 
-    fn reduce_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
-        let event = self.reduce_intent_single(intent);
         match event {
             GameEvent::UpdateMovement(AppMovementEvent::Tick(
                 movement_event,
