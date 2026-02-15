@@ -42,7 +42,7 @@ pub fn on_key_released(state: &mut MovementState, key: KeyCode) {
     }
 }
 
-pub fn tick(
+fn tick(
     state: &mut MovementState,
     player: &mut PlayerState,
     map: &Map,
@@ -63,7 +63,7 @@ pub fn tick(
     moved
 }
 
-pub fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
+fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
     let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
         return false;
     };

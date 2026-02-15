@@ -134,7 +134,7 @@ pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, dat
     }
 }
 
-pub fn change_map(
+fn change_map(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,

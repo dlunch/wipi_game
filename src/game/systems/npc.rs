@@ -18,11 +18,7 @@ pub fn reduce(player: &mut PlayerState, data: &GameData, intent: NpcIntent) -> O
     }
 }
 
-pub fn try_interact(
-    player: &mut PlayerState,
-    data: &GameData,
-    facing: Direction,
-) -> Option<NpcEvent> {
+fn try_interact(player: &mut PlayerState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
@@ -71,7 +67,7 @@ pub fn try_interact(
     None
 }
 
-pub fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
+fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
     let filtered = dialog
         .lines
         .iter()
