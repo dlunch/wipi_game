@@ -253,23 +253,11 @@ impl GameInner {
                         }
                     },
                     game::DialogEvent::Action(action, transition) => {
-                        if let Some(npc_event) = game::npc::reduce(
-                            &mut s.player,
-                            &self.data,
-                            game::NpcIntent::ProcessDialogAction { action: &action },
-                        ) {
-                            match npc_event {
-                                game::NpcEvent::OpenDialog(dialog_state) => {
-                                    self.ui.dialog.state = Some(dialog_state);
-                                    self.state = GameState::Dialog;
-                                }
-                                game::NpcEvent::OpenShop(shop_state) => {
-                                    self.ui.shop.state = Some(shop_state);
-                                    self.ui.shop.mode = game::ShopMode::Select;
-                                    self.ui.shop.selected = 0;
-                                    self.state = GameState::Shop;
-                                }
-                            }
+                        if let Some(shop_state) = game::dialog::apply_action(&mut s.player, &self.data, &action) {
+                            self.ui.shop.state = Some(shop_state);
+                            self.ui.shop.mode = game::ShopMode::Select;
+                            self.ui.shop.selected = 0;
+                            self.state = GameState::Shop;
                             return;
                         }
 

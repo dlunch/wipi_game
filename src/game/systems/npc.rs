@@ -1,4 +1,6 @@
-use crate::data::{Dialog, DialogAction, DialogCondition, Direction, NpcType};
+use crate::data::{Dialog, DialogCondition, Direction, NpcType};
+#[cfg(test)]
+use crate::data::DialogAction;
 use crate::game::{self, DialogState, GameData, PlayerIntent, PlayerState, ShopState};
 
 #[derive(Debug)]
@@ -8,19 +10,13 @@ pub enum NpcEvent {
 }
 
 #[derive(Debug)]
-pub enum NpcIntent<'a> {
+pub enum NpcIntent {
     Interact { facing: Direction },
-    ProcessDialogAction { action: &'a DialogAction },
 }
 
-pub fn reduce(
-    player: &mut PlayerState,
-    data: &GameData,
-    intent: NpcIntent<'_>,
-) -> Option<NpcEvent> {
+pub fn reduce(player: &mut PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
-        NpcIntent::ProcessDialogAction { action } => process_action(player, data, action),
     }
 }
 
@@ -96,6 +92,7 @@ pub fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Dialog {
     }
 }
 
+#[cfg(test)]
 pub fn process_action(
     player: &mut PlayerState,
     data: &GameData,

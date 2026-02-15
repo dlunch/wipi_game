@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
 use crate::data::DialogAction;
-use crate::game::{DialogState, GameData, GameState};
+use crate::game::{self, DialogState, GameData, GameState, PlayerIntent, PlayerState, ShopState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -28,6 +28,58 @@ pub enum DialogEvent {
 pub enum DialogTransition {
     Set(DialogState),
     CloseToExplore,
+}
+
+pub fn apply_action(player: &mut PlayerState, data: &GameData, action: &DialogAction) -> Option<ShopState> {
+    match action {
+        DialogAction::GiveQuest(id) => {
+            let _ = game::player::reduce(player, PlayerIntent::AddQuest(id.clone()));
+        }
+        DialogAction::CompleteQuest(id) => {
+            let can_reward = player
+                .quests
+                .iter()
+                .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+
+            if can_reward && let Some(quest) = data.find_quest(id) {
+                let _ = game::player::reduce(player, PlayerIntent::AddExp(quest.reward_exp));
+                let _ = game::player::reduce(player, PlayerIntent::AddGold(quest.reward_gold));
+
+                if let Some(item_id) = &quest.reward_item
+                    && let Some(item) = data.find_item(item_id).cloned()
+                {
+                    let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
+                }
+
+                let _ = game::player::reduce(player, PlayerIntent::MarkQuestRewarded(id.clone()));
+            }
+        }
+        DialogAction::GiveItem(id) => {
+            if let Some(item) = data.find_item(id).cloned() {
+                let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
+            }
+        }
+        DialogAction::TakeItem(id) => {
+            let _ = game::player::reduce(player, PlayerIntent::RemoveItem(id.clone()));
+        }
+        DialogAction::GiveGold(amount) => {
+            let _ = game::player::reduce(player, PlayerIntent::AddGold(*amount));
+        }
+        DialogAction::TakeGold(amount) => {
+            let _ = game::player::reduce(player, PlayerIntent::AddGold(-*amount));
+        }
+        DialogAction::OpenShop(id) => {
+            if let Some(shop) = data.find_shop(id).cloned() {
+                let shop_items = data.get_shop_items(&shop);
+                return Some(ShopState::new(shop, shop_items));
+            }
+        }
+        DialogAction::Heal => {
+            let _ = game::player::reduce(player, PlayerIntent::FullHeal);
+        }
+    }
+
+    None
 }
 
 pub fn reduce(
