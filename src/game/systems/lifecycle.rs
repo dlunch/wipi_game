@@ -47,22 +47,22 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
 
     if let Some(sword) = data.find_item("wooden_sword").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(sword));
-        let _ = game::player::reduce(&mut player, PlayerIntent::EquipWeapon(idx));
+        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(sword));
+        let _ = game::player::apply(&mut player, PlayerIntent::EquipWeapon(idx));
     }
     if let Some(armor) = data.find_item("cloth").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(armor));
-        let _ = game::player::reduce(&mut player, PlayerIntent::EquipArmor(idx));
+        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(armor));
+        let _ = game::player::apply(&mut player, PlayerIntent::EquipArmor(idx));
     }
     if let Some(potion) = data.find_item("potion").cloned() {
-        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(potion.clone()));
-        let _ = game::player::reduce(&mut player, PlayerIntent::AddItem(potion));
+        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(potion.clone()));
+        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(potion));
     }
 
     if let Some(map) = data.find_map("village") {
         let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-        let _ = game::player::reduce(
+        let _ = game::player::apply(
             &mut player,
             PlayerIntent::ChangeMap {
                 map_id: map.id.clone(),
@@ -70,7 +70,7 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
                 y,
             },
         );
-        let _ = game::combat::reduce(
+        let _ = game::combat::apply(
             &mut combat,
             CombatIntent::SpawnEnemies {
                 map,
@@ -107,7 +107,7 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<Dialog
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
                 let (x, y) = (player.x, player.y);
-                let _ = game::player::reduce(
+                let _ = game::player::apply(
                     &mut player,
                     PlayerIntent::ChangeMap {
                         map_id: String::from("village"),
@@ -122,9 +122,9 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<Dialog
                     || player.y >= map.height)
                     && let Some((x, y)) = map.find_player_start()
                 {
-                    let _ = game::player::reduce(&mut player, PlayerIntent::SpawnAtMap { x, y });
+                    let _ = game::player::apply(&mut player, PlayerIntent::SpawnAtMap { x, y });
                 }
-                let _ = game::combat::reduce(
+                let _ = game::combat::apply(
                     &mut combat,
                     CombatIntent::SpawnEnemies {
                         map,

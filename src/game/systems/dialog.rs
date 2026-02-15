@@ -37,7 +37,7 @@ pub fn apply_action(
 ) -> Option<ShopState> {
     match action {
         DialogAction::GiveQuest(id) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddQuest(id.clone()));
+            let _ = game::player::apply(player, PlayerIntent::AddQuest(id.clone()));
         }
         DialogAction::CompleteQuest(id) => {
             let can_reward = player
@@ -46,31 +46,31 @@ pub fn apply_action(
                 .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
 
             if can_reward && let Some(quest) = data.find_quest(id) {
-                let _ = game::player::reduce(player, PlayerIntent::AddExp(quest.reward_exp));
-                let _ = game::player::reduce(player, PlayerIntent::AddGold(quest.reward_gold));
+                let _ = game::player::apply(player, PlayerIntent::AddExp(quest.reward_exp));
+                let _ = game::player::apply(player, PlayerIntent::AddGold(quest.reward_gold));
 
                 if let Some(item_id) = &quest.reward_item
                     && let Some(item) = data.find_item(item_id).cloned()
                 {
-                    let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
+                    let _ = game::player::apply(player, PlayerIntent::AddItem(item));
                 }
 
-                let _ = game::player::reduce(player, PlayerIntent::MarkQuestRewarded(id.clone()));
+                let _ = game::player::apply(player, PlayerIntent::MarkQuestRewarded(id.clone()));
             }
         }
         DialogAction::GiveItem(id) => {
             if let Some(item) = data.find_item(id).cloned() {
-                let _ = game::player::reduce(player, PlayerIntent::AddItem(item));
+                let _ = game::player::apply(player, PlayerIntent::AddItem(item));
             }
         }
         DialogAction::TakeItem(id) => {
-            let _ = game::player::reduce(player, PlayerIntent::RemoveItem(id.clone()));
+            let _ = game::player::apply(player, PlayerIntent::RemoveItem(id.clone()));
         }
         DialogAction::GiveGold(amount) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddGold(*amount));
+            let _ = game::player::apply(player, PlayerIntent::AddGold(*amount));
         }
         DialogAction::TakeGold(amount) => {
-            let _ = game::player::reduce(player, PlayerIntent::AddGold(-*amount));
+            let _ = game::player::apply(player, PlayerIntent::AddGold(-*amount));
         }
         DialogAction::OpenShop(id) => {
             if let Some(shop) = data.find_shop(id).cloned() {
@@ -79,7 +79,7 @@ pub fn apply_action(
             }
         }
         DialogAction::Heal => {
-            let _ = game::player::reduce(player, PlayerIntent::FullHeal);
+            let _ = game::player::apply(player, PlayerIntent::FullHeal);
         }
     }
 

@@ -165,7 +165,7 @@ pub struct CombatState {
     pub respawn_positions: Vec<(usize, usize, usize)>,
 }
 
-pub fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
+pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
     match intent {
         CombatIntent::SpawnEnemies { map, enemy_data } => {
             spawn_enemies(state, map, enemy_data);
@@ -196,6 +196,10 @@ pub fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent 
             state, skill, player_x, player_y, player_atk, facing,
         )),
     }
+}
+
+fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
+    apply(state, intent)
 }
 
 fn spawn_enemies(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
@@ -582,7 +586,7 @@ pub fn apply_tick(
 
         if result.damage_taken > 0
             && matches!(
-                game::player::reduce(player, PlayerIntent::TakeDamage(result.damage_taken)),
+                game::player::apply(player, PlayerIntent::TakeDamage(result.damage_taken)),
                 game::PlayerEvent::Died
             )
         {
@@ -622,7 +626,7 @@ pub fn use_skill_action(
     for effect in &result.player_effects {
         match effect {
             PlayerEffect::Heal(amount) => {
-                let _ = game::player::reduce(player, PlayerIntent::Heal(*amount));
+                let _ = game::player::apply(player, PlayerIntent::Heal(*amount));
             }
         }
     }

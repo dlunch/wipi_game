@@ -195,7 +195,7 @@ impl GameInner {
                 game::movement::on_direction_pressed(&mut s.movement, key);
             }
             game::ExploreEvent::TryNpcInteract { facing } => {
-                if let Some(npc_event) = game::npc::reduce(
+                if let Some(npc_event) = game::npc::apply(
                     &mut s.player,
                     &self.data,
                     game::NpcIntent::Interact { facing },
@@ -222,7 +222,7 @@ impl GameInner {
                         slot,
                         skill,
                     );
-                } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
+                } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
                     &mut s.combat,
                     game::CombatIntent::PlayerAttack {
                         player_x: s.player.x,
@@ -261,7 +261,7 @@ impl GameInner {
             game::InventoryEvent::None => {}
             game::InventoryEvent::SetSelected(selected) => self.ui.inventory.set_selected(selected),
             game::InventoryEvent::UseSelected(index) => {
-                let _ = game::player::reduce(&mut s.player, game::PlayerIntent::UseItem { index });
+                let _ = game::player::apply(&mut s.player, game::PlayerIntent::UseItem { index });
             }
             game::InventoryEvent::CloseToExplore => self.state = GameState::Explore,
         }
@@ -330,14 +330,14 @@ impl GameInner {
             game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
             game::ShopEvent::BuyItem(item) => {
                 let _ =
-                    game::player::reduce(&mut s.player, game::PlayerIntent::AddGold(-item.price));
-                let _ = game::player::reduce(&mut s.player, game::PlayerIntent::AddItem(item));
+                    game::player::apply(&mut s.player, game::PlayerIntent::AddGold(-item.price));
+                let _ = game::player::apply(&mut s.player, game::PlayerIntent::AddItem(item));
             }
             game::ShopEvent::SellSelected(index) => {
                 let event =
-                    game::player::reduce(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
+                    game::player::apply(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
                 if let game::PlayerEvent::ItemRemoved(Some(item)) = event {
-                    let _ = game::player::reduce(
+                    let _ = game::player::apply(
                         &mut s.player,
                         game::PlayerIntent::AddGold(item.price / 2),
                     );

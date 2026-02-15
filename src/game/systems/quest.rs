@@ -7,7 +7,7 @@ pub enum QuestIntent<'a> {
     EnemyKilled { enemy_id: &'a str },
 }
 
-pub fn reduce(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>) {
+pub fn apply(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>) {
     match intent {
         QuestIntent::EnemyKilled { enemy_id } => {
             let mut updates = Vec::new();
@@ -34,6 +34,11 @@ pub fn reduce(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>
             }
         }
     }
+}
+
+#[cfg(test)]
+fn reduce(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>) {
+    apply(player, data, intent);
 }
 
 #[cfg(test)]

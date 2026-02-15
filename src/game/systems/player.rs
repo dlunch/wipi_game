@@ -30,7 +30,7 @@ pub enum PlayerEvent {
     ItemRemoved(Option<Item>),
 }
 
-pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
+pub fn apply(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
     match intent {
         PlayerIntent::AddExp(exp) => {
             player.stats.add_exp(exp);
@@ -103,6 +103,11 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
             PlayerEvent::None
         }
     }
+}
+
+#[cfg(test)]
+fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
+    apply(player, intent)
 }
 
 pub fn can_use_skill(
