@@ -603,60 +603,17 @@ impl GameInner {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 };
 
-                let map = self.data.find_map(&s.player.current_map_id);
-                let enemy_positions: Vec<(usize, usize)> = s
-                    .combat
-                    .enemies
-                    .iter()
-                    .filter(|enemy| !enemy.is_dead())
-                    .map(|enemy| (enemy.x, enemy.y))
-                    .collect();
-                let npc_positions: Vec<(usize, usize)> = self
-                    .data
-                    .npcs
-                    .iter()
-                    .filter(|npc| npc.map_id == s.player.current_map_id)
-                    .map(|npc| (npc.x, npc.y))
-                    .collect();
-
-                let movement_event = game::movement::reduce_tick(
+                let movement = game::movement::reduce_world_tick(
                     &s.movement,
                     &s.player,
-                    map,
-                    &enemy_positions,
-                    &npc_positions,
+                    &s.combat.enemies,
+                    &self.data,
                 );
-                let tile_event = if let Some((dx, dy)) = movement_event.step {
-                    if let Some(next_x) = s.player.x.checked_add_signed(dx as isize) {
-                        if let Some(next_y) = s.player.y.checked_add_signed(dy as isize) {
-                            game::explore::tile_event_for_position(
-                                &s.player.current_map_id,
-                                next_x,
-                                next_y,
-                                &self.data,
-                            )
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-                let map_changed = tile_event.as_ref().is_some_and(|event| match event {
-                    game::explore::TileEvent::MapExit(target)
-                    | game::explore::TileEvent::DungeonEntrance(target) => {
-                        !target.is_empty() && self.data.find_map(target).is_some()
-                    }
-                    game::explore::TileEvent::Treasure => false,
-                });
 
                 GameEvent::UpdateMovement(AppMovementEvent::Tick(
-                    movement_event,
-                    tile_event,
-                    map_changed,
+                    movement.movement_event,
+                    movement.tile_event,
+                    movement.map_changed,
                 ))
             }
             GameIntent::UpdateCombat => {

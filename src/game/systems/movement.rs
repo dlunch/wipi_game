@@ -1,5 +1,9 @@
+use alloc::vec::Vec;
+
 use crate::data::{Direction, Map};
-use crate::game::{MovementState, PlayerState};
+use crate::game::explore::{TileEvent, tile_event_for_position};
+use crate::game::state::FieldEnemy;
+use crate::game::{GameData, MovementState, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -7,6 +11,60 @@ pub struct MovementTickEvent {
     pub next_state: MovementState,
     pub facing: Option<(i32, i32)>,
     pub step: Option<(i32, i32)>,
+}
+
+pub struct MovementUpdateResult {
+    pub movement_event: MovementTickEvent,
+    pub tile_event: Option<TileEvent>,
+    pub map_changed: bool,
+}
+
+pub fn reduce_world_tick(
+    state: &MovementState,
+    player: &PlayerState,
+    enemies: &[FieldEnemy],
+    data: &GameData,
+) -> MovementUpdateResult {
+    let map = data.find_map(&player.current_map_id);
+    let enemy_positions: Vec<(usize, usize)> = enemies
+        .iter()
+        .filter(|enemy| !enemy.is_dead())
+        .map(|enemy| (enemy.x, enemy.y))
+        .collect();
+    let npc_positions: Vec<(usize, usize)> = data
+        .npcs
+        .iter()
+        .filter(|npc| npc.map_id == player.current_map_id)
+        .map(|npc| (npc.x, npc.y))
+        .collect();
+
+    let movement_event = reduce_tick(state, player, map, &enemy_positions, &npc_positions);
+    let tile_event = if let Some((dx, dy)) = movement_event.step {
+        if let Some(next_x) = player.x.checked_add_signed(dx as isize) {
+            if let Some(next_y) = player.y.checked_add_signed(dy as isize) {
+                tile_event_for_position(&player.current_map_id, next_x, next_y, data)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let map_changed = tile_event.as_ref().is_some_and(|event| match event {
+        TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
+            !target.is_empty() && data.find_map(target).is_some()
+        }
+        TileEvent::Treasure => false,
+    });
+
+    MovementUpdateResult {
+        movement_event,
+        tile_event,
+        map_changed,
+    }
 }
 
 pub fn reduce_tick(
