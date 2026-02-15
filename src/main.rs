@@ -216,15 +216,6 @@ impl GameInner {
     }
 }
 
-fn tick(inner: &Rc<RefCell<GameInner>>, render_state: &Rc<RefCell<RenderState>>) {
-    let mut inner = inner.borrow_mut();
-    inner.update();
-    let rs = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
-    *render_state.borrow_mut() = rs;
-    drop(inner);
-    repaint(0, 0, 0, 240, 320);
-}
-
 pub struct RpgGame {
     inner: Rc<RefCell<GameInner>>,
     render_state: Rc<RefCell<RenderState>>,
@@ -238,6 +229,15 @@ impl Default for RpgGame {
 }
 
 impl RpgGame {
+    fn tick(inner: &Rc<RefCell<GameInner>>, render_state: &Rc<RefCell<RenderState>>) {
+        let mut inner = inner.borrow_mut();
+        inner.update();
+        let rs = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
+        *render_state.borrow_mut() = rs;
+        drop(inner);
+        repaint(0, 0, 0, 240, 320);
+    }
+
     pub fn new() -> Self {
         let inner = Rc::new(RefCell::new(GameInner {
             state: GameState::Loading(0),
@@ -250,7 +250,7 @@ impl RpgGame {
         let timer_inner = Rc::clone(&inner);
         let timer_render_state = Rc::clone(&render_state);
         let timer = Timer::periodic(Duration::from_millis(33), move || {
-            tick(&timer_inner, &timer_render_state);
+            Self::tick(&timer_inner, &timer_render_state);
         });
 
         Self {
