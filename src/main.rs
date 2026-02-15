@@ -206,14 +206,6 @@ impl GameInner {
             return;
         }
 
-        let event = game::combat::reduce_tick(&s.skill_cooldowns, s.mp_regen_timer);
-        game::combat::apply_tick(
-            &mut s.player,
-            &mut s.skill_cooldowns,
-            &mut s.mp_regen_timer,
-            event,
-        );
-
         let Some(map) = self.data.find_map(&s.player.current_map_id) else {
             return;
         };
@@ -223,21 +215,30 @@ impl GameInner {
                 player_x: s.player.x,
                 player_y: s.player.y,
                 player_def: s.player.total_def(),
+                skill_cooldowns: s.skill_cooldowns,
+                mp_regen_timer: s.mp_regen_timer,
                 map,
                 enemy_data: &self.data.enemies,
             },
         );
-        if let game::CombatEvent::Tick(result) = combat_event
-            && result.damage_taken > 0
-            && matches!(
-                game::player::apply(
-                    &mut s.player,
-                    game::PlayerIntent::TakeDamage(result.damage_taken)
-                ),
-                game::PlayerEvent::Died
-            )
-        {
-            self.state = GameState::GameOver;
+        if let game::CombatEvent::Tick(result) = combat_event {
+            let damage_taken = game::combat::apply_tick(
+                &mut s.player,
+                &mut s.skill_cooldowns,
+                &mut s.mp_regen_timer,
+                result,
+            );
+            if damage_taken > 0
+                && matches!(
+                    game::player::apply(
+                        &mut s.player,
+                        game::PlayerIntent::TakeDamage(damage_taken)
+                    ),
+                    game::PlayerEvent::Died
+                )
+            {
+                self.state = GameState::GameOver;
+            }
         }
     }
 
