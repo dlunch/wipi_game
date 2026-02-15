@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use crate::game::{save_game, GameState, InventoryState, MenuAction, PlayerState};
+use crate::game::{GameState, InventoryState, MenuAction, PlayerState, save_game};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {

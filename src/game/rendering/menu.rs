@@ -1,8 +1,8 @@
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    clear_screen, draw_rect, draw_selection_cursor, draw_text, fill_rect, COLOR_DARK_GRAY,
-    COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW,
+    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
+    draw_selection_cursor, draw_text, fill_rect,
 };
 use crate::game::{MenuState, PauseMenuState};
 

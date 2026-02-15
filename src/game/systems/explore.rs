@@ -5,8 +5,8 @@ use wipi::event::KeyCode;
 
 use crate::data::{Map, Skill, Tile};
 use crate::game::{
-    self, has_save_data, save_game, CombatIntent, CombatState, GameData, GameState, MenuState,
-    MovementState, PauseMenuState, PlayerIntent, PlayerState,
+    self, CombatIntent, CombatState, GameData, GameState, MenuState, MovementState, PauseMenuState,
+    PlayerIntent, PlayerState, has_save_data, save_game,
 };
 
 #[derive(Debug, Clone, Copy)]
