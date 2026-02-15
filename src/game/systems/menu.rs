@@ -114,7 +114,7 @@ pub fn reduce_pause(
 
 #[cfg(test)]
 mod tests {
-    use super::{reduce, reduce_pause, MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
+    use super::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent, reduce, reduce_pause};
     use crate::game::{GameState, MenuAction, MenuState, MenuUiState, PauseMenuUiState};
 
     #[test]

@@ -105,7 +105,9 @@ impl GameInner {
     fn apply_effect(&mut self, effect: AppEffect) {
         match effect {
             AppEffect::UpdateLoading => {
-                if let Some(menu_state) = game::lifecycle::update_loading(&mut self.state, &mut self.data) {
+                if let Some(menu_state) =
+                    game::lifecycle::update_loading(&mut self.state, &mut self.data)
+                {
                     self.ui.menu.state = menu_state;
                     self.ui.menu.selected = 0;
                 }
@@ -142,25 +144,25 @@ impl GameInner {
                 match event {
                     MenuEvent::None => {}
                     MenuEvent::SetSelected(selected) => self.ui.menu.selected = selected,
-                    MenuEvent::Action(action) => {
-                    match action {
+                    MenuEvent::Action(action) => match action {
                         MenuAction::NewGame => {
-                            let (state, session, dialog_state) = game::lifecycle::start_new_game(&self.data);
+                            let (state, session, dialog_state) =
+                                game::lifecycle::start_new_game(&self.data);
                             self.state = state;
                             self.session = Some(session);
                             self.ui = UiState::default();
                             self.ui.dialog.state = dialog_state;
                         }
                         MenuAction::Continue => {
-                            let (state, session, dialog_state) = game::lifecycle::continue_game(&self.data);
+                            let (state, session, dialog_state) =
+                                game::lifecycle::continue_game(&self.data);
                             self.state = state;
                             self.session = Some(session);
                             self.ui = UiState::default();
                             self.ui.dialog.state = dialog_state;
                         }
                         MenuAction::Exit => wipi::kernel::exit(0),
-                    }
-                    }
+                    },
                 }
             }
             AppEffect::ApplyExploreIntent(intent) => {
@@ -215,9 +217,14 @@ impl GameInner {
                 );
                 match event {
                     game::InventoryEvent::None => {}
-                    game::InventoryEvent::SetSelected(selected) => self.ui.inventory.selected = selected,
+                    game::InventoryEvent::SetSelected(selected) => {
+                        self.ui.inventory.selected = selected
+                    }
                     game::InventoryEvent::UseSelected(index) => {
-                        let _ = game::player::reduce(&mut s.player, game::PlayerIntent::UseItem { index });
+                        let _ = game::player::reduce(
+                            &mut s.player,
+                            game::PlayerIntent::UseItem { index },
+                        );
                     }
                     game::InventoryEvent::CloseToExplore => self.state = GameState::Explore,
                 }
@@ -230,25 +237,52 @@ impl GameInner {
                 let event = game::dialog::reduce(
                     &self.state,
                     self.ui.dialog.state.as_ref(),
-                    &mut s.player,
                     &self.data,
                     intent,
                 );
                 match event {
                     game::DialogEvent::None => {}
-                    game::DialogEvent::Set(dialog_state) => {
-                        self.ui.dialog.state = Some(dialog_state);
-                        self.state = GameState::Dialog;
-                    }
-                    game::DialogEvent::CloseToExplore => {
-                        self.ui.dialog.state = None;
-                        self.state = GameState::Explore;
-                    }
-                    game::DialogEvent::OpenShop(shop_state) => {
-                        self.ui.shop.state = Some(shop_state);
-                        self.ui.shop.mode = game::ShopMode::Select;
-                        self.ui.shop.selected = 0;
-                        self.state = GameState::Shop;
+                    game::DialogEvent::Transition(transition) => match transition {
+                        game::DialogTransition::Set(dialog_state) => {
+                            self.ui.dialog.state = Some(dialog_state);
+                            self.state = GameState::Dialog;
+                        }
+                        game::DialogTransition::CloseToExplore => {
+                            self.ui.dialog.state = None;
+                            self.state = GameState::Explore;
+                        }
+                    },
+                    game::DialogEvent::Action(action, transition) => {
+                        if let Some(npc_event) = game::npc::reduce(
+                            &mut s.player,
+                            &self.data,
+                            game::NpcIntent::ProcessDialogAction { action: &action },
+                        ) {
+                            match npc_event {
+                                game::NpcEvent::OpenDialog(dialog_state) => {
+                                    self.ui.dialog.state = Some(dialog_state);
+                                    self.state = GameState::Dialog;
+                                }
+                                game::NpcEvent::OpenShop(shop_state) => {
+                                    self.ui.shop.state = Some(shop_state);
+                                    self.ui.shop.mode = game::ShopMode::Select;
+                                    self.ui.shop.selected = 0;
+                                    self.state = GameState::Shop;
+                                }
+                            }
+                            return;
+                        }
+
+                        match transition {
+                            game::DialogTransition::Set(dialog_state) => {
+                                self.ui.dialog.state = Some(dialog_state);
+                                self.state = GameState::Dialog;
+                            }
+                            game::DialogTransition::CloseToExplore => {
+                                self.ui.dialog.state = None;
+                                self.state = GameState::Explore;
+                            }
+                        }
                     }
                 }
             }
@@ -269,13 +303,23 @@ impl GameInner {
                     }
                     game::ShopEvent::SetSelected(selected) => self.ui.shop.selected = selected,
                     game::ShopEvent::BuyItem(item) => {
-                        let _ = game::player::reduce(&mut s.player, game::PlayerIntent::AddGold(-item.price));
-                        let _ = game::player::reduce(&mut s.player, game::PlayerIntent::AddItem(item));
+                        let _ = game::player::reduce(
+                            &mut s.player,
+                            game::PlayerIntent::AddGold(-item.price),
+                        );
+                        let _ =
+                            game::player::reduce(&mut s.player, game::PlayerIntent::AddItem(item));
                     }
                     game::ShopEvent::SellSelected(index) => {
-                        let event = game::player::reduce(&mut s.player, game::PlayerIntent::RemoveItemAt(index));
+                        let event = game::player::reduce(
+                            &mut s.player,
+                            game::PlayerIntent::RemoveItemAt(index),
+                        );
                         if let game::PlayerEvent::ItemRemoved(Some(item)) = event {
-                            let _ = game::player::reduce(&mut s.player, game::PlayerIntent::AddGold(item.price / 2));
+                            let _ = game::player::reduce(
+                                &mut s.player,
+                                game::PlayerIntent::AddGold(item.price / 2),
+                            );
                             let inv_len = s.player.inventory.len();
                             if self.ui.shop.selected >= inv_len && self.ui.shop.selected > 0 {
                                 self.ui.shop.selected -= 1;
@@ -293,7 +337,9 @@ impl GameInner {
                 let event = game::menu::reduce_pause(&self.state, &self.ui.pause_menu, intent);
                 match event {
                     game::PauseMenuEvent::None => {}
-                    game::PauseMenuEvent::SetSelected(selected) => self.ui.pause_menu.selected = selected,
+                    game::PauseMenuEvent::SetSelected(selected) => {
+                        self.ui.pause_menu.selected = selected
+                    }
                     game::PauseMenuEvent::OpenInventory => {
                         self.ui.inventory = game::InventoryUiState::default();
                         self.state = GameState::Inventory;

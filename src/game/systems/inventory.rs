@@ -51,7 +51,7 @@ pub fn reduce(
             }
         }
         InventoryIntent::UseSelected => {
-            return InventoryEvent::UseSelected(inventory_state.selected)
+            return InventoryEvent::UseSelected(inventory_state.selected);
         }
         InventoryIntent::Back => return InventoryEvent::CloseToExplore,
     }

@@ -13,7 +13,7 @@ pub mod shop;
 #[allow(unused_imports)]
 pub use crate::data::Direction;
 pub use combat::{CombatEvent, CombatIntent, CombatState};
-pub use dialog::{DialogEvent, DialogIntent};
+pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
 pub use explore::{ExploreEvent, ExploreIntent};
 pub use inventory::{InventoryEvent, InventoryIntent};
 pub use menu::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
