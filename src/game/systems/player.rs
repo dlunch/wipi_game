@@ -372,7 +372,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn skill_cooldowns() {
         let mut player = PlayerState::new(String::from("H"), "v");
         let mut cooldowns = [0; 3];

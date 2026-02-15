@@ -105,10 +105,19 @@ impl GameInner {
     fn apply_effect(&mut self, effect: AppEffect) {
         match effect {
             AppEffect::UpdateLoading => {
-                if let Some(menu_state) =
-                    game::lifecycle::update_loading(&mut self.state, &mut self.data)
-                {
-                    self.ui.menu.set_menu(menu_state);
+                let load_result = if let GameState::Loading(step) = self.state {
+                    game::lifecycle::load_step(&mut self.data, step)
+                } else {
+                    Ok(false)
+                };
+                match game::lifecycle::reduce_loading(&self.state, load_result, has_save_data()) {
+                    game::LoadingEvent::None => {}
+                    game::LoadingEvent::Advance(step) => self.state = GameState::Loading(step),
+                    game::LoadingEvent::Loaded(menu_state) => {
+                        self.state = GameState::Menu;
+                        self.ui.menu.set_menu(menu_state);
+                    }
+                    game::LoadingEvent::Error(msg) => self.state = GameState::Error(msg),
                 }
             }
             AppEffect::UpdateMovement => {
@@ -116,15 +125,22 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                let moved = game::movement::update(
+                let map = self.data.find_map(&s.player.current_map_id);
+                let event = game::movement::reduce_tick(
                     &self.state,
-                    &mut s.movement,
-                    &mut s.player,
-                    &mut s.combat,
-                    &self.data,
+                    &s.movement,
+                    &s.player,
+                    map,
+                    &s.combat,
+                    &self.data.npcs,
                 );
+                let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, event);
                 if moved {
-                    game::explore::check_tile_events(&mut s.player, &mut s.combat, &self.data);
+                    game::explore::check_tile_events(
+                        &mut s.player,
+                        &mut s.combat,
+                        &self.data,
+                    );
                 }
             }
             AppEffect::UpdateCombat => {
@@ -132,13 +148,20 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::combat::update_combat(
+                let event = game::combat::reduce_update(
+                    &self.state,
+                    &s.player,
+                    &s.skill_cooldowns,
+                    s.mp_regen_timer,
+                );
+                game::combat::apply_update(
                     &mut self.state,
                     &mut s.player,
                     &mut s.skill_cooldowns,
                     &mut s.mp_regen_timer,
                     &mut s.combat,
                     &self.data,
+                    event,
                 );
             }
             AppEffect::ApplyMenuIntent(intent) => {

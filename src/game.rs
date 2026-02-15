@@ -32,9 +32,10 @@ pub use systems::reward;
 pub use systems::shop;
 pub use systems::{
     CombatEvent, CombatIntent, CombatState, DialogEvent, DialogIntent, DialogTransition,
-    ExploreEvent, ExploreIntent, InventoryEvent, InventoryIntent, MenuEvent, MenuIntent,
-    MovementState, NpcEvent, NpcIntent, PauseMenuEvent, PauseMenuIntent, PlayerEvent, PlayerIntent,
-    QuestIntent, ShopEvent, ShopIntent,
+    ExploreEvent, ExploreIntent, InventoryEvent, InventoryIntent, LoadingEvent, MenuEvent,
+    MenuIntent, MovementState, NpcEvent, NpcIntent,
+    PauseMenuEvent, PauseMenuIntent, PlayerEvent, PlayerIntent, QuestIntent, ShopEvent,
+    ShopIntent,
 };
 pub use ui::{
     DialogState, ExploreAction, ExploreUiState, INVENTORY_VISIBLE_ITEMS, InventoryUiState,

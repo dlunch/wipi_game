@@ -2,33 +2,115 @@ use wipi::event::KeyCode;
 
 use super::combat::{enemy_at, CombatState};
 use crate::data::{Direction, Map, Npc};
-use crate::game::{GameData, GameState, PlayerState};
+use crate::game::{GameState, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct MovementState {
     pub pressed_direction: Option<KeyCode>,
     pub move_cooldown: u32,
 }
 
-pub fn update(
+pub struct MovementTickEvent {
+    pub next_state: MovementState,
+    pub facing: Option<(i32, i32)>,
+    pub step: Option<(i32, i32)>,
+}
+
+pub fn reduce_tick(
     game_state: &GameState,
-    state: &mut MovementState,
-    player: &mut PlayerState,
-    combat: &mut CombatState,
-    data: &GameData,
-) -> bool {
+    state: &MovementState,
+    player: &PlayerState,
+    map: Option<&Map>,
+    combat: &CombatState,
+    npcs: &[Npc],
+) -> MovementTickEvent {
+    let mut next_state = *state;
+
     if !matches!(game_state, GameState::Explore) {
-        return false;
+        return MovementTickEvent {
+            next_state,
+            facing: None,
+            step: None,
+        };
     }
 
-    let map_id = player.current_map_id.clone();
-    let Some(map) = data.find_map(&map_id) else {
-        return false;
+    let Some(map) = map else {
+        return MovementTickEvent {
+            next_state,
+            facing: None,
+            step: None,
+        };
     };
 
-    tick(state, player, map, combat, &data.npcs)
+    if state.move_cooldown > 0 {
+        next_state.move_cooldown -= 1;
+        return MovementTickEvent {
+            next_state,
+            facing: None,
+            step: None,
+        };
+    }
+
+    let Some(key) = state.pressed_direction else {
+        return MovementTickEvent {
+            next_state,
+            facing: None,
+            step: None,
+        };
+    };
+
+    let (dx, dy) = match key {
+        KeyCode::Up => (0, -1),
+        KeyCode::Down => (0, 1),
+        KeyCode::Left => (-1, 0),
+        KeyCode::Right => (1, 0),
+        _ => {
+            return MovementTickEvent {
+                next_state,
+                facing: None,
+                step: None,
+            };
+        }
+    };
+
+    next_state.move_cooldown = MOVE_COOLDOWN;
+    let mut step = None;
+
+    if can_move(player, map, dx, dy)
+        && let Some(new_x) = player.x.checked_add_signed(dx as isize)
+        && let Some(new_y) = player.y.checked_add_signed(dy as isize)
+        && !enemy_at(combat, new_x, new_y)
+        && !npc_at(npcs, &player.current_map_id, new_x, new_y)
+    {
+        step = Some((dx, dy));
+    }
+
+    MovementTickEvent {
+        next_state,
+        facing: Some((dx, dy)),
+        step,
+    }
+}
+
+pub fn apply_tick(
+    state: &mut MovementState,
+    player: &mut PlayerState,
+    event: MovementTickEvent,
+) -> bool {
+    *state = event.next_state;
+
+    if let Some((dx, dy)) = event.facing {
+        set_facing(player, dx, dy);
+    }
+
+    if let Some((dx, dy)) = event.step {
+        move_by(player, dx, dy);
+        return true;
+    }
+
+    false
 }
 
 pub fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {
@@ -42,6 +124,7 @@ pub fn on_key_released(state: &mut MovementState, key: KeyCode) {
     }
 }
 
+#[cfg(test)]
 fn tick(
     state: &mut MovementState,
     player: &mut PlayerState,
@@ -49,18 +132,15 @@ fn tick(
     combat: &CombatState,
     npcs: &[Npc],
 ) -> bool {
-    if state.move_cooldown > 0 {
-        state.move_cooldown -= 1;
-        return false;
-    }
-
-    let Some(key) = state.pressed_direction else {
-        return false;
-    };
-
-    let moved = try_move(player, map, combat, npcs, key);
-    state.move_cooldown = MOVE_COOLDOWN;
-    moved
+    let event = reduce_tick(
+        &GameState::Explore,
+        state,
+        player,
+        Some(map),
+        combat,
+        npcs,
+    );
+    apply_tick(state, player, event)
 }
 
 fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
@@ -73,6 +153,7 @@ fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
     map.get_tile(new_x, new_y).is_passable()
 }
 
+#[cfg(test)]
 fn try_move(
     player: &mut PlayerState,
     map: &Map,

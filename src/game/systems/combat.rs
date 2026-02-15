@@ -48,6 +48,15 @@ pub enum CombatEvent {
     Skill(SkillResult),
 }
 
+pub enum CombatUpdateEvent {
+    None,
+    Tick {
+        next_skill_cooldowns: [u32; 3],
+        next_mp_regen_timer: u32,
+        recover_mp: i32,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct FieldEnemy {
     pub data: Enemy,
@@ -497,28 +506,59 @@ pub struct KillReward {
     pub gold: i32,
 }
 
-pub fn update_combat(
+pub fn reduce_update(
+    state: &GameState,
+    _player: &PlayerState,
+    skill_cooldowns: &[u32; 3],
+    mp_regen_timer: u32,
+) -> CombatUpdateEvent {
+    if !matches!(state, GameState::Explore) {
+        return CombatUpdateEvent::None;
+    }
+
+    let mut next_skill_cooldowns = *skill_cooldowns;
+    for cooldown in &mut next_skill_cooldowns {
+        if *cooldown > 0 {
+            *cooldown -= 1;
+        }
+    }
+
+    let mut next_mp_regen_timer = mp_regen_timer + 1;
+    let mut recover_mp = 0;
+    if next_mp_regen_timer >= MP_REGEN_INTERVAL {
+        next_mp_regen_timer = 0;
+        recover_mp = 1;
+    }
+
+    CombatUpdateEvent::Tick {
+        next_skill_cooldowns,
+        next_mp_regen_timer,
+        recover_mp,
+    }
+}
+
+pub fn apply_update(
     state: &mut GameState,
     player: &mut PlayerState,
     skill_cooldowns: &mut [u32; 3],
     mp_regen_timer: &mut u32,
     combat: &mut CombatState,
     data: &GameData,
+    event: CombatUpdateEvent,
 ) {
-    if !matches!(state, GameState::Explore) {
+    let CombatUpdateEvent::Tick {
+        next_skill_cooldowns,
+        next_mp_regen_timer,
+        recover_mp,
+    } = event
+    else {
         return;
-    }
+    };
 
-    for cooldown in skill_cooldowns {
-        if *cooldown > 0 {
-            *cooldown -= 1;
-        }
-    }
-
-    *mp_regen_timer += 1;
-    if *mp_regen_timer >= MP_REGEN_INTERVAL {
-        *mp_regen_timer = 0;
-        player.stats.recover_mp(1);
+    *skill_cooldowns = next_skill_cooldowns;
+    *mp_regen_timer = next_mp_regen_timer;
+    if recover_mp > 0 {
+        player.stats.recover_mp(recover_mp);
     }
 
     let player_x = player.x;
@@ -1027,13 +1067,15 @@ mod tests {
             Vec::new(),
         ));
 
-        update_combat(
+        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_update(
             &mut game_state,
             &mut player,
             &mut cooldowns,
             &mut mp_regen_timer,
             &mut combat,
             &data,
+            event,
         );
 
         assert!(player.stats.current_hp < initial_hp);
@@ -1072,13 +1114,15 @@ mod tests {
             Vec::new(),
         ));
 
-        update_combat(
+        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_update(
             &mut game_state,
             &mut player,
             &mut cooldowns,
             &mut mp_regen_timer,
             &mut combat,
             &data,
+            event,
         );
 
         assert!(matches!(game_state, GameState::GameOver));
@@ -1102,13 +1146,15 @@ mod tests {
             Vec::new(),
         ));
 
-        update_combat(
+        let event = reduce_update(&game_state, &player, &cooldowns, mp_regen_timer);
+        apply_update(
             &mut game_state,
             &mut player,
             &mut cooldowns,
             &mut mp_regen_timer,
             &mut combat,
             &data,
+            event,
         );
 
         assert_eq!(cooldowns, [1, 0, 0]);

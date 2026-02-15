@@ -5,33 +5,40 @@ use alloc::string::String;
 use crate::data::Tile;
 use crate::game::{
     self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
-    PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
+    PlayerIntent, PlayerState, SessionState, load_game,
 };
 
-pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) -> Option<MenuState> {
+pub enum LoadingEvent {
+    None,
+    Advance(usize),
+    Loaded(MenuState),
+    Error(String),
+}
+
+pub fn reduce_loading(
+    state: &GameState,
+    load_result: Result<bool, String>,
+    has_save: bool,
+) -> LoadingEvent {
     let GameState::Loading(step) = *state else {
-        return None;
+        return LoadingEvent::None;
     };
 
-    let Some(data_mut) = Rc::get_mut(data) else {
-        *state = GameState::Error(String::from("Load error: data is shared"));
-        return None;
-    };
-
-    match data_mut.load_step(step) {
-        Ok(true) => {
-            *state = GameState::Menu;
-            return Some(MenuState::new(has_save_data()));
-        }
-        Ok(false) => {
-            *state = GameState::Loading(step + 1);
-        }
-        Err(e) => {
-            *state = GameState::Error(format!("Load error: {}", e));
-        }
+    match load_result {
+        Ok(true) => LoadingEvent::Loaded(MenuState::new(has_save)),
+        Ok(false) => LoadingEvent::Advance(step + 1),
+        Err(e) => LoadingEvent::Error(e),
     }
+}
 
-    None
+pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
+    let Some(data_mut) = Rc::get_mut(data) else {
+        return Err(String::from("Load error: data is shared"));
+    };
+
+    data_mut
+        .load_step(step)
+        .map_err(|e| format!("Load error: {}", e))
 }
 
 pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<DialogState>) {
