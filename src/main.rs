@@ -7,6 +7,7 @@ mod game;
 
 use alloc::rc::Rc;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::time::Duration;
@@ -56,6 +57,7 @@ enum AppMovementEvent {
     Tick(
         game::movement::MovementTickEvent,
         Option<game::explore::TileEvent>,
+        bool,
     ),
 }
 
@@ -181,25 +183,15 @@ impl GameInner {
     }
 
     fn apply_update_movement(&mut self, event: AppMovementEvent) {
-        let map_changed = {
-            let Some(s) = self.session.as_mut() else {
-                self.state = GameState::Error(String::from("No active session"));
-                return;
-            };
-
-            let AppMovementEvent::Tick(movement_event, tile_event) = event;
-            let moved = s.movement.apply_tick(&mut s.player, movement_event);
-            moved
-                && tile_event.is_some_and(|tile_event| {
-                    matches!(
-                        s.player.apply_tile_event(&self.data, tile_event),
-                        game::explore::TileApplyEvent::MapChanged
-                    )
-                })
+        let Some(s) = self.session.as_mut() else {
+            self.state = GameState::Error(String::from("No active session"));
+            return;
         };
 
-        if map_changed {
-            self.apply_event(AppEvent::MapChanged);
+        let AppMovementEvent::Tick(movement_event, tile_event, _) = event;
+        let moved = s.movement.apply_tick(&mut s.player, movement_event);
+        if moved && let Some(tile_event) = tile_event {
+            let _ = s.player.apply_tile_event(&self.data, tile_event);
         }
     }
 
@@ -593,7 +585,7 @@ impl GameInner {
         }
     }
 
-    fn reduce_intent(&mut self, intent: AppIntent) -> AppEvent {
+    fn reduce_intent_single(&mut self, intent: AppIntent) -> AppEvent {
         match intent {
             AppIntent::UpdateLoading => {
                 let GameState::Loading(step) = self.state else {
@@ -653,7 +645,19 @@ impl GameInner {
                     None
                 };
 
-                AppEvent::UpdateMovement(AppMovementEvent::Tick(movement_event, tile_event))
+                let map_changed = tile_event.as_ref().is_some_and(|event| match event {
+                    game::explore::TileEvent::MapExit(target)
+                    | game::explore::TileEvent::DungeonEntrance(target) => {
+                        !target.is_empty() && self.data.find_map(target).is_some()
+                    }
+                    game::explore::TileEvent::Treasure => false,
+                });
+
+                AppEvent::UpdateMovement(AppMovementEvent::Tick(
+                    movement_event,
+                    tile_event,
+                    map_changed,
+                ))
             }
             AppIntent::UpdateCombat => {
                 if !matches!(self.state, GameState::Explore) {
@@ -795,6 +799,29 @@ impl GameInner {
         }
     }
 
+    fn reduce_intent(&mut self, intent: AppIntent) -> Vec<AppEvent> {
+        let event = self.reduce_intent_single(intent);
+        match event {
+            AppEvent::UpdateMovement(AppMovementEvent::Tick(
+                movement_event,
+                tile_event,
+                map_changed,
+            )) => {
+                let mut events = Vec::with_capacity(if map_changed { 2 } else { 1 });
+                events.push(AppEvent::UpdateMovement(AppMovementEvent::Tick(
+                    movement_event,
+                    tile_event,
+                    map_changed,
+                )));
+                if map_changed {
+                    events.push(AppEvent::MapChanged);
+                }
+                events
+            }
+            other => vec![other],
+        }
+    }
+
     fn apply_event(&mut self, event: AppEvent) {
         match event {
             AppEvent::None => {}
@@ -822,8 +849,10 @@ impl GameInner {
     fn dispatch(&mut self, action: AppAction) {
         let intents = self.collect_intents(action);
         for intent in intents {
-            let event = self.reduce_intent(intent);
-            self.apply_event(event);
+            let events = self.reduce_intent(intent);
+            for event in events {
+                self.apply_event(event);
+            }
         }
     }
 }
