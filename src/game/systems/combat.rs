@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
+use crate::game::{self, GameData, GameState, PlayerState};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -14,10 +14,6 @@ const MP_REGEN_INTERVAL: u32 = 60;
 
 #[derive(Debug)]
 pub enum CombatIntent<'a> {
-    SpawnEnemies {
-        map: &'a Map,
-        enemy_data: &'a [Enemy],
-    },
     Tick {
         player_x: usize,
         player_y: usize,
@@ -42,7 +38,6 @@ pub enum CombatIntent<'a> {
 
 #[derive(Debug)]
 pub enum CombatEvent {
-    None,
     Tick(CombatResult),
     Attack(Option<KillReward>),
     Skill(SkillResult),
@@ -55,6 +50,11 @@ pub enum CombatUpdateEvent {
         next_mp_regen_timer: u32,
         recover_mp: i32,
     },
+}
+
+pub enum CombatTickApplyEvent {
+    None,
+    Damage(i32),
 }
 
 #[derive(Debug, Clone)]
@@ -167,10 +167,6 @@ pub struct CombatState {
 
 pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
     match intent {
-        CombatIntent::SpawnEnemies { map, enemy_data } => {
-            spawn_enemies(state, map, enemy_data);
-            CombatEvent::None
-        }
         CombatIntent::Tick {
             player_x,
             player_y,
@@ -200,6 +196,10 @@ pub fn apply(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
 
 fn reduce(state: &mut CombatState, intent: CombatIntent<'_>) -> CombatEvent {
     apply(state, intent)
+}
+
+pub fn spawn_for_map(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
+    spawn_enemies(state, map, enemy_data);
 }
 
 fn spawn_enemies(state: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
@@ -542,21 +542,21 @@ pub fn reduce_tick(
 }
 
 pub fn apply_tick(
-    state: &mut GameState,
+    _state: &mut GameState,
     player: &mut PlayerState,
     skill_cooldowns: &mut [u32; 3],
     mp_regen_timer: &mut u32,
     combat: &mut CombatState,
     data: &GameData,
     event: CombatUpdateEvent,
-) {
+) -> CombatTickApplyEvent {
     let CombatUpdateEvent::Tick {
         next_skill_cooldowns,
         next_mp_regen_timer,
         recover_mp,
     } = event
     else {
-        return;
+        return CombatTickApplyEvent::None;
     };
 
     *skill_cooldowns = next_skill_cooldowns;
@@ -581,30 +581,31 @@ pub fn apply_tick(
                 enemy_data: &data.enemies,
             },
         ) else {
-            return;
+            return CombatTickApplyEvent::None;
         };
 
-        if result.damage_taken > 0
-            && matches!(
-                game::player::apply(player, PlayerIntent::TakeDamage(result.damage_taken)),
-                game::PlayerEvent::Died
-            )
-        {
-            *state = GameState::GameOver;
-        }
+        return if result.damage_taken > 0 {
+            CombatTickApplyEvent::Damage(result.damage_taken)
+        } else {
+            CombatTickApplyEvent::None
+        };
     }
+
+    CombatTickApplyEvent::None
 }
 
 pub fn use_skill_action(
     player: &mut PlayerState,
     cooldowns: &mut [u32; 3],
     combat: &mut CombatState,
-    data: &GameData,
     slot: usize,
     skill: &Skill,
-) {
+) -> SkillResult {
     if !game::player::can_use_skill(player, cooldowns, slot, skill.mp_cost) {
-        return;
+        return SkillResult {
+            player_effects: Vec::new(),
+            kills: Vec::new(),
+        };
     }
 
     let CombatEvent::Skill(result) = reduce(
@@ -617,21 +618,16 @@ pub fn use_skill_action(
             facing: player.facing,
         },
     ) else {
-        return;
+        return SkillResult {
+            player_effects: Vec::new(),
+            kills: Vec::new(),
+        };
     };
 
     cooldowns[slot] = skill.cooldown;
     player.stats.current_mp = (player.stats.current_mp - skill.mp_cost).max(0);
 
-    for effect in &result.player_effects {
-        match effect {
-            PlayerEffect::Heal(amount) => {
-                let _ = game::player::apply(player, PlayerIntent::Heal(*amount));
-            }
-        }
-    }
-
-    game::reward::apply_kill_rewards(player, data, &result.kills);
+    result
 }
 
 #[cfg(test)]
@@ -782,15 +778,8 @@ mod tests {
         );
         let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
 
-        let event = reduce(
-            &mut state,
-            CombatIntent::SpawnEnemies {
-                map: &map,
-                enemy_data: &enemies,
-            },
-        );
+        spawn_enemies(&mut state, &map, &enemies);
 
-        assert!(matches!(event, CombatEvent::None));
         assert_eq!(state.enemies.len(), 2);
         assert!(state.enemies.iter().any(|e| e.x == 1 && e.y == 0));
         assert!(state.enemies.iter().any(|e| e.x == 0 && e.y == 1));
@@ -807,13 +796,7 @@ mod tests {
         );
         let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
 
-        let _ = reduce(
-            &mut state,
-            CombatIntent::SpawnEnemies {
-                map: &map,
-                enemy_data: &enemies,
-            },
-        );
+        spawn_enemies(&mut state, &map, &enemies);
 
         assert!(state.enemies.is_empty());
     }
@@ -829,13 +812,7 @@ mod tests {
         );
         let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
 
-        let _ = reduce(
-            &mut state,
-            CombatIntent::SpawnEnemies {
-                map: &map,
-                enemy_data: &enemies,
-            },
-        );
+        spawn_enemies(&mut state, &map, &enemies);
 
         assert!(state.enemies.is_empty());
     }
@@ -1072,7 +1049,7 @@ mod tests {
         ));
 
         let event = reduce_tick(&game_state, &player, &cooldowns, mp_regen_timer);
-        apply_tick(
+        let apply_event = apply_tick(
             &mut game_state,
             &mut player,
             &mut cooldowns,
@@ -1081,6 +1058,13 @@ mod tests {
             &data,
             event,
         );
+
+        if let CombatTickApplyEvent::Damage(amount) = apply_event {
+            let _ = crate::game::player::apply(
+                &mut player,
+                crate::game::PlayerIntent::TakeDamage(amount),
+            );
+        }
 
         assert!(player.stats.current_hp < initial_hp);
         assert!(matches!(game_state, GameState::Explore));
@@ -1119,7 +1103,7 @@ mod tests {
         ));
 
         let event = reduce_tick(&game_state, &player, &cooldowns, mp_regen_timer);
-        apply_tick(
+        let apply_event = apply_tick(
             &mut game_state,
             &mut player,
             &mut cooldowns,
@@ -1128,6 +1112,18 @@ mod tests {
             &data,
             event,
         );
+
+        if let CombatTickApplyEvent::Damage(amount) = apply_event
+            && matches!(
+                crate::game::player::apply(
+                    &mut player,
+                    crate::game::PlayerIntent::TakeDamage(amount)
+                ),
+                crate::game::PlayerEvent::Died
+            )
+        {
+            game_state = GameState::GameOver;
+        }
 
         assert!(matches!(game_state, GameState::GameOver));
         assert_eq!(player.stats.current_hp, 0);

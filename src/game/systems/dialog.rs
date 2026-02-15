@@ -1,7 +1,7 @@
 use wipi::event::KeyCode;
 
 use crate::data::DialogAction;
-use crate::game::{self, DialogState, GameData, GameState, PlayerIntent, PlayerState, ShopState};
+use crate::game::{DialogState, GameData, GameState, PlayerState, ShopState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -37,7 +37,14 @@ pub fn apply_action(
 ) -> Option<ShopState> {
     match action {
         DialogAction::GiveQuest(id) => {
-            let _ = game::player::apply(player, PlayerIntent::AddQuest(id.clone()));
+            if !player.quests.iter().any(|q| q.quest_id == *id) {
+                player.quests.push(crate::data::QuestProgress {
+                    quest_id: id.clone(),
+                    current_count: 0,
+                    completed: false,
+                    rewarded: false,
+                });
+            }
         }
         DialogAction::CompleteQuest(id) => {
             let can_reward = player
@@ -46,31 +53,35 @@ pub fn apply_action(
                 .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
 
             if can_reward && let Some(quest) = data.find_quest(id) {
-                let _ = game::player::apply(player, PlayerIntent::AddExp(quest.reward_exp));
-                let _ = game::player::apply(player, PlayerIntent::AddGold(quest.reward_gold));
+                player.stats.add_exp(quest.reward_exp);
+                player.stats.gold = (player.stats.gold + quest.reward_gold).max(0);
 
                 if let Some(item_id) = &quest.reward_item
                     && let Some(item) = data.find_item(item_id).cloned()
                 {
-                    let _ = game::player::apply(player, PlayerIntent::AddItem(item));
+                    player.inventory.push(item);
                 }
 
-                let _ = game::player::apply(player, PlayerIntent::MarkQuestRewarded(id.clone()));
+                if let Some(progress) = player.quests.iter_mut().find(|q| q.quest_id == *id) {
+                    progress.rewarded = true;
+                }
             }
         }
         DialogAction::GiveItem(id) => {
             if let Some(item) = data.find_item(id).cloned() {
-                let _ = game::player::apply(player, PlayerIntent::AddItem(item));
+                player.inventory.push(item);
             }
         }
         DialogAction::TakeItem(id) => {
-            let _ = game::player::apply(player, PlayerIntent::RemoveItem(id.clone()));
+            if let Some(index) = player.inventory.iter().position(|item| item.id == *id) {
+                player.inventory.remove(index);
+            }
         }
         DialogAction::GiveGold(amount) => {
-            let _ = game::player::apply(player, PlayerIntent::AddGold(*amount));
+            player.stats.gold = (player.stats.gold + *amount).max(0);
         }
         DialogAction::TakeGold(amount) => {
-            let _ = game::player::apply(player, PlayerIntent::AddGold(-*amount));
+            player.stats.gold = (player.stats.gold - *amount).max(0);
         }
         DialogAction::OpenShop(id) => {
             if let Some(shop) = data.find_shop(id).cloned() {
@@ -79,7 +90,8 @@ pub fn apply_action(
             }
         }
         DialogAction::Heal => {
-            let _ = game::player::apply(player, PlayerIntent::FullHeal);
+            player.stats.current_hp = player.stats.max_hp;
+            player.stats.current_mp = player.stats.max_mp;
         }
     }
 

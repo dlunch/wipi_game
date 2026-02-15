@@ -37,11 +37,6 @@ pub fn apply(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>)
 }
 
 #[cfg(test)]
-fn reduce(player: &mut PlayerState, data: &GameData, intent: QuestIntent<'_>) {
-    apply(player, data, intent);
-}
-
-#[cfg(test)]
 mod tests {
     use alloc::string::String;
     use alloc::vec;
@@ -50,7 +45,7 @@ mod tests {
     use crate::data::{Quest, QuestProgress, QuestType};
     use crate::game::GameData;
 
-    use super::{QuestIntent, reduce};
+    use super::{QuestIntent, apply};
 
     fn make_quest(id: &str, target_id: &str, target_count: i32) -> Quest {
         Quest {
@@ -93,7 +88,7 @@ mod tests {
         let mut player = make_player_with_quest("q1", 0, false, false);
         let data = make_game_data_with_quest(make_quest("q1", "slime", 3));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },
@@ -108,7 +103,7 @@ mod tests {
         let mut player = make_player_with_quest("q1", 1, false, false);
         let data = make_game_data_with_quest(make_quest("q1", "slime", 2));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },
@@ -123,7 +118,7 @@ mod tests {
         let mut player = make_player_with_quest("q1", 1, false, false);
         let data = make_game_data_with_quest(make_quest("q1", "slime", 3));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "goblin" },
@@ -138,7 +133,7 @@ mod tests {
         let mut player = make_player_with_quest("q1", 3, true, false);
         let data = make_game_data_with_quest(make_quest("q1", "slime", 3));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },
@@ -153,7 +148,7 @@ mod tests {
         let mut player = make_player_with_quest("q1", 2, false, true);
         let data = make_game_data_with_quest(make_quest("q1", "slime", 3));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },
@@ -169,7 +164,7 @@ mod tests {
         let mut player = crate::game::PlayerState::new(String::from("H"), "v");
         let data = make_game_data_with_quest(make_quest("q1", "slime", 3));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },
@@ -191,7 +186,7 @@ mod tests {
         let mut data = make_game_data_with_quest(make_quest("q1", "slime", 3));
         data.quests.push(make_quest("q2", "slime", 2));
 
-        reduce(
+        apply(
             &mut player,
             &data,
             QuestIntent::EnemyKilled { enemy_id: "slime" },

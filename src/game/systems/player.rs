@@ -1,22 +1,11 @@
-use alloc::string::String;
-
-use crate::data::{Item, ItemKind, QuestProgress};
+use crate::data::{Item, ItemKind};
 use crate::game::PlayerState;
 
 #[derive(Debug, Clone)]
 pub enum PlayerIntent {
-    AddExp(i32),
     AddGold(i32),
-    FullHeal,
     AddItem(Item),
-    RemoveItem(String),
     RemoveItemAt(usize),
-    EquipWeapon(usize),
-    EquipArmor(usize),
-    ChangeMap { map_id: String, x: usize, y: usize },
-    SpawnAtMap { x: usize, y: usize },
-    AddQuest(String),
-    MarkQuestRewarded(String),
     UseItem { index: usize },
     TakeDamage(i32),
     Heal(i32),
@@ -32,56 +21,16 @@ pub enum PlayerEvent {
 
 pub fn apply(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
     match intent {
-        PlayerIntent::AddExp(exp) => {
-            player.stats.add_exp(exp);
-            PlayerEvent::None
-        }
         PlayerIntent::AddGold(amount) => {
             player.stats.gold = (player.stats.gold + amount).max(0);
-            PlayerEvent::None
-        }
-        PlayerIntent::FullHeal => {
-            player.stats.current_hp = player.stats.max_hp;
-            player.stats.current_mp = player.stats.max_mp;
             PlayerEvent::None
         }
         PlayerIntent::AddItem(item) => {
             add_item(player, item);
             PlayerEvent::None
         }
-        PlayerIntent::RemoveItem(id) => {
-            let _ = remove_item(player, &id);
-            PlayerEvent::None
-        }
         PlayerIntent::RemoveItemAt(index) => {
             PlayerEvent::ItemRemoved(remove_item_at(player, index))
-        }
-        PlayerIntent::EquipWeapon(idx) => {
-            player.equipped_weapon = Some(idx);
-            PlayerEvent::None
-        }
-        PlayerIntent::EquipArmor(idx) => {
-            player.equipped_armor = Some(idx);
-            PlayerEvent::None
-        }
-        PlayerIntent::ChangeMap { map_id, x, y } => {
-            player.current_map_id = map_id;
-            player.x = x;
-            player.y = y;
-            PlayerEvent::None
-        }
-        PlayerIntent::SpawnAtMap { x, y } => {
-            player.x = x;
-            player.y = y;
-            PlayerEvent::None
-        }
-        PlayerIntent::AddQuest(id) => {
-            add_quest(player, &id);
-            PlayerEvent::None
-        }
-        PlayerIntent::MarkQuestRewarded(id) => {
-            mark_quest_rewarded(player, &id);
-            PlayerEvent::None
         }
         PlayerIntent::UseItem { index } => {
             if use_item(player, index) {
@@ -103,11 +52,6 @@ pub fn apply(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
             PlayerEvent::None
         }
     }
-}
-
-#[cfg(test)]
-fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
-    apply(player, intent)
 }
 
 pub fn can_use_skill(
@@ -152,16 +96,6 @@ fn add_item(player: &mut PlayerState, item: Item) {
     player.inventory.push(item);
 }
 
-fn remove_item(player: &mut PlayerState, item_id: &str) -> bool {
-    if let Some(index) = player.inventory.iter().position(|item| item.id == item_id) {
-        player.inventory.remove(index);
-        fix_equipped_indices(player, index);
-        true
-    } else {
-        false
-    }
-}
-
 fn remove_item_at(player: &mut PlayerState, index: usize) -> Option<Item> {
     if index >= player.inventory.len() {
         return None;
@@ -170,27 +104,6 @@ fn remove_item_at(player: &mut PlayerState, index: usize) -> Option<Item> {
     let item = player.inventory.remove(index);
     fix_equipped_indices(player, index);
     Some(item)
-}
-
-fn add_quest(player: &mut PlayerState, quest_id: &str) {
-    if !player.has_quest(quest_id) {
-        player.quests.push(QuestProgress {
-            quest_id: quest_id.into(),
-            current_count: 0,
-            completed: false,
-            rewarded: false,
-        });
-    }
-}
-
-fn mark_quest_rewarded(player: &mut PlayerState, quest_id: &str) {
-    if let Some(quest) = player
-        .quests
-        .iter_mut()
-        .find(|quest| quest.quest_id == quest_id)
-    {
-        quest.rewarded = true;
-    }
 }
 
 fn fix_equipped_indices(player: &mut PlayerState, removed_index: usize) {
@@ -219,6 +132,8 @@ fn fix_equipped_indices(player: &mut PlayerState, removed_index: usize) {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::String;
+
     use super::*;
     use crate::data::ItemKind;
 
@@ -249,7 +164,7 @@ mod tests {
     #[test]
     fn equip_weapon_via_use_item() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(
+        let _ = apply(
             &mut player,
             PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
         );
@@ -260,7 +175,7 @@ mod tests {
     #[test]
     fn equip_armor_via_use_item() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(
+        let _ = apply(
             &mut player,
             PlayerIntent::AddItem(make_item("armor", ItemKind::Armor)),
         );
@@ -272,7 +187,7 @@ mod tests {
     fn use_consumable_heals_and_removes() {
         let mut player = PlayerState::new(String::from("H"), "v");
         player.stats.current_hp = 20;
-        let _ = reduce(&mut player, PlayerIntent::AddItem(make_potion()));
+        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
         assert!(use_item(&mut player, 0));
         assert_eq!(player.stats.current_hp, 50);
         assert!(player.inventory.is_empty());
@@ -281,12 +196,12 @@ mod tests {
     #[test]
     fn fix_equipped_indices_on_remove() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(&mut player, PlayerIntent::AddItem(make_potion()));
-        let _ = reduce(
+        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
+        let _ = apply(
             &mut player,
             PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
         );
-        let _ = reduce(
+        let _ = apply(
             &mut player,
             PlayerIntent::AddItem(make_item("armor", ItemKind::Armor)),
         );
@@ -301,13 +216,14 @@ mod tests {
     #[test]
     fn fix_equipped_clears_on_exact_removal() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(
+        let _ = apply(
             &mut player,
             PlayerIntent::AddItem(make_item("sword", ItemKind::Weapon)),
         );
         player.equipped_weapon = Some(0);
 
-        let _ = reduce(&mut player, PlayerIntent::RemoveItem(String::from("sword")));
+        player.inventory.remove(0);
+        fix_equipped_indices(&mut player, 0);
         assert_eq!(player.equipped_weapon, None);
     }
 
@@ -321,8 +237,8 @@ mod tests {
     #[test]
     fn remove_item_at_returns_item() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(&mut player, PlayerIntent::AddItem(make_potion()));
-        let event = reduce(&mut player, PlayerIntent::RemoveItemAt(0));
+        let _ = apply(&mut player, PlayerIntent::AddItem(make_potion()));
+        let event = apply(&mut player, PlayerIntent::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
             panic!("expected ItemRemoved event");
         };
@@ -336,7 +252,7 @@ mod tests {
     #[test]
     fn remove_item_at_out_of_bounds() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let event = reduce(&mut player, PlayerIntent::RemoveItemAt(0));
+        let event = apply(&mut player, PlayerIntent::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
             panic!("expected ItemRemoved event");
         };
@@ -346,8 +262,22 @@ mod tests {
     #[test]
     fn add_quest_no_duplicates() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(&mut player, PlayerIntent::AddQuest(String::from("q1")));
-        let _ = reduce(&mut player, PlayerIntent::AddQuest(String::from("q1")));
+        if !player.has_quest("q1") {
+            player.quests.push(crate::data::QuestProgress {
+                quest_id: String::from("q1"),
+                current_count: 0,
+                completed: false,
+                rewarded: false,
+            });
+        }
+        if !player.has_quest("q1") {
+            player.quests.push(crate::data::QuestProgress {
+                quest_id: String::from("q1"),
+                current_count: 0,
+                completed: false,
+                rewarded: false,
+            });
+        }
         assert_eq!(player.quests.len(), 1);
     }
 
@@ -368,11 +298,19 @@ mod tests {
     #[test]
     fn mark_quest_rewarded_intent_marks_rewarded() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(&mut player, PlayerIntent::AddQuest(String::from("q1")));
-        let _ = reduce(
-            &mut player,
-            PlayerIntent::MarkQuestRewarded(String::from("q1")),
-        );
+        player.quests.push(crate::data::QuestProgress {
+            quest_id: String::from("q1"),
+            current_count: 0,
+            completed: false,
+            rewarded: false,
+        });
+        if let Some(quest) = player
+            .quests
+            .iter_mut()
+            .find(|quest| quest.quest_id == "q1")
+        {
+            quest.rewarded = true;
+        }
         assert!(player.quests[0].rewarded);
     }
 

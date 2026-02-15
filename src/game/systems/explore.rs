@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{Direction, Enemy, Map, Tile};
+use crate::data::{Direction, Map, Tile};
 use crate::game::{CombatState, ExploreAction, ExploreUiState, GameData, GameState, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
@@ -148,49 +148,7 @@ fn change_map(
     player.current_map_id = map.id.clone();
     player.x = x;
     player.y = y;
-    spawn_enemies_for_map(combat, map, &data.enemies);
-}
-
-fn spawn_enemies_for_map(combat: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
-    combat.enemies.clear();
-    combat.respawn_positions.clear();
-    combat.respawn_timer = 0;
-    combat.player_attack_cooldown = 0;
-    combat.player_hit_flash = 0;
-    combat.skill_effects.clear();
-    combat.update_counter = 0;
-
-    let mut enemy_tiles = Vec::new();
-    for y in 0..map.height {
-        for x in 0..map.width {
-            if map.get_tile(x, y) == Tile::Enemy {
-                enemy_tiles.push((x, y));
-            }
-        }
-    }
-
-    if enemy_tiles.is_empty() || map.encounters.is_empty() {
-        return;
-    }
-
-    let available_enemies: Vec<&Enemy> = map
-        .encounters
-        .iter()
-        .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
-        .collect();
-
-    if available_enemies.is_empty() {
-        return;
-    }
-
-    for (i, (x, y)) in enemy_tiles.iter().enumerate() {
-        let enemy_idx = i % available_enemies.len();
-        let enemy = available_enemies[enemy_idx];
-        combat
-            .enemies
-            .push(crate::game::combat::FieldEnemy::new(enemy.clone(), *x, *y));
-        combat.respawn_positions.push((*x, *y, enemy_idx));
-    }
+    crate::game::combat::spawn_for_map(combat, map, &data.enemies);
 }
 
 #[cfg(test)]

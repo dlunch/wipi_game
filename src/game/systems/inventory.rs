@@ -61,22 +61,7 @@ pub fn reduce(
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
-
     use super::*;
-    use crate::data::{Item, ItemKind};
-
-    fn make_potion() -> Item {
-        Item {
-            id: String::from("potion"),
-            name: String::from("Potion"),
-            kind: ItemKind::Consumable,
-            param1: 30,
-            param2: 0,
-            param3: 0,
-            price: 50,
-        }
-    }
 
     #[test]
     fn test_intent_for_key_up() {

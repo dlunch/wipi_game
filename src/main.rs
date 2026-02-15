@@ -146,7 +146,7 @@ impl GameInner {
         };
         let event =
             game::combat::reduce_tick(&self.state, &s.player, &s.skill_cooldowns, s.mp_regen_timer);
-        game::combat::apply_tick(
+        let apply_event = game::combat::apply_tick(
             &mut self.state,
             &mut s.player,
             &mut s.skill_cooldowns,
@@ -155,6 +155,15 @@ impl GameInner {
             &self.data,
             event,
         );
+
+        if let game::CombatTickApplyEvent::Damage(amount) = apply_event
+            && matches!(
+                game::player::apply(&mut s.player, game::PlayerIntent::TakeDamage(amount)),
+                game::PlayerEvent::Died
+            )
+        {
+            self.state = GameState::GameOver;
+        }
     }
 
     fn apply_menu_intent(&mut self, intent: MenuIntent) {
@@ -214,14 +223,35 @@ impl GameInner {
             }
             game::ExploreEvent::UseAction(action) => {
                 if let Some((slot, skill)) = action.skill() {
-                    game::combat::use_skill_action(
+                    let result = game::combat::use_skill_action(
                         &mut s.player,
                         &mut s.skill_cooldowns,
                         &mut s.combat,
-                        &self.data,
                         slot,
                         skill,
                     );
+
+                    for effect in &result.player_effects {
+                        match effect {
+                            game::PlayerEffect::Heal(amount) => {
+                                let _ = game::player::apply(
+                                    &mut s.player,
+                                    game::PlayerIntent::Heal(*amount),
+                                );
+                            }
+                        }
+                    }
+
+                    game::reward::apply_kill_rewards(&mut s.player, &result.kills);
+                    for reward in &result.kills {
+                        game::quest::apply(
+                            &mut s.player,
+                            &self.data,
+                            game::quest::QuestIntent::EnemyKilled {
+                                enemy_id: &reward.enemy_id,
+                            },
+                        );
+                    }
                 } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
                     &mut s.combat,
                     game::CombatIntent::PlayerAttack {
@@ -231,7 +261,14 @@ impl GameInner {
                         facing: s.player.facing,
                     },
                 ) {
-                    game::reward::apply_kill_reward(&mut s.player, &self.data, &reward);
+                    game::reward::apply_kill_reward(&mut s.player, &reward);
+                    game::quest::apply(
+                        &mut s.player,
+                        &self.data,
+                        game::quest::QuestIntent::EnemyKilled {
+                            enemy_id: &reward.enemy_id,
+                        },
+                    );
                 }
             }
             game::ExploreEvent::EnterPauseMenu => {

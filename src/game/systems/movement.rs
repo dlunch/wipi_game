@@ -146,47 +146,6 @@ fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
     map.get_tile(new_x, new_y).is_passable()
 }
 
-#[cfg(test)]
-fn try_move(
-    player: &mut PlayerState,
-    map: &Map,
-    combat: &CombatState,
-    npcs: &[Npc],
-    key: KeyCode,
-) -> bool {
-    let (dx, dy) = match key {
-        KeyCode::Up => (0, -1),
-        KeyCode::Down => (0, 1),
-        KeyCode::Left => (-1, 0),
-        KeyCode::Right => (1, 0),
-        _ => return false,
-    };
-
-    set_facing(player, dx, dy);
-
-    if !can_move(player, map, dx, dy) {
-        return false;
-    }
-
-    let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
-        return false;
-    };
-    let Some(new_y) = player.y.checked_add_signed(dy as isize) else {
-        return false;
-    };
-
-    if enemy_at(combat, new_x, new_y) {
-        return false;
-    }
-
-    if npc_at(npcs, &player.current_map_id, new_x, new_y) {
-        return false;
-    }
-
-    move_by(player, dx, dy);
-    true
-}
-
 fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
     player.facing = match (dx, dy) {
         (0, -1) => Direction::Up,

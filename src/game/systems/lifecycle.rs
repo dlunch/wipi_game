@@ -4,8 +4,8 @@ use alloc::string::String;
 
 use crate::data::Tile;
 use crate::game::{
-    self, CombatIntent, CombatState, DialogState, GameData, GameState, MenuState, MovementState,
-    PlayerIntent, PlayerState, SessionState, load_game,
+    CombatState, DialogState, GameData, GameState, MenuState, MovementState, PlayerState,
+    SessionState, combat, load_game,
 };
 
 pub enum LoadingEvent {
@@ -47,36 +47,25 @@ pub fn start_new_game(data: &GameData) -> (GameState, SessionState, Option<Dialo
 
     if let Some(sword) = data.find_item("wooden_sword").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(sword));
-        let _ = game::player::apply(&mut player, PlayerIntent::EquipWeapon(idx));
+        player.inventory.push(sword);
+        player.equipped_weapon = Some(idx);
     }
     if let Some(armor) = data.find_item("cloth").cloned() {
         let idx = player.inventory.len();
-        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(armor));
-        let _ = game::player::apply(&mut player, PlayerIntent::EquipArmor(idx));
+        player.inventory.push(armor);
+        player.equipped_armor = Some(idx);
     }
     if let Some(potion) = data.find_item("potion").cloned() {
-        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(potion.clone()));
-        let _ = game::player::apply(&mut player, PlayerIntent::AddItem(potion));
+        player.inventory.push(potion.clone());
+        player.inventory.push(potion);
     }
 
     if let Some(map) = data.find_map("village") {
         let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-        let _ = game::player::apply(
-            &mut player,
-            PlayerIntent::ChangeMap {
-                map_id: map.id.clone(),
-                x,
-                y,
-            },
-        );
-        let _ = game::combat::apply(
-            &mut combat,
-            CombatIntent::SpawnEnemies {
-                map,
-                enemy_data: &data.enemies,
-            },
-        );
+        player.current_map_id = map.id.clone();
+        player.x = x;
+        player.y = y;
+        combat::spawn_for_map(&mut combat, map, &data.enemies);
     }
 
     let (state, dialog_state) = if let Some(dialog) = data.find_dialog("dialog_guide") {
@@ -107,14 +96,9 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<Dialog
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
                 let (x, y) = (player.x, player.y);
-                let _ = game::player::apply(
-                    &mut player,
-                    PlayerIntent::ChangeMap {
-                        map_id: String::from("village"),
-                        x,
-                        y,
-                    },
-                );
+                player.current_map_id = String::from("village");
+                player.x = x;
+                player.y = y;
             }
             if let Some(map) = data.find_map(&player.current_map_id) {
                 if (map.get_tile(player.x, player.y) == Tile::Wall
@@ -122,15 +106,10 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<Dialog
                     || player.y >= map.height)
                     && let Some((x, y)) = map.find_player_start()
                 {
-                    let _ = game::player::apply(&mut player, PlayerIntent::SpawnAtMap { x, y });
+                    player.x = x;
+                    player.y = y;
                 }
-                let _ = game::combat::apply(
-                    &mut combat,
-                    CombatIntent::SpawnEnemies {
-                        map,
-                        enemy_data: &data.enemies,
-                    },
-                );
+                combat::spawn_for_map(&mut combat, map, &data.enemies);
             }
 
             let session = SessionState {
