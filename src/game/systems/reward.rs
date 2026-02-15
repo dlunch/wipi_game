@@ -1,13 +1,9 @@
-use crate::game::PlayerState;
-use crate::game::combat::KillReward;
+use crate::game::{KillReward, PlayerState};
 
 pub fn apply_kill_reward(player: &mut PlayerState, reward: &KillReward) {
-    player.stats.add_exp(reward.exp);
-    player.stats.gold = (player.stats.gold + reward.gold).max(0);
+    player.apply_kill_reward(reward);
 }
 
 pub fn apply_kill_rewards(player: &mut PlayerState, rewards: &[KillReward]) {
-    for reward in rewards {
-        apply_kill_reward(player, reward);
-    }
+    player.apply_kill_rewards(rewards);
 }

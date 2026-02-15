@@ -186,14 +186,14 @@ impl GameInner {
         };
 
         let AppMovementEvent::Tick(movement_event, tile_event) = event;
-        let moved = game::movement::apply_tick(&mut s.movement, &mut s.player, movement_event);
+        let moved = s.movement.apply_tick(&mut s.player, movement_event);
         if moved && let Some(tile_event) = tile_event {
             let apply_event =
                 game::explore::apply_tile_event(&mut s.player, &self.data, tile_event);
             if matches!(apply_event, game::explore::TileApplyEvent::MapChanged)
                 && let Some(map) = self.data.find_map(&s.player.current_map_id)
             {
-                game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+                s.combat.spawn_for_map(map, &self.data.enemies);
             }
         }
     }
@@ -221,7 +221,7 @@ impl GameInner {
 
         if damage_taken > 0
             && matches!(
-                game::player::apply(&mut s.player, game::PlayerAction::TakeDamage(damage_taken)),
+                s.player.apply(game::PlayerAction::TakeDamage(damage_taken)),
                 game::PlayerEvent::Died
             )
         {
@@ -234,7 +234,7 @@ impl GameInner {
             return;
         };
         if let Some(map) = self.data.find_map(&s.player.current_map_id) {
-            game::combat::spawn_for_map(&mut s.combat, map, &self.data.enemies);
+            s.combat.spawn_for_map(map, &self.data.enemies);
         }
     }
 
@@ -272,20 +272,20 @@ impl GameInner {
 
     fn apply_explore_action(s: &mut SessionState, data: &GameData, action: game::ExploreAction) {
         if let Some((slot, skill)) = action.skill() {
-            if !game::player::can_use_skill(&s.player, &s.skill_cooldowns, slot, skill.mp_cost) {
+            if !s
+                .player
+                .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
+            {
                 return;
             }
 
-            let combat_event = game::combat::apply(
-                &mut s.combat,
-                game::CombatAction::UseSkill {
-                    skill,
-                    player_x: s.player.x,
-                    player_y: s.player.y,
-                    player_atk: s.player.total_atk(),
-                    facing: s.player.facing,
-                },
-            );
+            let combat_event = s.combat.apply(game::CombatAction::UseSkill {
+                skill,
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_atk: s.player.total_atk(),
+                facing: s.player.facing,
+            });
             let game::CombatEvent::Skill(result) = combat_event else {
                 return;
             };
@@ -296,42 +296,28 @@ impl GameInner {
             for effect in &result.player_effects {
                 match effect {
                     game::PlayerEffect::Heal(amount) => {
-                        let _ =
-                            game::player::apply(&mut s.player, game::PlayerAction::Heal(*amount));
+                        let _ = s.player.apply(game::PlayerAction::Heal(*amount));
                     }
                 }
             }
 
-            game::reward::apply_kill_rewards(&mut s.player, &result.kills);
+            s.player.apply_kill_rewards(&result.kills);
             for reward in &result.kills {
-                game::quest::apply(
-                    &mut s.player,
-                    data,
-                    game::quest::QuestIntent::EnemyKilled {
-                        enemy_id: &reward.enemy_id,
-                    },
-                );
+                s.player.apply_quest_kill(data, &reward.enemy_id);
             }
             return;
         }
 
-        if let game::CombatEvent::Attack(Some(reward)) = game::combat::apply(
-            &mut s.combat,
-            game::CombatAction::PlayerAttack {
+        if let game::CombatEvent::Attack(Some(reward)) =
+            s.combat.apply(game::CombatAction::PlayerAttack {
                 player_x: s.player.x,
                 player_y: s.player.y,
                 player_atk: s.player.total_atk(),
                 facing: s.player.facing,
-            },
-        ) {
-            game::reward::apply_kill_reward(&mut s.player, &reward);
-            game::quest::apply(
-                &mut s.player,
-                data,
-                game::quest::QuestIntent::EnemyKilled {
-                    enemy_id: &reward.enemy_id,
-                },
-            );
+            })
+        {
+            s.player.apply_kill_reward(&reward);
+            s.player.apply_quest_kill(data, &reward.enemy_id);
         }
     }
 
@@ -361,16 +347,14 @@ impl GameInner {
                     .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
                 if can_reward && let Some(quest) = data.find_quest(id) {
                     s.player.stats.add_exp(quest.reward_exp);
-                    let _ = game::player::apply(
-                        &mut s.player,
-                        game::PlayerAction::AddGold(quest.reward_gold),
-                    );
+                    let _ = s
+                        .player
+                        .apply(game::PlayerAction::AddGold(quest.reward_gold));
 
                     if let Some(item_id) = &quest.reward_item
                         && let Some(item) = data.find_item(item_id).cloned()
                     {
-                        let _ =
-                            game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
+                        let _ = s.player.apply(game::PlayerAction::AddItem(item));
                     }
 
                     if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
@@ -380,20 +364,19 @@ impl GameInner {
             }
             DialogAction::GiveItem(id) => {
                 if let Some(item) = data.find_item(id).cloned() {
-                    let _ = game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
+                    let _ = s.player.apply(game::PlayerAction::AddItem(item));
                 }
             }
             DialogAction::TakeItem(id) => {
                 if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
-                    let _ =
-                        game::player::apply(&mut s.player, game::PlayerAction::RemoveItemAt(index));
+                    let _ = s.player.apply(game::PlayerAction::RemoveItemAt(index));
                 }
             }
             DialogAction::GiveGold(amount) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddGold(*amount));
+                let _ = s.player.apply(game::PlayerAction::AddGold(*amount));
             }
             DialogAction::TakeGold(amount) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddGold(-*amount));
+                let _ = s.player.apply(game::PlayerAction::AddGold(-*amount));
             }
             DialogAction::OpenShop(shop_id) => {
                 let Some(shop) = data.find_shop(shop_id).cloned() else {
@@ -439,7 +422,7 @@ impl GameInner {
 
         match event {
             AppExploreEvent::MoveDirection(direction) => {
-                game::movement::on_direction_pressed(&mut s.movement, direction);
+                s.movement.on_direction_pressed(direction);
             }
             AppExploreEvent::Npc(npc_event) => match npc_event {
                 game::NpcEvent::OpenDialog(dialog_spec) => {
@@ -486,7 +469,7 @@ impl GameInner {
             game::InventoryEvent::None => {}
             game::InventoryEvent::SetSelected(selected) => self.ui.inventory.set_selected(selected),
             game::InventoryEvent::UseSelected(index) => {
-                let _ = game::player::apply(&mut s.player, game::PlayerAction::UseItem { index });
+                let _ = s.player.apply(game::PlayerAction::UseItem { index });
             }
             game::InventoryEvent::CloseToExplore => self.state = GameState::Explore,
         }
@@ -550,18 +533,13 @@ impl GameInner {
             }
             game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
             game::ShopEvent::BuyItem(item) => {
-                let _ =
-                    game::player::apply(&mut s.player, game::PlayerAction::AddGold(-item.price));
-                let _ = game::player::apply(&mut s.player, game::PlayerAction::AddItem(item));
+                let _ = s.player.apply(game::PlayerAction::AddGold(-item.price));
+                let _ = s.player.apply(game::PlayerAction::AddItem(item));
             }
             game::ShopEvent::SellSelected(index) => {
-                let event =
-                    game::player::apply(&mut s.player, game::PlayerAction::RemoveItemAt(index));
+                let event = s.player.apply(game::PlayerAction::RemoveItemAt(index));
                 if let game::PlayerEvent::ItemRemoved(Some(item)) = event {
-                    let _ = game::player::apply(
-                        &mut s.player,
-                        game::PlayerAction::AddGold(item.price / 2),
-                    );
+                    let _ = s.player.apply(game::PlayerAction::AddGold(item.price / 2));
                     let inv_len = s.player.inventory.len();
                     if self.ui.shop.selected >= inv_len && self.ui.shop.selected > 0 {
                         self.ui.shop.set_selected(self.ui.shop.selected - 1);
@@ -606,7 +584,7 @@ impl GameInner {
             return;
         };
         if let Some(direction) = direction_for_key(key) {
-            game::movement::on_direction_released(&mut s.movement, direction);
+            s.movement.on_direction_released(direction);
         }
     }
 

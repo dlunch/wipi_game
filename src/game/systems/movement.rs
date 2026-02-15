@@ -1,13 +1,7 @@
 use crate::data::{Direction, Map};
-use crate::game::PlayerState;
+use crate::game::{MovementState, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
-
-#[derive(Default, Clone, Copy)]
-pub struct MovementState {
-    pub pressed_direction: Option<Direction>,
-    pub move_cooldown: u32,
-}
 
 pub struct MovementTickEvent {
     pub next_state: MovementState,
@@ -75,36 +69,6 @@ pub fn reduce_tick(
     }
 }
 
-pub fn apply_tick(
-    state: &mut MovementState,
-    player: &mut PlayerState,
-    event: MovementTickEvent,
-) -> bool {
-    *state = event.next_state;
-
-    if let Some((dx, dy)) = event.facing {
-        set_facing(player, dx, dy);
-    }
-
-    if let Some((dx, dy)) = event.step {
-        move_by(player, dx, dy);
-        return true;
-    }
-
-    false
-}
-
-pub fn on_direction_pressed(state: &mut MovementState, direction: Direction) {
-    state.pressed_direction = Some(direction);
-    state.move_cooldown = 0;
-}
-
-pub fn on_direction_released(state: &mut MovementState, direction: Direction) {
-    if state.pressed_direction == Some(direction) {
-        state.pressed_direction = None;
-    }
-}
-
 #[cfg(test)]
 fn tick(
     state: &mut MovementState,
@@ -114,7 +78,7 @@ fn tick(
     npc_positions: &[(usize, usize)],
 ) -> bool {
     let event = reduce_tick(state, player, Some(map), enemy_positions, npc_positions);
-    apply_tick(state, player, event)
+    state.apply_tick(player, event)
 }
 
 fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
@@ -125,25 +89,6 @@ fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
         return false;
     };
     map.get_tile(new_x, new_y).is_passable()
-}
-
-fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
-    player.facing = match (dx, dy) {
-        (0, -1) => Direction::Up,
-        (0, 1) => Direction::Down,
-        (-1, 0) => Direction::Left,
-        (1, 0) => Direction::Right,
-        _ => player.facing,
-    };
-}
-
-fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
-    if let Some(new_x) = player.x.checked_add_signed(dx as isize) {
-        player.x = new_x;
-    }
-    if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
-        player.y = new_y;
-    }
 }
 
 fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
@@ -189,7 +134,7 @@ mod tests {
             move_cooldown: 3,
         };
 
-        on_direction_pressed(&mut state, Direction::Left);
+        state.on_direction_pressed(Direction::Left);
 
         assert!(state.pressed_direction == Some(Direction::Left));
         assert!(state.move_cooldown == 0);
@@ -202,7 +147,7 @@ mod tests {
             move_cooldown: 0,
         };
 
-        on_direction_released(&mut state, Direction::Right);
+        state.on_direction_released(Direction::Right);
 
         assert!(state.pressed_direction.is_none());
     }
@@ -214,7 +159,7 @@ mod tests {
             move_cooldown: 0,
         };
 
-        on_direction_released(&mut state, Direction::Down);
+        state.on_direction_released(Direction::Down);
 
         assert!(state.pressed_direction == Some(Direction::Up));
     }

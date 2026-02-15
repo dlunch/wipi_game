@@ -1,6 +1,10 @@
+mod combat;
+mod movement;
 mod player;
 
-pub use player::PlayerState;
+pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect};
+pub use movement::MovementState;
+pub use player::{PlayerAction, PlayerEvent, PlayerState};
 
 use alloc::string::String;
 

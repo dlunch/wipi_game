@@ -173,39 +173,7 @@ pub fn apply_tile_event(
     data: &GameData,
     event: TileEvent,
 ) -> TileApplyEvent {
-    match event {
-        TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-            if !target.is_empty() && change_map(player, data, &target) {
-                TileApplyEvent::MapChanged
-            } else {
-                TileApplyEvent::None
-            }
-        }
-        TileEvent::Treasure => {
-            let map_id = player.current_map_id.clone();
-            if !player.is_treasure_opened(&map_id, player.x, player.y) {
-                if let Some(item_id) = data.newgame.treasure_item.as_deref()
-                    && let Some(item) = data.find_item(item_id).cloned()
-                {
-                    player.inventory.push(item);
-                }
-                player.opened_treasures.push((map_id, player.x, player.y));
-            }
-            TileApplyEvent::None
-        }
-    }
-}
-
-fn change_map(player: &mut PlayerState, data: &GameData, target_id: &str) -> bool {
-    let Some(map) = data.find_map(target_id) else {
-        return false;
-    };
-
-    let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-    player.current_map_id = map.id.clone();
-    player.x = x;
-    player.y = y;
-    true
+    player.apply_tile_event(data, event)
 }
 
 #[cfg(test)]
