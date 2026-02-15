@@ -1,6 +1,6 @@
 use alloc::string::String;
 
-use crate::data::{Direction, Item, ItemKind, QuestProgress};
+use crate::data::{Item, ItemKind, QuestProgress};
 use crate::game::PlayerState;
 
 #[derive(Debug, Clone)]
@@ -13,8 +13,6 @@ pub enum PlayerIntent {
     RemoveItemAt(usize),
     EquipWeapon(usize),
     EquipArmor(usize),
-    SetFacing { dx: i32, dy: i32 },
-    MoveBy { dx: i32, dy: i32 },
     ChangeMap { map_id: String, x: usize, y: usize },
     SpawnAtMap { x: usize, y: usize },
     AddQuest(String),
@@ -64,14 +62,6 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
         }
         PlayerIntent::EquipArmor(idx) => {
             player.equipped_armor = Some(idx);
-            PlayerEvent::None
-        }
-        PlayerIntent::SetFacing { dx, dy } => {
-            set_facing(player, dx, dy);
-            PlayerEvent::None
-        }
-        PlayerIntent::MoveBy { dx, dy } => {
-            move_by(player, dx, dy);
             PlayerEvent::None
         }
         PlayerIntent::ChangeMap { map_id, x, y } => {
@@ -175,26 +165,6 @@ fn remove_item_at(player: &mut PlayerState, index: usize) -> Option<Item> {
     let item = player.inventory.remove(index);
     fix_equipped_indices(player, index);
     Some(item)
-}
-
-fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
-    player.facing = match (dx, dy) {
-        (0, -1) => Direction::Up,
-        (0, 1) => Direction::Down,
-        (-1, 0) => Direction::Left,
-        (1, 0) => Direction::Right,
-        _ => player.facing,
-    };
-}
-
-fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
-    if let Some(new_x) = player.x.checked_add_signed(dx as isize) {
-        player.x = new_x;
-    }
-    if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
-        player.y = new_y;
-    }
-    set_facing(player, dx, dy);
 }
 
 fn add_quest(player: &mut PlayerState, quest_id: &str) {
@@ -402,17 +372,6 @@ mod tests {
     }
 
     #[test]
-    fn move_by_and_set_facing_intents_update_position_and_direction() {
-        let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(&mut player, PlayerIntent::SetFacing { dx: 1, dy: 0 });
-        assert!(matches!(player.facing, Direction::Right));
-
-        let _ = reduce(&mut player, PlayerIntent::MoveBy { dx: 0, dy: 1 });
-        assert_eq!(player.x, 0);
-        assert_eq!(player.y, 1);
-        assert!(matches!(player.facing, Direction::Down));
-    }
-
     #[test]
     fn skill_cooldowns() {
         let mut player = PlayerState::new(String::from("H"), "v");

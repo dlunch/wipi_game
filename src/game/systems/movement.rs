@@ -1,8 +1,8 @@
 use wipi::event::KeyCode;
 
 use super::combat::{enemy_at, CombatState};
-use crate::data::{Map, Npc};
-use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
+use crate::data::{Direction, Map, Npc};
+use crate::game::{GameData, GameState, PlayerState};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -88,7 +88,7 @@ fn try_move(
         _ => return false,
     };
 
-    let _ = game::player::reduce(player, PlayerIntent::SetFacing { dx, dy });
+    set_facing(player, dx, dy);
 
     if !can_move(player, map, dx, dy) {
         return false;
@@ -109,8 +109,27 @@ fn try_move(
         return false;
     }
 
-    let _ = game::player::reduce(player, PlayerIntent::MoveBy { dx, dy });
+    move_by(player, dx, dy);
     true
+}
+
+fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
+    player.facing = match (dx, dy) {
+        (0, -1) => Direction::Up,
+        (0, 1) => Direction::Down,
+        (-1, 0) => Direction::Left,
+        (1, 0) => Direction::Right,
+        _ => player.facing,
+    };
+}
+
+fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
+    if let Some(new_x) = player.x.checked_add_signed(dx as isize) {
+        player.x = new_x;
+    }
+    if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
+        player.y = new_y;
+    }
 }
 
 fn npc_at(npcs: &[Npc], map_id: &str, x: usize, y: usize) -> bool {
