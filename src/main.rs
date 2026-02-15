@@ -20,13 +20,13 @@ use wipi::wipi_main;
 
 use crate::game::{
     AppAction, AppEffect, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
-    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, SessionState, ShopIntent,
-    build_render_state, has_save_data, render,
+    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
+    ShopIntent, build_render_state, has_save_data, render,
 };
 
 struct GameInner {
     state: GameState,
-    data: GameData,
+    data: Rc<GameData>,
     session: Option<SessionState>,
 }
 
@@ -218,6 +218,7 @@ impl GameInner {
 
 pub struct RpgGame {
     inner: Rc<RefCell<GameInner>>,
+    render_state: Rc<RefCell<RenderState>>,
     _timer: Timer,
 }
 
@@ -231,18 +232,28 @@ impl RpgGame {
     pub fn new() -> Self {
         let inner = Rc::new(RefCell::new(GameInner {
             state: GameState::Loading(0),
-            data: GameData::default(),
+            data: Rc::new(GameData::default()),
             session: None,
         }));
 
+        let render_state = Rc::new(RefCell::new(RenderState::Loading { step: 0 }));
+
         let timer_inner = Rc::clone(&inner);
+        let timer_render_state = Rc::clone(&render_state);
         let timer = Timer::periodic(Duration::from_millis(33), move || {
-            timer_inner.borrow_mut().update();
+            {
+                let mut inner = timer_inner.borrow_mut();
+                inner.update();
+                let next_render_state =
+                    build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
+                *timer_render_state.borrow_mut() = next_render_state;
+            }
             repaint(0, 0, 0, 240, 320);
         });
 
         Self {
             inner,
+            render_state,
             _timer: timer,
         }
     }
@@ -250,9 +261,8 @@ impl RpgGame {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        let inner = self.inner.borrow();
+        let render_state = self.render_state.borrow();
         let mut fb = Framebuffer::screen_framebuffer();
-        let render_state = build_render_state(&inner.state, inner.session.as_ref(), &inner.data);
         render(&render_state, &mut fb);
     }
 

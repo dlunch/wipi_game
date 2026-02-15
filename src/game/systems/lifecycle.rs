@@ -1,4 +1,5 @@
 use alloc::format;
+use alloc::rc::Rc;
 use alloc::string::String;
 
 use crate::data::Tile;
@@ -7,12 +8,17 @@ use crate::game::{
     MovementState, PlayerIntent, PlayerState, SessionState, has_save_data, load_game,
 };
 
-pub fn update_loading(state: &mut GameState, data: &mut GameData) {
+pub fn update_loading(state: &mut GameState, data: &mut Rc<GameData>) {
     let GameState::Loading(step) = *state else {
         return;
     };
 
-    match data.load_step(step) {
+    let Some(data_mut) = Rc::get_mut(data) else {
+        *state = GameState::Error(String::from("Load error: data is shared"));
+        return;
+    };
+
+    match data_mut.load_step(step) {
         Ok(true) => {
             *state = GameState::Menu(MenuState::new(has_save_data()));
         }

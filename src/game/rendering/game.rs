@@ -1,86 +1,220 @@
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use wipi::framebuffer::Framebuffer;
 
-use crate::data::{Dialog, Map, Npc, Quest};
+use crate::data::{Direction, ItemKind, SkillType};
 use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatState, DialogState,
-    GameData, GameState, InventoryState, MenuState, PauseMenuState, PlayerState, SessionState,
-    ShopState, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
-    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, GameData, GameState,
+    MenuAction, SessionState, ShopMode, clear_screen, draw_dialog, draw_explore, draw_inventory,
+    draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text,
+    fill_rect,
 };
 
-pub struct ExploreRenderState<'a> {
-    pub map: &'a Map,
-    pub player: &'a PlayerState,
-    pub combat: &'a CombatState,
-    pub npcs: &'a [Npc],
-    pub skill_cooldowns: &'a [u32; 3],
-}
-
-pub enum RenderState<'a> {
+pub enum RenderState {
     Loading {
         step: usize,
     },
-    Menu(&'a MenuState),
-    Explore(ExploreRenderState<'a>),
-    Inventory {
-        player: &'a PlayerState,
-        state: &'a InventoryState,
+    Menu {
+        title: &'static str,
+        items: Vec<(&'static str, MenuAction)>,
+        selected: usize,
     },
-    Stats(&'a PlayerState),
+    Explore(ExploreRender),
+    Inventory(InventoryRender),
+    Stats(StatsRender),
     Dialog {
-        explore: Option<ExploreRenderState<'a>>,
-        dialog_state: &'a DialogState,
-        dialogs: &'a [Dialog],
+        explore: Option<ExploreRender>,
+        npc_name: String,
+        current_text: Option<String>,
+        has_next: bool,
     },
-    Shop {
-        shop_state: &'a ShopState,
-        player: &'a PlayerState,
-    },
-    QuestLog {
-        player: &'a PlayerState,
-        quests: &'a [Quest],
-    },
+    Shop(ShopRender),
+    QuestLog(QuestLogRender),
     PauseMenu {
-        explore: Option<ExploreRenderState<'a>>,
-        state: &'a PauseMenuState,
+        explore: Option<ExploreRender>,
+        items: Vec<&'static str>,
+        selected: usize,
     },
     GameOver,
-    Error(&'a str),
+    Error(String),
     NoSession,
 }
 
-fn map_for_session<'a>(session: &'a SessionState, data: &'a GameData) -> Option<&'a Map> {
-    data.find_map(&session.player.current_map_id)
+pub struct ExploreRender {
+    pub data: Rc<GameData>,
+    pub map_id: String,
+    pub player_x: usize,
+    pub player_y: usize,
+    pub player_facing: Direction,
+    pub hp: u32,
+    pub max_hp: u32,
+    pub mp: u32,
+    pub max_mp: u32,
+    pub level: u32,
+    pub active_quest_count: usize,
+    pub first_live_enemy_name: Option<String>,
+    pub opened_treasures: Vec<(String, usize, usize)>,
+    pub enemies: Vec<EnemyRender>,
+    pub player_hit_flash: u32,
+    pub skill_effects: Vec<SkillEffectRender>,
+    pub skill_cooldowns: [u32; 3],
+    pub peaceful: bool,
 }
 
-fn build_explore_state<'a>(
-    session: &'a SessionState,
-    data: &'a GameData,
-) -> Option<ExploreRenderState<'a>> {
-    let map = map_for_session(session, data)?;
-    Some(ExploreRenderState {
-        map,
-        player: &session.player,
-        combat: &session.combat,
-        npcs: &data.npcs,
-        skill_cooldowns: &session.skill_cooldowns,
+pub struct EnemyRender {
+    pub x: usize,
+    pub y: usize,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub hit_flash: u32,
+    pub dead: bool,
+}
+
+pub struct SkillEffectRender {
+    pub x: usize,
+    pub y: usize,
+    pub effect_type: SkillType,
+}
+
+pub struct InventoryRender {
+    pub items: Vec<InventoryItemRender>,
+    pub equipped_weapon: Option<usize>,
+    pub equipped_armor: Option<usize>,
+    pub equipped_accessory: Option<usize>,
+    pub selected: usize,
+    pub scroll: usize,
+}
+
+pub struct InventoryItemRender {
+    pub name: String,
+    pub kind: ItemKind,
+}
+
+pub struct StatsRender {
+    pub hp: u32,
+    pub max_hp: u32,
+    pub mp: u32,
+    pub max_mp: u32,
+    pub level: u32,
+    pub atk: u32,
+    pub def: u32,
+    pub exp: u32,
+    pub gold: u32,
+}
+
+pub struct ShopRender {
+    pub shop_name: String,
+    pub mode: ShopMode,
+    pub selected: usize,
+    pub scroll: usize,
+    pub buy_items: Vec<ShopItemRender>,
+    pub player_gold: i32,
+    pub player_inventory: Vec<ShopItemRender>,
+}
+
+pub struct ShopItemRender {
+    pub name: String,
+    pub price: i32,
+}
+
+pub struct QuestLogRender {
+    pub quests: Vec<QuestEntryRender>,
+}
+
+pub struct QuestEntryRender {
+    pub name: String,
+    pub description: String,
+    pub current_count: u32,
+    pub target_count: u32,
+    pub completed: bool,
+}
+
+fn as_u32(value: i32) -> u32 {
+    value.max(0) as u32
+}
+
+fn build_explore_render(session: &SessionState, data: &Rc<GameData>) -> Option<ExploreRender> {
+    let map = data.find_map(&session.player.current_map_id)?;
+
+    let first_live_enemy_name = session
+        .combat
+        .enemies
+        .iter()
+        .find(|enemy| !enemy.is_dead())
+        .map(|enemy| enemy.data.name.clone());
+
+    let enemies = session
+        .combat
+        .enemies
+        .iter()
+        .map(|enemy| EnemyRender {
+            x: enemy.x,
+            y: enemy.y,
+            hp: enemy.hp,
+            max_hp: enemy.data.hp,
+            hit_flash: enemy.hit_flash,
+            dead: enemy.is_dead(),
+        })
+        .collect();
+
+    let skill_effects = session
+        .combat
+        .skill_effects
+        .iter()
+        .map(|effect| SkillEffectRender {
+            x: effect.x,
+            y: effect.y,
+            effect_type: effect.effect_type,
+        })
+        .collect();
+
+    Some(ExploreRender {
+        data: Rc::clone(data),
+        map_id: session.player.current_map_id.clone(),
+        player_x: session.player.x,
+        player_y: session.player.y,
+        player_facing: session.player.facing,
+        hp: as_u32(session.player.stats.current_hp),
+        max_hp: as_u32(session.player.stats.max_hp),
+        mp: as_u32(session.player.stats.current_mp),
+        max_mp: as_u32(session.player.stats.max_mp),
+        level: as_u32(session.player.stats.level),
+        active_quest_count: session
+            .player
+            .quests
+            .iter()
+            .filter(|quest| !quest.rewarded && !quest.completed)
+            .count(),
+        first_live_enemy_name,
+        opened_treasures: session.player.opened_treasures.clone(),
+        enemies,
+        player_hit_flash: session.combat.player_hit_flash,
+        skill_effects,
+        skill_cooldowns: session.skill_cooldowns,
+        peaceful: map.peaceful,
     })
 }
 
-pub fn build_render_state<'a>(
-    state: &'a GameState,
-    session: Option<&'a SessionState>,
-    data: &'a GameData,
-) -> RenderState<'a> {
+pub fn build_render_state(
+    state: &GameState,
+    session: Option<&SessionState>,
+    data: &Rc<GameData>,
+) -> RenderState {
     match state {
         GameState::Loading(step) => RenderState::Loading { step: *step },
-        GameState::Menu(menu_state) => RenderState::Menu(menu_state),
+        GameState::Menu(menu_state) => RenderState::Menu {
+            title: menu_state.title,
+            items: menu_state.items.clone(),
+            selected: menu_state.selected,
+        },
         GameState::Explore => {
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            let Some(explore) = build_explore_state(s, data) else {
-                return RenderState::Error("Map not found");
+            let Some(explore) = build_explore_render(s, data) else {
+                return RenderState::Error(String::from("Map not found"));
             };
             RenderState::Explore(explore)
         }
@@ -88,96 +222,151 @@ pub fn build_render_state<'a>(
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            RenderState::Inventory {
-                player: &s.player,
-                state: &s.inventory,
-            }
+            RenderState::Inventory(InventoryRender {
+                items: s
+                    .player
+                    .inventory
+                    .iter()
+                    .map(|item| InventoryItemRender {
+                        name: item.name.clone(),
+                        kind: item.kind,
+                    })
+                    .collect(),
+                equipped_weapon: s.player.equipped_weapon,
+                equipped_armor: s.player.equipped_armor,
+                equipped_accessory: s.player.equipped_accessory,
+                selected: s.inventory.selected,
+                scroll: s.inventory.scroll,
+            })
         }
         GameState::Stats => {
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            RenderState::Stats(&s.player)
+            RenderState::Stats(StatsRender {
+                hp: as_u32(s.player.stats.current_hp),
+                max_hp: as_u32(s.player.stats.max_hp),
+                mp: as_u32(s.player.stats.current_mp),
+                max_mp: as_u32(s.player.stats.max_mp),
+                level: as_u32(s.player.stats.level),
+                atk: as_u32(s.player.total_atk()),
+                def: as_u32(s.player.total_def()),
+                exp: as_u32(s.player.stats.exp),
+                gold: as_u32(s.player.stats.gold),
+            })
         }
-        GameState::Dialog(dialog_state) => RenderState::Dialog {
-            explore: session.and_then(|s| build_explore_state(s, data)),
-            dialog_state,
-            dialogs: &data.dialogs,
-        },
+        GameState::Dialog(dialog_state) => {
+            let current_text = data
+                .find_dialog(&dialog_state.dialog_id)
+                .and_then(|dialog| dialog.lines.get(dialog_state.current_line))
+                .map(|line| line.text.clone());
+
+            let has_next = data
+                .find_dialog(&dialog_state.dialog_id)
+                .map(|dialog| dialog_state.current_line + 1 < dialog.lines.len())
+                .unwrap_or(false);
+
+            RenderState::Dialog {
+                explore: session.and_then(|s| build_explore_render(s, data)),
+                npc_name: dialog_state.npc_name.clone(),
+                current_text,
+                has_next,
+            }
+        }
         GameState::Shop(shop_state) => {
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            RenderState::Shop {
-                shop_state,
-                player: &s.player,
-            }
+            RenderState::Shop(ShopRender {
+                shop_name: shop_state.shop.name.clone(),
+                mode: shop_state.mode,
+                selected: shop_state.selected,
+                scroll: shop_state.scroll,
+                buy_items: shop_state
+                    .items
+                    .iter()
+                    .map(|item| ShopItemRender {
+                        name: item.name.clone(),
+                        price: item.price,
+                    })
+                    .collect(),
+                player_gold: s.player.stats.gold,
+                player_inventory: s
+                    .player
+                    .inventory
+                    .iter()
+                    .map(|item| ShopItemRender {
+                        name: item.name.clone(),
+                        price: item.price / 2,
+                    })
+                    .collect(),
+            })
         }
         GameState::QuestLog => {
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            RenderState::QuestLog {
-                player: &s.player,
-                quests: &data.quests,
-            }
+            let quests = s
+                .player
+                .quests
+                .iter()
+                .filter(|quest| !quest.rewarded)
+                .filter_map(|quest| {
+                    data.find_quest(&quest.quest_id)
+                        .map(|quest_data| QuestEntryRender {
+                            name: quest_data.name.clone(),
+                            description: quest_data.description.clone(),
+                            current_count: as_u32(quest.current_count),
+                            target_count: as_u32(quest_data.target_count),
+                            completed: quest.completed,
+                        })
+                })
+                .collect();
+            RenderState::QuestLog(QuestLogRender { quests })
         }
         GameState::PauseMenu(state) => RenderState::PauseMenu {
-            explore: session.and_then(|s| build_explore_state(s, data)),
-            state,
+            explore: session.and_then(|s| build_explore_render(s, data)),
+            items: state.items.clone(),
+            selected: state.selected,
         },
         GameState::GameOver => RenderState::GameOver,
-        GameState::Error(msg) => RenderState::Error(msg.as_str()),
+        GameState::Error(msg) => RenderState::Error(msg.clone()),
     }
 }
 
-pub fn render(state: &RenderState<'_>, fb: &mut Framebuffer) {
+pub fn render(state: &RenderState, fb: &mut Framebuffer) {
     match state {
         RenderState::Loading { step } => draw_loading(fb, *step),
-        RenderState::Menu(menu_state) => draw_menu(fb, menu_state),
-        RenderState::Explore(explore) => {
-            draw_explore(
-                fb,
-                explore.map,
-                explore.player,
-                explore.combat,
-                explore.npcs,
-                explore.skill_cooldowns,
-            );
-        }
-        RenderState::Inventory { player, state } => draw_inventory(fb, player, state),
-        RenderState::Stats(player) => draw_stats(fb, player),
+        RenderState::Menu {
+            title,
+            items,
+            selected,
+        } => draw_menu(fb, title, items, *selected),
+        RenderState::Explore(explore) => draw_explore(fb, explore),
+        RenderState::Inventory(inventory) => draw_inventory(fb, inventory),
+        RenderState::Stats(stats) => draw_stats(fb, stats),
         RenderState::Dialog {
             explore,
-            dialog_state,
-            dialogs,
+            npc_name,
+            current_text,
+            has_next,
         } => {
-            if let Some(explore) = explore {
-                draw_explore(
-                    fb,
-                    explore.map,
-                    explore.player,
-                    explore.combat,
-                    explore.npcs,
-                    explore.skill_cooldowns,
-                );
+            if let Some(explore_state) = explore {
+                draw_explore(fb, explore_state);
             }
-            draw_dialog(fb, dialog_state, dialogs);
+            draw_dialog(fb, npc_name, current_text.as_deref(), *has_next);
         }
-        RenderState::Shop { shop_state, player } => draw_shop(fb, shop_state, player),
-        RenderState::QuestLog { player, quests } => draw_quest_log(fb, player, quests),
-        RenderState::PauseMenu { explore, state } => {
-            if let Some(explore) = explore {
-                draw_explore(
-                    fb,
-                    explore.map,
-                    explore.player,
-                    explore.combat,
-                    explore.npcs,
-                    explore.skill_cooldowns,
-                );
+        RenderState::Shop(shop) => draw_shop(fb, shop),
+        RenderState::QuestLog(quest_log) => draw_quest_log(fb, quest_log),
+        RenderState::PauseMenu {
+            explore,
+            items,
+            selected,
+        } => {
+            if let Some(explore_state) = explore {
+                draw_explore(fb, explore_state);
             }
-            draw_pause_menu(fb, state);
+            draw_pause_menu(fb, items, *selected);
         }
         RenderState::GameOver => {
             clear_screen(fb);

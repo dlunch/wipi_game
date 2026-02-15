@@ -1,4 +1,6 @@
 use alloc::format;
+use alloc::string::String;
+
 use wipi::framebuffer::{Color, Framebuffer};
 
 use super::renderer::{
@@ -6,39 +8,23 @@ use super::renderer::{
     COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
     draw_rect, draw_text, fill_rect,
 };
-use crate::data::{Direction, Map, Npc, Skill, SkillType, Tile};
-use crate::game::{CombatState, PlayerState};
+use crate::data::{Direction, Map, Skill, SkillType, Tile};
+use crate::game::ExploreRender;
 
-pub fn draw_explore(
-    fb: &mut Framebuffer,
-    map: &Map,
-    player: &PlayerState,
-    combat: &CombatState,
-    npcs: &[Npc],
-    skill_cooldowns: &[u32; 3],
-) {
+pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender) {
+    let Some(map) = state.data.find_map(&state.map_id) else {
+        clear_screen(fb);
+        draw_text(fb, 16, 16, "ERR: Map not found", COLOR_RED);
+        return;
+    };
+
     clear_screen(fb);
     let screen_h = fb.height() as i32;
-    draw_map_with_entities(fb, map, player, combat, npcs, screen_h);
-    draw_hud(
-        fb,
-        map,
-        player,
-        combat,
-        skill_cooldowns,
-        screen_h,
-        map.peaceful,
-    );
+    draw_map_with_entities(fb, map, state, screen_h);
+    draw_hud(fb, map.name.as_str(), state, screen_h);
 }
 
-fn draw_map_with_entities(
-    fb: &mut Framebuffer,
-    map: &Map,
-    player: &PlayerState,
-    combat: &CombatState,
-    npcs: &[Npc],
-    screen_h: i32,
-) {
+fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender, screen_h: i32) {
     let screen_w = fb.width() as i32;
     let view_tiles_x = (screen_w / TILE_SIZE) as usize;
     let view_tiles_y = ((screen_h - 30) / TILE_SIZE) as usize;
@@ -46,8 +32,8 @@ fn draw_map_with_entities(
     let half_x = view_tiles_x / 2;
     let half_y = view_tiles_y / 2;
 
-    let camera_x = player.x as i32 - half_x as i32;
-    let camera_y = player.y as i32 - half_y as i32;
+    let camera_x = state.player_x as i32 - half_x as i32;
+    let camera_y = state.player_y as i32 - half_y as i32;
 
     for screen_y in 0..view_tiles_y {
         for screen_x in 0..view_tiles_x {
@@ -60,13 +46,11 @@ fn draw_map_with_entities(
             if map_x < 0 || map_y < 0 || map_x >= map.width as i32 || map_y >= map.height as i32 {
                 fill_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_BLACK);
             } else {
-                let tile = map.get_tile(map_x as usize, map_y as usize);
+                let map_xu = map_x as usize;
+                let map_yu = map_y as usize;
+                let tile = map.get_tile(map_xu, map_yu);
                 let is_opened = tile == Tile::Treasure
-                    && player.is_treasure_opened(
-                        &player.current_map_id,
-                        map_x as usize,
-                        map_y as usize,
-                    );
+                    && is_treasure_opened(&state.opened_treasures, &state.map_id, map_xu, map_yu);
                 fill_rect(
                     fb,
                     px,
@@ -79,8 +63,8 @@ fn draw_map_with_entities(
         }
     }
 
-    for npc in npcs {
-        if npc.map_id != player.current_map_id {
+    for npc in &state.data.npcs {
+        if npc.map_id != state.map_id {
             continue;
         }
 
@@ -96,15 +80,15 @@ fn draw_map_with_entities(
             let py = screen_y * TILE_SIZE;
             fill_rect(fb, px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_CYAN);
 
-            let dist = player.x.abs_diff(npc.x) + player.y.abs_diff(npc.y);
+            let dist = state.player_x.abs_diff(npc.x) + state.player_y.abs_diff(npc.y);
             if dist <= 2 {
                 draw_text(fb, px, py - 8, &npc.name, COLOR_YELLOW);
             }
         }
     }
 
-    for enemy in &combat.enemies {
-        if enemy.is_dead() {
+    for enemy in &state.enemies {
+        if enemy.dead {
             continue;
         }
 
@@ -134,8 +118,8 @@ fn draw_map_with_entities(
                 enemy_color,
             );
 
-            let bar_width = if enemy.data.hp > 0 {
-                enemy.hp * (TILE_SIZE - 2) / enemy.data.hp
+            let bar_width = if enemy.max_hp > 0 {
+                enemy.hp.max(0) * (TILE_SIZE - 2) / enemy.max_hp
             } else {
                 0
             };
@@ -147,7 +131,7 @@ fn draw_map_with_entities(
     let px = (half_x as i32) * TILE_SIZE;
     let py = (half_y as i32) * TILE_SIZE;
 
-    let player_color = if combat.player_hit_flash > 0 {
+    let player_color = if state.player_hit_flash > 0 {
         COLOR_RED
     } else {
         COLOR_WHITE
@@ -161,11 +145,10 @@ fn draw_map_with_entities(
         player_color,
     );
 
-    let hp_bar_width = if player.stats.max_hp > 0 {
-        player.stats.current_hp * (TILE_SIZE - 2) / player.stats.max_hp
-    } else {
-        0
-    };
+    let hp_bar_width = (state.hp * (TILE_SIZE - 2) as u32)
+        .checked_div(state.max_hp)
+        .map(|width| width as i32)
+        .unwrap_or(0);
     fill_rect(
         fb,
         px + 1,
@@ -176,11 +159,10 @@ fn draw_map_with_entities(
     );
     fill_rect(fb, px + 1, py + TILE_SIZE, hp_bar_width, 2, COLOR_GREEN);
 
-    let mp_bar_width = if player.stats.max_mp > 0 {
-        player.stats.current_mp * (TILE_SIZE - 2) / player.stats.max_mp
-    } else {
-        0
-    };
+    let mp_bar_width = (state.mp * (TILE_SIZE - 2) as u32)
+        .checked_div(state.max_mp)
+        .map(|width| width as i32)
+        .unwrap_or(0);
     fill_rect(
         fb,
         px + 1,
@@ -191,9 +173,9 @@ fn draw_map_with_entities(
     );
     fill_rect(fb, px + 1, py + TILE_SIZE + 2, mp_bar_width, 2, COLOR_BLUE);
 
-    draw_facing_indicator(fb, half_x as i32, half_y as i32, &player.facing);
+    draw_facing_indicator(fb, half_x as i32, half_y as i32, state.player_facing);
 
-    for effect in &combat.skill_effects {
+    for effect in &state.skill_effects {
         let screen_x = effect.x as i32 - camera_x;
         let screen_y = effect.y as i32 - camera_y;
 
@@ -216,7 +198,13 @@ fn draw_map_with_entities(
     }
 }
 
-fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, facing: &Direction) {
+fn is_treasure_opened(opened: &[(String, usize, usize)], map_id: &str, x: usize, y: usize) -> bool {
+    opened
+        .iter()
+        .any(|(opened_map_id, tx, ty)| opened_map_id == map_id && *tx == x && *ty == y)
+}
+
+fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, facing: Direction) {
     let (ox, oy, w, h) = match facing {
         Direction::Up => (TILE_SIZE / 2 - 1, 0, 2, 2),
         Direction::Down => (TILE_SIZE / 2 - 1, TILE_SIZE - 2, 2, 2),
@@ -230,42 +218,29 @@ fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, fac
     fill_rect(fb, px, py, w, h, COLOR_YELLOW);
 }
 
-fn draw_hud(
-    fb: &mut Framebuffer,
-    map: &Map,
-    player: &PlayerState,
-    combat: &CombatState,
-    skill_cooldowns: &[u32; 3],
-    screen_h: i32,
-    peaceful: bool,
-) {
+fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_h: i32) {
     let screen_w = fb.width() as i32;
     let hud_y = screen_h - 30;
 
     fill_rect(fb, 0, hud_y, screen_w, 30, COLOR_BLACK);
     draw_rect(fb, 0, hud_y, screen_w, 30, COLOR_WHITE);
 
-    draw_text(fb, 4, hud_y + 2, &map.name, COLOR_CYAN);
+    draw_text(fb, 4, hud_y + 2, map_name, COLOR_CYAN);
 
-    let active_quests = player
-        .quests
-        .iter()
-        .filter(|q| !q.rewarded && !q.completed)
-        .count();
-    if active_quests > 0 {
-        let quest_text = format!("Q:{}", active_quests);
+    if state.active_quest_count > 0 {
+        let quest_text = format!("Q:{}", state.active_quest_count);
         draw_text(fb, screen_w - 70, hud_y + 2, &quest_text, COLOR_GREEN);
     }
 
-    let lv_text = format!("Lv{}", player.stats.level);
+    let lv_text = format!("Lv{}", state.level);
     draw_text(fb, screen_w - 30, hud_y + 2, &lv_text, COLOR_YELLOW);
 
-    if let Some(enemy) = combat.enemies.iter().find(|e| !e.is_dead()) {
-        draw_text(fb, screen_w - 80, hud_y + 2, &enemy.data.name, COLOR_RED);
+    if let Some(enemy_name) = &state.first_live_enemy_name {
+        draw_text(fb, screen_w - 80, hud_y + 2, enemy_name, COLOR_RED);
     }
 
-    if !peaceful {
-        draw_skill_bar(fb, hud_y + 14, screen_w, player, skill_cooldowns);
+    if !state.peaceful {
+        draw_skill_bar(fb, hud_y + 14, screen_w, state.mp, &state.skill_cooldowns);
     }
 }
 
@@ -273,7 +248,7 @@ fn draw_skill_bar(
     fb: &mut Framebuffer,
     y: i32,
     screen_w: i32,
-    player: &PlayerState,
+    current_mp: u32,
     skill_cooldowns: &[u32; 3],
 ) {
     let skills: [(&Skill, &str); 3] = [
@@ -287,7 +262,7 @@ fn draw_skill_bar(
     for (i, (skill, key)) in skills.iter().enumerate() {
         let x = i as i32 * slot_width + 4;
         let cd = skill_cooldowns[i];
-        let is_ready = cd == 0 && player.stats.current_mp >= skill.mp_cost;
+        let is_ready = cd == 0 && current_mp >= skill.mp_cost.max(0) as u32;
 
         let color = if is_ready { COLOR_WHITE } else { COLOR_GRAY };
         let text = if cd > 0 {

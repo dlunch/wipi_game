@@ -1,62 +1,63 @@
 use alloc::format;
+
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    COLOR_BLACK, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW,
-    clear_screen, draw_rect, draw_text, fill_rect,
+    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
+    draw_text, fill_rect,
 };
-use crate::game::{PlayerState, ShopMode, ShopState};
+use crate::game::{ShopMode, ShopRender};
 
-pub fn draw_shop(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
+pub fn draw_shop(fb: &mut Framebuffer, state: &ShopRender) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
 
-    fill_rect(fb, 4, 4, screen_w - 8, screen_h - 8, COLOR_BLACK);
+    fill_rect(fb, 4, 4, screen_w - 8, screen_h - 8, COLOR_DARK_GRAY);
     draw_rect(fb, 4, 4, screen_w - 8, screen_h - 8, COLOR_WHITE);
 
-    draw_text(fb, 8, 6, &state.shop.name, COLOR_YELLOW);
+    draw_text(fb, 8, 6, &state.shop_name, COLOR_YELLOW);
 
-    let gold_text = format!("Gold: {}", player.stats.gold);
+    let gold_text = format!("Gold: {}", state.player_gold);
     draw_text(fb, screen_w - 60, 6, &gold_text, COLOR_YELLOW);
 
     match state.mode {
-        ShopMode::Select => draw_mode_select(fb, state),
-        ShopMode::Buy => draw_buy_list(fb, state, player),
-        ShopMode::Sell => draw_sell_list(fb, state, player),
+        ShopMode::Select => draw_mode_select(fb, state.selected),
+        ShopMode::Buy => draw_buy_list(fb, state),
+        ShopMode::Sell => draw_sell_list(fb, state),
     }
 
     draw_text(fb, 8, screen_h - 14, "Back:Exit", COLOR_GRAY);
 }
 
-fn draw_mode_select(fb: &mut Framebuffer, state: &ShopState) {
+fn draw_mode_select(fb: &mut Framebuffer, selected: usize) {
     let screen_w = fb.width() as i32;
     let center_x = screen_w / 2 - 30;
 
-    let buy_color = if state.selected == 0 {
+    let buy_color = if selected == 0 {
         COLOR_WHITE
     } else {
         COLOR_GRAY
     };
-    let sell_color = if state.selected == 1 {
+    let sell_color = if selected == 1 {
         COLOR_WHITE
     } else {
         COLOR_GRAY
     };
 
-    if state.selected == 0 {
+    if selected == 0 {
         draw_text(fb, center_x - 8, 30, ">", COLOR_YELLOW);
     }
     draw_text(fb, center_x, 30, "Buy", buy_color);
 
-    if state.selected == 1 {
+    if selected == 1 {
         draw_text(fb, center_x - 8, 42, ">", COLOR_YELLOW);
     }
     draw_text(fb, center_x, 42, "Sell", sell_color);
 }
 
-fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
+fn draw_buy_list(fb: &mut Framebuffer, state: &ShopRender) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
     let visible_items = ((screen_h - 60) / 12).max(1) as usize;
@@ -64,7 +65,7 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) 
     draw_text(fb, 8, 18, "== BUY ==", COLOR_GREEN);
 
     for (i, item) in state
-        .items
+        .buy_items
         .iter()
         .skip(state.scroll)
         .take(visible_items)
@@ -74,7 +75,7 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) 
         let y = 30 + (i as i32 * 12);
 
         let is_selected = actual_idx == state.selected;
-        let can_afford = player.stats.gold >= item.price;
+        let can_afford = state.player_gold >= item.price;
 
         let (text_color1, text_color2) = if is_selected {
             (COLOR_WHITE, COLOR_WHITE)
@@ -97,7 +98,7 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) 
     if state.scroll > 0 {
         draw_text(fb, screen_w - 16, 30, "^", COLOR_WHITE);
     }
-    if state.scroll + visible_items < state.items.len() {
+    if state.scroll + visible_items < state.buy_items.len() {
         draw_text(
             fb,
             screen_w - 16,
@@ -108,20 +109,20 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) 
     }
 }
 
-fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState) {
+fn draw_sell_list(fb: &mut Framebuffer, state: &ShopRender) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
     let visible_items = ((screen_h - 60) / 12).max(1) as usize;
 
-    draw_text(fb, 8, 18, "== SELL ==", COLOR_BLUE);
+    draw_text(fb, 8, 18, "== SELL ==", COLOR_GREEN);
 
-    if player.inventory.is_empty() {
+    if state.player_inventory.is_empty() {
         draw_text(fb, 8, 30, "No items", COLOR_GRAY);
         return;
     }
 
-    for (i, item) in player
-        .inventory
+    for (i, item) in state
+        .player_inventory
         .iter()
         .skip(state.scroll)
         .take(visible_items)
@@ -143,15 +144,14 @@ fn draw_sell_list(fb: &mut Framebuffer, state: &ShopState, player: &PlayerState)
 
         draw_text(fb, 16, y, &item.name, text_color1);
 
-        let sell_price = item.price / 2;
-        let price_text = format!("{}G", sell_price);
+        let price_text = format!("{}G", item.price);
         draw_text(fb, screen_w - 40, y, &price_text, text_color2);
     }
 
     if state.scroll > 0 {
         draw_text(fb, screen_w - 16, 30, "^", COLOR_WHITE);
     }
-    if state.scroll + visible_items < player.inventory.len() {
+    if state.scroll + visible_items < state.player_inventory.len() {
         draw_text(
             fb,
             screen_w - 16,

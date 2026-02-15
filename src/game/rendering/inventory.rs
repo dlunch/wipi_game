@@ -1,4 +1,5 @@
 use alloc::format;
+
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
@@ -7,9 +8,9 @@ use super::renderer::{
     fill_rect,
 };
 use crate::data::ItemKind;
-use crate::game::{InventoryState, PlayerState};
+use crate::game::{InventoryRender, StatsRender};
 
-pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &InventoryState) {
+pub fn draw_inventory(fb: &mut Framebuffer, state: &InventoryRender) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;
@@ -20,7 +21,7 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &Invent
 
     draw_text(fb, 8, 8, "INVENTORY", COLOR_YELLOW);
 
-    if player.inventory.is_empty() {
+    if state.items.is_empty() {
         draw_text(fb, 30, 60, "No items", COLOR_GRAY);
         draw_text(fb, 8, screen_h - 16, "Back:Return", COLOR_GRAY);
         return;
@@ -31,8 +32,8 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &Invent
     let visible_items = ((screen_h - 50) / item_height).max(1) as usize;
     let scroll = state.scroll;
 
-    for (i, item) in player
-        .inventory
+    for (i, item) in state
+        .items
         .iter()
         .skip(scroll)
         .take(visible_items)
@@ -41,9 +42,9 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &Invent
         let actual_idx = scroll + i;
         let y = start_y + (i as i32) * item_height;
 
-        let is_equipped = player.equipped_weapon == Some(actual_idx)
-            || player.equipped_armor == Some(actual_idx)
-            || player.equipped_accessory == Some(actual_idx);
+        let is_equipped = state.equipped_weapon == Some(actual_idx)
+            || state.equipped_armor == Some(actual_idx)
+            || state.equipped_accessory == Some(actual_idx);
 
         if actual_idx == state.selected {
             draw_selection_cursor(fb, 8, y);
@@ -77,11 +78,11 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &Invent
         draw_text(fb, 24, y + 2, &item_text, COLOR_WHITE);
     }
 
-    if player.inventory.len() > visible_items {
+    if state.items.len() > visible_items {
         if scroll > 0 {
             draw_text(fb, screen_w - 16, 24, "^", COLOR_WHITE);
         }
-        if scroll + visible_items < player.inventory.len() {
+        if scroll + visible_items < state.items.len() {
             draw_text(
                 fb,
                 screen_w - 16,
@@ -95,7 +96,7 @@ pub fn draw_inventory(fb: &mut Framebuffer, player: &PlayerState, state: &Invent
     draw_text(fb, 8, screen_h - 16, "OK:Use Back:Return", COLOR_GRAY);
 }
 
-pub fn draw_stats(fb: &mut Framebuffer, player: &PlayerState) {
+pub fn draw_stats(fb: &mut Framebuffer, state: &StatsRender) {
     clear_screen(fb);
 
     let screen_w = fb.width() as i32;
@@ -110,35 +111,27 @@ pub fn draw_stats(fb: &mut Framebuffer, player: &PlayerState) {
     let line_height: i32 = 14;
 
     draw_text(fb, 10, stat_y, "HP", COLOR_WHITE);
-    draw_hp_bar(
-        fb,
-        30,
-        stat_y + 2,
-        60,
-        player.stats.current_hp,
-        player.stats.max_hp,
-    );
-    let hp_text = format!("{}/{}", player.stats.current_hp, player.stats.max_hp);
+    draw_hp_bar(fb, 30, stat_y + 2, 60, state.hp as i32, state.max_hp as i32);
+    let hp_text = format!("{}/{}", state.hp, state.max_hp);
     draw_text(fb, 94, stat_y, &hp_text, COLOR_WHITE);
 
     draw_text(fb, 10, stat_y + line_height, "MP", COLOR_BLUE);
-    let mp_fill = if player.stats.max_mp > 0 {
-        (player.stats.current_mp * 60) / player.stats.max_mp
-    } else {
-        0
-    };
+    let mp_fill = (state.mp * 60)
+        .checked_div(state.max_mp)
+        .map(|fill| fill as i32)
+        .unwrap_or(0);
     fill_rect(fb, 30, stat_y + line_height + 2, 60, 4, COLOR_DARK_GRAY);
     fill_rect(fb, 30, stat_y + line_height + 2, mp_fill, 4, COLOR_BLUE);
     draw_rect(fb, 30, stat_y + line_height + 2, 60, 4, COLOR_WHITE);
-    let mp_text = format!("{}/{}", player.stats.current_mp, player.stats.max_mp);
+    let mp_text = format!("{}/{}", state.mp, state.max_mp);
     draw_text(fb, 94, stat_y + line_height, &mp_text, COLOR_WHITE);
 
     let stats = [
-        ("LV", player.stats.level),
-        ("ATK", player.total_atk()),
-        ("DEF", player.total_def()),
-        ("EXP", player.stats.exp),
-        ("GOLD", player.stats.gold),
+        ("LV", state.level),
+        ("ATK", state.atk),
+        ("DEF", state.def),
+        ("EXP", state.exp),
+        ("GOLD", state.gold),
     ];
 
     for (i, (label, value)) in stats.iter().enumerate() {

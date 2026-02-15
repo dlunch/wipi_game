@@ -1,12 +1,17 @@
+use alloc::vec::Vec;
+
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
     COLOR_BLACK, COLOR_GRAY, COLOR_WHITE, COLOR_YELLOW, draw_rect, draw_text, fill_rect,
 };
-use crate::data::Dialog;
-use crate::game::DialogState;
 
-pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, dialogs: &[Dialog]) {
+pub fn draw_dialog(
+    fb: &mut Framebuffer,
+    npc_name: &str,
+    current_text: Option<&str>,
+    has_next: bool,
+) {
     let screen_w = fb.width() as i32;
     let screen_h = fb.height() as i32;
 
@@ -16,14 +21,9 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, dialogs: &[Dialog]
     fill_rect(fb, 4, box_y, screen_w - 8, box_h, COLOR_BLACK);
     draw_rect(fb, 4, box_y, screen_w - 8, box_h, COLOR_WHITE);
 
-    draw_text(fb, 8, box_y + 2, &state.npc_name, COLOR_YELLOW);
+    draw_text(fb, 8, box_y + 2, npc_name, COLOR_YELLOW);
 
-    if let Some(dialog) = find_dialog(dialogs, &state.dialog_id)
-        && let Some(text) = dialog
-            .lines
-            .get(state.current_line)
-            .map(|line| line.text.as_str())
-    {
+    if let Some(text) = current_text {
         let max_chars = ((screen_w - 16) / 6) as usize;
         let lines = wrap_text(text, max_chars);
 
@@ -32,24 +32,12 @@ pub fn draw_dialog(fb: &mut Framebuffer, state: &DialogState, dialogs: &[Dialog]
         }
     }
 
-    let indicator = if let Some(dialog) = find_dialog(dialogs, &state.dialog_id) {
-        if state.current_line + 1 < dialog.lines.len() {
-            "OK:Next"
-        } else {
-            "OK:Close"
-        }
-    } else {
-        "OK:Close"
-    };
+    let indicator = if has_next { "OK:Next" } else { "OK:Close" };
     draw_text(fb, screen_w - 50, box_y + box_h - 10, indicator, COLOR_GRAY);
 }
 
-fn find_dialog<'a>(dialogs: &'a [Dialog], dialog_id: &str) -> Option<&'a Dialog> {
-    dialogs.iter().find(|dialog| dialog.id == dialog_id)
-}
-
-fn wrap_text(text: &str, max_chars: usize) -> alloc::vec::Vec<&str> {
-    let mut lines = alloc::vec::Vec::new();
+fn wrap_text(text: &str, max_chars: usize) -> Vec<&str> {
+    let mut lines = Vec::new();
 
     if max_chars == 0 || text.is_empty() {
         lines.push("");
@@ -57,7 +45,7 @@ fn wrap_text(text: &str, max_chars: usize) -> alloc::vec::Vec<&str> {
     }
 
     let mut start = 0;
-    let chars: alloc::vec::Vec<_> = text.char_indices().collect();
+    let chars: Vec<_> = text.char_indices().collect();
 
     while start < chars.len() {
         let end = (start + max_chars).min(chars.len());
