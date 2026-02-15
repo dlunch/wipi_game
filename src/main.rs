@@ -29,7 +29,7 @@ enum AppEvent {
     None,
     UpdateLoading(game::LoadingEvent),
     UpdateMovement(AppMovementEvent),
-    UpdateCombat,
+    UpdateCombat(game::combat::CombatResult),
     Menu(MenuEvent),
     Explore(AppExploreEvent),
     Inventory(game::InventoryEvent),
@@ -198,50 +198,26 @@ impl GameInner {
         }
     }
 
-    fn apply_update_combat(&mut self) {
+    fn apply_update_combat(&mut self, result: game::combat::CombatResult) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
 
-        if !matches!(self.state, GameState::Explore) {
-            return;
+        s.skill_cooldowns = result.next_skill_cooldowns;
+        s.mp_regen_timer = result.next_mp_regen_timer;
+        if result.recover_mp > 0 {
+            s.player.stats.recover_mp(result.recover_mp);
         }
 
-        let Some(map) = self.data.find_map(&s.player.current_map_id) else {
-            return;
-        };
-        let combat_event = game::combat::apply(
-            &mut s.combat,
-            game::CombatIntent::Tick {
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_def: s.player.total_def(),
-                skill_cooldowns: s.skill_cooldowns,
-                mp_regen_timer: s.mp_regen_timer,
-                map,
-                enemy_data: &self.data.enemies,
-            },
-        );
-        if let game::CombatEvent::Tick(result) = combat_event {
-            s.skill_cooldowns = result.next_skill_cooldowns;
-            s.mp_regen_timer = result.next_mp_regen_timer;
-            if result.recover_mp > 0 {
-                s.player.stats.recover_mp(result.recover_mp);
-            }
-
-            let damage_taken = result.damage_taken;
-            if damage_taken > 0
-                && matches!(
-                    game::player::apply(
-                        &mut s.player,
-                        game::PlayerIntent::TakeDamage(damage_taken)
-                    ),
-                    game::PlayerEvent::Died
-                )
-            {
-                self.state = GameState::GameOver;
-            }
+        let damage_taken = result.damage_taken;
+        if damage_taken > 0
+            && matches!(
+                game::player::apply(&mut s.player, game::PlayerIntent::TakeDamage(damage_taken)),
+                game::PlayerEvent::Died
+            )
+        {
+            self.state = GameState::GameOver;
         }
     }
 
@@ -688,7 +664,35 @@ impl GameInner {
 
                 AppEvent::UpdateMovement(AppMovementEvent::Tick(movement_event, tile_event))
             }
-            AppIntent::UpdateCombat => AppEvent::UpdateCombat,
+            AppIntent::UpdateCombat => {
+                if !matches!(self.state, GameState::Explore) {
+                    return AppEvent::None;
+                }
+                let Some(s) = self.session.as_mut() else {
+                    return AppEvent::Error(String::from("No active session"));
+                };
+                let Some(map) = self.data.find_map(&s.player.current_map_id) else {
+                    return AppEvent::None;
+                };
+
+                let combat_event = game::combat::apply(
+                    &mut s.combat,
+                    game::CombatIntent::Tick {
+                        player_x: s.player.x,
+                        player_y: s.player.y,
+                        player_def: s.player.total_def(),
+                        skill_cooldowns: s.skill_cooldowns,
+                        mp_regen_timer: s.mp_regen_timer,
+                        map,
+                        enemy_data: &self.data.enemies,
+                    },
+                );
+
+                match combat_event {
+                    game::CombatEvent::Tick(result) => AppEvent::UpdateCombat(result),
+                    _ => AppEvent::None,
+                }
+            }
             AppIntent::Menu(intent) => {
                 if !matches!(self.state, GameState::Menu) {
                     AppEvent::None
@@ -810,7 +814,7 @@ impl GameInner {
             AppEvent::None => {}
             AppEvent::UpdateLoading(event) => self.apply_update_loading(event),
             AppEvent::UpdateMovement(event) => self.apply_update_movement(event),
-            AppEvent::UpdateCombat => self.apply_update_combat(),
+            AppEvent::UpdateCombat(result) => self.apply_update_combat(result),
             AppEvent::Menu(event) => self.apply_menu_event(event),
             AppEvent::Explore(event) => self.apply_explore_event(event),
             AppEvent::Inventory(event) => self.apply_inventory_event(event),
