@@ -36,6 +36,7 @@ enum AppEvent {
     Dialog(game::DialogEvent),
     Shop(game::ShopEvent),
     PauseMenu(game::PauseMenuEvent),
+    MapChanged,
     ReturnToExplore,
     ReturnToMenuFromGameOver,
     ReleaseMovementKey(KeyCode),
@@ -180,20 +181,25 @@ impl GameInner {
     }
 
     fn apply_update_movement(&mut self, event: AppMovementEvent) {
-        let Some(s) = self.session.as_mut() else {
-            self.state = GameState::Error(String::from("No active session"));
-            return;
+        let map_changed = {
+            let Some(s) = self.session.as_mut() else {
+                self.state = GameState::Error(String::from("No active session"));
+                return;
+            };
+
+            let AppMovementEvent::Tick(movement_event, tile_event) = event;
+            let moved = s.movement.apply_tick(&mut s.player, movement_event);
+            moved
+                && tile_event.is_some_and(|tile_event| {
+                    matches!(
+                        s.player.apply_tile_event(&self.data, tile_event),
+                        game::explore::TileApplyEvent::MapChanged
+                    )
+                })
         };
 
-        let AppMovementEvent::Tick(movement_event, tile_event) = event;
-        let moved = s.movement.apply_tick(&mut s.player, movement_event);
-        if moved && let Some(tile_event) = tile_event {
-            let apply_event = s.player.apply_tile_event(&self.data, tile_event);
-            if matches!(apply_event, game::explore::TileApplyEvent::MapChanged)
-                && let Some(map) = self.data.find_map(&s.player.current_map_id)
-            {
-                s.combat.spawn_for_map(map, &self.data.enemies);
-            }
+        if map_changed {
+            self.apply_event(AppEvent::MapChanged);
         }
     }
 
@@ -228,7 +234,7 @@ impl GameInner {
         }
     }
 
-    fn spawn_current_map_enemies(&mut self) {
+    fn apply_map_changed(&mut self) {
         let Some(s) = self.session.as_mut() else {
             return;
         };
@@ -254,7 +260,7 @@ impl GameInner {
     ) {
         self.state = state;
         self.session = Some(session);
-        self.spawn_current_map_enemies();
+        self.apply_event(AppEvent::MapChanged);
         self.ui = UiState::default();
         self.ui.dialog.set(self.dialog_state_from_intro(intro));
     }
@@ -801,6 +807,7 @@ impl GameInner {
             AppEvent::Dialog(event) => self.apply_dialog_event(event),
             AppEvent::Shop(event) => self.apply_shop_event(event),
             AppEvent::PauseMenu(event) => self.apply_pause_menu_event(event),
+            AppEvent::MapChanged => self.apply_map_changed(),
             AppEvent::ReturnToExplore => self.state = GameState::Explore,
             AppEvent::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu;
