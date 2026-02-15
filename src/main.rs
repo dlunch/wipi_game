@@ -21,12 +21,12 @@ use wipi::wipi_main;
 
 use crate::data::{DialogAction, Direction};
 use crate::game::{
-    AppAction, AppIntent, DialogIntent, ExploreIntent, GameData, GameState, InventoryIntent,
+    DialogIntent, ExploreIntent, GameData, GameInput, GameIntent, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
     ShopIntent, UiState, build_render_state, has_save_data, render,
 };
 
-enum AppEvent {
+enum GameEvent {
     None,
     UpdateLoading(game::LoadingEvent),
     UpdateMovement(AppMovementEvent),
@@ -80,26 +80,26 @@ fn direction_for_key(key: KeyCode) -> Option<Direction> {
 
 impl GameInner {
     fn update(&mut self) {
-        self.dispatch(AppAction::Tick);
+        self.dispatch(GameInput::Tick);
     }
 
-    fn collect_intents(&self, action: AppAction) -> Vec<AppIntent> {
+    fn collect_intents(&self, action: GameInput) -> Vec<GameIntent> {
         let mut intents = Vec::new();
 
         match action {
-            AppAction::Tick => match self.state {
-                GameState::Loading(_) => intents.push(AppIntent::UpdateLoading),
+            GameInput::Tick => match self.state {
+                GameState::Loading(_) => intents.push(GameIntent::UpdateLoading),
                 GameState::Explore => {
-                    intents.push(AppIntent::UpdateMovement);
-                    intents.push(AppIntent::UpdateCombat);
+                    intents.push(GameIntent::UpdateMovement);
+                    intents.push(GameIntent::UpdateCombat);
                 }
                 _ => {}
             },
-            AppAction::KeyDown(key) => match self.state {
+            GameInput::KeyDown(key) => match self.state {
                 GameState::Loading(_) => {}
                 GameState::Menu => {
                     if let Some(intent) = MenuIntent::intent_for_key(key) {
-                        intents.push(AppIntent::Menu(intent));
+                        intents.push(GameIntent::Menu(intent));
                     }
                 }
                 GameState::Explore => {
@@ -114,51 +114,51 @@ impl GameInner {
                         self.ui.explore.ok_action,
                         self.ui.explore.key_actions,
                     ) {
-                        intents.push(AppIntent::Explore(intent));
+                        intents.push(GameIntent::Explore(intent));
                     }
                 }
                 GameState::Inventory => {
                     if let Some(intent) = InventoryIntent::intent_for_key(key) {
-                        intents.push(AppIntent::Inventory(intent));
+                        intents.push(GameIntent::Inventory(intent));
                     }
                 }
                 GameState::Stats | GameState::QuestLog => {
                     if matches!(key, KeyCode::Back | KeyCode::Ok) {
-                        intents.push(AppIntent::ReturnToExplore);
+                        intents.push(GameIntent::ReturnToExplore);
                     }
                 }
                 GameState::Dialog => {
                     if let Some(intent) = DialogIntent::intent_for_key(key) {
-                        intents.push(AppIntent::Dialog(intent));
+                        intents.push(GameIntent::Dialog(intent));
                     }
                 }
                 GameState::Shop => {
                     if let Some(intent) = ShopIntent::intent_for_key(key) {
-                        intents.push(AppIntent::Shop(intent));
+                        intents.push(GameIntent::Shop(intent));
                     }
                 }
                 GameState::PauseMenu => {
                     if let Some(intent) = PauseMenuIntent::intent_for_key(key) {
-                        intents.push(AppIntent::PauseMenu(intent));
+                        intents.push(GameIntent::PauseMenu(intent));
                     }
                 }
                 GameState::GameOver => {
                     if matches!(key, KeyCode::Ok) {
-                        intents.push(AppIntent::ReturnToMenuFromGameOver);
+                        intents.push(GameIntent::ReturnToMenuFromGameOver);
                     }
                 }
                 GameState::Error(_) => {
                     if matches!(key, KeyCode::Ok) {
-                        intents.push(AppIntent::Exit(1));
+                        intents.push(GameIntent::Exit(1));
                     }
                 }
             },
-            AppAction::KeyUp(key) => {
+            GameInput::KeyUp(key) => {
                 if matches!(self.state, GameState::Explore)
                     && self.session.is_some()
                     && let Some(direction) = direction_for_key(key)
                 {
-                    intents.push(AppIntent::ReleaseMovementKey(match direction {
+                    intents.push(GameIntent::ReleaseMovementKey(match direction {
                         Direction::Up => KeyCode::Up,
                         Direction::Down => KeyCode::Down,
                         Direction::Left => KeyCode::Left,
@@ -252,7 +252,7 @@ impl GameInner {
     ) {
         self.state = state;
         self.session = Some(session);
-        self.apply_event(AppEvent::MapChanged);
+        self.apply_event(GameEvent::MapChanged);
         self.ui = UiState::default();
         self.ui.dialog.set(self.dialog_state_from_intro(intro));
     }
@@ -406,7 +406,7 @@ impl GameInner {
                     let (state, session, intro) = game::lifecycle::continue_game(&self.data);
                     self.enter_session(state, session, intro);
                 }
-                MenuAction::Exit => self.apply_event(AppEvent::Exit(0)),
+                MenuAction::Exit => self.apply_event(GameEvent::Exit(0)),
             },
         }
     }
@@ -585,22 +585,22 @@ impl GameInner {
         }
     }
 
-    fn reduce_intent_single(&mut self, intent: AppIntent) -> AppEvent {
+    fn reduce_intent_single(&mut self, intent: GameIntent) -> GameEvent {
         match intent {
-            AppIntent::UpdateLoading => {
+            GameIntent::UpdateLoading => {
                 let GameState::Loading(step) = self.state else {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 };
 
                 let load_result = game::lifecycle::load_step(&mut self.data, step);
-                AppEvent::UpdateLoading(game::lifecycle::reduce_loading(step, load_result))
+                GameEvent::UpdateLoading(game::lifecycle::reduce_loading(step, load_result))
             }
-            AppIntent::UpdateMovement => {
+            GameIntent::UpdateMovement => {
                 if !matches!(self.state, GameState::Explore) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 };
 
                 let map = self.data.find_map(&s.player.current_map_id);
@@ -653,24 +653,24 @@ impl GameInner {
                     game::explore::TileEvent::Treasure => false,
                 });
 
-                AppEvent::UpdateMovement(AppMovementEvent::Tick(
+                GameEvent::UpdateMovement(AppMovementEvent::Tick(
                     movement_event,
                     tile_event,
                     map_changed,
                 ))
             }
-            AppIntent::UpdateCombat => {
+            GameIntent::UpdateCombat => {
                 if !matches!(self.state, GameState::Explore) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 let Some(s) = self.session.as_mut() else {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 };
                 let Some(map) = self.data.find_map(&s.player.current_map_id) else {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 };
 
-                AppEvent::UpdateCombat(game::combat::reduce_tick(
+                GameEvent::UpdateCombat(game::combat::reduce_tick(
                     &s.combat,
                     game::combat::CombatTickInput {
                         player_x: s.player.x,
@@ -683,32 +683,32 @@ impl GameInner {
                     },
                 ))
             }
-            AppIntent::Menu(intent) => {
+            GameIntent::Menu(intent) => {
                 if !matches!(self.state, GameState::Menu) {
-                    AppEvent::None
+                    GameEvent::None
                 } else {
-                    AppEvent::Menu(game::menu::reduce(
+                    GameEvent::Menu(game::menu::reduce(
                         self.ui.menu.selected,
                         &self.ui.menu.state.items,
                         intent,
                     ))
                 }
             }
-            AppIntent::Explore(intent) => {
+            GameIntent::Explore(intent) => {
                 if !matches!(self.state, GameState::Explore) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 };
                 let is_peaceful = self
                     .data
                     .find_map(&s.player.current_map_id)
                     .is_some_and(|map| map.peaceful);
                 match game::explore::reduce(is_peaceful, intent) {
-                    game::ExploreEvent::None => AppEvent::None,
+                    game::ExploreEvent::None => GameEvent::None,
                     game::ExploreEvent::MoveDirection(direction) => {
-                        AppEvent::Explore(AppExploreEvent::MoveDirection(direction))
+                        GameEvent::Explore(AppExploreEvent::MoveDirection(direction))
                     }
                     game::ExploreEvent::TryNpcInteract {
                         facing,
@@ -719,52 +719,52 @@ impl GameInner {
                             &self.data,
                             game::NpcIntent::Interact { facing },
                         ) {
-                            AppEvent::Explore(AppExploreEvent::Npc(npc_event))
+                            GameEvent::Explore(AppExploreEvent::Npc(npc_event))
                         } else if let Some(action) = fallback_action {
-                            AppEvent::Explore(AppExploreEvent::UseAction(action))
+                            GameEvent::Explore(AppExploreEvent::UseAction(action))
                         } else {
-                            AppEvent::None
+                            GameEvent::None
                         }
                     }
                     game::ExploreEvent::UseAction(action) => {
-                        AppEvent::Explore(AppExploreEvent::UseAction(action))
+                        GameEvent::Explore(AppExploreEvent::UseAction(action))
                     }
                     game::ExploreEvent::EnterPauseMenu => {
-                        AppEvent::Explore(AppExploreEvent::EnterPauseMenu)
+                        GameEvent::Explore(AppExploreEvent::EnterPauseMenu)
                     }
-                    game::ExploreEvent::EnterMenu => AppEvent::Explore(AppExploreEvent::EnterMenu),
+                    game::ExploreEvent::EnterMenu => GameEvent::Explore(AppExploreEvent::EnterMenu),
                 }
             }
-            AppIntent::Inventory(intent) => {
+            GameIntent::Inventory(intent) => {
                 if !matches!(self.state, GameState::Inventory) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 };
-                AppEvent::Inventory(game::inventory::reduce(
+                GameEvent::Inventory(game::inventory::reduce(
                     self.ui.inventory.selected,
                     s.player.inventory.len(),
                     intent,
                 ))
             }
-            AppIntent::Dialog(intent) => {
+            GameIntent::Dialog(intent) => {
                 if !matches!(self.state, GameState::Dialog) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 if self.session.is_none() {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 }
-                AppEvent::Dialog(game::dialog::reduce(self.ui.dialog.state.as_ref(), intent))
+                GameEvent::Dialog(game::dialog::reduce(self.ui.dialog.state.as_ref(), intent))
             }
-            AppIntent::Shop(intent) => {
+            GameIntent::Shop(intent) => {
                 if !matches!(self.state, GameState::Shop) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 let Some(s) = self.session.as_ref() else {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 };
-                AppEvent::Shop(game::shop::reduce(
+                GameEvent::Shop(game::shop::reduce(
                     self.ui.shop.mode,
                     self.ui.shop.selected,
                     self.ui.shop.state.is_some(),
@@ -779,42 +779,42 @@ impl GameInner {
                     intent,
                 ))
             }
-            AppIntent::PauseMenu(intent) => {
+            GameIntent::PauseMenu(intent) => {
                 if !matches!(self.state, GameState::PauseMenu) {
-                    return AppEvent::None;
+                    return GameEvent::None;
                 }
                 if self.session.is_none() {
-                    return AppEvent::Error(String::from("No active session"));
+                    return GameEvent::Error(String::from("No active session"));
                 }
-                AppEvent::PauseMenu(game::menu::reduce_pause(
+                GameEvent::PauseMenu(game::menu::reduce_pause(
                     self.ui.pause_menu.selected,
                     self.ui.pause_menu.state.items.len(),
                     intent,
                 ))
             }
-            AppIntent::ReturnToExplore => AppEvent::ReturnToExplore,
-            AppIntent::ReturnToMenuFromGameOver => AppEvent::ReturnToMenuFromGameOver,
-            AppIntent::ReleaseMovementKey(key) => AppEvent::ReleaseMovementKey(key),
-            AppIntent::Exit(code) => AppEvent::Exit(code),
+            GameIntent::ReturnToExplore => GameEvent::ReturnToExplore,
+            GameIntent::ReturnToMenuFromGameOver => GameEvent::ReturnToMenuFromGameOver,
+            GameIntent::ReleaseMovementKey(key) => GameEvent::ReleaseMovementKey(key),
+            GameIntent::Exit(code) => GameEvent::Exit(code),
         }
     }
 
-    fn reduce_intent(&mut self, intent: AppIntent) -> Vec<AppEvent> {
+    fn reduce_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
         let event = self.reduce_intent_single(intent);
         match event {
-            AppEvent::UpdateMovement(AppMovementEvent::Tick(
+            GameEvent::UpdateMovement(AppMovementEvent::Tick(
                 movement_event,
                 tile_event,
                 map_changed,
             )) => {
                 let mut events = Vec::with_capacity(if map_changed { 2 } else { 1 });
-                events.push(AppEvent::UpdateMovement(AppMovementEvent::Tick(
+                events.push(GameEvent::UpdateMovement(AppMovementEvent::Tick(
                     movement_event,
                     tile_event,
                     map_changed,
                 )));
                 if map_changed {
-                    events.push(AppEvent::MapChanged);
+                    events.push(GameEvent::MapChanged);
                 }
                 events
             }
@@ -822,31 +822,31 @@ impl GameInner {
         }
     }
 
-    fn apply_event(&mut self, event: AppEvent) {
+    fn apply_event(&mut self, event: GameEvent) {
         match event {
-            AppEvent::None => {}
-            AppEvent::UpdateLoading(event) => self.apply_update_loading(event),
-            AppEvent::UpdateMovement(event) => self.apply_update_movement(event),
-            AppEvent::UpdateCombat(result) => self.apply_update_combat(result),
-            AppEvent::Menu(event) => self.apply_menu_event(event),
-            AppEvent::Explore(event) => self.apply_explore_event(event),
-            AppEvent::Inventory(event) => self.apply_inventory_event(event),
-            AppEvent::Dialog(event) => self.apply_dialog_event(event),
-            AppEvent::Shop(event) => self.apply_shop_event(event),
-            AppEvent::PauseMenu(event) => self.apply_pause_menu_event(event),
-            AppEvent::MapChanged => self.apply_map_changed(),
-            AppEvent::ReturnToExplore => self.state = GameState::Explore,
-            AppEvent::ReturnToMenuFromGameOver => {
+            GameEvent::None => {}
+            GameEvent::UpdateLoading(event) => self.apply_update_loading(event),
+            GameEvent::UpdateMovement(event) => self.apply_update_movement(event),
+            GameEvent::UpdateCombat(result) => self.apply_update_combat(result),
+            GameEvent::Menu(event) => self.apply_menu_event(event),
+            GameEvent::Explore(event) => self.apply_explore_event(event),
+            GameEvent::Inventory(event) => self.apply_inventory_event(event),
+            GameEvent::Dialog(event) => self.apply_dialog_event(event),
+            GameEvent::Shop(event) => self.apply_shop_event(event),
+            GameEvent::PauseMenu(event) => self.apply_pause_menu_event(event),
+            GameEvent::MapChanged => self.apply_map_changed(),
+            GameEvent::ReturnToExplore => self.state = GameState::Explore,
+            GameEvent::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu;
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
-            AppEvent::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
-            AppEvent::Exit(code) => wipi::kernel::exit(code),
-            AppEvent::Error(message) => self.state = GameState::Error(message),
+            GameEvent::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
+            GameEvent::Exit(code) => wipi::kernel::exit(code),
+            GameEvent::Error(message) => self.state = GameState::Error(message),
         }
     }
 
-    fn dispatch(&mut self, action: AppAction) {
+    fn dispatch(&mut self, action: GameInput) {
         let intents = self.collect_intents(action);
         for intent in intents {
             let events = self.reduce_intent(intent);
@@ -911,11 +911,11 @@ impl App for RpgGame {
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
-        self.inner.borrow_mut().dispatch(AppAction::KeyDown(key));
+        self.inner.borrow_mut().dispatch(GameInput::KeyDown(key));
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
-        self.inner.borrow_mut().dispatch(AppAction::KeyUp(key));
+        self.inner.borrow_mut().dispatch(GameInput::KeyUp(key));
     }
 }
 

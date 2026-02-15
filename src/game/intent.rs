@@ -5,14 +5,14 @@ use crate::game::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub enum AppAction {
+pub enum GameInput {
     Tick,
     KeyDown(KeyCode),
     KeyUp(KeyCode),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AppIntent {
+pub enum GameIntent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
