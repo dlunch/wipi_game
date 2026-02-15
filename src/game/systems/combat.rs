@@ -587,17 +587,7 @@ pub fn use_skill_action(
         }
     }
 
-    for kill in result.kills {
-        let _ = game::player::reduce(player, PlayerIntent::AddExp(kill.exp));
-        let _ = game::player::reduce(player, PlayerIntent::AddGold(kill.gold));
-        game::quest::reduce(
-            player,
-            data,
-            game::QuestIntent::EnemyKilled {
-                enemy_id: &kill.enemy_id,
-            },
-        );
-    }
+    game::reward::apply_kill_rewards(player, data, &result.kills);
 }
 
 #[cfg(test)]

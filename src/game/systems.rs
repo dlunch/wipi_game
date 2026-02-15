@@ -8,6 +8,7 @@ pub mod movement;
 pub mod npc;
 pub mod player;
 pub mod quest;
+pub mod reward;
 pub mod shop;
 
 #[allow(unused_imports)]

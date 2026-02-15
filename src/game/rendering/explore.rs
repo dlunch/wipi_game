@@ -4,11 +4,12 @@ use alloc::string::String;
 use wipi::framebuffer::{Color, Framebuffer};
 
 use super::renderer::{
-    COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
-    COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
-    draw_rect, draw_text, fill_rect,
+    clear_screen, draw_rect, draw_text, fill_rect, COLOR_BLACK, COLOR_BLUE, COLOR_BROWN,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST, COLOR_GRAY, COLOR_GREEN, COLOR_RED,
+    COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
 };
-use crate::data::{Direction, Map, Skill, SkillType, Tile};
+use crate::data::{Direction, Map, SkillType, Tile};
+use crate::game::ExploreAction;
 use crate::game::ExploreRender;
 
 pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender) {
@@ -240,7 +241,14 @@ fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_
     }
 
     if !state.peaceful {
-        draw_skill_bar(fb, hud_y + 14, screen_w, state.mp, &state.skill_cooldowns);
+        draw_skill_bar(
+            fb,
+            hud_y + 14,
+            screen_w,
+            state.mp,
+            &state.skill_cooldowns,
+            &state.key_actions,
+        );
     }
 }
 
@@ -250,25 +258,34 @@ fn draw_skill_bar(
     screen_w: i32,
     current_mp: u32,
     skill_cooldowns: &[u32; 3],
+    key_actions: &[Option<ExploreAction>; 3],
 ) {
-    let skills: [(&Skill, &str); 3] = [
-        (&Skill::FIREBALL, "1"),
-        (&Skill::HEAL, "2"),
-        (&Skill::SPIN_ATTACK, "3"),
-    ];
-
     let slot_width = screen_w / 3;
 
-    for (i, (skill, key)) in skills.iter().enumerate() {
+    for (i, action_opt) in key_actions.iter().enumerate() {
         let x = i as i32 * slot_width + 4;
-        let cd = skill_cooldowns[i];
-        let is_ready = cd == 0 && current_mp >= skill.mp_cost.max(0) as u32;
+        let key = match i {
+            0 => "1",
+            1 => "2",
+            _ => "3",
+        };
 
+        let Some(action) = action_opt else {
+            draw_text(fb, x, y, &format!("[{}]-", key), COLOR_GRAY);
+            continue;
+        };
+
+        let (cd, mp_cost) = match action.skill() {
+            Some((slot, skill)) => (skill_cooldowns[slot], skill.mp_cost.max(0) as u32),
+            None => (0, 0),
+        };
+
+        let is_ready = cd == 0 && current_mp >= mp_cost;
         let color = if is_ready { COLOR_WHITE } else { COLOR_GRAY };
         let text = if cd > 0 {
-            format!("[{}]{} {}", key, skill.name, cd / 10)
+            format!("[{}]{} {}", key, action.label(), cd / 10)
         } else {
-            format!("[{}]{}", key, skill.name)
+            format!("[{}]{}", key, action.label())
         };
         draw_text(fb, x, y, &text, color);
     }

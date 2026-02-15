@@ -6,10 +6,10 @@ use wipi::framebuffer::Framebuffer;
 
 use crate::data::{Direction, ItemKind, SkillType};
 use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, GameData, GameState,
-    INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, SessionState, ShopMode, UiState,
     clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
-    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, ExploreAction,
+    GameData, GameState, MenuAction, SessionState, ShopMode, UiState, COLOR_CYAN, COLOR_DARK_GRAY,
+    COLOR_GREEN, COLOR_RED, COLOR_WHITE, INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS,
 };
 
 pub enum RenderState {
@@ -60,6 +60,7 @@ pub struct ExploreRender {
     pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffectRender>,
     pub skill_cooldowns: [u32; 3],
+    pub key_actions: [Option<ExploreAction>; 3],
     pub peaceful: bool,
 }
 
@@ -144,7 +145,11 @@ fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize 
     selected.saturating_sub(visible - 1).min(max_scroll)
 }
 
-fn build_explore_render(session: &SessionState, data: &Rc<GameData>) -> Option<ExploreRender> {
+fn build_explore_render(
+    session: &SessionState,
+    ui: &UiState,
+    data: &Rc<GameData>,
+) -> Option<ExploreRender> {
     let map = data.find_map(&session.player.current_map_id)?;
 
     let first_live_enemy_name = session
@@ -202,6 +207,7 @@ fn build_explore_render(session: &SessionState, data: &Rc<GameData>) -> Option<E
         player_hit_flash: session.combat.player_hit_flash,
         skill_effects,
         skill_cooldowns: session.skill_cooldowns,
+        key_actions: ui.explore.key_actions,
         peaceful: map.peaceful,
     })
 }
@@ -223,7 +229,7 @@ pub fn build_render_state(
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            let Some(explore) = build_explore_render(s, data) else {
+            let Some(explore) = build_explore_render(s, ui, data) else {
                 return RenderState::Error(String::from("Map not found"));
             };
             RenderState::Explore(explore)
@@ -284,7 +290,7 @@ pub fn build_render_state(
                 .unwrap_or(false);
 
             RenderState::Dialog {
-                explore: session.and_then(|s| build_explore_render(s, data)),
+                explore: session.and_then(|s| build_explore_render(s, ui, data)),
                 npc_name: dialog_state.npc_name.clone(),
                 current_text,
                 has_next,
@@ -353,7 +359,7 @@ pub fn build_render_state(
             RenderState::QuestLog(QuestLogRender { quests })
         }
         GameState::PauseMenu => RenderState::PauseMenu {
-            explore: session.and_then(|s| build_explore_render(s, data)),
+            explore: session.and_then(|s| build_explore_render(s, ui, data)),
             items: ui.pause_menu.state.items.clone(),
             selected: ui.pause_menu.selected,
         },

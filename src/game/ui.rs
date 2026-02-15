@@ -2,18 +2,80 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::data::{Dialog, Item, Shop};
+use wipi::event::KeyCode;
+
+use crate::data::{Dialog, Item, Shop, Skill};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
 
 #[derive(Debug, Default)]
 pub struct UiState {
+    pub explore: ExploreUiState,
     pub menu: MenuUiState,
     pub pause_menu: PauseMenuUiState,
     pub inventory: InventoryUiState,
     pub shop: ShopUiState,
     pub dialog: DialogUiState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExploreAction {
+    BasicAttack,
+    Fireball,
+    Heal,
+    SpinAttack,
+}
+
+impl ExploreAction {
+    pub fn skill(self) -> Option<(usize, &'static Skill)> {
+        match self {
+            ExploreAction::BasicAttack => None,
+            ExploreAction::Fireball => Some((0, &Skill::FIREBALL)),
+            ExploreAction::Heal => Some((1, &Skill::HEAL)),
+            ExploreAction::SpinAttack => Some((2, &Skill::SPIN_ATTACK)),
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ExploreAction::BasicAttack => "Attack",
+            ExploreAction::Fireball => Skill::FIREBALL.name,
+            ExploreAction::Heal => Skill::HEAL.name,
+            ExploreAction::SpinAttack => Skill::SPIN_ATTACK.name,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ExploreUiState {
+    pub ok_action: ExploreAction,
+    pub key_actions: [Option<ExploreAction>; 3],
+}
+
+impl Default for ExploreUiState {
+    fn default() -> Self {
+        Self {
+            ok_action: ExploreAction::BasicAttack,
+            key_actions: [
+                Some(ExploreAction::Fireball),
+                Some(ExploreAction::Heal),
+                Some(ExploreAction::SpinAttack),
+            ],
+        }
+    }
+}
+
+impl ExploreUiState {
+    pub fn action_for_key(&self, key: KeyCode) -> Option<ExploreAction> {
+        match key {
+            KeyCode::Ok => Some(self.ok_action),
+            KeyCode::Key1 => self.key_actions[0],
+            KeyCode::Key2 => self.key_actions[1],
+            KeyCode::Key3 => self.key_actions[2],
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]

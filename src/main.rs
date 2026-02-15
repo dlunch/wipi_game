@@ -56,7 +56,7 @@ impl GameInner {
                     }
                 }
                 GameState::Explore => {
-                    for intent in ExploreIntent::intent_for_key(key) {
+                    for intent in ExploreIntent::intent_for_key(&self.ui.explore, key) {
                         effects.push(AppEffect::ApplyExploreIntent(intent));
                     }
                 }

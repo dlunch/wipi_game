@@ -28,6 +28,7 @@ pub use systems::movement;
 pub use systems::npc;
 pub use systems::player;
 pub use systems::quest;
+pub use systems::reward;
 pub use systems::shop;
 pub use systems::{
     CombatEvent, CombatIntent, CombatState, DialogEvent, DialogIntent, DialogTransition,
@@ -36,6 +37,7 @@ pub use systems::{
     QuestIntent, ShopEvent, ShopIntent,
 };
 pub use ui::{
-    DialogState, INVENTORY_VISIBLE_ITEMS, InventoryUiState, MenuAction, MenuState, MenuUiState,
-    PauseMenuUiState, SHOP_VISIBLE_ITEMS, ShopMode, ShopState, ShopUiState, UiState,
+    DialogState, ExploreAction, ExploreUiState, INVENTORY_VISIBLE_ITEMS, InventoryUiState,
+    MenuAction, MenuState, MenuUiState, PauseMenuUiState, SHOP_VISIBLE_ITEMS, ShopMode,
+    ShopState, ShopUiState, UiState,
 };
