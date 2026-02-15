@@ -116,13 +116,16 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                game::movement::update(
+                let moved = game::movement::update(
                     &self.state,
                     &mut s.movement,
                     &mut s.player,
                     &mut s.combat,
                     &self.data,
                 );
+                if moved {
+                    game::explore::check_tile_events(&mut s.player, &mut s.combat, &self.data);
+                }
             }
             AppEffect::UpdateCombat => {
                 let Some(s) = self.session.as_mut() else {

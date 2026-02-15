@@ -17,7 +17,6 @@ pub enum PlayerIntent {
     MoveBy { dx: i32, dy: i32 },
     ChangeMap { map_id: String, x: usize, y: usize },
     SpawnAtMap { x: usize, y: usize },
-    OpenTreasure { map_id: String, x: usize, y: usize },
     AddQuest(String),
     MarkQuestRewarded(String),
     UseItem { index: usize },
@@ -84,10 +83,6 @@ pub fn reduce(player: &mut PlayerState, intent: PlayerIntent) -> PlayerEvent {
         PlayerIntent::SpawnAtMap { x, y } => {
             player.x = x;
             player.y = y;
-            PlayerEvent::None
-        }
-        PlayerIntent::OpenTreasure { map_id, x, y } => {
-            open_treasure(player, &map_id, x, y);
             PlayerEvent::None
         }
         PlayerIntent::AddQuest(id) => {
@@ -200,12 +195,6 @@ fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
         player.y = new_y;
     }
     set_facing(player, dx, dy);
-}
-
-fn open_treasure(player: &mut PlayerState, map_id: &str, x: usize, y: usize) {
-    if !player.is_treasure_opened(map_id, x, y) {
-        player.opened_treasures.push((map_id.into(), x, y));
-    }
 }
 
 fn add_quest(player: &mut PlayerState, quest_id: &str) {
@@ -390,22 +379,12 @@ mod tests {
     #[test]
     fn treasure_tracking_no_duplicates() {
         let mut player = PlayerState::new(String::from("H"), "v");
-        let _ = reduce(
-            &mut player,
-            PlayerIntent::OpenTreasure {
-                map_id: String::from("map1"),
-                x: 3,
-                y: 4,
-            },
-        );
-        let _ = reduce(
-            &mut player,
-            PlayerIntent::OpenTreasure {
-                map_id: String::from("map1"),
-                x: 3,
-                y: 4,
-            },
-        );
+        if !player.is_treasure_opened("map1", 3, 4) {
+            player.opened_treasures.push((String::from("map1"), 3, 4));
+        }
+        if !player.is_treasure_opened("map1", 3, 4) {
+            player.opened_treasures.push((String::from("map1"), 3, 4));
+        }
 
         assert!(player.is_treasure_opened("map1", 3, 4));
         assert_eq!(player.opened_treasures.len(), 1);

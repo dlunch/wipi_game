@@ -3,11 +3,8 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{Direction, Map, Tile};
-use crate::game::{
-    self, CombatIntent, CombatState, ExploreAction, ExploreUiState, GameData, GameState,
-    PlayerIntent, PlayerState,
-};
+use crate::data::{Direction, Enemy, Map, Tile};
+use crate::game::{CombatState, ExploreAction, ExploreUiState, GameData, GameState, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -129,16 +126,9 @@ pub fn check_tile_events(player: &mut PlayerState, combat: &mut CombatState, dat
             let map_id = player.current_map_id.clone();
             if !player.is_treasure_opened(&map_id, player.x, player.y) {
                 if let Some(potion) = data.find_item("potion").cloned() {
-                    let _ = game::player::reduce(player, PlayerIntent::AddItem(potion));
+                    player.inventory.push(potion);
                 }
-                let _ = game::player::reduce(
-                    player,
-                    PlayerIntent::OpenTreasure {
-                        map_id,
-                        x: player.x,
-                        y: player.y,
-                    },
-                );
+                player.opened_treasures.push((map_id, player.x, player.y));
             }
         }
     }
@@ -155,21 +145,52 @@ pub fn change_map(
     };
 
     let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-    let _ = game::player::reduce(
-        player,
-        PlayerIntent::ChangeMap {
-            map_id: map.id.clone(),
-            x,
-            y,
-        },
-    );
-    let _ = game::combat::reduce(
-        combat,
-        CombatIntent::SpawnEnemies {
-            map,
-            enemy_data: &data.enemies,
-        },
-    );
+    player.current_map_id = map.id.clone();
+    player.x = x;
+    player.y = y;
+    spawn_enemies_for_map(combat, map, &data.enemies);
+}
+
+fn spawn_enemies_for_map(combat: &mut CombatState, map: &Map, enemy_data: &[Enemy]) {
+    combat.enemies.clear();
+    combat.respawn_positions.clear();
+    combat.respawn_timer = 0;
+    combat.player_attack_cooldown = 0;
+    combat.player_hit_flash = 0;
+    combat.skill_effects.clear();
+    combat.update_counter = 0;
+
+    let mut enemy_tiles = Vec::new();
+    for y in 0..map.height {
+        for x in 0..map.width {
+            if map.get_tile(x, y) == Tile::Enemy {
+                enemy_tiles.push((x, y));
+            }
+        }
+    }
+
+    if enemy_tiles.is_empty() || map.encounters.is_empty() {
+        return;
+    }
+
+    let available_enemies: Vec<&Enemy> = map
+        .encounters
+        .iter()
+        .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
+        .collect();
+
+    if available_enemies.is_empty() {
+        return;
+    }
+
+    for (i, (x, y)) in enemy_tiles.iter().enumerate() {
+        let enemy_idx = i % available_enemies.len();
+        let enemy = available_enemies[enemy_idx];
+        combat
+            .enemies
+            .push(crate::game::combat::FieldEnemy::new(enemy.clone(), *x, *y));
+        combat.respawn_positions.push((*x, *y, enemy_idx));
+    }
 }
 
 #[cfg(test)]
@@ -182,7 +203,6 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Enemy, Item, ItemKind, Map, Tile};
-    use crate::game::combat::FieldEnemy;
 
     fn make_test_map(
         id: &str,

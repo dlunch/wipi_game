@@ -1,6 +1,6 @@
 use wipi::event::KeyCode;
 
-use super::combat::{CombatState, enemy_at};
+use super::combat::{enemy_at, CombatState};
 use crate::data::{Map, Npc};
 use crate::game::{self, GameData, GameState, PlayerIntent, PlayerState};
 
@@ -18,21 +18,17 @@ pub fn update(
     player: &mut PlayerState,
     combat: &mut CombatState,
     data: &GameData,
-) {
+) -> bool {
     if !matches!(game_state, GameState::Explore) {
-        return;
+        return false;
     }
 
     let map_id = player.current_map_id.clone();
     let Some(map) = data.find_map(&map_id) else {
-        return;
+        return false;
     };
 
-    let moved = tick(state, player, map, combat, &data.npcs);
-
-    if moved {
-        game::explore::check_tile_events(player, combat, data);
-    }
+    tick(state, player, map, combat, &data.npcs)
 }
 
 pub fn on_direction_pressed(state: &mut MovementState, key: KeyCode) {
@@ -132,7 +128,7 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Enemy, Map, Npc, NpcType, Tile};
-    use crate::game::{PlayerState, combat::FieldEnemy};
+    use crate::game::{combat::FieldEnemy, PlayerState};
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {

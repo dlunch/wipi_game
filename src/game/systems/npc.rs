@@ -98,7 +98,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
-    use crate::data::{Item, ItemKind, Npc, QuestProgress, Shop};
+    use crate::data::{Npc, QuestProgress, Shop};
 
     fn make_npc(npc_type: NpcType) -> Npc {
         Npc {

@@ -112,7 +112,6 @@ pub fn reduce(
 mod tests {
     use alloc::string::String;
     use alloc::vec;
-    use alloc::vec::Vec;
 
     use super::ShopIntent::{Back, Confirm};
     use super::*;
