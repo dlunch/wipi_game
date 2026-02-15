@@ -3,10 +3,10 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{Map, Tile};
+use crate::data::{Direction, Map, Tile};
 use crate::game::{
-    self, save_game, CombatIntent, CombatState, ExploreAction, ExploreUiState, GameData, GameState,
-    MovementState, PlayerIntent, PlayerState,
+    self, CombatIntent, CombatState, ExploreAction, ExploreUiState, GameData, GameState,
+    PlayerIntent, PlayerState,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -18,17 +18,11 @@ pub enum ExploreIntent {
     BackToMenu,
 }
 
-pub struct ExploreRuntime<'a> {
-    pub movement: &'a mut MovementState,
-    pub player: &'a mut PlayerState,
-    pub skill_cooldowns: &'a mut [u32; 3],
-    pub combat: &'a mut CombatState,
-}
-
 pub enum ExploreEvent {
     None,
-    OpenDialog(crate::game::DialogState),
-    OpenShop(crate::game::ShopState),
+    MoveDirection(KeyCode),
+    TryNpcInteract { facing: Direction },
+    UseAction(ExploreAction),
     EnterPauseMenu,
     EnterMenu,
 }
@@ -58,71 +52,30 @@ impl ExploreIntent {
 
 pub fn reduce(
     state: &GameState,
-    runtime: ExploreRuntime<'_>,
+    player: &PlayerState,
     data: &GameData,
     intent: ExploreIntent,
 ) -> ExploreEvent {
-    let ExploreRuntime {
-        movement,
-        player,
-        skill_cooldowns,
-        combat,
-    } = runtime;
-
     let is_peaceful = data
         .find_map(&player.current_map_id)
         .is_some_and(|m| m.peaceful);
 
     match intent {
-        ExploreIntent::MoveDirection(key) => {
-            game::movement::on_direction_pressed(movement, key);
-        }
-        ExploreIntent::TryNpcInteract => {
-            let facing = player.facing;
-            if let Some(event) =
-                game::npc::reduce(player, data, game::NpcIntent::Interact { facing })
-            {
-                match event {
-                    game::NpcEvent::OpenDialog(dialog_state) => {
-                        return ExploreEvent::OpenDialog(dialog_state);
-                    }
-                    game::NpcEvent::OpenShop(shop_state) => {
-                        return ExploreEvent::OpenShop(shop_state);
-                    }
-                }
-            }
-        }
+        ExploreIntent::MoveDirection(key) => ExploreEvent::MoveDirection(key),
+        ExploreIntent::TryNpcInteract => ExploreEvent::TryNpcInteract {
+            facing: player.facing,
+        },
         ExploreIntent::UseAction(action) if !is_peaceful => {
             if matches!(*state, GameState::Dialog) {
-                return ExploreEvent::None;
-            }
-            if let Some((slot, skill)) = action.skill() {
-                game::combat::use_skill_action(player, skill_cooldowns, combat, data, slot, skill);
-            } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
-                combat,
-                CombatIntent::PlayerAttack {
-                    player_x: player.x,
-                    player_y: player.y,
-                    player_atk: player.total_atk(),
-                    facing: player.facing,
-                },
-            ) {
-                game::reward::apply_kill_reward(player, data, &reward);
+                ExploreEvent::None
+            } else {
+                ExploreEvent::UseAction(action)
             }
         }
-        ExploreIntent::UseAction(_) => {
-            return ExploreEvent::None;
-        }
-        ExploreIntent::Pause => {
-            return ExploreEvent::EnterPauseMenu;
-        }
-        ExploreIntent::BackToMenu => {
-            let _ = save_game(player);
-            return ExploreEvent::EnterMenu;
-        }
+        ExploreIntent::UseAction(_) => ExploreEvent::None,
+        ExploreIntent::Pause => ExploreEvent::EnterPauseMenu,
+        ExploreIntent::BackToMenu => ExploreEvent::EnterMenu,
     }
-
-    ExploreEvent::None
 }
 
 #[derive(Debug, Clone)]
@@ -523,22 +476,9 @@ mod tests {
     fn reduce_pause_switches_to_pause_menu_state() {
         let data = make_game_data();
         let state = GameState::Explore;
-        let mut movement = MovementState::default();
-        let mut player = make_player("field", 0, 0);
-        let mut skill_cooldowns = [0; 3];
-        let mut combat = CombatState::default();
+        let player = make_player("field", 0, 0);
 
-        let event = reduce(
-            &state,
-            ExploreRuntime {
-                movement: &mut movement,
-                player: &mut player,
-                skill_cooldowns: &mut skill_cooldowns,
-                combat: &mut combat,
-            },
-            &data,
-            ExploreIntent::Pause,
-        );
+        let event = reduce(&state, &player, &data, ExploreIntent::Pause);
 
         assert!(matches!(event, ExploreEvent::EnterPauseMenu));
     }
@@ -547,40 +487,15 @@ mod tests {
     fn reduce_attack_has_no_effect_in_peaceful_zone() {
         let data = make_game_data();
         let state = GameState::Explore;
-        let mut movement = MovementState::default();
         let mut player = make_player("safe_zone", 0, 0);
         player.facing = Direction::Right;
-        let mut skill_cooldowns = [0; 3];
-        let mut combat = CombatState::default();
-        combat.enemies.push(FieldEnemy::new(
-            Enemy {
-                id: "slime".into(),
-                name: "Slime".into(),
-                hp: 10,
-                atk: 4,
-                def: 1,
-                exp: 5,
-                gold: 2,
-            },
-            1,
-            0,
-        ));
-
         let event = reduce(
             &state,
-            ExploreRuntime {
-                movement: &mut movement,
-                player: &mut player,
-                skill_cooldowns: &mut skill_cooldowns,
-                combat: &mut combat,
-            },
+            &player,
             &data,
             ExploreIntent::UseAction(ExploreAction::BasicAttack),
         );
 
         assert!(matches!(event, ExploreEvent::None));
-        assert_eq!(combat.enemies[0].hp, 10);
-        assert_eq!(combat.player_attack_cooldown, 0);
-        assert!(combat.skill_effects.is_empty());
     }
 }

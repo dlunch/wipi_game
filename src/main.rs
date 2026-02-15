@@ -169,32 +169,56 @@ impl GameInner {
                     self.state = GameState::Error(String::from("No active session"));
                     return;
                 };
-                let event = game::explore::reduce(
-                    &self.state,
-                    game::explore::ExploreRuntime {
-                        movement: &mut s.movement,
-                        player: &mut s.player,
-                        skill_cooldowns: &mut s.skill_cooldowns,
-                        combat: &mut s.combat,
-                    },
-                    &self.data,
-                    intent,
-                );
+                let event = game::explore::reduce(&self.state, &s.player, &self.data, intent);
                 match event {
                     game::ExploreEvent::None => {}
-                    game::ExploreEvent::OpenDialog(dialog_state) => {
-                        self.ui.dialog.open(dialog_state);
-                        self.state = GameState::Dialog;
+                    game::ExploreEvent::MoveDirection(key) => {
+                        game::movement::on_direction_pressed(&mut s.movement, key);
                     }
-                    game::ExploreEvent::OpenShop(shop_state) => {
-                        self.ui.shop.open(shop_state);
-                        self.state = GameState::Shop;
+                    game::ExploreEvent::TryNpcInteract { facing } => {
+                        if let Some(npc_event) =
+                            game::npc::reduce(&mut s.player, &self.data, game::NpcIntent::Interact { facing })
+                        {
+                            match npc_event {
+                                game::NpcEvent::OpenDialog(dialog_state) => {
+                                    self.ui.dialog.open(dialog_state);
+                                    self.state = GameState::Dialog;
+                                }
+                                game::NpcEvent::OpenShop(shop_state) => {
+                                    self.ui.shop.open(shop_state);
+                                    self.state = GameState::Shop;
+                                }
+                            }
+                        }
+                    }
+                    game::ExploreEvent::UseAction(action) => {
+                        if let Some((slot, skill)) = action.skill() {
+                            game::combat::use_skill_action(
+                                &mut s.player,
+                                &mut s.skill_cooldowns,
+                                &mut s.combat,
+                                &self.data,
+                                slot,
+                                skill,
+                            );
+                        } else if let game::CombatEvent::Attack(Some(reward)) = game::combat::reduce(
+                            &mut s.combat,
+                            game::CombatIntent::PlayerAttack {
+                                player_x: s.player.x,
+                                player_y: s.player.y,
+                                player_atk: s.player.total_atk(),
+                                facing: s.player.facing,
+                            },
+                        ) {
+                            game::reward::apply_kill_reward(&mut s.player, &self.data, &reward);
+                        }
                     }
                     game::ExploreEvent::EnterPauseMenu => {
                         self.ui.pause_menu.reset();
                         self.state = GameState::PauseMenu;
                     }
                     game::ExploreEvent::EnterMenu => {
+                        let _ = game::save_game(&s.player);
                         self.ui.menu.set_menu(MenuState::new(has_save_data()));
                         self.state = GameState::Menu;
                     }
