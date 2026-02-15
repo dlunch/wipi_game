@@ -361,9 +361,7 @@ pub enum SkillType {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Skill {
-    pub id: &'static str,
     pub name: &'static str,
     pub skill_type: SkillType,
     pub power: i32,
@@ -375,7 +373,6 @@ pub struct Skill {
 
 impl Skill {
     pub const FIREBALL: Skill = Skill {
-        id: "fireball",
         name: "Fireball",
         skill_type: SkillType::Ranged,
         power: 20,
@@ -386,7 +383,6 @@ impl Skill {
     };
 
     pub const HEAL: Skill = Skill {
-        id: "heal",
         name: "Heal",
         skill_type: SkillType::Heal,
         power: 0,
@@ -397,7 +393,6 @@ impl Skill {
     };
 
     pub const SPIN_ATTACK: Skill = Skill {
-        id: "spin",
         name: "Spin",
         skill_type: SkillType::Area,
         power: 15,

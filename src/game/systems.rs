@@ -11,8 +11,6 @@ pub mod quest;
 pub mod reward;
 pub mod shop;
 
-#[allow(unused_imports)]
-pub use crate::data::Direction;
 pub use combat::{CombatEvent, CombatIntent, CombatState};
 pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
 pub use explore::{ExploreEvent, ExploreIntent};
