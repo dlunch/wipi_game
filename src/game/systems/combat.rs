@@ -599,3 +599,530 @@ pub fn use_skill_action(
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::String;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    use super::*;
+    use crate::data::{Direction, Enemy, Map, Tile};
+    use crate::game::{GameData, GameState, PlayerState};
+
+    fn make_enemy(id: &str, hp: i32, atk: i32, def: i32, exp: i32, gold: i32) -> Enemy {
+        Enemy {
+            id: String::from(id),
+            name: String::from(id),
+            hp,
+            atk,
+            def,
+            exp,
+            gold,
+        }
+    }
+
+    fn make_test_map(
+        width: usize,
+        height: usize,
+        tiles: Vec<Tile>,
+        encounters: Vec<(String, i32)>,
+    ) -> Map {
+        Map {
+            id: String::from("test_map"),
+            name: String::from("Test Map"),
+            width,
+            height,
+            tiles,
+            encounters,
+            exits: Vec::new(),
+            dungeons: Vec::new(),
+            npcs: Vec::new(),
+            peaceful: false,
+        }
+    }
+
+    fn make_player() -> PlayerState {
+        PlayerState::new(String::from("Hero"), "test_map")
+    }
+
+    #[test]
+    fn field_enemy_new_sets_initial_values() {
+        let enemy = make_enemy("slime", 20, 5, 2, 10, 3);
+        let field = FieldEnemy::new(enemy.clone(), 3, 4);
+
+        assert_eq!(field.data.id, enemy.id);
+        assert_eq!(field.x, 3);
+        assert_eq!(field.y, 4);
+        assert_eq!(field.hp, 20);
+        assert_eq!(field.attack_cooldown, 0);
+        assert_eq!(field.hit_flash, 0);
+    }
+
+    #[test]
+    fn field_enemy_is_dead_checks_hp_threshold() {
+        let mut field = FieldEnemy::new(make_enemy("slime", 1, 5, 0, 1, 1), 0, 0);
+        assert!(!field.is_dead());
+        field.hp = 0;
+        assert!(field.is_dead());
+    }
+
+    #[test]
+    fn field_enemy_take_damage_clamps_hp_and_sets_flash() {
+        let mut field = FieldEnemy::new(make_enemy("slime", 12, 5, 0, 1, 1), 0, 0);
+
+        field.take_damage(5);
+        assert_eq!(field.hp, 7);
+        assert_eq!(field.hit_flash, HIT_FLASH_DURATION);
+
+        field.take_damage(100);
+        assert_eq!(field.hp, 0);
+        assert_eq!(field.hit_flash, HIT_FLASH_DURATION);
+    }
+
+    #[test]
+    fn field_enemy_distance_to_is_manhattan_distance() {
+        let field = FieldEnemy::new(make_enemy("slime", 10, 5, 0, 1, 1), 2, 3);
+        assert_eq!(field.distance_to(5, 7), 7);
+        assert_eq!(field.distance_to(2, 3), 0);
+    }
+
+    #[test]
+    fn field_enemy_can_attack_and_do_attack_sets_cooldown() {
+        let mut field = FieldEnemy::new(make_enemy("slime", 10, 9, 0, 1, 1), 0, 0);
+        assert!(field.can_attack());
+
+        let damage = field.do_attack();
+        assert_eq!(damage, 9);
+        assert_eq!(field.attack_cooldown, ENEMY_ATTACK_COOLDOWN);
+        assert!(!field.can_attack());
+    }
+
+    #[test]
+    fn field_enemy_move_towards_moves_on_passable_tile() {
+        let map = make_test_map(
+            4,
+            4,
+            vec![
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+            ],
+            Vec::new(),
+        );
+        let mut field = FieldEnemy::new(make_enemy("slime", 10, 5, 0, 1, 1), 0, 0);
+
+        field.move_towards(2, 0, &map);
+        assert_eq!(field.x, 1);
+        assert_eq!(field.y, 0);
+    }
+
+    #[test]
+    fn spawn_enemies_places_on_enemy_tiles() {
+        let mut state = CombatState::default();
+        let map = make_test_map(
+            3,
+            2,
+            vec![
+                Tile::Floor,
+                Tile::Enemy,
+                Tile::Floor,
+                Tile::Enemy,
+                Tile::Floor,
+                Tile::Floor,
+            ],
+            vec![(String::from("slime"), 1)],
+        );
+        let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::SpawnEnemies {
+                map: &map,
+                enemy_data: &enemies,
+            },
+        );
+
+        assert!(matches!(event, CombatEvent::None));
+        assert_eq!(state.enemies.len(), 2);
+        assert!(state.enemies.iter().any(|e| e.x == 1 && e.y == 0));
+        assert!(state.enemies.iter().any(|e| e.x == 0 && e.y == 1));
+    }
+
+    #[test]
+    fn spawn_enemies_with_no_enemy_tiles_produces_none() {
+        let mut state = CombatState::default();
+        let map = make_test_map(
+            2,
+            2,
+            vec![Tile::Floor, Tile::Floor, Tile::Floor, Tile::Floor],
+            vec![(String::from("slime"), 1)],
+        );
+        let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
+
+        let _ = reduce(
+            &mut state,
+            CombatIntent::SpawnEnemies {
+                map: &map,
+                enemy_data: &enemies,
+            },
+        );
+
+        assert!(state.enemies.is_empty());
+    }
+
+    #[test]
+    fn spawn_enemies_with_empty_encounters_produces_none() {
+        let mut state = CombatState::default();
+        let map = make_test_map(
+            2,
+            2,
+            vec![Tile::Enemy, Tile::Floor, Tile::Floor, Tile::Floor],
+            Vec::new(),
+        );
+        let enemies = vec![make_enemy("slime", 10, 4, 0, 5, 2)];
+
+        let _ = reduce(
+            &mut state,
+            CombatIntent::SpawnEnemies {
+                map: &map,
+                enemy_data: &enemies,
+            },
+        );
+
+        assert!(state.enemies.is_empty());
+    }
+
+    #[test]
+    fn reduce_player_attack_hits_enemy_in_facing_direction() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 20, 4, 0, 5, 2), 2, 1));
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::PlayerAttack {
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+
+        assert!(matches!(event, CombatEvent::Attack(None)));
+        assert_eq!(state.enemies[0].hp, 10);
+    }
+
+    #[test]
+    fn reduce_player_attack_kill_returns_reward() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 5, 4, 0, 11, 7), 2, 1));
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::PlayerAttack {
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+
+        let CombatEvent::Attack(reward) = event else {
+            panic!("expected CombatEvent::Attack");
+        };
+        assert!(reward.is_some());
+        if let Some(kill) = reward {
+            assert_eq!(kill.enemy_id, "slime");
+            assert_eq!(kill.exp, 11);
+            assert_eq!(kill.gold, 7);
+        }
+    }
+
+    #[test]
+    fn reduce_player_attack_cooldown_prevents_double_attack() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 30, 4, 0, 5, 2), 2, 1));
+
+        let first = reduce(
+            &mut state,
+            CombatIntent::PlayerAttack {
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+        let hp_after_first = state.enemies[0].hp;
+
+        let second = reduce(
+            &mut state,
+            CombatIntent::PlayerAttack {
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+
+        assert!(matches!(first, CombatEvent::Attack(None)));
+        assert!(matches!(second, CombatEvent::Attack(None)));
+        assert_eq!(state.enemies[0].hp, hp_after_first);
+        assert_eq!(state.player_attack_cooldown, PLAYER_ATTACK_COOLDOWN);
+    }
+
+    #[test]
+    fn reduce_player_attack_miss_returns_none() {
+        let mut state = CombatState::default();
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::PlayerAttack {
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+
+        assert!(matches!(event, CombatEvent::Attack(None)));
+        assert_eq!(state.player_attack_cooldown, PLAYER_ATTACK_COOLDOWN);
+    }
+
+    #[test]
+    fn reduce_use_skill_ranged_hits_enemy_in_line() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 20, 4, 0, 5, 2), 3, 1));
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::UseSkill {
+                skill: &crate::data::Skill::FIREBALL,
+                player_x: 1,
+                player_y: 1,
+                player_atk: 10,
+                facing: Direction::Right,
+            },
+        );
+
+        let CombatEvent::Skill(result) = event else {
+            panic!("expected CombatEvent::Skill");
+        };
+        assert_eq!(result.kills.len(), 1);
+        assert_eq!(result.kills[0].enemy_id, "slime");
+    }
+
+    #[test]
+    fn reduce_use_skill_area_hits_four_adjacent_enemies() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("up", 15, 4, 0, 1, 1), 2, 1));
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("down", 15, 4, 0, 1, 1), 2, 3));
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("left", 15, 4, 0, 1, 1), 1, 2));
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("right", 15, 4, 0, 1, 1), 3, 2));
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::UseSkill {
+                skill: &crate::data::Skill::SPIN_ATTACK,
+                player_x: 2,
+                player_y: 2,
+                player_atk: 10,
+                facing: Direction::Up,
+            },
+        );
+
+        let CombatEvent::Skill(result) = event else {
+            panic!("expected CombatEvent::Skill");
+        };
+        assert_eq!(result.kills.len(), 4);
+    }
+
+    #[test]
+    fn reduce_use_skill_heal_adds_player_heal_effect() {
+        let mut state = CombatState::default();
+
+        let event = reduce(
+            &mut state,
+            CombatIntent::UseSkill {
+                skill: &crate::data::Skill::HEAL,
+                player_x: 4,
+                player_y: 5,
+                player_atk: 10,
+                facing: Direction::Left,
+            },
+        );
+
+        let CombatEvent::Skill(result) = event else {
+            panic!("expected CombatEvent::Skill");
+        };
+        assert!(matches!(
+            result.player_effects.as_slice(),
+            [PlayerEffect::Heal(30)]
+        ));
+    }
+
+    #[test]
+    fn enemy_at_checks_live_dead_and_empty_tiles() {
+        let mut state = CombatState::default();
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("live", 10, 4, 0, 1, 1), 1, 1));
+        state
+            .enemies
+            .push(FieldEnemy::new(make_enemy("dead", 10, 4, 0, 1, 1), 2, 2));
+        state.enemies[1].hp = 0;
+
+        assert!(enemy_at(&state, 1, 1));
+        assert!(!enemy_at(&state, 2, 2));
+        assert!(!enemy_at(&state, 0, 0));
+    }
+
+    #[test]
+    fn update_combat_enemy_damage_reduces_player_hp() {
+        let mut game_state = GameState::Explore;
+        let mut player = make_player();
+        let initial_hp = player.stats.current_hp;
+        player.x = 1;
+        player.y = 1;
+        let mut cooldowns = [0; 3];
+        let mut mp_regen_timer = 0;
+        let mut combat = CombatState::default();
+        combat
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 20, 20, 0, 1, 1), 2, 1));
+
+        let mut data = GameData::default();
+        data.maps.push(make_test_map(
+            3,
+            3,
+            vec![
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+            ],
+            Vec::new(),
+        ));
+
+        update_combat(
+            &mut game_state,
+            &mut player,
+            &mut cooldowns,
+            &mut mp_regen_timer,
+            &mut combat,
+            &data,
+        );
+
+        assert!(player.stats.current_hp < initial_hp);
+        assert!(matches!(game_state, GameState::Explore));
+    }
+
+    #[test]
+    fn update_combat_player_death_sets_game_over() {
+        let mut game_state = GameState::Explore;
+        let mut player = make_player();
+        player.stats.current_hp = 1;
+        player.x = 1;
+        player.y = 1;
+        let mut cooldowns = [0; 3];
+        let mut mp_regen_timer = 0;
+        let mut combat = CombatState::default();
+        combat
+            .enemies
+            .push(FieldEnemy::new(make_enemy("slime", 20, 20, 0, 1, 1), 2, 1));
+
+        let mut data = GameData::default();
+        data.maps.push(make_test_map(
+            3,
+            3,
+            vec![
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+                Tile::Floor,
+            ],
+            Vec::new(),
+        ));
+
+        update_combat(
+            &mut game_state,
+            &mut player,
+            &mut cooldowns,
+            &mut mp_regen_timer,
+            &mut combat,
+            &data,
+        );
+
+        assert!(matches!(game_state, GameState::GameOver));
+        assert_eq!(player.stats.current_hp, 0);
+    }
+
+    #[test]
+    fn update_combat_decrements_cooldown_and_regens_mp() {
+        let mut game_state = GameState::Explore;
+        let mut player = make_player();
+        player.stats.current_mp = 10;
+        let mut cooldowns = [2, 0, 1];
+        let mut mp_regen_timer = MP_REGEN_INTERVAL - 1;
+        let mut combat = CombatState::default();
+
+        let mut data = GameData::default();
+        data.maps.push(make_test_map(
+            2,
+            2,
+            vec![Tile::Floor, Tile::Floor, Tile::Floor, Tile::Floor],
+            Vec::new(),
+        ));
+
+        update_combat(
+            &mut game_state,
+            &mut player,
+            &mut cooldowns,
+            &mut mp_regen_timer,
+            &mut combat,
+            &data,
+        );
+
+        assert_eq!(cooldowns, [1, 0, 0]);
+        assert_eq!(mp_regen_timer, 0);
+        assert_eq!(player.stats.current_mp, 11);
+    }
+}
