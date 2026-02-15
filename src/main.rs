@@ -25,21 +25,30 @@ use crate::game::{
     ShopIntent, UiState, build_render_state, has_save_data, render,
 };
 
-#[derive(Debug, Clone, Copy)]
 enum AppEvent {
+    None,
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    Menu(MenuIntent),
-    Explore(ExploreIntent),
-    Inventory(InventoryIntent),
-    Dialog(DialogIntent),
-    Shop(ShopIntent),
-    PauseMenu(PauseMenuIntent),
+    Menu(MenuEvent),
+    Explore(AppExploreEvent),
+    Inventory(game::InventoryEvent),
+    Dialog(game::DialogEvent),
+    Shop(game::ShopEvent),
+    PauseMenu(game::PauseMenuEvent),
     ReturnToExplore,
     ReturnToMenuFromGameOver,
     ReleaseMovementKey(KeyCode),
     Exit(i32),
+    Error(String),
+}
+
+enum AppExploreEvent {
+    MoveDirection(Direction),
+    Npc(game::NpcEvent),
+    UseAction(game::ExploreAction),
+    EnterPauseMenu,
+    EnterMenu,
 }
 
 struct GameInner {
@@ -443,11 +452,7 @@ impl GameInner {
         false
     }
 
-    fn apply_menu_intent(&mut self, intent: MenuIntent) {
-        if !matches!(self.state, GameState::Menu) {
-            return;
-        }
-        let event = game::menu::reduce(self.ui.menu.selected, &self.ui.menu.state.items, intent);
+    fn apply_menu_event(&mut self, event: MenuEvent) {
         match event {
             MenuEvent::None => {}
             MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
@@ -465,64 +470,44 @@ impl GameInner {
         }
     }
 
-    fn apply_explore_intent(&mut self, intent: ExploreIntent) {
-        if !matches!(self.state, GameState::Explore) {
-            return;
-        }
-
+    fn apply_explore_event(&mut self, event: AppExploreEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let is_peaceful = self
-            .data
-            .find_map(&s.player.current_map_id)
-            .is_some_and(|map| map.peaceful);
-        let event = game::explore::reduce(is_peaceful, intent);
+
         match event {
-            game::ExploreEvent::None => {}
-            game::ExploreEvent::MoveDirection(direction) => {
+            AppExploreEvent::MoveDirection(direction) => {
                 game::movement::on_direction_pressed(&mut s.movement, direction);
             }
-            game::ExploreEvent::TryNpcInteract {
-                facing,
-                fallback_action,
-            } => {
-                if let Some(npc_event) =
-                    game::npc::reduce(&s.player, &self.data, game::NpcIntent::Interact { facing })
-                {
-                    match npc_event {
-                        game::NpcEvent::OpenDialog(dialog_spec) => {
-                            if dialog_spec.restore {
-                                s.player.stats.current_hp = s.player.stats.max_hp;
-                                s.player.stats.current_mp = s.player.stats.max_mp;
-                            }
-                            self.ui.dialog.open(game::DialogState::new(
-                                dialog_spec.npc_name,
-                                dialog_spec.lines,
-                            ));
-                            self.state = GameState::Dialog;
-                        }
-                        game::NpcEvent::OpenShop(shop_id) => {
-                            let _ = self.open_shop_by_id(&shop_id);
-                        }
-                        game::NpcEvent::RestoreStats => {
-                            s.player.stats.current_hp = s.player.stats.max_hp;
-                            s.player.stats.current_mp = s.player.stats.max_mp;
-                        }
+            AppExploreEvent::Npc(npc_event) => match npc_event {
+                game::NpcEvent::OpenDialog(dialog_spec) => {
+                    if dialog_spec.restore {
+                        s.player.stats.current_hp = s.player.stats.max_hp;
+                        s.player.stats.current_mp = s.player.stats.max_mp;
                     }
-                } else if let Some(action) = fallback_action {
-                    Self::apply_explore_action(s, &self.data, action);
+                    self.ui.dialog.open(game::DialogState::new(
+                        dialog_spec.npc_name,
+                        dialog_spec.lines,
+                    ));
+                    self.state = GameState::Dialog;
                 }
-            }
-            game::ExploreEvent::UseAction(action) => {
+                game::NpcEvent::OpenShop(shop_id) => {
+                    let _ = self.open_shop_by_id(&shop_id);
+                }
+                game::NpcEvent::RestoreStats => {
+                    s.player.stats.current_hp = s.player.stats.max_hp;
+                    s.player.stats.current_mp = s.player.stats.max_mp;
+                }
+            },
+            AppExploreEvent::UseAction(action) => {
                 Self::apply_explore_action(s, &self.data, action);
             }
-            game::ExploreEvent::EnterPauseMenu => {
+            AppExploreEvent::EnterPauseMenu => {
                 self.ui.pause_menu.reset();
                 self.state = GameState::PauseMenu;
             }
-            game::ExploreEvent::EnterMenu => {
+            AppExploreEvent::EnterMenu => {
                 let _ = game::save_game(&s.player);
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
                 self.state = GameState::Menu;
@@ -530,16 +515,12 @@ impl GameInner {
         }
     }
 
-    fn apply_inventory_intent(&mut self, intent: InventoryIntent) {
-        if !matches!(self.state, GameState::Inventory) {
-            return;
-        }
+    fn apply_inventory_event(&mut self, event: game::InventoryEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event =
-            game::inventory::reduce(self.ui.inventory.selected, s.player.inventory.len(), intent);
+
         match event {
             game::InventoryEvent::None => {}
             game::InventoryEvent::SetSelected(selected) => self.ui.inventory.set_selected(selected),
@@ -550,15 +531,12 @@ impl GameInner {
         }
     }
 
-    fn apply_dialog_intent(&mut self, intent: DialogIntent) {
-        if !matches!(self.state, GameState::Dialog) {
-            return;
-        }
+    fn apply_dialog_event(&mut self, event: game::DialogEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::dialog::reduce(self.ui.dialog.state.as_ref(), intent);
+
         match event {
             game::DialogEvent::None => {}
             game::DialogEvent::Transition(transition) => match transition {
@@ -595,28 +573,12 @@ impl GameInner {
         }
     }
 
-    fn apply_shop_intent(&mut self, intent: ShopIntent) {
-        if !matches!(self.state, GameState::Shop) {
-            return;
-        }
+    fn apply_shop_event(&mut self, event: game::ShopEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::shop::reduce(
-            self.ui.shop.mode,
-            self.ui.shop.selected,
-            self.ui.shop.state.is_some(),
-            s.player.stats.gold,
-            s.player.inventory.len(),
-            self.ui
-                .shop
-                .state
-                .as_ref()
-                .map(|state| state.items.as_slice())
-                .unwrap_or(&[]),
-            intent,
-        );
+
         match event {
             game::ShopEvent::None => {}
             game::ShopEvent::ErrorNoActiveShop => {
@@ -649,19 +611,12 @@ impl GameInner {
         }
     }
 
-    fn apply_pause_menu_intent(&mut self, intent: PauseMenuIntent) {
-        if !matches!(self.state, GameState::PauseMenu) {
-            return;
-        }
+    fn apply_pause_menu_event(&mut self, event: game::PauseMenuEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
-        let event = game::menu::reduce_pause(
-            self.ui.pause_menu.selected,
-            self.ui.pause_menu.state.items.len(),
-            intent,
-        );
+
         match event {
             game::PauseMenuEvent::None => {}
             game::PauseMenuEvent::SetSelected(selected) => {
@@ -699,12 +654,115 @@ impl GameInner {
             AppIntent::UpdateLoading => AppEvent::UpdateLoading,
             AppIntent::UpdateMovement => AppEvent::UpdateMovement,
             AppIntent::UpdateCombat => AppEvent::UpdateCombat,
-            AppIntent::Menu(intent) => AppEvent::Menu(intent),
-            AppIntent::Explore(intent) => AppEvent::Explore(intent),
-            AppIntent::Inventory(intent) => AppEvent::Inventory(intent),
-            AppIntent::Dialog(intent) => AppEvent::Dialog(intent),
-            AppIntent::Shop(intent) => AppEvent::Shop(intent),
-            AppIntent::PauseMenu(intent) => AppEvent::PauseMenu(intent),
+            AppIntent::Menu(intent) => {
+                if !matches!(self.state, GameState::Menu) {
+                    AppEvent::None
+                } else {
+                    AppEvent::Menu(game::menu::reduce(
+                        self.ui.menu.selected,
+                        &self.ui.menu.state.items,
+                        intent,
+                    ))
+                }
+            }
+            AppIntent::Explore(intent) => {
+                if !matches!(self.state, GameState::Explore) {
+                    return AppEvent::None;
+                }
+                let Some(s) = self.session.as_ref() else {
+                    return AppEvent::Error(String::from("No active session"));
+                };
+                let is_peaceful = self
+                    .data
+                    .find_map(&s.player.current_map_id)
+                    .is_some_and(|map| map.peaceful);
+                match game::explore::reduce(is_peaceful, intent) {
+                    game::ExploreEvent::None => AppEvent::None,
+                    game::ExploreEvent::MoveDirection(direction) => {
+                        AppEvent::Explore(AppExploreEvent::MoveDirection(direction))
+                    }
+                    game::ExploreEvent::TryNpcInteract {
+                        facing,
+                        fallback_action,
+                    } => {
+                        if let Some(npc_event) = game::npc::reduce(
+                            &s.player,
+                            &self.data,
+                            game::NpcIntent::Interact { facing },
+                        ) {
+                            AppEvent::Explore(AppExploreEvent::Npc(npc_event))
+                        } else if let Some(action) = fallback_action {
+                            AppEvent::Explore(AppExploreEvent::UseAction(action))
+                        } else {
+                            AppEvent::None
+                        }
+                    }
+                    game::ExploreEvent::UseAction(action) => {
+                        AppEvent::Explore(AppExploreEvent::UseAction(action))
+                    }
+                    game::ExploreEvent::EnterPauseMenu => {
+                        AppEvent::Explore(AppExploreEvent::EnterPauseMenu)
+                    }
+                    game::ExploreEvent::EnterMenu => AppEvent::Explore(AppExploreEvent::EnterMenu),
+                }
+            }
+            AppIntent::Inventory(intent) => {
+                if !matches!(self.state, GameState::Inventory) {
+                    return AppEvent::None;
+                }
+                let Some(s) = self.session.as_ref() else {
+                    return AppEvent::Error(String::from("No active session"));
+                };
+                AppEvent::Inventory(game::inventory::reduce(
+                    self.ui.inventory.selected,
+                    s.player.inventory.len(),
+                    intent,
+                ))
+            }
+            AppIntent::Dialog(intent) => {
+                if !matches!(self.state, GameState::Dialog) {
+                    return AppEvent::None;
+                }
+                if self.session.is_none() {
+                    return AppEvent::Error(String::from("No active session"));
+                }
+                AppEvent::Dialog(game::dialog::reduce(self.ui.dialog.state.as_ref(), intent))
+            }
+            AppIntent::Shop(intent) => {
+                if !matches!(self.state, GameState::Shop) {
+                    return AppEvent::None;
+                }
+                let Some(s) = self.session.as_ref() else {
+                    return AppEvent::Error(String::from("No active session"));
+                };
+                AppEvent::Shop(game::shop::reduce(
+                    self.ui.shop.mode,
+                    self.ui.shop.selected,
+                    self.ui.shop.state.is_some(),
+                    s.player.stats.gold,
+                    s.player.inventory.len(),
+                    self.ui
+                        .shop
+                        .state
+                        .as_ref()
+                        .map(|state| state.items.as_slice())
+                        .unwrap_or(&[]),
+                    intent,
+                ))
+            }
+            AppIntent::PauseMenu(intent) => {
+                if !matches!(self.state, GameState::PauseMenu) {
+                    return AppEvent::None;
+                }
+                if self.session.is_none() {
+                    return AppEvent::Error(String::from("No active session"));
+                }
+                AppEvent::PauseMenu(game::menu::reduce_pause(
+                    self.ui.pause_menu.selected,
+                    self.ui.pause_menu.state.items.len(),
+                    intent,
+                ))
+            }
             AppIntent::ReturnToExplore => AppEvent::ReturnToExplore,
             AppIntent::ReturnToMenuFromGameOver => AppEvent::ReturnToMenuFromGameOver,
             AppIntent::ReleaseMovementKey(key) => AppEvent::ReleaseMovementKey(key),
@@ -714,15 +772,16 @@ impl GameInner {
 
     fn apply_event(&mut self, event: AppEvent) {
         match event {
+            AppEvent::None => {}
             AppEvent::UpdateLoading => self.apply_update_loading(),
             AppEvent::UpdateMovement => self.apply_update_movement(),
             AppEvent::UpdateCombat => self.apply_update_combat(),
-            AppEvent::Menu(intent) => self.apply_menu_intent(intent),
-            AppEvent::Explore(intent) => self.apply_explore_intent(intent),
-            AppEvent::Inventory(intent) => self.apply_inventory_intent(intent),
-            AppEvent::Dialog(intent) => self.apply_dialog_intent(intent),
-            AppEvent::Shop(intent) => self.apply_shop_intent(intent),
-            AppEvent::PauseMenu(intent) => self.apply_pause_menu_intent(intent),
+            AppEvent::Menu(event) => self.apply_menu_event(event),
+            AppEvent::Explore(event) => self.apply_explore_event(event),
+            AppEvent::Inventory(event) => self.apply_inventory_event(event),
+            AppEvent::Dialog(event) => self.apply_dialog_event(event),
+            AppEvent::Shop(event) => self.apply_shop_event(event),
+            AppEvent::PauseMenu(event) => self.apply_pause_menu_event(event),
             AppEvent::ReturnToExplore => self.state = GameState::Explore,
             AppEvent::ReturnToMenuFromGameOver => {
                 self.state = GameState::Menu;
@@ -730,6 +789,7 @@ impl GameInner {
             }
             AppEvent::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
             AppEvent::Exit(code) => wipi::kernel::exit(code),
+            AppEvent::Error(message) => self.state = GameState::Error(message),
         }
     }
 
