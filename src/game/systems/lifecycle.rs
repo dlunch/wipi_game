@@ -156,3 +156,24 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
         Ok(false) | Err(_) => start_new_game(data),
     }
 }
+
+pub fn apply_lifecycle_event(
+    event: &GameEvent,
+    state: &mut GameState,
+    session_slot: &mut Option<SessionState>,
+    data: &GameData,
+) -> bool {
+    match event {
+        GameEvent::StartNewGame => {
+            let (next_state, session) = start_new_game(data);
+            crate::game::enter_session(state, session_slot, next_state, session, data);
+            true
+        }
+        GameEvent::ContinueGame => {
+            let (next_state, session) = continue_game(data);
+            crate::game::enter_session(state, session_slot, next_state, session, data);
+            true
+        }
+        _ => false,
+    }
+}

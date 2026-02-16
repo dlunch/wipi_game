@@ -28,7 +28,7 @@ pub use state::{
 };
 pub use systems::{
     DialogEvent, DialogTransition, InventoryEvent, LoadingEvent, MenuEvent, NpcEvent,
-    PauseMenuEvent, ResolveContext, ShopEvent, continue_game, domain_resolvers, start_new_game,
+    PauseMenuEvent, ResolveContext, ShopEvent, apply_lifecycle_event, domain_resolvers,
 };
 pub use ui::{
     DialogState, ExploreAction, GameInput, INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction,
