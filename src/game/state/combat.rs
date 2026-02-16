@@ -1,11 +1,10 @@
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use anyhow::Result;
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::{GameEvent, GameState, PlayerAction, PlayerEvent};
+use crate::game::{CombatRuntimeEvent, GameEvent};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -367,36 +366,18 @@ impl CombatState {
 }
 
 impl CombatState {
-    pub fn apply_event(
-        &mut self,
-        data: &crate::game::GameData,
-        state: &mut GameState,
-        player: &mut crate::game::PlayerState,
-        skill_cooldowns: &mut [u32; 3],
-        mp_regen_timer: &mut u32,
-        event: &GameEvent,
-    ) -> Result<()> {
-        if matches!(
-            event,
-            GameEvent::Transition(crate::game::TransitionEvent::MapChanged)
-        ) {
-            if let Some(map) = data.find_map(&player.current_map_id) {
-                self.spawn_for_map(map, &data.enemies);
-            }
-            return Ok(());
-        }
-
+    pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         let GameEvent::Combat(event) = event else {
             return Ok(());
         };
         match event {
-            crate::game::CombatRuntimeEvent::EnemySpawn(enemy) => {
+            CombatRuntimeEvent::EnemySpawn(enemy) => {
                 self.enemies.push(enemy.clone());
             }
-            crate::game::CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
+            CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
                 self.enemies.retain(|enemy| enemy.instance_id != *enemy_id);
             }
-            crate::game::CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
+            CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -406,7 +387,7 @@ impl CombatState {
                     enemy.y = *y;
                 }
             }
-            crate::game::CombatRuntimeEvent::EnemyHpSet { enemy_id, hp } => {
+            CombatRuntimeEvent::EnemyHpSet { enemy_id, hp } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -415,7 +396,7 @@ impl CombatState {
                     enemy.hp = *hp;
                 }
             }
-            crate::game::CombatRuntimeEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
+            CombatRuntimeEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -424,7 +405,7 @@ impl CombatState {
                     enemy.attack_cooldown = *cooldown;
                 }
             }
-            crate::game::CombatRuntimeEvent::EnemyHitFlashSet {
+            CombatRuntimeEvent::EnemyHitFlashSet {
                 enemy_id,
                 hit_flash,
             } => {
@@ -436,72 +417,30 @@ impl CombatState {
                     enemy.hit_flash = *hit_flash;
                 }
             }
-            crate::game::CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
+            CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
                 self.player_attack_cooldown = *cooldown;
             }
-            crate::game::CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
+            CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
                 self.player_hit_flash = *hit_flash;
             }
-            crate::game::CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
+            CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
                 self.skill_effects = skill_effects.clone();
             }
-            crate::game::CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
+            CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
                 self.update_counter = *update_counter;
             }
-            crate::game::CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
+            CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;
             }
-            crate::game::CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
+            CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
                 self.next_enemy_instance_id = *next_enemy_instance_id;
             }
-            crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
-                *skill_cooldowns = *next_skill_cooldowns;
-            }
-            crate::game::CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
-                *mp_regen_timer = *next_mp_regen_timer;
-            }
-            crate::game::CombatRuntimeEvent::RecoverMp(recover_mp) => {
-                if *recover_mp > 0 {
-                    player.stats.recover_mp(*recover_mp);
-                } else if *recover_mp < 0 {
-                    player.stats.current_mp = (player.stats.current_mp + *recover_mp).max(0);
-                }
-            }
-            crate::game::CombatRuntimeEvent::Heal(heal) => {
-                if *heal > 0 {
-                    let _ = player.apply(PlayerAction::Heal(*heal));
-                }
-            }
-            crate::game::CombatRuntimeEvent::GrantKillReward {
-                enemy_id,
-                exp,
-                gold,
-            } => {
-                player.apply_kill_reward(&KillReward {
-                    enemy_id: enemy_id.clone(),
-                    exp: *exp,
-                    gold: *gold,
-                });
-                player.apply_quest_kill(data, enemy_id);
-            }
-            crate::game::CombatRuntimeEvent::TakeDamage(damage_taken) => {
-                if *damage_taken > 0
-                    && matches!(
-                        player.apply(PlayerAction::TakeDamage(*damage_taken)),
-                        PlayerEvent::Died
-                    )
-                {
-                    if state.can_transition_to(&GameState::GameOver) {
-                        *state = GameState::GameOver;
-                    } else {
-                        state.set_error(format!(
-                            "Invalid state transition: {:?} -> {:?}",
-                            state,
-                            GameState::GameOver
-                        ));
-                    }
-                }
-            }
+            CombatRuntimeEvent::SetSkillCooldowns(_)
+            | CombatRuntimeEvent::SetMpRegenTimer(_)
+            | CombatRuntimeEvent::RecoverMp(_)
+            | CombatRuntimeEvent::Heal(_)
+            | CombatRuntimeEvent::GrantKillReward { .. }
+            | CombatRuntimeEvent::TakeDamage(_) => {}
         }
         Ok(())
     }

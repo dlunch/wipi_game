@@ -1,9 +1,13 @@
+use alloc::format;
 use alloc::string::String;
 
 use anyhow::Result;
 
+use super::combat::KillReward;
+
 use crate::game::{
-    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionEvent,
+    CombatRuntimeEvent, CombatState, GameData, GameEvent, GameState, MovementState, PlayerAction,
+    PlayerEvent, PlayerState, SessionEvent, TransitionEvent,
 };
 
 #[derive(Clone)]
@@ -39,6 +43,9 @@ impl SessionState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
+            GameEvent::Transition(TransitionEvent::MapChanged) => {
+                self.spawn_current_map_enemies(data);
+            }
             GameEvent::Session(session_event) => match session_event {
                 SessionEvent::Create => {}
                 SessionEvent::SetSkillCooldowns(cooldowns) => {
@@ -63,20 +70,65 @@ impl SessionState {
             | GameEvent::OpenMenuFromExplore => {
                 let _ = crate::game::save_game(&self.player);
             }
+            GameEvent::Combat(combat_event) => match combat_event {
+                CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
+                    self.skill_cooldowns = *next_skill_cooldowns;
+                }
+                CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
+                    self.mp_regen_timer = *next_mp_regen_timer;
+                }
+                CombatRuntimeEvent::RecoverMp(recover_mp) => {
+                    if *recover_mp > 0 {
+                        self.player.stats.recover_mp(*recover_mp);
+                    } else if *recover_mp < 0 {
+                        self.player.stats.current_mp =
+                            (self.player.stats.current_mp + *recover_mp).max(0);
+                    }
+                }
+                CombatRuntimeEvent::Heal(heal) => {
+                    if *heal > 0 {
+                        let _ = self.player.apply(PlayerAction::Heal(*heal));
+                    }
+                }
+                CombatRuntimeEvent::GrantKillReward {
+                    enemy_id,
+                    exp,
+                    gold,
+                } => {
+                    self.player.apply_kill_reward(&KillReward {
+                        enemy_id: enemy_id.clone(),
+                        exp: *exp,
+                        gold: *gold,
+                    });
+                    self.player.apply_quest_kill(data, enemy_id);
+                }
+                CombatRuntimeEvent::TakeDamage(damage_taken) => {
+                    if *damage_taken > 0
+                        && matches!(
+                            self.player.apply(PlayerAction::TakeDamage(*damage_taken)),
+                            PlayerEvent::Died
+                        )
+                    {
+                        if state.can_transition_to(&GameState::GameOver) {
+                            *state = GameState::GameOver;
+                        } else {
+                            state.set_error(format!(
+                                "Invalid state transition: {:?} -> {:?}",
+                                state,
+                                GameState::GameOver
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
 
         self.player.apply_event(data, event)?;
         self.movement
             .apply_event(data, state, &mut self.player, event)?;
-        self.combat.apply_event(
-            data,
-            state,
-            &mut self.player,
-            &mut self.skill_cooldowns,
-            &mut self.mp_regen_timer,
-            event,
-        )?;
+        self.combat.apply_event(event)?;
         Ok(())
     }
 }
