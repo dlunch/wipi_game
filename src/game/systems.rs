@@ -8,7 +8,6 @@ pub mod movement;
 pub mod npc;
 pub mod runtime;
 pub mod shop;
-pub mod transition;
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -32,6 +31,5 @@ pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     handlers.extend(dialog::resolvers());
     handlers.extend(shop::resolvers());
     handlers.extend(npc::resolvers());
-    handlers.extend(transition::resolvers());
     handlers
 }
