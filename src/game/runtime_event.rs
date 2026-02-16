@@ -26,6 +26,10 @@ pub enum GameEvent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
+    ExploreInput(crate::game::InputKey),
+    InventoryInput(crate::game::InputKey),
+    DialogInput(crate::game::InputKey),
+    ShopInput(ShopInputEvent),
     StartNewGame,
     ContinueGame,
     OpenPauseMenu,
@@ -47,6 +51,13 @@ pub enum GameEvent {
     PauseMenu(crate::game::PauseMenuEvent),
     Transition(TransitionEvent),
     Exit(i32),
+}
+
+#[derive(Clone, Copy)]
+pub enum ShopInputEvent {
+    BuySelected(usize),
+    SellSelected(usize),
+    Close,
 }
 
 pub enum UiEvent {

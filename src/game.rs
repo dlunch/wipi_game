@@ -17,7 +17,8 @@ pub use rendering::{
     draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, render,
 };
 pub use runtime_event::{
-    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, GameEvent, TransitionEvent, UiEvent,
+    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, GameEvent, ShopInputEvent,
+    TransitionEvent, UiEvent,
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;

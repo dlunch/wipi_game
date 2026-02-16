@@ -65,12 +65,7 @@ impl GameEngine {
     fn apply_ui_events(&mut self, ui_events: Vec<crate::game::UiEvent>) -> Vec<GameEvent> {
         let mut out = Vec::new();
         for event in ui_events {
-            out.extend(self.ui.apply_ui_event(
-                event,
-                &self.state,
-                self.session.as_ref(),
-                &self.data,
-            ));
+            out.extend(self.ui.apply_ui_event(event));
         }
         out
     }
@@ -83,6 +78,7 @@ impl GameEngine {
                     state: &self.state,
                     data: &mut self.data,
                     session: self.session.as_ref(),
+                    ui: &self.ui,
                 };
                 derived.extend(resolver.resolve(&mut ctx, event)?);
             }

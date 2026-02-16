@@ -18,11 +18,67 @@ pub enum DialogTransition {
 }
 
 struct DialogCascadeResolver;
+struct DialogInputResolver;
 
 static DIALOG_CASCADE_RESOLVER: DialogCascadeResolver = DialogCascadeResolver;
+static DIALOG_INPUT_RESOLVER: DialogInputResolver = DialogInputResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&DIALOG_CASCADE_RESOLVER]
+    alloc::vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
+}
+
+impl DomainEventResolver for DialogInputResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::DialogInput(_))
+    }
+
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+    ) -> Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::DialogInput(key) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+
+        let event = match key {
+            crate::game::InputKey::Back => {
+                DialogEvent::Transition(DialogTransition::CloseToExplore)
+            }
+            crate::game::InputKey::Ok => {
+                if let Some(dialog_state_ref) = ctx.ui.dialog.state.as_ref() {
+                    if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
+                        DialogEvent::Transition(DialogTransition::CloseToExplore)
+                    } else {
+                        let transition =
+                            if dialog_state_ref.current_line + 1 < dialog_state_ref.lines.len() {
+                                DialogTransition::SetLine(dialog_state_ref.current_line + 1)
+                            } else {
+                                DialogTransition::CloseToExplore
+                            };
+                        if let Some(action) = dialog_state_ref
+                            .lines
+                            .get(dialog_state_ref.current_line)
+                            .and_then(|line| line.action.as_ref())
+                            .cloned()
+                        {
+                            DialogEvent::Action(action, transition)
+                        } else {
+                            DialogEvent::Transition(transition)
+                        }
+                    }
+                } else {
+                    DialogEvent::None
+                }
+            }
+            _ => DialogEvent::None,
+        };
+
+        match event {
+            DialogEvent::None => Ok(alloc::vec::Vec::new()),
+            event => Ok(alloc::vec![GameEvent::Dialog(event)]),
+        }
+    }
 }
 
 impl DomainEventResolver for DialogCascadeResolver {

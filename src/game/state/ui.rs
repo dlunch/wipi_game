@@ -79,23 +79,11 @@ impl UiInputEventResolver for UiState {
 }
 
 pub trait UiEventApplier {
-    fn apply_ui_event(
-        &mut self,
-        event: UiEvent,
-        game_state: &GameState,
-        session: Option<&SessionState>,
-        data: &crate::game::GameData,
-    ) -> Vec<GameEvent>;
+    fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent>;
 }
 
 impl UiEventApplier for UiState {
-    fn apply_ui_event(
-        &mut self,
-        event: UiEvent,
-        game_state: &GameState,
-        session: Option<&SessionState>,
-        data: &crate::game::GameData,
-    ) -> Vec<GameEvent> {
+    fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent> {
         match event {
             UiEvent::OverlayCloseRequested => {
                 alloc::vec![GameEvent::Transition(TransitionEvent::ToExplore)]
@@ -121,57 +109,17 @@ impl UiEventApplier for UiState {
             .into_iter()
             .map(GameEvent::PauseMenu)
             .collect(),
-            UiEvent::ExploreInput(key) => {
-                if !matches!(game_state, GameState::Explore) {
-                    return Vec::new();
-                }
-                let Some(s) = session else {
-                    return Vec::new();
-                };
-                self.explore
-                    .resolve_events_for_key(key, &s.player, data)
-                    .into_iter()
-                    .map(GameEvent::Explore)
-                    .collect()
-            }
-            UiEvent::InventoryInput(key) => {
-                let Some(s) = session else {
-                    return Vec::new();
-                };
-                resolve_inventory_events(self.inventory.selected, s.player.inventory.len(), key)
-                    .into_iter()
-                    .map(GameEvent::Inventory)
-                    .collect()
-            }
-            UiEvent::DialogInput(key) => resolve_dialog_events(self.dialog.state.as_ref(), key)
-                .into_iter()
-                .map(GameEvent::Dialog)
-                .collect(),
-            UiEvent::ShopBuySelected(selected) => {
-                let Some(s) = session else {
-                    return Vec::new();
-                };
-                let shop_items = self
-                    .shop
-                    .state
-                    .as_ref()
-                    .map(|state| state.items.as_slice())
-                    .unwrap_or(&[]);
-                if let Some(item) = shop_items.get(selected).cloned()
-                    && s.player.stats.gold >= item.price
-                {
-                    alloc::vec![GameEvent::Shop(crate::game::ShopEvent::BuyItem(item))]
-                } else {
-                    Vec::new()
-                }
-            }
-            UiEvent::ShopSellSelected(selected) => {
-                alloc::vec![GameEvent::Shop(crate::game::ShopEvent::SellSelected(
-                    selected
-                ))]
-            }
+            UiEvent::ExploreInput(key) => alloc::vec![GameEvent::ExploreInput(key)],
+            UiEvent::InventoryInput(key) => alloc::vec![GameEvent::InventoryInput(key)],
+            UiEvent::DialogInput(key) => alloc::vec![GameEvent::DialogInput(key)],
+            UiEvent::ShopBuySelected(selected) => alloc::vec![GameEvent::ShopInput(
+                crate::game::ShopInputEvent::BuySelected(selected),
+            )],
+            UiEvent::ShopSellSelected(selected) => alloc::vec![GameEvent::ShopInput(
+                crate::game::ShopInputEvent::SellSelected(selected),
+            )],
             UiEvent::ShopClose => {
-                alloc::vec![GameEvent::Shop(crate::game::ShopEvent::CloseToExplore)]
+                alloc::vec![GameEvent::ShopInput(crate::game::ShopInputEvent::Close,)]
             }
         }
     }
@@ -323,85 +271,6 @@ fn resolve_pause_menu_events(
 
     match event {
         crate::game::PauseMenuEvent::None => Vec::new(),
-        event => vec![event],
-    }
-}
-
-fn resolve_inventory_events(
-    selected: usize,
-    inventory_len: usize,
-    key: InputKey,
-) -> Vec<crate::game::InventoryEvent> {
-    let event = match key {
-        InputKey::Up => {
-            let next = step_up(selected);
-            if next != selected {
-                crate::game::InventoryEvent::SetSelected(next)
-            } else {
-                crate::game::InventoryEvent::None
-            }
-        }
-        InputKey::Down => {
-            let next = step_down(selected, inventory_len);
-            if next != selected {
-                crate::game::InventoryEvent::SetSelected(next)
-            } else {
-                crate::game::InventoryEvent::None
-            }
-        }
-        InputKey::Ok => crate::game::InventoryEvent::UseSelected(selected),
-        InputKey::Back => crate::game::InventoryEvent::CloseToExplore,
-        _ => crate::game::InventoryEvent::None,
-    };
-
-    match event {
-        crate::game::InventoryEvent::None => Vec::new(),
-        event => vec![event],
-    }
-}
-
-fn resolve_dialog_events(
-    dialog_state: Option<&DialogState>,
-    key: InputKey,
-) -> Vec<crate::game::DialogEvent> {
-    let event = match key {
-        InputKey::Back => {
-            crate::game::DialogEvent::Transition(crate::game::DialogTransition::CloseToExplore)
-        }
-        InputKey::Ok => {
-            if let Some(dialog_state_ref) = dialog_state {
-                if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
-                    crate::game::DialogEvent::Transition(
-                        crate::game::DialogTransition::CloseToExplore,
-                    )
-                } else {
-                    let transition = if dialog_state_ref.current_line + 1
-                        < dialog_state_ref.lines.len()
-                    {
-                        crate::game::DialogTransition::SetLine(dialog_state_ref.current_line + 1)
-                    } else {
-                        crate::game::DialogTransition::CloseToExplore
-                    };
-                    if let Some(action) = dialog_state_ref
-                        .lines
-                        .get(dialog_state_ref.current_line)
-                        .and_then(|line| line.action.as_ref())
-                        .cloned()
-                    {
-                        crate::game::DialogEvent::Action(action, transition)
-                    } else {
-                        crate::game::DialogEvent::Transition(transition)
-                    }
-                }
-            } else {
-                crate::game::DialogEvent::None
-            }
-        }
-        _ => crate::game::DialogEvent::None,
-    };
-
-    match event {
-        crate::game::DialogEvent::None => Vec::new(),
         event => vec![event],
     }
 }

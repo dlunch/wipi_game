@@ -1,12 +1,14 @@
 use anyhow::Result;
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, GameEvent};
+use crate::game::{AppExploreEvent, GameEvent, GameState};
 
+struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
 struct ExplorePauseCascadeResolver;
 struct ExploreMenuCascadeResolver;
 
+static EXPLORE_INPUT_RESOLVER: ExploreInputResolver = ExploreInputResolver;
 static EXPLORE_USE_ACTION_CASCADE_RESOLVER: ExploreUseActionCascadeResolver =
     ExploreUseActionCascadeResolver;
 static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePauseCascadeResolver;
@@ -14,10 +16,41 @@ static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCa
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
+        &EXPLORE_INPUT_RESOLVER,
         &EXPLORE_USE_ACTION_CASCADE_RESOLVER,
         &EXPLORE_PAUSE_CASCADE_RESOLVER,
         &EXPLORE_MENU_CASCADE_RESOLVER,
     ]
+}
+
+impl DomainEventResolver for ExploreInputResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::ExploreInput(_))
+    }
+
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+    ) -> Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::ExploreInput(key) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        if !matches!(ctx.state, GameState::Explore) {
+            return Ok(alloc::vec::Vec::new());
+        }
+        let Some(s) = ctx.session else {
+            return Ok(alloc::vec::Vec::new());
+        };
+
+        Ok(ctx
+            .ui
+            .explore
+            .resolve_events_for_key(*key, &s.player, ctx.data())
+            .into_iter()
+            .map(GameEvent::Explore)
+            .collect())
+    }
 }
 
 impl DomainEventResolver for ExploreUseActionCascadeResolver {
