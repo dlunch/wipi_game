@@ -56,7 +56,7 @@ pub enum GameEvent {
     OpenDialogState(crate::game::DialogState),
     OpenShopById(String),
     OpenShopState(Box<crate::game::ShopState>),
-    RestoreSessionStats,
+    RestoreHpMp,
     ApplyDialogAction(crate::data::DialogAction),
     ApplyDialogTransition(crate::game::DialogTransition),
     ShopBuyItem(crate::data::Item),

@@ -162,7 +162,7 @@ impl SessionState {
                 }
                 _ => {}
             },
-            GameEvent::RestoreSessionStats => self.leader.restore_stats(),
+            GameEvent::RestoreHpMp => self.leader.restore_stats(),
             GameEvent::ApplyDialogAction(action) => match action {
                 crate::data::DialogAction::GiveQuest(id) => {
                     if !self.quests.iter().any(|q| q.quest_id == *id) {

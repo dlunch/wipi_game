@@ -160,7 +160,7 @@ impl DomainEventResolver for ExploreNpcCascadeResolver {
             NpcEvent::OpenDialog(dialog_spec) => {
                 let mut events = Vec::with_capacity(2);
                 if dialog_spec.restore {
-                    events.push(GameEvent::RestoreSessionStats);
+                    events.push(GameEvent::RestoreHpMp);
                 }
                 events.push(GameEvent::OpenDialogState(DialogState::new(
                     dialog_spec.npc_name.clone(),
@@ -169,7 +169,7 @@ impl DomainEventResolver for ExploreNpcCascadeResolver {
                 Ok(events)
             }
             NpcEvent::OpenShop(shop_id) => Ok(vec![GameEvent::OpenShopById(shop_id.clone())]),
-            NpcEvent::RestoreStats => Ok(vec![GameEvent::RestoreSessionStats]),
+            NpcEvent::RestoreStats => Ok(vec![GameEvent::RestoreHpMp]),
         }
     }
 }
