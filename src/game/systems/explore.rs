@@ -2,9 +2,7 @@ use crate::data::Direction;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::ExploreAction;
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{AppExploreEvent, GameState, RuntimeEvent};
 #[cfg(test)]
 use crate::game::{GameData, PlayerState};
@@ -61,14 +59,12 @@ struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
 struct ExplorePauseCascadeResolver;
 struct ExploreMenuCascadeResolver;
-struct ExploreApplier;
 
 static EXPLORE_INPUT_RESOLVER: ExploreInputResolver = ExploreInputResolver;
 static EXPLORE_USE_ACTION_CASCADE_RESOLVER: ExploreUseActionCascadeResolver =
     ExploreUseActionCascadeResolver;
 static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePauseCascadeResolver;
 static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCascadeResolver;
-static EXPLORE_APPLIER: ExploreApplier = ExploreApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
@@ -77,10 +73,6 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
         &EXPLORE_PAUSE_CASCADE_RESOLVER,
         &EXPLORE_MENU_CASCADE_RESOLVER,
     ]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&EXPLORE_APPLIER]
 }
 
 impl DomainEventResolver for ExploreInputResolver {
@@ -190,31 +182,6 @@ impl DomainEventResolver for ExploreMenuCascadeResolver {
         _event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         Ok(alloc::vec![RuntimeEvent::OpenMenuFromExplore])
-    }
-}
-
-impl DomainEventApplier for ExploreApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Explore(_))
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Explore(event) = event else {
-            return Ok(());
-        };
-        match event {
-            AppExploreEvent::MoveDirection(direction) => {
-                let s = engine
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.on_direction_pressed(*direction);
-            }
-            AppExploreEvent::Npc(_)
-            | AppExploreEvent::UseAction(_)
-            | AppExploreEvent::EnterPauseMenu
-            | AppExploreEvent::EnterMenu => {}
-        }
-        Ok(())
     }
 }
 

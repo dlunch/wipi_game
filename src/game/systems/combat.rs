@@ -5,9 +5,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Enemy, Map};
 
 use crate::game::state::{CombatState, FieldEnemy};
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{CombatRuntimeEvent, GameState, RuntimeEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -268,17 +266,11 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
 }
 
 struct UpdateCombatResolver;
-struct CombatPlayerActionApplier;
 
 static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
-static COMBAT_PLAYER_ACTION_APPLIER: CombatPlayerActionApplier = CombatPlayerActionApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_COMBAT_RESOLVER]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER]
 }
 
 impl DomainEventResolver for UpdateCombatResolver {
@@ -309,24 +301,6 @@ impl DomainEventResolver for UpdateCombatResolver {
             map,
             &ctx.data().enemies,
         ))
-    }
-}
-
-impl DomainEventApplier for CombatPlayerActionApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::CombatPlayerAction(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::CombatPlayerAction(action) = event else {
-            return Ok(());
-        };
-        let data = alloc::rc::Rc::clone(ctx.data);
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        s.apply_explore_action(&data, *action);
-        Ok(())
     }
 }
 

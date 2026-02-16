@@ -1,9 +1,7 @@
 use crate::game::selection::{step_down, step_up};
 use anyhow::{Result, anyhow, ensure};
 
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,17 +55,11 @@ pub fn resolve_many(
 }
 
 struct InventoryInputResolver;
-struct InventoryApplier;
 
 static INVENTORY_INPUT_RESOLVER: InventoryInputResolver = InventoryInputResolver;
-static INVENTORY_APPLIER: InventoryApplier = InventoryApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&INVENTORY_INPUT_RESOLVER]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&INVENTORY_APPLIER]
 }
 
 impl DomainEventResolver for InventoryInputResolver {
@@ -95,34 +87,6 @@ impl DomainEventResolver for InventoryInputResolver {
                 .map(RuntimeEvent::Inventory)
                 .collect(),
         )
-    }
-}
-
-impl DomainEventApplier for InventoryApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Inventory(_))
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Inventory(event) = event else {
-            return Ok(());
-        };
-
-        match event {
-            InventoryEvent::None => {}
-            InventoryEvent::SetSelected(selected) => {
-                engine.ui_mut().inventory.set_selected(*selected)
-            }
-            InventoryEvent::UseSelected(index) => {
-                let s = engine
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.use_inventory_item(*index);
-            }
-            InventoryEvent::CloseToExplore => engine.transition_to(GameState::Explore),
-        }
-
-        Ok(())
     }
 }
 

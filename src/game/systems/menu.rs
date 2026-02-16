@@ -2,10 +2,8 @@ use crate::game::MenuAction;
 use crate::game::selection::{step_down, step_up};
 use anyhow::{Result, anyhow, ensure};
 
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
-use crate::game::{GameState, MenuState, RuntimeEvent, has_save_data};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {
@@ -120,33 +118,16 @@ pub fn resolve_pause_many(
 struct MenuInputResolver;
 struct PauseMenuInputResolver;
 struct MenuActionCascadeResolver;
-struct MenuApplier;
-struct PauseMenuApplier;
-struct OpenPauseMenuApplier;
-struct OpenMenuFromExploreApplier;
 
 static MENU_INPUT_RESOLVER: MenuInputResolver = MenuInputResolver;
 static PAUSE_MENU_INPUT_RESOLVER: PauseMenuInputResolver = PauseMenuInputResolver;
 static MENU_ACTION_CASCADE_RESOLVER: MenuActionCascadeResolver = MenuActionCascadeResolver;
-static MENU_APPLIER: MenuApplier = MenuApplier;
-static PAUSE_MENU_APPLIER: PauseMenuApplier = PauseMenuApplier;
-static OPEN_PAUSE_MENU_APPLIER: OpenPauseMenuApplier = OpenPauseMenuApplier;
-static OPEN_MENU_FROM_EXPLORE_APPLIER: OpenMenuFromExploreApplier = OpenMenuFromExploreApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
         &MENU_INPUT_RESOLVER,
         &PAUSE_MENU_INPUT_RESOLVER,
         &MENU_ACTION_CASCADE_RESOLVER,
-    ]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![
-        &MENU_APPLIER,
-        &PAUSE_MENU_APPLIER,
-        &OPEN_PAUSE_MENU_APPLIER,
-        &OPEN_MENU_FROM_EXPLORE_APPLIER,
     ]
 }
 
@@ -226,93 +207,6 @@ impl DomainEventResolver for MenuActionCascadeResolver {
             MenuAction::Exit => RuntimeEvent::Exit(0),
         };
         Ok(alloc::vec![event])
-    }
-}
-
-impl DomainEventApplier for MenuApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Menu(_))
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Menu(event) = event else {
-            return Ok(());
-        };
-        match event {
-            MenuEvent::None => {}
-            MenuEvent::SetSelected(selected) => engine.ui_mut().menu.set_selected(*selected),
-            MenuEvent::Action(_) => {}
-        }
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for PauseMenuApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::PauseMenu(_))
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::PauseMenu(event) = event else {
-            return Ok(());
-        };
-        match event {
-            PauseMenuEvent::None => {}
-            PauseMenuEvent::SetSelected(selected) => {
-                engine.ui_mut().pause_menu.set_selected(*selected)
-            }
-            PauseMenuEvent::OpenInventory => {
-                engine.ui_mut().inventory.reset();
-                engine.transition_to(GameState::Inventory);
-            }
-            PauseMenuEvent::OpenStats => engine.transition_to(GameState::Stats),
-            PauseMenuEvent::OpenQuestLog => engine.transition_to(GameState::QuestLog),
-            PauseMenuEvent::SaveAndReturnExplore => {
-                {
-                    let s = engine
-                        .session()
-                        .ok_or_else(|| anyhow!("No active session"))?;
-                    let _ = crate::game::save_game(&s.player);
-                }
-                engine.ui_mut().shop.reset();
-                engine.transition_to(GameState::Explore);
-            }
-            PauseMenuEvent::BackToExplore => engine.transition_to(GameState::Explore),
-        }
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for OpenPauseMenuApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::OpenPauseMenu)
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
-        engine.ui_mut().pause_menu.reset();
-        engine.transition_to(GameState::PauseMenu);
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for OpenMenuFromExploreApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::OpenMenuFromExplore)
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
-        {
-            let s = engine
-                .session()
-                .ok_or_else(|| anyhow!("No active session"))?;
-            let _ = crate::game::save_game(&s.player);
-        }
-        engine
-            .ui_mut()
-            .menu
-            .set_menu(MenuState::new(has_save_data()));
-        engine.transition_to(GameState::Menu);
-        Ok(())
     }
 }
 

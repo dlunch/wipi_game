@@ -7,12 +7,10 @@ use anyhow::{Result, anyhow};
 
 use crate::data::Tile;
 
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CombatState, GameData, GameState, MenuState, MovementState, PlayerState, RuntimeEvent,
-    SessionState, has_save_data, load_game,
+    CombatState, GameData, GameState, MovementState, PlayerState, RuntimeEvent, SessionState,
+    load_game,
 };
 
 pub struct IntroDialogSpec {
@@ -142,25 +140,11 @@ pub fn continue_game(data: &GameData) -> (GameState, SessionState, Option<IntroD
 }
 
 struct UpdateLoadingResolver;
-struct LoadingApplier;
-struct StartNewGameApplier;
-struct ContinueGameApplier;
 
 static UPDATE_LOADING_RESOLVER: UpdateLoadingResolver = UpdateLoadingResolver;
-static LOADING_APPLIER: LoadingApplier = LoadingApplier;
-static START_NEW_GAME_APPLIER: StartNewGameApplier = StartNewGameApplier;
-static CONTINUE_GAME_APPLIER: ContinueGameApplier = ContinueGameApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_LOADING_RESOLVER]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![
-        &LOADING_APPLIER,
-        &START_NEW_GAME_APPLIER,
-        &CONTINUE_GAME_APPLIER,
-    ]
 }
 
 impl DomainEventResolver for UpdateLoadingResolver {
@@ -186,75 +170,4 @@ impl DomainEventResolver for UpdateLoadingResolver {
             load_result,
         ))])
     }
-}
-
-impl DomainEventApplier for LoadingApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Loading(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Loading(event) = event else {
-            return Ok(());
-        };
-        match event {
-            LoadingEvent::Advance(step) => ctx.transition_to(GameState::Loading(*step)),
-            LoadingEvent::Loaded => {
-                ctx.transition_to(GameState::Menu);
-                ctx.ui.menu.set_menu(MenuState::new(has_save_data()));
-            }
-            LoadingEvent::Error(msg) => ctx.set_error(msg.clone()),
-        }
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for StartNewGameApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::StartNewGame)
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
-        let (state, session, intro) = start_new_game(ctx.data);
-        enter_session(ctx, state, session, intro);
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for ContinueGameApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::ContinueGame)
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
-        let (state, session, intro) = continue_game(ctx.data);
-        enter_session(ctx, state, session, intro);
-        Ok(())
-    }
-}
-
-fn dialog_state_from_intro(
-    data: &GameData,
-    intro: Option<IntroDialogSpec>,
-) -> Option<crate::game::DialogState> {
-    let spec = intro?;
-    let dialog = data.find_dialog(&spec.dialog_id)?;
-    Some(crate::game::DialogState::from_dialog(spec.npc_name, dialog))
-}
-
-fn enter_session(
-    ctx: &mut ApplyContext<'_>,
-    state: GameState,
-    session: SessionState,
-    intro: Option<IntroDialogSpec>,
-) {
-    *ctx.session = Some(session);
-    ctx.transition_to(state);
-
-    if let Some(s) = ctx.session.as_mut() {
-        s.spawn_current_map_enemies(ctx.data);
-    }
-
-    *ctx.ui = crate::game::UiState::default();
-    ctx.ui.dialog.set(dialog_state_from_intro(ctx.data, intro));
 }

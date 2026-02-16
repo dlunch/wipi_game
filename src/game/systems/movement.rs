@@ -5,9 +5,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Direction, Map, Tile};
 
 use crate::game::state::FieldEnemy;
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
     AppMovementEvent, GameData, GameState, MovementState, MovementTickEvent, PlayerState,
     RuntimeEvent, TileEvent, TransitionEvent,
@@ -170,17 +168,11 @@ fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) ->
 }
 
 struct UpdateMovementResolver;
-struct MovementApplier;
 
 static UPDATE_MOVEMENT_RESOLVER: UpdateMovementResolver = UpdateMovementResolver;
-static MOVEMENT_APPLIER: MovementApplier = MovementApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_MOVEMENT_RESOLVER]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&MOVEMENT_APPLIER]
 }
 
 impl DomainEventResolver for UpdateMovementResolver {
@@ -210,25 +202,6 @@ impl DomainEventResolver for UpdateMovementResolver {
             events.push(RuntimeEvent::Transition(TransitionEvent::MapChanged));
         }
         Ok(events)
-    }
-}
-
-impl DomainEventApplier for MovementApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Movement(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event
-        else {
-            return Ok(());
-        };
-        let data = alloc::rc::Rc::clone(ctx.data);
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        s.apply_movement_tick(&data, *movement_event, tile_event.clone());
-        Ok(())
     }
 }
 

@@ -26,12 +26,13 @@ pub use session::{DialogActionResult, SessionEventApplier, SessionState};
 pub use state::{
     CombatAction, CombatEvent, CombatState, GameState, MovementState, MovementTickEvent,
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
+    domain_appliers,
 };
 pub use systems::npc;
 pub use systems::{
     ApplyContext, DialogEvent, DialogIntent, DialogTransition, ExploreIntent, InventoryEvent,
     InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
-    PauseMenuIntent, ResolveContext, ShopEvent, ShopIntent, domain_appliers, domain_resolvers,
+    PauseMenuIntent, ResolveContext, ShopEvent, ShopIntent, domain_resolvers,
 };
 pub use ui::{
     DialogState, ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, MenuState, SHOP_VISIBLE_ITEMS,

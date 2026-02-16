@@ -1,9 +1,7 @@
 use crate::data::Item;
 use anyhow::{Result, anyhow, ensure};
 
-use crate::game::systems::runtime::{
-    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
-};
+use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
@@ -48,17 +46,11 @@ pub fn resolve_many(
 }
 
 struct ShopInputResolver;
-struct ShopApplier;
 
 static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
-static SHOP_APPLIER: ShopApplier = ShopApplier;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&SHOP_INPUT_RESOLVER]
-}
-
-pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&SHOP_APPLIER]
 }
 
 impl DomainEventResolver for ShopInputResolver {
@@ -91,44 +83,6 @@ impl DomainEventResolver for ShopInputResolver {
             .into_iter()
             .map(RuntimeEvent::Shop)
             .collect())
-    }
-}
-
-impl DomainEventApplier for ShopApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Shop(_))
-    }
-
-    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Shop(event) = event else {
-            return Ok(());
-        };
-        match event {
-            ShopEvent::None => {}
-            ShopEvent::BuyItem(item) => {
-                let s = engine
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.buy_shop_item(item.clone());
-            }
-            ShopEvent::SellSelected(index) => {
-                let (sold, len_after) = {
-                    let s = engine
-                        .session_mut()
-                        .ok_or_else(|| anyhow!("No active session"))?;
-                    let sold = s.sell_inventory_item(*index).is_some();
-                    (sold, s.player.inventory.len())
-                };
-                if sold {
-                    let current_selected = engine.ui.shop.selected;
-                    if current_selected >= len_after && current_selected > 0 {
-                        engine.ui_mut().shop.set_selected(current_selected - 1);
-                    }
-                }
-            }
-            ShopEvent::CloseToExplore => engine.transition_to(GameState::Explore),
-        }
-        Ok(())
     }
 }
 
