@@ -38,6 +38,17 @@ pub fn resolve(selected: usize, inventory_len: usize, intent: InventoryIntent) -
     InventoryEvent::None
 }
 
+pub fn resolve_many(
+    selected: usize,
+    inventory_len: usize,
+    intent: InventoryIntent,
+) -> alloc::vec::Vec<InventoryEvent> {
+    match resolve(selected, inventory_len, intent) {
+        InventoryEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

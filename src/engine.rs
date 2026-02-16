@@ -6,51 +6,10 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::Direction;
 use crate::game::{
-    GameData, GameInput, GameIntent, GameState, InputKey, MenuAction, MenuEvent, MenuState,
-    RenderState, SceneIntent, SessionState, ShopIntent, SystemIntent, UiState, build_render_state,
-    has_save_data,
+    AppExploreEvent, AppMovementEvent, GameData, GameInput, GameIntent, GameState, InputKey,
+    MenuAction, MenuEvent, MenuState, RenderState, RuntimeEvent, SceneIntent, SessionState,
+    ShopIntent, SystemIntent, TransitionEvent, UiState, build_render_state, has_save_data,
 };
-
-enum RuntimeEvent {
-    None,
-    Domain(DomainEvent),
-    Transition(TransitionEvent),
-    Exit(i32),
-}
-
-enum DomainEvent {
-    Loading(crate::game::LoadingEvent),
-    Movement(AppMovementEvent),
-    Combat(crate::game::combat::CombatTickEvent),
-    Menu(crate::game::MenuEvent),
-    Explore(AppExploreEvent),
-    Inventory(crate::game::InventoryEvent),
-    Dialog(crate::game::DialogEvent),
-    Shop(crate::game::ShopEvent),
-    PauseMenu(crate::game::PauseMenuEvent),
-}
-
-enum TransitionEvent {
-    MapChanged,
-    ToExplore,
-    ToMenuFromGameOver,
-    ReleaseMovementDirection(Direction),
-}
-
-enum AppExploreEvent {
-    MoveDirection(Direction),
-    Npc(crate::game::NpcEvent),
-    UseAction(crate::game::ExploreAction),
-    EnterPauseMenu,
-    EnterMenu,
-}
-
-enum AppMovementEvent {
-    Tick(
-        crate::game::MovementTickEvent,
-        Option<crate::game::TileEvent>,
-    ),
-}
 
 pub struct GameEngine {
     state: GameState,
@@ -285,13 +244,13 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_update_combat(&mut self, result: crate::game::combat::CombatTickEvent) -> Result<()> {
+    fn apply_session_event(&mut self, event: RuntimeEvent) -> Result<()> {
         let s = self
             .session
             .as_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        if s.apply_combat_tick(result) {
+        if s.apply_event(event) {
             self.transition_to(GameState::GameOver);
         }
         Ok(())
@@ -372,9 +331,9 @@ impl GameEngine {
         };
 
         let load_result = crate::game::lifecycle::load_step(&mut self.data, step);
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Loading(
+        Ok(vec![RuntimeEvent::Loading(
             crate::game::lifecycle::resolve_loading(step, load_result),
-        ))])
+        )])
     }
 
     fn resolve_update_movement_intent(&self) -> Result<Vec<RuntimeEvent>> {
@@ -395,8 +354,9 @@ impl GameEngine {
         );
 
         let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
-        events.push(RuntimeEvent::Domain(DomainEvent::Movement(
-            AppMovementEvent::Tick(movement.movement_event, movement.tile_event),
+        events.push(RuntimeEvent::Movement(AppMovementEvent::Tick(
+            movement.movement_event,
+            movement.tile_event,
         )));
         if movement.map_changed {
             events.push(RuntimeEvent::Transition(TransitionEvent::MapChanged));
@@ -414,39 +374,38 @@ impl GameEngine {
             .as_ref()
             .ok_or_else(|| anyhow!("No active session"))?;
         let Some(map) = self.data.find_map(&s.player.current_map_id) else {
-            return Ok(vec![RuntimeEvent::None]);
+            return Ok(Vec::new());
         };
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Combat(
-            crate::game::combat::resolve_tick(
-                &s.combat,
-                crate::game::combat::CombatTickInput {
-                    player_x: s.player.x,
-                    player_y: s.player.y,
-                    player_def: s.player.total_def(),
-                    skill_cooldowns: s.skill_cooldowns,
-                    mp_regen_timer: s.mp_regen_timer,
-                    map,
-                    enemy_data: &self.data.enemies,
-                },
-            ),
-        ))])
+        Ok(crate::game::combat::resolve_tick(
+            &s.combat,
+            crate::game::combat::CombatTickInput {
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_def: s.player.total_def(),
+                skill_cooldowns: s.skill_cooldowns,
+                mp_regen_timer: s.mp_regen_timer,
+                map,
+                enemy_data: &self.data.enemies,
+            },
+        ))
     }
 
     fn apply_event(&mut self, event: RuntimeEvent) -> Result<()> {
         match event {
-            RuntimeEvent::None => {}
-            RuntimeEvent::Domain(domain_event) => match domain_event {
-                DomainEvent::Loading(event) => self.apply_update_loading(event),
-                DomainEvent::Movement(event) => self.apply_update_movement(event)?,
-                DomainEvent::Combat(event) => self.apply_update_combat(event)?,
-                DomainEvent::Menu(event) => self.apply_menu_event(event)?,
-                DomainEvent::Explore(event) => self.apply_explore_event(event)?,
-                DomainEvent::Inventory(event) => self.apply_inventory_event(event)?,
-                DomainEvent::Dialog(event) => self.apply_dialog_event(event)?,
-                DomainEvent::Shop(event) => self.apply_shop_event(event)?,
-                DomainEvent::PauseMenu(event) => self.apply_pause_menu_event(event)?,
-            },
+            RuntimeEvent::Loading(event) => self.apply_update_loading(event),
+            RuntimeEvent::Movement(event) => self.apply_update_movement(event)?,
+            RuntimeEvent::Menu(event) => self.apply_menu_event(event)?,
+            RuntimeEvent::Explore(event) => self.apply_explore_event(event)?,
+            RuntimeEvent::Inventory(event) => self.apply_inventory_event(event)?,
+            RuntimeEvent::Dialog(event) => self.apply_dialog_event(event)?,
+            RuntimeEvent::Shop(event) => self.apply_shop_event(event)?,
+            RuntimeEvent::PauseMenu(event) => self.apply_pause_menu_event(event)?,
+            event @ (RuntimeEvent::SetCombatState(_)
+            | RuntimeEvent::SetSkillCooldowns(_)
+            | RuntimeEvent::SetMpRegenTimer(_)
+            | RuntimeEvent::RecoverMp(_)
+            | RuntimeEvent::TakeDamage(_)) => self.apply_session_event(event)?,
             RuntimeEvent::Transition(event) => self.apply_transition_event(event)?,
             RuntimeEvent::Exit(code) => wipi::kernel::exit(code),
         }
@@ -489,9 +448,14 @@ impl GameEngine {
             "Invalid state: expected Menu"
         );
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Menu(
-            crate::game::menu::resolve(self.ui.menu.selected, &self.ui.menu.state.items, intent),
-        ))])
+        Ok(crate::game::menu::resolve_many(
+            self.ui.menu.selected,
+            &self.ui.menu.state.items,
+            intent,
+        )
+        .into_iter()
+        .map(RuntimeEvent::Menu)
+        .collect())
     }
 
     fn resolve_explore_intent(
@@ -512,38 +476,41 @@ impl GameEngine {
             .find_map(&s.player.current_map_id)
             .is_some_and(|map| map.peaceful);
 
-        let event = match crate::game::explore::resolve(is_peaceful, intent) {
-            crate::game::ExploreEvent::None => RuntimeEvent::None,
-            crate::game::ExploreEvent::MoveDirection(direction) => RuntimeEvent::Domain(
-                DomainEvent::Explore(AppExploreEvent::MoveDirection(direction)),
-            ),
-            crate::game::ExploreEvent::TryNpcInteract {
-                facing,
-                fallback_action,
-            } => {
-                if let Some(npc_event) = crate::game::npc::resolve(
-                    &s.player,
-                    &self.data,
-                    crate::game::npc::NpcIntent::Interact { facing },
-                ) {
-                    RuntimeEvent::Domain(DomainEvent::Explore(AppExploreEvent::Npc(npc_event)))
-                } else if let Some(action) = fallback_action {
-                    RuntimeEvent::Domain(DomainEvent::Explore(AppExploreEvent::UseAction(action)))
-                } else {
-                    RuntimeEvent::None
+        let mut events = Vec::new();
+        for explore_event in crate::game::explore::resolve_many(is_peaceful, intent) {
+            match explore_event {
+                crate::game::ExploreEvent::None => {}
+                crate::game::ExploreEvent::MoveDirection(direction) => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::MoveDirection(
+                        direction,
+                    )));
+                }
+                crate::game::ExploreEvent::TryNpcInteract {
+                    facing,
+                    fallback_action,
+                } => {
+                    if let Some(npc_event) = crate::game::npc::resolve(
+                        &s.player,
+                        &self.data,
+                        crate::game::npc::NpcIntent::Interact { facing },
+                    ) {
+                        events.push(RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)));
+                    } else if let Some(action) = fallback_action {
+                        events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
+                    }
+                }
+                crate::game::ExploreEvent::UseAction(action) => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
+                }
+                crate::game::ExploreEvent::EnterPauseMenu => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu));
+                }
+                crate::game::ExploreEvent::EnterMenu => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterMenu));
                 }
             }
-            crate::game::ExploreEvent::UseAction(action) => {
-                RuntimeEvent::Domain(DomainEvent::Explore(AppExploreEvent::UseAction(action)))
-            }
-            crate::game::ExploreEvent::EnterPauseMenu => {
-                RuntimeEvent::Domain(DomainEvent::Explore(AppExploreEvent::EnterPauseMenu))
-            }
-            crate::game::ExploreEvent::EnterMenu => {
-                RuntimeEvent::Domain(DomainEvent::Explore(AppExploreEvent::EnterMenu))
-            }
-        };
-        Ok(vec![event])
+        }
+        Ok(events)
     }
 
     fn resolve_inventory_intent(
@@ -559,13 +526,14 @@ impl GameEngine {
             .as_ref()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Inventory(
-            crate::game::inventory::resolve(
-                self.ui.inventory.selected,
-                s.player.inventory.len(),
-                intent,
-            ),
-        ))])
+        Ok(crate::game::inventory::resolve_many(
+            self.ui.inventory.selected,
+            s.player.inventory.len(),
+            intent,
+        )
+        .into_iter()
+        .map(RuntimeEvent::Inventory)
+        .collect())
     }
 
     fn resolve_dialog_intent(
@@ -580,9 +548,12 @@ impl GameEngine {
             .as_ref()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Dialog(
-            crate::game::dialog::resolve(self.ui.dialog.state.as_ref(), intent),
-        ))])
+        Ok(
+            crate::game::dialog::resolve_many(self.ui.dialog.state.as_ref(), intent)
+                .into_iter()
+                .map(RuntimeEvent::Dialog)
+                .collect(),
+        )
     }
 
     fn resolve_shop_intent(&self, intent: ShopIntent) -> Result<Vec<RuntimeEvent>> {
@@ -602,9 +573,12 @@ impl GameEngine {
             .map(|state| state.items.as_slice())
             .unwrap_or(&[]);
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::Shop(
-            crate::game::shop::resolve(intent, s.player.stats.gold, shop_items),
-        ))])
+        Ok(
+            crate::game::shop::resolve_many(intent, s.player.stats.gold, shop_items)
+                .into_iter()
+                .map(RuntimeEvent::Shop)
+                .collect(),
+        )
     }
 
     fn resolve_pause_menu_intent(
@@ -619,13 +593,14 @@ impl GameEngine {
             .as_ref()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(vec![RuntimeEvent::Domain(DomainEvent::PauseMenu(
-            crate::game::menu::resolve_pause(
-                self.ui.pause_menu.selected,
-                self.ui.pause_menu.state.items.len(),
-                intent,
-            ),
-        ))])
+        Ok(crate::game::menu::resolve_pause_many(
+            self.ui.pause_menu.selected,
+            self.ui.pause_menu.state.items.len(),
+            intent,
+        )
+        .into_iter()
+        .map(RuntimeEvent::PauseMenu)
+        .collect())
     }
 
     fn apply_menu_event(&mut self, event: MenuEvent) -> Result<()> {

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::{Enemy, Map};
-use crate::game::SessionEvent;
+use crate::game::RuntimeEvent;
 use crate::game::state::{CombatState, FieldEnemy};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -27,12 +27,7 @@ struct TickContext<'a> {
     enemy_data: &'a [Enemy],
 }
 
-#[derive(Debug, Clone)]
-pub struct CombatTickEvent {
-    pub events: Vec<SessionEvent>,
-}
-
-pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTickEvent {
+pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> Vec<RuntimeEvent> {
     let mut next_state = state.clone();
     update(
         &mut next_state,
@@ -48,7 +43,7 @@ pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTi
     )
 }
 
-fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatTickEvent {
+fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
     state.update_counter = state.update_counter.wrapping_add(1);
 
     if state.player_attack_cooldown > 0 {
@@ -95,17 +90,17 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatTickEvent {
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
     let mut events = Vec::with_capacity(5);
-    events.push(SessionEvent::SetCombatState(state.clone()));
-    events.push(SessionEvent::SetSkillCooldowns(next_skill_cooldowns));
-    events.push(SessionEvent::SetMpRegenTimer(next_mp_regen_timer));
+    events.push(RuntimeEvent::SetCombatState(state.clone()));
+    events.push(RuntimeEvent::SetSkillCooldowns(next_skill_cooldowns));
+    events.push(RuntimeEvent::SetMpRegenTimer(next_mp_regen_timer));
     if recover_mp > 0 {
-        events.push(SessionEvent::RecoverMp(recover_mp));
+        events.push(RuntimeEvent::RecoverMp(recover_mp));
     }
     if damage_taken > 0 {
-        events.push(SessionEvent::TakeDamage(damage_taken));
+        events.push(RuntimeEvent::TakeDamage(damage_taken));
     }
 
-    CombatTickEvent { events }
+    events
 }
 
 fn try_respawn(

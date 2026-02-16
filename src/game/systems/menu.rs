@@ -57,6 +57,17 @@ pub fn resolve(selected: usize, items: &[(&str, MenuAction)], intent: MenuIntent
     MenuEvent::None
 }
 
+pub fn resolve_many(
+    selected: usize,
+    items: &[(&str, MenuAction)],
+    intent: MenuIntent,
+) -> alloc::vec::Vec<MenuEvent> {
+    match resolve(selected, items, intent) {
+        MenuEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
+}
+
 pub fn resolve_pause(
     selected: usize,
     item_count: usize,
@@ -86,6 +97,17 @@ pub fn resolve_pause(
     }
 
     PauseMenuEvent::None
+}
+
+pub fn resolve_pause_many(
+    selected: usize,
+    item_count: usize,
+    intent: PauseMenuIntent,
+) -> alloc::vec::Vec<PauseMenuEvent> {
+    match resolve_pause(selected, item_count, intent) {
+        PauseMenuEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
 }
 
 #[cfg(test)]

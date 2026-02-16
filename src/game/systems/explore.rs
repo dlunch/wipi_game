@@ -44,6 +44,13 @@ pub fn resolve(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
     }
 }
 
+pub fn resolve_many(is_peaceful: bool, intent: ExploreIntent) -> alloc::vec::Vec<ExploreEvent> {
+    match resolve(is_peaceful, intent) {
+        ExploreEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::string::String;

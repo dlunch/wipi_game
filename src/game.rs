@@ -1,6 +1,7 @@
 mod game_data;
 mod intent;
 mod rendering;
+mod runtime_event;
 mod save;
 mod save_schema;
 mod selection;
@@ -17,8 +18,9 @@ pub use rendering::{
     clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
     draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, render,
 };
+pub use runtime_event::{AppExploreEvent, AppMovementEvent, RuntimeEvent, TransitionEvent};
 pub use save::{has_save_data, load_game, save_game};
-pub use session::{DialogActionResult, SessionEvent, SessionState};
+pub use session::{DialogActionResult, SessionState};
 pub use state::{
     CombatAction, CombatEvent, CombatState, GameState, MovementState, MovementTickEvent,
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,

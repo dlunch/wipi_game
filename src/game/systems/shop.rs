@@ -29,6 +29,17 @@ pub fn resolve(intent: ShopIntent, player_gold: i32, shop_items: &[Item]) -> Sho
     }
 }
 
+pub fn resolve_many(
+    intent: ShopIntent,
+    player_gold: i32,
+    shop_items: &[Item],
+) -> alloc::vec::Vec<ShopEvent> {
+    match resolve(intent, player_gold, shop_items) {
+        ShopEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::string::String;

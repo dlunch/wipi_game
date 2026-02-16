@@ -51,6 +51,16 @@ pub fn resolve(dialog_state: Option<&DialogState>, intent: DialogIntent) -> Dial
     DialogEvent::None
 }
 
+pub fn resolve_many(
+    dialog_state: Option<&DialogState>,
+    intent: DialogIntent,
+) -> alloc::vec::Vec<DialogEvent> {
+    match resolve(dialog_state, intent) {
+        DialogEvent::None => alloc::vec::Vec::new(),
+        event => alloc::vec![event],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::string::String;
