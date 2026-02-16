@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogAction, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
-use crate::game::{ExploreCommand, GameEvent, GameState, SessionState, TransitionEvent};
+use crate::game::{GameEvent, GameState, SessionState, TransitionEvent};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -101,6 +101,15 @@ pub enum MenuEvent {
     None,
     SetSelected(usize),
     Action(MenuAction),
+}
+
+#[derive(Clone, Copy)]
+pub enum ExploreCommand {
+    Move(Direction),
+    Confirm,
+    UseSlot(usize),
+    OpenPauseMenu,
+    OpenMenu,
 }
 
 #[derive(Clone, Copy)]

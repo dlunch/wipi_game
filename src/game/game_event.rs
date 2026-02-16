@@ -47,7 +47,7 @@ pub enum GameEvent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    ExploreCommand(ExploreCommand),
+    ExploreCommand(crate::game::ExploreCommand),
     StartNewGame,
     ContinueGame,
     SaveSession,
@@ -90,15 +90,6 @@ pub enum SessionEvent {
     ResetMovement,
     ResetCombat,
     SpawnCurrentMapEnemies,
-}
-
-#[derive(Clone, Copy)]
-pub enum ExploreCommand {
-    Move(Direction),
-    Confirm,
-    UseSlot(usize),
-    OpenPauseMenu,
-    OpenMenu,
 }
 
 #[derive(Clone, Copy)]
