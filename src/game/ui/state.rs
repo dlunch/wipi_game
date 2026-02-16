@@ -84,6 +84,24 @@ pub trait UiEventApplier {
     fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent>;
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MenuEvent {
+    None,
+    SetSelected(usize),
+    Action(MenuAction),
+}
+
+#[derive(Clone, Copy)]
+pub enum PauseMenuEvent {
+    None,
+    SetSelected(usize),
+    OpenInventory,
+    OpenStats,
+    OpenQuestLog,
+    SaveAndReturnExplore,
+    BackToExplore,
+}
+
 impl UiEventApplier for UiState {
     fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent> {
         match event {
@@ -97,8 +115,8 @@ impl UiEventApplier for UiState {
             UiEvent::MovementKeyReleased(direction) => vec![GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
             )],
-            UiEvent::MenuInput(key) => vec![GameEvent::MenuInput(key)],
-            UiEvent::PauseMenuInput(key) => vec![GameEvent::PauseMenuInput(key)],
+            UiEvent::MenuInput(key) => self.resolve_menu_input(key),
+            UiEvent::PauseMenuInput(key) => self.resolve_pause_menu_input(key),
             UiEvent::ExploreInput(key) => vec![GameEvent::ExploreInput(key)],
             UiEvent::InventoryInput(key) => vec![GameEvent::InventoryInput(key)],
             UiEvent::DialogInput(key) => vec![GameEvent::DialogInput(key)],
@@ -109,6 +127,90 @@ impl UiEventApplier for UiState {
                 vec![GameEvent::ShopInput(ShopInputEvent::SellSelected(selected))]
             }
             UiEvent::ShopClose => vec![GameEvent::ShopInput(ShopInputEvent::Close)],
+        }
+    }
+}
+
+impl UiState {
+    fn resolve_menu_input(&self, key: InputKey) -> Vec<GameEvent> {
+        let selected = self.menu.selected;
+        let items = &self.menu.state.items;
+
+        let event = match key {
+            InputKey::Up => {
+                let next = step_up(selected);
+                if next != selected {
+                    MenuEvent::SetSelected(next)
+                } else {
+                    MenuEvent::None
+                }
+            }
+            InputKey::Down => {
+                let next = step_down(selected, items.len());
+                if next != selected {
+                    MenuEvent::SetSelected(next)
+                } else {
+                    MenuEvent::None
+                }
+            }
+            InputKey::Ok => {
+                if let Some((_, action)) = items.get(selected).copied() {
+                    MenuEvent::Action(action)
+                } else {
+                    MenuEvent::None
+                }
+            }
+            _ => MenuEvent::None,
+        };
+
+        match event {
+            MenuEvent::None => Vec::new(),
+            MenuEvent::SetSelected(selected) => {
+                vec![GameEvent::Menu(MenuEvent::SetSelected(selected))]
+            }
+            MenuEvent::Action(action) => match action {
+                MenuAction::NewGame => vec![GameEvent::StartNewGame],
+                MenuAction::Continue => vec![GameEvent::ContinueGame],
+                MenuAction::Exit => vec![GameEvent::Exit(0)],
+            },
+        }
+    }
+
+    fn resolve_pause_menu_input(&self, key: InputKey) -> Vec<GameEvent> {
+        let selected = self.pause_menu.selected;
+        let item_count = self.pause_menu.state.items.len();
+
+        let event = match key {
+            InputKey::Up => {
+                let next = step_up(selected);
+                if next != selected {
+                    PauseMenuEvent::SetSelected(next)
+                } else {
+                    PauseMenuEvent::None
+                }
+            }
+            InputKey::Down => {
+                let next = step_down(selected, item_count);
+                if next != selected {
+                    PauseMenuEvent::SetSelected(next)
+                } else {
+                    PauseMenuEvent::None
+                }
+            }
+            InputKey::Ok => match selected {
+                0 => PauseMenuEvent::OpenInventory,
+                1 => PauseMenuEvent::OpenStats,
+                2 => PauseMenuEvent::OpenQuestLog,
+                3 => PauseMenuEvent::SaveAndReturnExplore,
+                _ => PauseMenuEvent::None,
+            },
+            InputKey::Back | InputKey::Key0 => PauseMenuEvent::BackToExplore,
+            _ => PauseMenuEvent::None,
+        };
+
+        match event {
+            PauseMenuEvent::None => Vec::new(),
+            event => vec![GameEvent::PauseMenu(event)],
         }
     }
 }
