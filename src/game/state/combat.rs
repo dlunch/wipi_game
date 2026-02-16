@@ -60,6 +60,7 @@ pub struct SkillEffect {
 
 #[derive(Debug, Clone)]
 pub struct FieldEnemy {
+    pub instance_id: u32,
     pub data: Enemy,
     pub x: usize,
     pub y: usize,
@@ -69,9 +70,10 @@ pub struct FieldEnemy {
 }
 
 impl FieldEnemy {
-    pub fn new(data: Enemy, x: usize, y: usize) -> Self {
+    pub fn new(data: Enemy, x: usize, y: usize, instance_id: u32) -> Self {
         let hp = data.hp;
         Self {
+            instance_id,
             data,
             x,
             y,
@@ -156,6 +158,7 @@ pub struct CombatState {
     pub update_counter: u32,
     pub respawn_timer: u32,
     pub respawn_positions: Vec<(usize, usize, usize)>,
+    pub next_enemy_instance_id: u32,
 }
 
 impl CombatState {
@@ -185,6 +188,7 @@ impl CombatState {
         self.player_hit_flash = 0;
         self.skill_effects.clear();
         self.update_counter = 0;
+        self.next_enemy_instance_id = 1;
 
         let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
         for y in 0..map.height {
@@ -212,9 +216,20 @@ impl CombatState {
         for (i, (x, y)) in enemy_tiles.iter().enumerate() {
             let enemy_idx = i % available_enemies.len();
             let enemy = available_enemies[enemy_idx];
-            self.enemies.push(FieldEnemy::new(enemy.clone(), *x, *y));
+            let instance_id = self.allocate_enemy_instance_id();
+            self.enemies
+                .push(FieldEnemy::new(enemy.clone(), *x, *y, instance_id));
             self.respawn_positions.push((*x, *y, enemy_idx));
         }
+    }
+
+    fn allocate_enemy_instance_id(&mut self) -> u32 {
+        let id = self.next_enemy_instance_id;
+        self.next_enemy_instance_id = self.next_enemy_instance_id.wrapping_add(1);
+        if self.next_enemy_instance_id == 0 {
+            self.next_enemy_instance_id = 1;
+        }
+        id.max(1)
     }
 
     fn player_attack(

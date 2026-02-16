@@ -65,8 +65,62 @@ impl SessionState {
     pub fn apply_event(&mut self, event: RuntimeEvent) -> bool {
         match event {
             RuntimeEvent::Combat(event) => match event {
-                crate::game::CombatRuntimeEvent::SetEnemies(enemies) => {
-                    self.combat.enemies = enemies;
+                crate::game::CombatRuntimeEvent::EnemySpawn(enemy) => {
+                    self.combat.enemies.push(enemy);
+                    false
+                }
+                crate::game::CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
+                    self.combat
+                        .enemies
+                        .retain(|enemy| enemy.instance_id != enemy_id);
+                    false
+                }
+                crate::game::CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
+                    if let Some(enemy) = self
+                        .combat
+                        .enemies
+                        .iter_mut()
+                        .find(|enemy| enemy.instance_id == enemy_id)
+                    {
+                        enemy.x = x;
+                        enemy.y = y;
+                    }
+                    false
+                }
+                crate::game::CombatRuntimeEvent::EnemyHpSet { enemy_id, hp } => {
+                    if let Some(enemy) = self
+                        .combat
+                        .enemies
+                        .iter_mut()
+                        .find(|enemy| enemy.instance_id == enemy_id)
+                    {
+                        enemy.hp = hp;
+                    }
+                    false
+                }
+                crate::game::CombatRuntimeEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
+                    if let Some(enemy) = self
+                        .combat
+                        .enemies
+                        .iter_mut()
+                        .find(|enemy| enemy.instance_id == enemy_id)
+                    {
+                        enemy.attack_cooldown = cooldown;
+                    }
+                    false
+                }
+                crate::game::CombatRuntimeEvent::EnemyHitFlashSet {
+                    enemy_id,
+                    hit_flash,
+                } => {
+                    if let Some(enemy) = self
+                        .combat
+                        .enemies
+                        .iter_mut()
+                        .find(|enemy| enemy.instance_id == enemy_id)
+                    {
+                        enemy.hit_flash = hit_flash;
+                    }
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
@@ -87,6 +141,10 @@ impl SessionState {
                 }
                 crate::game::CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
                     self.combat.respawn_timer = respawn_timer;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
+                    self.combat.next_enemy_instance_id = next_enemy_instance_id;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {

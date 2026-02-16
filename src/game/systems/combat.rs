@@ -17,7 +17,7 @@ pub fn resolve_tick(
     enemy_data: &[Enemy],
 ) -> Vec<RuntimeEvent> {
     let (skill_cooldowns, mp_regen_timer) = resources;
-    let mut events = Vec::with_capacity(10);
+    let mut events = Vec::with_capacity(12);
     let update_counter = state.update_counter.wrapping_add(1);
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetUpdateCounter(
         update_counter,
@@ -28,6 +28,7 @@ pub fn resolve_tick(
     let mut skill_effects = state.skill_effects.clone();
     let mut enemies = state.enemies.clone();
     let mut respawn_timer = state.respawn_timer;
+    let mut next_enemy_instance_id = state.next_enemy_instance_id;
 
     if player_attack_cooldown > 0 {
         player_attack_cooldown = player_attack_cooldown.saturating_sub(1);
@@ -55,28 +56,16 @@ pub fn resolve_tick(
     }
 
     let mut damage_taken = 0;
-    let mut enemies_changed = false;
 
     if update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
         for enemy in &mut enemies {
             if !enemy.is_dead() {
-                let before_x = enemy.x;
-                let before_y = enemy.y;
-                let before_attack_cooldown = enemy.attack_cooldown;
-                let before_hit_flash = enemy.hit_flash;
                 enemy.update(player_x, player_y, map);
-                if enemy.x != before_x
-                    || enemy.y != before_y
-                    || enemy.attack_cooldown != before_attack_cooldown
-                    || enemy.hit_flash != before_hit_flash
-                {
-                    enemies_changed = true;
-                }
             }
         }
     }
 
-    let enemies_before_attack = enemies.len();
+    let previous_enemies = state.enemies.clone();
     for enemy in &mut enemies {
         if enemy.is_dead() {
             continue;
@@ -86,7 +75,6 @@ pub fn resolve_tick(
             let raw_damage = enemy.do_attack();
             let actual_damage = (raw_damage - player_def / 2).max(1);
             damage_taken += actual_damage;
-            enemies_changed = true;
             if player_hit_flash != 10 {
                 player_hit_flash = 10;
                 events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
@@ -97,51 +85,30 @@ pub fn resolve_tick(
     }
 
     enemies.retain(|e| !e.is_dead());
-    if enemies.len() != enemies_before_attack {
-        enemies_changed = true;
-    }
 
-    let respawned = try_respawn(
+    try_respawn(
         &mut enemies,
         &mut respawn_timer,
+        &mut next_enemy_instance_id,
         &state.respawn_positions,
-        player_x,
-        player_y,
+        (player_x, player_y),
         map,
         enemy_data,
     );
-    if respawned {
-        enemies_changed = true;
-    }
 
-    if enemies_changed {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetEnemies(
-            enemies,
-        )));
-    }
+    push_enemy_events(&previous_enemies, &enemies, &mut events);
     if respawn_timer != state.respawn_timer {
         events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetRespawnTimer(
             respawn_timer,
         )));
     }
+    if next_enemy_instance_id != state.next_enemy_instance_id {
+        events.push(RuntimeEvent::Combat(
+            CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id),
+        ));
+    }
 
-    let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
-        tick_resource_state(skill_cooldowns, mp_regen_timer);
-    if next_skill_cooldowns != skill_cooldowns {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
-            next_skill_cooldowns,
-        )));
-    }
-    if next_mp_regen_timer != mp_regen_timer {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetMpRegenTimer(
-            next_mp_regen_timer,
-        )));
-    }
-    if recover_mp > 0 {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::RecoverMp(
-            recover_mp,
-        )));
-    }
+    tick_resource_state(skill_cooldowns, mp_regen_timer, &mut events);
     if damage_taken > 0 {
         events.push(RuntimeEvent::Combat(CombatRuntimeEvent::TakeDamage(
             damage_taken,
@@ -154,28 +121,28 @@ pub fn resolve_tick(
 fn try_respawn(
     enemies: &mut Vec<FieldEnemy>,
     respawn_timer: &mut u32,
+    next_enemy_instance_id: &mut u32,
     respawn_positions: &[(usize, usize, usize)],
-    player_x: usize,
-    player_y: usize,
+    player_pos: (usize, usize),
     map: &Map,
     enemy_data: &[Enemy],
-) -> bool {
+) {
     const RESPAWN_DELAY: u32 = 300;
     const RESPAWN_DISTANCE: usize = 8;
 
     if respawn_positions.is_empty() {
-        return false;
+        return;
     }
 
     let max_enemies = respawn_positions.len();
     if enemies.len() >= max_enemies {
         *respawn_timer = 0;
-        return false;
+        return;
     }
 
     *respawn_timer += 1;
     if *respawn_timer < RESPAWN_DELAY {
-        return false;
+        return;
     }
 
     let available_enemies: Vec<&Enemy> = map
@@ -185,11 +152,11 @@ fn try_respawn(
         .collect();
 
     if available_enemies.is_empty() {
-        return false;
+        return;
     }
 
     for (x, y, enemy_idx) in respawn_positions {
-        let distance = x.abs_diff(player_x) + y.abs_diff(player_y);
+        let distance = x.abs_diff(player_pos.0) + y.abs_diff(player_pos.1);
         if distance < RESPAWN_DISTANCE {
             continue;
         }
@@ -200,29 +167,105 @@ fn try_respawn(
         }
 
         if let Some(enemy) = available_enemies.get(*enemy_idx) {
-            enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y));
+            let instance_id = allocate_enemy_instance_id(next_enemy_instance_id);
+            enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y, instance_id));
             *respawn_timer = 0;
-            return true;
+            return;
         }
     }
-
-    false
 }
 
-fn tick_resource_state(skill_cooldowns: [u32; 3], mp_regen_timer: u32) -> ([u32; 3], u32, i32) {
+fn tick_resource_state(
+    skill_cooldowns: [u32; 3],
+    mp_regen_timer: u32,
+    events: &mut Vec<RuntimeEvent>,
+) {
     let mut next_skill_cooldowns = skill_cooldowns;
     for cooldown in &mut next_skill_cooldowns {
         if *cooldown > 0 {
             *cooldown -= 1;
         }
     }
-
-    let mut next_mp_regen_timer = mp_regen_timer + 1;
-    let mut recover_mp = 0;
-    if next_mp_regen_timer >= MP_REGEN_INTERVAL {
-        next_mp_regen_timer = 0;
-        recover_mp = 1;
+    if next_skill_cooldowns != skill_cooldowns {
+        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
+            next_skill_cooldowns,
+        )));
     }
 
-    (next_skill_cooldowns, next_mp_regen_timer, recover_mp)
+    let mut next_mp_regen_timer = mp_regen_timer + 1;
+    let mut recover_mp = false;
+    if next_mp_regen_timer >= MP_REGEN_INTERVAL {
+        next_mp_regen_timer = 0;
+        recover_mp = true;
+    }
+    if next_mp_regen_timer != mp_regen_timer {
+        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetMpRegenTimer(
+            next_mp_regen_timer,
+        )));
+    }
+    if recover_mp {
+        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::RecoverMp(1)));
+    }
+}
+
+fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut Vec<RuntimeEvent>) {
+    for enemy in previous {
+        if !next
+            .iter()
+            .any(|next_enemy| next_enemy.instance_id == enemy.instance_id)
+        {
+            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyDespawn(
+                enemy.instance_id,
+            )));
+        }
+    }
+
+    for enemy in next {
+        let Some(previous_enemy) = previous
+            .iter()
+            .find(|previous_enemy| previous_enemy.instance_id == enemy.instance_id)
+        else {
+            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemySpawn(
+                enemy.clone(),
+            )));
+            continue;
+        };
+
+        if previous_enemy.x != enemy.x || previous_enemy.y != enemy.y {
+            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyMove {
+                enemy_id: enemy.instance_id,
+                x: enemy.x,
+                y: enemy.y,
+            }));
+        }
+        if previous_enemy.hp != enemy.hp {
+            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyHpSet {
+                enemy_id: enemy.instance_id,
+                hp: enemy.hp,
+            }));
+        }
+        if previous_enemy.attack_cooldown != enemy.attack_cooldown {
+            events.push(RuntimeEvent::Combat(
+                CombatRuntimeEvent::EnemyAttackCooldownSet {
+                    enemy_id: enemy.instance_id,
+                    cooldown: enemy.attack_cooldown,
+                },
+            ));
+        }
+        if previous_enemy.hit_flash != enemy.hit_flash {
+            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyHitFlashSet {
+                enemy_id: enemy.instance_id,
+                hit_flash: enemy.hit_flash,
+            }));
+        }
+    }
+}
+
+fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
+    let id = (*next_enemy_instance_id).max(1);
+    *next_enemy_instance_id = next_enemy_instance_id.wrapping_add(1);
+    if *next_enemy_instance_id == 0 {
+        *next_enemy_instance_id = 1;
+    }
+    id
 }
