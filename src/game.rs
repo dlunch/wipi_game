@@ -22,7 +22,7 @@ pub use runtime_event::{
     AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, RuntimeEvent, TransitionEvent,
 };
 pub use save::{has_save_data, load_game, save_game};
-pub use session::{DialogActionResult, SessionState};
+pub use session::{DialogActionResult, SessionEventApplier, SessionState};
 pub use state::{
     CombatAction, CombatEvent, CombatState, GameState, MovementState, MovementTickEvent,
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
@@ -36,7 +36,7 @@ pub use systems::menu;
 pub use systems::movement;
 pub use systems::npc;
 pub use systems::shop;
-pub use systems::ui_input;
+pub use systems::ui_input::UiInputEventResolver;
 pub use systems::{
     DialogEvent, DialogIntent, DialogTransition, ExploreEvent, ExploreIntent, InventoryEvent,
     InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,

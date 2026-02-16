@@ -4,6 +4,33 @@ use alloc::vec::Vec;
 use crate::data::Direction;
 use crate::game::{GameInput, GameState, RuntimeEvent, SessionState, TransitionEvent, UiState};
 
+pub trait UiInputEventResolver {
+    fn resolve_input_event(
+        &mut self,
+        event: &RuntimeEvent,
+        game_state: &GameState,
+        session: Option<&SessionState>,
+    ) -> Vec<RuntimeEvent>;
+}
+
+impl UiInputEventResolver for UiState {
+    fn resolve_input_event(
+        &mut self,
+        event: &RuntimeEvent,
+        game_state: &GameState,
+        session: Option<&SessionState>,
+    ) -> Vec<RuntimeEvent> {
+        match event {
+            RuntimeEvent::Tick => resolve(GameInput::Tick, game_state, self, session),
+            RuntimeEvent::KeyDown(key) => {
+                resolve(GameInput::KeyDown(*key), game_state, self, session)
+            }
+            RuntimeEvent::KeyUp(key) => resolve(GameInput::KeyUp(*key), game_state, self, session),
+            _ => Vec::new(),
+        }
+    }
+}
+
 pub fn resolve(
     input: GameInput,
     game_state: &GameState,

@@ -4,6 +4,11 @@ use crate::game::{
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, RuntimeEvent, TileApplyEvent, TileEvent,
 };
 
+pub trait SessionEventApplier {
+    fn handles_event(&self, event: &RuntimeEvent) -> bool;
+    fn apply_runtime_event(&mut self, event: &RuntimeEvent) -> bool;
+}
+
 pub enum DialogActionResult {
     None,
     OpenShop(alloc::string::String),
@@ -62,17 +67,17 @@ impl SessionState {
         }
     }
 
-    pub fn apply_event(&mut self, event: RuntimeEvent) -> bool {
+    pub fn apply_event(&mut self, event: &RuntimeEvent) -> bool {
         match event {
             RuntimeEvent::Combat(event) => match event {
                 crate::game::CombatRuntimeEvent::EnemySpawn(enemy) => {
-                    self.combat.enemies.push(enemy);
+                    self.combat.enemies.push(enemy.clone());
                     false
                 }
                 crate::game::CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
                     self.combat
                         .enemies
-                        .retain(|enemy| enemy.instance_id != enemy_id);
+                        .retain(|enemy| enemy.instance_id != *enemy_id);
                     false
                 }
                 crate::game::CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
@@ -80,10 +85,10 @@ impl SessionState {
                         .combat
                         .enemies
                         .iter_mut()
-                        .find(|enemy| enemy.instance_id == enemy_id)
+                        .find(|enemy| enemy.instance_id == *enemy_id)
                     {
-                        enemy.x = x;
-                        enemy.y = y;
+                        enemy.x = *x;
+                        enemy.y = *y;
                     }
                     false
                 }
@@ -92,9 +97,9 @@ impl SessionState {
                         .combat
                         .enemies
                         .iter_mut()
-                        .find(|enemy| enemy.instance_id == enemy_id)
+                        .find(|enemy| enemy.instance_id == *enemy_id)
                     {
-                        enemy.hp = hp;
+                        enemy.hp = *hp;
                     }
                     false
                 }
@@ -103,9 +108,9 @@ impl SessionState {
                         .combat
                         .enemies
                         .iter_mut()
-                        .find(|enemy| enemy.instance_id == enemy_id)
+                        .find(|enemy| enemy.instance_id == *enemy_id)
                     {
-                        enemy.attack_cooldown = cooldown;
+                        enemy.attack_cooldown = *cooldown;
                     }
                     false
                 }
@@ -117,54 +122,54 @@ impl SessionState {
                         .combat
                         .enemies
                         .iter_mut()
-                        .find(|enemy| enemy.instance_id == enemy_id)
+                        .find(|enemy| enemy.instance_id == *enemy_id)
                     {
-                        enemy.hit_flash = hit_flash;
+                        enemy.hit_flash = *hit_flash;
                     }
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
-                    self.combat.player_attack_cooldown = cooldown;
+                    self.combat.player_attack_cooldown = *cooldown;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
-                    self.combat.player_hit_flash = hit_flash;
+                    self.combat.player_hit_flash = *hit_flash;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
-                    self.combat.skill_effects = skill_effects;
+                    self.combat.skill_effects = skill_effects.clone();
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
-                    self.combat.update_counter = update_counter;
+                    self.combat.update_counter = *update_counter;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
-                    self.combat.respawn_timer = respawn_timer;
+                    self.combat.respawn_timer = *respawn_timer;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
-                    self.combat.next_enemy_instance_id = next_enemy_instance_id;
+                    self.combat.next_enemy_instance_id = *next_enemy_instance_id;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
-                    self.skill_cooldowns = next_skill_cooldowns;
+                    self.skill_cooldowns = *next_skill_cooldowns;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
-                    self.mp_regen_timer = next_mp_regen_timer;
+                    self.mp_regen_timer = *next_mp_regen_timer;
                     false
                 }
                 crate::game::CombatRuntimeEvent::RecoverMp(recover_mp) => {
-                    if recover_mp > 0 {
-                        self.player.stats.recover_mp(recover_mp);
+                    if *recover_mp > 0 {
+                        self.player.stats.recover_mp(*recover_mp);
                     }
                     false
                 }
                 crate::game::CombatRuntimeEvent::TakeDamage(damage_taken) => {
-                    damage_taken > 0
+                    *damage_taken > 0
                         && matches!(
-                            self.player.apply(PlayerAction::TakeDamage(damage_taken)),
+                            self.player.apply(PlayerAction::TakeDamage(*damage_taken)),
                             PlayerEvent::Died
                         )
                 }
@@ -172,7 +177,19 @@ impl SessionState {
             _ => false,
         }
     }
+}
 
+impl SessionEventApplier for SessionState {
+    fn handles_event(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Combat(_))
+    }
+
+    fn apply_runtime_event(&mut self, event: &RuntimeEvent) -> bool {
+        self.apply_event(event)
+    }
+}
+
+impl SessionState {
     pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
         if let Some(map) = data.find_map(&self.player.current_map_id) {
             self.combat.spawn_for_map(map, &data.enemies);

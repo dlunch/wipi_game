@@ -8,8 +8,8 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::Direction;
 use crate::game::{
     AppExploreEvent, AppMovementEvent, GameData, GameInput, GameState, InputKey, MenuAction,
-    MenuEvent, MenuState, RenderState, RuntimeEvent, SessionState, ShopIntent, TransitionEvent,
-    UiState, build_render_state, has_save_data,
+    MenuEvent, MenuState, RenderState, RuntimeEvent, SessionEventApplier, SessionState, ShopIntent,
+    TransitionEvent, UiInputEventResolver, UiState, build_render_state, has_save_data,
 };
 
 pub struct GameEngine {
@@ -17,82 +17,6 @@ pub struct GameEngine {
     data: Rc<GameData>,
     session: Option<SessionState>,
     ui: UiState,
-}
-
-trait EventResolverPlugin {
-    fn handles(&self, event: &RuntimeEvent) -> bool;
-    fn resolve(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>>;
-}
-
-trait EventApplierPlugin {
-    fn handles(&self, event: &RuntimeEvent) -> bool;
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()>;
-}
-
-struct UiInputResolverPlugin;
-struct DomainResolverPlugin;
-struct DomainApplierPlugin;
-
-static UI_INPUT_RESOLVER_PLUGIN: UiInputResolverPlugin = UiInputResolverPlugin;
-static DOMAIN_RESOLVER_PLUGIN: DomainResolverPlugin = DomainResolverPlugin;
-static DOMAIN_APPLIER_PLUGIN: DomainApplierPlugin = DomainApplierPlugin;
-
-impl EventResolverPlugin for UiInputResolverPlugin {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(
-            event,
-            RuntimeEvent::Tick | RuntimeEvent::KeyDown(_) | RuntimeEvent::KeyUp(_)
-        )
-    }
-
-    fn resolve(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
-        Ok(engine.resolve_ui_input_event(event))
-    }
-}
-
-impl EventResolverPlugin for DomainResolverPlugin {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(
-            event,
-            RuntimeEvent::OverlayCloseRequested
-                | RuntimeEvent::GameOverConfirmRequested
-                | RuntimeEvent::ErrorConfirmRequested
-                | RuntimeEvent::UpdateLoading
-                | RuntimeEvent::UpdateMovement
-                | RuntimeEvent::UpdateCombat
-                | RuntimeEvent::MenuInput(_)
-                | RuntimeEvent::ExploreInput(_)
-                | RuntimeEvent::InventoryInput(_)
-                | RuntimeEvent::DialogInput(_)
-                | RuntimeEvent::ShopInput(_)
-                | RuntimeEvent::PauseMenuInput(_)
-                | RuntimeEvent::Dialog(_)
-                | RuntimeEvent::Menu(_)
-                | RuntimeEvent::Explore(_)
-        )
-    }
-
-    fn resolve(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
-        engine.resolve_domain_event(event)
-    }
-}
-
-impl EventApplierPlugin for DomainApplierPlugin {
-    fn handles(&self, _event: &RuntimeEvent) -> bool {
-        true
-    }
-
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
-        engine.apply_domain_event(event)
-    }
-}
-
-fn resolver_plugins() -> [&'static dyn EventResolverPlugin; 2] {
-    [&UI_INPUT_RESOLVER_PLUGIN, &DOMAIN_RESOLVER_PLUGIN]
-}
-
-fn applier_plugins() -> [&'static dyn EventApplierPlugin; 1] {
-    [&DOMAIN_APPLIER_PLUGIN]
 }
 
 impl GameEngine {
@@ -123,27 +47,8 @@ impl GameEngine {
     }
 
     fn resolve_ui_input_event(&mut self, event: &RuntimeEvent) -> Vec<RuntimeEvent> {
-        match event {
-            RuntimeEvent::Tick => crate::game::ui_input::resolve(
-                GameInput::Tick,
-                &self.state,
-                &mut self.ui,
-                self.session.as_ref(),
-            ),
-            RuntimeEvent::KeyDown(key) => crate::game::ui_input::resolve(
-                GameInput::KeyDown(*key),
-                &self.state,
-                &mut self.ui,
-                self.session.as_ref(),
-            ),
-            RuntimeEvent::KeyUp(key) => crate::game::ui_input::resolve(
-                GameInput::KeyUp(*key),
-                &self.state,
-                &mut self.ui,
-                self.session.as_ref(),
-            ),
-            _ => Vec::new(),
-        }
+        self.ui
+            .resolve_input_event(event, &self.state, self.session.as_ref())
     }
 
     fn transition_to(&mut self, next: GameState) {
@@ -194,18 +99,6 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_combat_event(&mut self, event: crate::game::CombatRuntimeEvent) -> Result<()> {
-        let s = self
-            .session
-            .as_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-
-        if s.apply_event(RuntimeEvent::Combat(event)) {
-            self.transition_to(GameState::GameOver);
-        }
-        Ok(())
-    }
-
     fn apply_map_changed(&mut self) -> Result<()> {
         let s = self
             .session
@@ -233,7 +126,7 @@ impl GameEngine {
         self.session = Some(session);
         self.transition_to(state);
         if let Err(e) =
-            self.apply_with_plugins(RuntimeEvent::Transition(TransitionEvent::MapChanged))
+            self.apply_with_handlers(RuntimeEvent::Transition(TransitionEvent::MapChanged))
         {
             self.state = GameState::Error(alloc::format!("{e}"));
             return;
@@ -468,7 +361,7 @@ impl GameEngine {
             RuntimeEvent::Dialog(event) => self.apply_dialog_event(event.clone())?,
             RuntimeEvent::Shop(event) => self.apply_shop_event(event.clone())?,
             RuntimeEvent::PauseMenu(event) => self.apply_pause_menu_event(*event)?,
-            RuntimeEvent::Combat(event) => self.apply_combat_event(event.clone())?,
+            RuntimeEvent::Combat(_) => {}
             RuntimeEvent::CombatPlayerAction(action) => {
                 let s = self
                     .session
@@ -482,21 +375,20 @@ impl GameEngine {
         Ok(())
     }
 
-    fn resolve_with_plugins(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+    fn resolve_with_handlers(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
         let mut derived = Vec::new();
-        for plugin in resolver_plugins() {
-            if plugin.handles(event) {
-                derived.extend(plugin.resolve(self, event)?);
-            }
-        }
+        derived.extend(self.resolve_ui_input_event(event));
+        derived.extend(self.resolve_domain_event(event)?);
         Ok(derived)
     }
 
-    fn apply_with_plugins(&mut self, event: RuntimeEvent) -> Result<()> {
-        for plugin in applier_plugins() {
-            if plugin.handles(&event) {
-                plugin.apply(self, &event)?;
-            }
+    fn apply_with_handlers(&mut self, event: RuntimeEvent) -> Result<()> {
+        self.apply_domain_event(&event)?;
+        if let Some(s) = self.session.as_mut()
+            && s.handles_event(&event)
+            && s.apply_runtime_event(&event)
+        {
+            self.transition_to(GameState::GameOver);
         }
         Ok(())
     }
@@ -515,7 +407,7 @@ impl GameEngine {
                 return;
             }
 
-            let derived = match self.resolve_with_plugins(&event) {
+            let derived = match self.resolve_with_handlers(&event) {
                 Ok(events) => events,
                 Err(e) => {
                     self.state = GameState::Error(alloc::format!("{e}"));
@@ -523,7 +415,7 @@ impl GameEngine {
                 }
             };
 
-            if let Err(e) = self.apply_with_plugins(event) {
+            if let Err(e) = self.apply_with_handlers(event) {
                 self.state = GameState::Error(alloc::format!("{e}"));
                 return;
             }
