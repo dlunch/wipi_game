@@ -1,9 +1,9 @@
 use crate::game::MenuAction;
 use crate::game::selection::{step_down, step_up};
-use anyhow::{Result, anyhow, ensure};
+use anyhow::Result;
 
+use crate::game::RuntimeEvent;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {
@@ -115,77 +115,12 @@ pub fn resolve_pause_many(
     }
 }
 
-struct MenuInputResolver;
-struct PauseMenuInputResolver;
 struct MenuActionCascadeResolver;
 
-static MENU_INPUT_RESOLVER: MenuInputResolver = MenuInputResolver;
-static PAUSE_MENU_INPUT_RESOLVER: PauseMenuInputResolver = PauseMenuInputResolver;
 static MENU_ACTION_CASCADE_RESOLVER: MenuActionCascadeResolver = MenuActionCascadeResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![
-        &MENU_INPUT_RESOLVER,
-        &PAUSE_MENU_INPUT_RESOLVER,
-        &MENU_ACTION_CASCADE_RESOLVER,
-    ]
-}
-
-impl DomainEventResolver for MenuInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::MenuInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::MenuInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Menu),
-            "Invalid state: expected Menu"
-        );
-
-        Ok(
-            resolve_many(ctx.ui.menu.selected, &ctx.ui.menu.state.items, *intent)
-                .into_iter()
-                .map(RuntimeEvent::Menu)
-                .collect(),
-        )
-    }
-}
-
-impl DomainEventResolver for PauseMenuInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::PauseMenuInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::PauseMenuInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::PauseMenu),
-            "Invalid state: expected PauseMenu"
-        );
-        ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        Ok(resolve_pause_many(
-            ctx.ui.pause_menu.selected,
-            ctx.ui.pause_menu.state.items.len(),
-            *intent,
-        )
-        .into_iter()
-        .map(RuntimeEvent::PauseMenu)
-        .collect())
-    }
+    alloc::vec![&MENU_ACTION_CASCADE_RESOLVER]
 }
 
 impl DomainEventResolver for MenuActionCascadeResolver {

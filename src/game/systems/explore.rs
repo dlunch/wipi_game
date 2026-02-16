@@ -1,11 +1,9 @@
 use crate::data::Direction;
-use anyhow::{Result, anyhow, ensure};
+use anyhow::Result;
 
 use crate::game::ExploreAction;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, GameState, RuntimeEvent};
-#[cfg(test)]
-use crate::game::{GameData, PlayerState};
+use crate::game::{AppExploreEvent, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -55,12 +53,10 @@ pub fn resolve_many(is_peaceful: bool, intent: ExploreIntent) -> alloc::vec::Vec
     }
 }
 
-struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
 struct ExplorePauseCascadeResolver;
 struct ExploreMenuCascadeResolver;
 
-static EXPLORE_INPUT_RESOLVER: ExploreInputResolver = ExploreInputResolver;
 static EXPLORE_USE_ACTION_CASCADE_RESOLVER: ExploreUseActionCascadeResolver =
     ExploreUseActionCascadeResolver;
 static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePauseCascadeResolver;
@@ -68,73 +64,10 @@ static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCa
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
-        &EXPLORE_INPUT_RESOLVER,
         &EXPLORE_USE_ACTION_CASCADE_RESOLVER,
         &EXPLORE_PAUSE_CASCADE_RESOLVER,
         &EXPLORE_MENU_CASCADE_RESOLVER,
     ]
-}
-
-impl DomainEventResolver for ExploreInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::ExploreInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::ExploreInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        let is_peaceful = ctx
-            .data()
-            .find_map(&s.player.current_map_id)
-            .is_some_and(|map| map.peaceful);
-
-        let mut events = alloc::vec::Vec::new();
-        for explore_event in resolve_many(is_peaceful, *intent) {
-            match explore_event {
-                ExploreEvent::None => {}
-                ExploreEvent::MoveDirection(direction) => {
-                    events.push(RuntimeEvent::Explore(AppExploreEvent::MoveDirection(
-                        direction,
-                    )));
-                }
-                ExploreEvent::TryNpcInteract {
-                    facing,
-                    fallback_action,
-                } => {
-                    if let Some(npc_event) = crate::game::npc::resolve(
-                        &s.player,
-                        ctx.data(),
-                        crate::game::npc::NpcIntent::Interact { facing },
-                    ) {
-                        events.push(RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)));
-                    } else if let Some(action) = fallback_action {
-                        events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
-                    }
-                }
-                ExploreEvent::UseAction(action) => {
-                    events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
-                }
-                ExploreEvent::EnterPauseMenu => {
-                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu));
-                }
-                ExploreEvent::EnterMenu => {
-                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterMenu));
-                }
-            }
-        }
-        Ok(events)
-    }
 }
 
 impl DomainEventResolver for ExploreUseActionCascadeResolver {
@@ -195,6 +128,7 @@ mod tests {
     use crate::data::{Item, ItemKind, Map, Tile};
     use crate::game::TileEvent;
     use crate::game::state::TileApplyEvent;
+    use crate::game::{GameData, PlayerState};
 
     fn make_test_map(
         id: &str,

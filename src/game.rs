@@ -17,7 +17,8 @@ pub use rendering::{
     draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, render,
 };
 pub use runtime_event::{
-    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, RuntimeEvent, TransitionEvent,
+    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, GameEvent, RuntimeEvent,
+    TransitionEvent, UiEvent,
 };
 pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;
@@ -33,5 +34,6 @@ pub use systems::{
 };
 pub use ui::{
     DialogState, ExploreAction, GameInput, INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction,
-    MenuState, SHOP_VISIBLE_ITEMS, ShopMode, ShopState, UiInputEventResolver, UiState,
+    MenuState, SHOP_VISIBLE_ITEMS, ShopMode, ShopState, UiEventApplier, UiInputEventResolver,
+    UiState,
 };

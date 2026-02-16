@@ -1,8 +1,5 @@
 use crate::data::Item;
-use anyhow::{Result, anyhow, ensure};
-
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameState, RuntimeEvent};
+use crate::game::systems::runtime::DomainEventResolver;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShopIntent {
@@ -45,45 +42,8 @@ pub fn resolve_many(
     }
 }
 
-struct ShopInputResolver;
-
-static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
-
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&SHOP_INPUT_RESOLVER]
-}
-
-impl DomainEventResolver for ShopInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::ShopInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::ShopInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Shop),
-            "Invalid state: expected Shop"
-        );
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let shop_items = ctx
-            .ui
-            .shop
-            .state
-            .as_ref()
-            .map(|state| state.items.as_slice())
-            .unwrap_or(&[]);
-
-        Ok(resolve_many(*intent, s.player.stats.gold, shop_items)
-            .into_iter()
-            .map(RuntimeEvent::Shop)
-            .collect())
-    }
+    alloc::vec::Vec::new()
 }
 
 #[cfg(test)]

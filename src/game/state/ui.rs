@@ -7,11 +7,12 @@ use anyhow::{Result, anyhow};
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
+use crate::game::systems::{dialog, explore, inventory, menu, shop};
 use crate::game::{
     DialogIntent, ExploreIntent, GameState, InventoryIntent, MenuIntent, PauseMenuIntent,
-    PlayerAction, PlayerEvent, RuntimeEvent, SessionState, ShopIntent, TransitionEvent,
-    has_save_data,
+    PlayerAction, PlayerEvent, SessionState, ShopIntent, TransitionEvent, has_save_data,
 };
+use crate::game::{GameEvent, RuntimeEvent, UiEvent};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -50,7 +51,6 @@ impl InputKey {
 
 #[derive(Debug, Clone, Copy)]
 pub enum GameInput {
-    Tick,
     KeyDown(InputKey),
     KeyUp(InputKey),
 }
@@ -71,7 +71,7 @@ pub trait UiInputEventResolver {
         input: GameInput,
         game_state: &GameState,
         session: Option<&SessionState>,
-    ) -> Vec<RuntimeEvent>;
+    ) -> Vec<UiEvent>;
 }
 
 impl UiInputEventResolver for UiState {
@@ -80,8 +80,140 @@ impl UiInputEventResolver for UiState {
         input: GameInput,
         game_state: &GameState,
         session: Option<&SessionState>,
-    ) -> Vec<RuntimeEvent> {
+    ) -> Vec<UiEvent> {
         resolve_input(input, game_state, self, session)
+    }
+}
+
+pub trait UiEventApplier {
+    fn apply_ui_event(
+        &mut self,
+        event: UiEvent,
+        game_state: &GameState,
+        session: Option<&SessionState>,
+        data: &crate::game::GameData,
+    ) -> Vec<GameEvent>;
+}
+
+impl UiEventApplier for UiState {
+    fn apply_ui_event(
+        &mut self,
+        event: UiEvent,
+        game_state: &GameState,
+        session: Option<&SessionState>,
+        data: &crate::game::GameData,
+    ) -> Vec<GameEvent> {
+        match event {
+            UiEvent::OverlayCloseRequested => {
+                alloc::vec![GameEvent::Transition(TransitionEvent::ToExplore)]
+            }
+            UiEvent::GameOverConfirmRequested => {
+                alloc::vec![GameEvent::Transition(TransitionEvent::ToMenuFromGameOver)]
+            }
+            UiEvent::ErrorConfirmRequested => alloc::vec![GameEvent::Exit(1)],
+            UiEvent::MovementKeyReleased(direction) => alloc::vec![GameEvent::Transition(
+                TransitionEvent::ReleaseMovementDirection(direction),
+            )],
+            UiEvent::MenuInput(intent) => {
+                menu::resolve_many(self.menu.selected, &self.menu.state.items, intent)
+                    .into_iter()
+                    .map(GameEvent::Menu)
+                    .collect()
+            }
+            UiEvent::PauseMenuInput(intent) => menu::resolve_pause_many(
+                self.pause_menu.selected,
+                self.pause_menu.state.items.len(),
+                intent,
+            )
+            .into_iter()
+            .map(GameEvent::PauseMenu)
+            .collect(),
+            UiEvent::ExploreInput(intent) => {
+                if !matches!(game_state, GameState::Explore) {
+                    return Vec::new();
+                }
+                let Some(s) = session else {
+                    return Vec::new();
+                };
+                let is_peaceful = data
+                    .find_map(&s.player.current_map_id)
+                    .is_some_and(|map| map.peaceful);
+                let mut events = Vec::new();
+                for explore_event in explore::resolve_many(is_peaceful, intent) {
+                    match explore_event {
+                        explore::ExploreEvent::None => {}
+                        explore::ExploreEvent::MoveDirection(direction) => {
+                            events.push(GameEvent::Explore(
+                                crate::game::AppExploreEvent::MoveDirection(direction),
+                            ));
+                        }
+                        explore::ExploreEvent::TryNpcInteract {
+                            facing,
+                            fallback_action,
+                        } => {
+                            if let Some(npc_event) = crate::game::npc::resolve(
+                                &s.player,
+                                data,
+                                crate::game::npc::NpcIntent::Interact { facing },
+                            ) {
+                                events.push(GameEvent::Explore(crate::game::AppExploreEvent::Npc(
+                                    npc_event,
+                                )));
+                            } else if let Some(action) = fallback_action {
+                                events.push(GameEvent::Explore(
+                                    crate::game::AppExploreEvent::UseAction(action),
+                                ));
+                            }
+                        }
+                        explore::ExploreEvent::UseAction(action) => {
+                            events.push(GameEvent::Explore(
+                                crate::game::AppExploreEvent::UseAction(action),
+                            ));
+                        }
+                        explore::ExploreEvent::EnterPauseMenu => {
+                            events.push(GameEvent::Explore(
+                                crate::game::AppExploreEvent::EnterPauseMenu,
+                            ));
+                        }
+                        explore::ExploreEvent::EnterMenu => {
+                            events
+                                .push(GameEvent::Explore(crate::game::AppExploreEvent::EnterMenu));
+                        }
+                    }
+                }
+                events
+            }
+            UiEvent::InventoryInput(intent) => {
+                let Some(s) = session else {
+                    return Vec::new();
+                };
+                inventory::resolve_many(self.inventory.selected, s.player.inventory.len(), intent)
+                    .into_iter()
+                    .map(GameEvent::Inventory)
+                    .collect()
+            }
+            UiEvent::DialogInput(intent) => {
+                dialog::resolve_many(self.dialog.state.as_ref(), intent)
+                    .into_iter()
+                    .map(GameEvent::Dialog)
+                    .collect()
+            }
+            UiEvent::ShopInput(intent) => {
+                let Some(s) = session else {
+                    return Vec::new();
+                };
+                let shop_items = self
+                    .shop
+                    .state
+                    .as_ref()
+                    .map(|state| state.items.as_slice())
+                    .unwrap_or(&[]);
+                shop::resolve_many(intent, s.player.stats.gold, shop_items)
+                    .into_iter()
+                    .map(GameEvent::Shop)
+                    .collect()
+            }
+        }
     }
 }
 
@@ -90,19 +222,10 @@ fn resolve_input(
     game_state: &GameState,
     ui: &mut UiState,
     session: Option<&SessionState>,
-) -> Vec<RuntimeEvent> {
+) -> Vec<UiEvent> {
     match input {
-        GameInput::Tick => resolve_tick(game_state),
         GameInput::KeyDown(key) => resolve_keydown(key, game_state, ui, session),
         GameInput::KeyUp(key) => resolve_keyup(key, game_state, session),
-    }
-}
-
-fn resolve_tick(game_state: &GameState) -> Vec<RuntimeEvent> {
-    match game_state {
-        GameState::Loading(_) => vec![RuntimeEvent::UpdateLoading],
-        GameState::Explore => vec![RuntimeEvent::UpdateMovement, RuntimeEvent::UpdateCombat],
-        _ => Vec::new(),
     }
 }
 
@@ -111,7 +234,7 @@ fn resolve_keydown(
     game_state: &GameState,
     ui: &mut UiState,
     session: Option<&SessionState>,
-) -> Vec<RuntimeEvent> {
+) -> Vec<UiEvent> {
     match game_state {
         GameState::Loading(_) => Vec::new(),
         GameState::Menu => ui.menu.event_for_key(key).into_iter().collect(),
@@ -124,7 +247,7 @@ fn resolve_keydown(
         GameState::Inventory => ui.inventory.event_for_key(key).into_iter().collect(),
         GameState::Stats | GameState::QuestLog => {
             if matches!(key, InputKey::Back | InputKey::Ok) {
-                vec![RuntimeEvent::OverlayCloseRequested]
+                vec![UiEvent::OverlayCloseRequested]
             } else {
                 Vec::new()
             }
@@ -142,14 +265,14 @@ fn resolve_keydown(
         GameState::PauseMenu => ui.pause_menu.event_for_key(key).into_iter().collect(),
         GameState::GameOver => {
             if matches!(key, InputKey::Ok) {
-                vec![RuntimeEvent::GameOverConfirmRequested]
+                vec![UiEvent::GameOverConfirmRequested]
             } else {
                 Vec::new()
             }
         }
         GameState::Error(_) => {
             if matches!(key, InputKey::Ok) {
-                vec![RuntimeEvent::ErrorConfirmRequested]
+                vec![UiEvent::ErrorConfirmRequested]
             } else {
                 Vec::new()
             }
@@ -161,14 +284,12 @@ fn resolve_keyup(
     key: InputKey,
     game_state: &GameState,
     session: Option<&SessionState>,
-) -> Vec<RuntimeEvent> {
+) -> Vec<UiEvent> {
     if matches!(game_state, GameState::Explore)
         && session.is_some()
         && let Some(direction) = key.direction()
     {
-        vec![RuntimeEvent::Transition(
-            TransitionEvent::ReleaseMovementDirection(direction),
-        )]
+        vec![UiEvent::MovementKeyReleased(direction)]
     } else {
         Vec::new()
     }
@@ -387,10 +508,10 @@ impl Default for ExploreUiState {
 }
 
 impl ExploreUiState {
-    pub fn events_for_key(&self, key: InputKey, facing: Direction) -> Vec<RuntimeEvent> {
+    pub fn events_for_key(&self, key: InputKey, facing: Direction) -> Vec<UiEvent> {
         self.intents_for_key(key, facing)
             .into_iter()
-            .map(RuntimeEvent::ExploreInput)
+            .map(UiEvent::ExploreInput)
             .collect()
     }
 
@@ -446,8 +567,8 @@ impl Default for MenuUiState {
 }
 
 impl MenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
-        self.intent_for_key(key).map(RuntimeEvent::MenuInput)
+    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
+        self.intent_for_key(key).map(UiEvent::MenuInput)
     }
 
     pub fn intent_for_key(&self, key: InputKey) -> Option<MenuIntent> {
@@ -485,8 +606,8 @@ impl Default for PauseMenuUiState {
 }
 
 impl PauseMenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
-        self.intent_for_key(key).map(RuntimeEvent::PauseMenuInput)
+    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
+        self.intent_for_key(key).map(UiEvent::PauseMenuInput)
     }
 
     pub fn intent_for_key(&self, key: InputKey) -> Option<PauseMenuIntent> {
@@ -514,8 +635,8 @@ pub struct InventoryUiState {
 }
 
 impl InventoryUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
-        self.intent_for_key(key).map(RuntimeEvent::InventoryInput)
+    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
+        self.intent_for_key(key).map(UiEvent::InventoryInput)
     }
 
     pub fn intent_for_key(&self, key: InputKey) -> Option<InventoryIntent> {
@@ -562,16 +683,16 @@ impl Default for ShopUiState {
 }
 
 impl ShopUiState {
-    pub fn event_for_key(&mut self, key: InputKey, inventory_len: usize) -> Option<RuntimeEvent> {
+    pub fn event_for_key(&mut self, key: InputKey, inventory_len: usize) -> Option<UiEvent> {
         self.handle_key(key, inventory_len)
             .map(|ui_intent| match ui_intent {
                 ShopUiIntent::BuySelected(selected) => {
-                    RuntimeEvent::ShopInput(ShopIntent::BuySelected(selected))
+                    UiEvent::ShopInput(ShopIntent::BuySelected(selected))
                 }
                 ShopUiIntent::SellSelected(selected) => {
-                    RuntimeEvent::ShopInput(ShopIntent::SellSelected(selected))
+                    UiEvent::ShopInput(ShopIntent::SellSelected(selected))
                 }
-                ShopUiIntent::Close => RuntimeEvent::ShopInput(ShopIntent::Close),
+                ShopUiIntent::Close => UiEvent::ShopInput(ShopIntent::Close),
             })
     }
 
@@ -662,8 +783,8 @@ pub struct DialogUiState {
 }
 
 impl DialogUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
-        self.intent_for_key(key).map(RuntimeEvent::DialogInput)
+    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
+        self.intent_for_key(key).map(UiEvent::DialogInput)
     }
 
     pub fn intent_for_key(&self, key: InputKey) -> Option<DialogIntent> {

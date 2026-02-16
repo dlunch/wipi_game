@@ -1,8 +1,5 @@
 use crate::game::selection::{step_down, step_up};
-use anyhow::{Result, anyhow, ensure};
-
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameState, RuntimeEvent};
+use crate::game::systems::runtime::DomainEventResolver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InventoryIntent {
@@ -54,40 +51,8 @@ pub fn resolve_many(
     }
 }
 
-struct InventoryInputResolver;
-
-static INVENTORY_INPUT_RESOLVER: InventoryInputResolver = InventoryInputResolver;
-
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&INVENTORY_INPUT_RESOLVER]
-}
-
-impl DomainEventResolver for InventoryInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::InventoryInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::InventoryInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Inventory),
-            "Invalid state: expected Inventory"
-        );
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        Ok(
-            resolve_many(ctx.ui.inventory.selected, s.player.inventory.len(), *intent)
-                .into_iter()
-                .map(RuntimeEvent::Inventory)
-                .collect(),
-        )
-    }
+    alloc::vec::Vec::new()
 }
 
 #[cfg(test)]

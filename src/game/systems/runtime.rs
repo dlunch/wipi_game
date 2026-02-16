@@ -9,7 +9,6 @@ pub struct ResolveContext<'a> {
     pub state: &'a GameState,
     pub data: &'a mut Rc<GameData>,
     pub session: Option<&'a SessionState>,
-    pub ui: &'a UiState,
 }
 
 impl<'a> ResolveContext<'a> {

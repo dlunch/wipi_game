@@ -25,19 +25,10 @@ pub enum CombatRuntimeEvent {
     TakeDamage(i32),
 }
 
-pub enum RuntimeEvent {
-    OverlayCloseRequested,
-    GameOverConfirmRequested,
-    ErrorConfirmRequested,
+pub enum GameEvent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    MenuInput(MenuIntent),
-    ExploreInput(ExploreIntent),
-    InventoryInput(InventoryIntent),
-    DialogInput(DialogIntent),
-    ShopInput(ShopIntent),
-    PauseMenuInput(PauseMenuIntent),
     StartNewGame,
     ContinueGame,
     OpenPauseMenu,
@@ -60,6 +51,21 @@ pub enum RuntimeEvent {
     Transition(TransitionEvent),
     Exit(i32),
 }
+
+pub enum UiEvent {
+    OverlayCloseRequested,
+    GameOverConfirmRequested,
+    ErrorConfirmRequested,
+    MovementKeyReleased(Direction),
+    MenuInput(MenuIntent),
+    ExploreInput(ExploreIntent),
+    InventoryInput(InventoryIntent),
+    DialogInput(DialogIntent),
+    ShopInput(ShopIntent),
+    PauseMenuInput(PauseMenuIntent),
+}
+
+pub type RuntimeEvent = GameEvent;
 
 #[derive(Clone, Copy)]
 pub enum TransitionEvent {

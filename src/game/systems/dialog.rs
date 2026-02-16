@@ -1,9 +1,9 @@
 use crate::data::DialogAction;
-use anyhow::{Result, anyhow, ensure};
+use anyhow::Result;
 
 use crate::game::DialogState;
+use crate::game::RuntimeEvent;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -67,40 +67,12 @@ pub fn resolve_many(
     }
 }
 
-struct DialogInputResolver;
 struct DialogCascadeResolver;
 
-static DIALOG_INPUT_RESOLVER: DialogInputResolver = DialogInputResolver;
 static DIALOG_CASCADE_RESOLVER: DialogCascadeResolver = DialogCascadeResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
-}
-
-impl DomainEventResolver for DialogInputResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::DialogInput(_))
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::DialogInput(intent) = event else {
-            return Ok(alloc::vec::Vec::new());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Dialog),
-            "Invalid state: expected Dialog"
-        );
-        ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        Ok(resolve_many(ctx.ui.dialog.state.as_ref(), *intent)
-            .into_iter()
-            .map(RuntimeEvent::Dialog)
-            .collect())
-    }
+    alloc::vec![&DIALOG_CASCADE_RESOLVER]
 }
 
 impl DomainEventResolver for DialogCascadeResolver {

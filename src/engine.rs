@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    ApplyContext, GameData, GameInput, GameState, InputKey, RenderState, ResolveContext,
-    RuntimeEvent, SessionState, UiInputEventResolver, UiState, build_render_state, domain_appliers,
-    domain_resolvers,
+    ApplyContext, GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext,
+    SessionState, UiEventApplier, UiInputEventResolver, UiState, build_render_state,
+    domain_appliers, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -28,13 +28,15 @@ impl GameEngine {
     }
 
     pub fn on_keydown(&mut self, key: InputKey) {
-        let initial = self.resolve_ui_input_event(GameInput::KeyDown(key));
-        self.dispatch_all(initial);
+        let ui_events = self.resolve_ui_input_event(GameInput::KeyDown(key));
+        let initial = self.apply_ui_events(ui_events);
+        self.dispatch_game_events(initial);
     }
 
     pub fn on_keyup(&mut self, key: InputKey) {
-        let initial = self.resolve_ui_input_event(GameInput::KeyUp(key));
-        self.dispatch_all(initial);
+        let ui_events = self.resolve_ui_input_event(GameInput::KeyUp(key));
+        let initial = self.apply_ui_events(ui_events);
+        self.dispatch_game_events(initial);
     }
 
     pub fn tick_and_build_render_state(&mut self) -> RenderState {
@@ -43,16 +45,37 @@ impl GameEngine {
     }
 
     fn update(&mut self) {
-        let initial = self.resolve_ui_input_event(GameInput::Tick);
-        self.dispatch_all(initial);
+        let initial = self.resolve_tick_game_events();
+        self.dispatch_game_events(initial);
     }
 
-    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<RuntimeEvent> {
+    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<crate::game::UiEvent> {
         self.ui
             .resolve_input(input, &self.state, self.session.as_ref())
     }
 
-    fn resolve_with_handlers(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+    fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
+        match self.state {
+            GameState::Loading(_) => alloc::vec![GameEvent::UpdateLoading],
+            GameState::Explore => alloc::vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
+            _ => Vec::new(),
+        }
+    }
+
+    fn apply_ui_events(&mut self, ui_events: Vec<crate::game::UiEvent>) -> Vec<GameEvent> {
+        let mut out = Vec::new();
+        for event in ui_events {
+            out.extend(self.ui.apply_ui_event(
+                event,
+                &self.state,
+                self.session.as_ref(),
+                &self.data,
+            ));
+        }
+        out
+    }
+
+    fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let mut derived = Vec::new();
         for resolver in domain_resolvers() {
             if resolver.handles(event) {
@@ -60,7 +83,6 @@ impl GameEngine {
                     state: &self.state,
                     data: &mut self.data,
                     session: self.session.as_ref(),
-                    ui: &self.ui,
                 };
                 derived.extend(resolver.resolve(&mut ctx, event)?);
             }
@@ -68,7 +90,7 @@ impl GameEngine {
         Ok(derived)
     }
 
-    fn apply_with_handlers(&mut self, event: RuntimeEvent) -> Result<()> {
+    fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
         let mut ctx = ApplyContext {
             state: &mut self.state,
             data: &self.data,
@@ -83,12 +105,12 @@ impl GameEngine {
         Ok(())
     }
 
-    fn dispatch_all(&mut self, initial_events: Vec<RuntimeEvent>) {
+    fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) {
         if initial_events.is_empty() {
             return;
         }
 
-        let mut queue: VecDeque<RuntimeEvent> = initial_events.into();
+        let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
 
         while let Some(event) = queue.pop_front() {
