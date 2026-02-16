@@ -12,7 +12,7 @@ use crate::game::{
     MovementTickEvent, TileEvent, TransitionEvent,
 };
 
-const MOVE_COOLDOWN: u32 = 5;
+const MOVE_COOLDOWN: u32 = 2;
 
 pub struct MovementUpdateResult {
     pub movement_event: MovementTickEvent,
