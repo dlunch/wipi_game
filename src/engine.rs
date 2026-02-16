@@ -46,102 +46,27 @@ impl GameEngine {
         self.dispatch(RuntimeEvent::from(GameInput::Tick));
     }
 
-    fn collect_tick_events(&self) -> Vec<RuntimeEvent> {
-        match self.state {
-            GameState::Loading(_) => vec![RuntimeEvent::UpdateLoading],
-            GameState::Explore => vec![RuntimeEvent::UpdateMovement, RuntimeEvent::UpdateCombat],
+    fn resolve_ui_input_event(&mut self, event: &RuntimeEvent) -> Vec<RuntimeEvent> {
+        match event {
+            RuntimeEvent::Tick => crate::game::ui_input::resolve(
+                GameInput::Tick,
+                &self.state,
+                &mut self.ui,
+                self.session.as_ref(),
+            ),
+            RuntimeEvent::KeyDown(key) => crate::game::ui_input::resolve(
+                GameInput::KeyDown(*key),
+                &self.state,
+                &mut self.ui,
+                self.session.as_ref(),
+            ),
+            RuntimeEvent::KeyUp(key) => crate::game::ui_input::resolve(
+                GameInput::KeyUp(*key),
+                &self.state,
+                &mut self.ui,
+                self.session.as_ref(),
+            ),
             _ => Vec::new(),
-        }
-    }
-
-    fn collect_keydown_events(&mut self, key: InputKey) -> Vec<RuntimeEvent> {
-        match self.state {
-            GameState::Loading(_) => Vec::new(),
-            GameState::Menu => self.collect_menu_keydown_events(key),
-            GameState::Explore => self.collect_explore_keydown_events(key),
-            GameState::Inventory => self.collect_inventory_keydown_events(key),
-            GameState::Stats | GameState::QuestLog => self.collect_overlay_keydown_events(key),
-            GameState::Dialog => self.collect_dialog_keydown_events(key),
-            GameState::Shop => self.collect_shop_keydown_events(key),
-            GameState::PauseMenu => self.collect_pause_menu_keydown_events(key),
-            GameState::GameOver => self.collect_game_over_keydown_events(key),
-            GameState::Error(_) => self.collect_error_keydown_events(key),
-        }
-    }
-
-    fn collect_keyup_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        if matches!(self.state, GameState::Explore)
-            && self.session.is_some()
-            && let Some(direction) = key.direction()
-        {
-            vec![RuntimeEvent::Transition(
-                TransitionEvent::ReleaseMovementDirection(direction),
-            )]
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn collect_menu_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        self.ui.menu.event_for_key(key).into_iter().collect()
-    }
-
-    fn collect_explore_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        let facing = self
-            .session
-            .as_ref()
-            .map(|s| s.player.facing)
-            .unwrap_or(Direction::Down);
-        self.ui.explore.events_for_key(key, facing)
-    }
-
-    fn collect_inventory_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        self.ui.inventory.event_for_key(key).into_iter().collect()
-    }
-
-    fn collect_overlay_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        if matches!(key, InputKey::Back | InputKey::Ok) {
-            vec![RuntimeEvent::OverlayCloseRequested]
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn collect_dialog_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        self.ui.dialog.event_for_key(key).into_iter().collect()
-    }
-
-    fn collect_shop_keydown_events(&mut self, key: InputKey) -> Vec<RuntimeEvent> {
-        let inventory_len = self
-            .session
-            .as_ref()
-            .map(|s| s.player.inventory.len())
-            .unwrap_or(0);
-
-        self.ui
-            .shop
-            .event_for_key(key, inventory_len)
-            .into_iter()
-            .collect()
-    }
-
-    fn collect_pause_menu_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        self.ui.pause_menu.event_for_key(key).into_iter().collect()
-    }
-
-    fn collect_game_over_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        if matches!(key, InputKey::Ok) {
-            vec![RuntimeEvent::GameOverConfirmRequested]
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn collect_error_keydown_events(&self, key: InputKey) -> Vec<RuntimeEvent> {
-        if matches!(key, InputKey::Ok) {
-            vec![RuntimeEvent::ErrorConfirmRequested]
-        } else {
-            Vec::new()
         }
     }
 
@@ -253,9 +178,9 @@ impl GameEngine {
 
     fn resolve_event(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
         match event {
-            RuntimeEvent::Tick => Ok(self.collect_tick_events()),
-            RuntimeEvent::KeyDown(key) => Ok(self.collect_keydown_events(*key)),
-            RuntimeEvent::KeyUp(key) => Ok(self.collect_keyup_events(*key)),
+            RuntimeEvent::Tick | RuntimeEvent::KeyDown(_) | RuntimeEvent::KeyUp(_) => {
+                Ok(self.resolve_ui_input_event(event))
+            }
             RuntimeEvent::OverlayCloseRequested => {
                 Ok(vec![RuntimeEvent::Transition(TransitionEvent::ToExplore)])
             }

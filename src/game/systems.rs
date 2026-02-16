@@ -7,6 +7,7 @@ pub mod menu;
 pub mod movement;
 pub mod npc;
 pub mod shop;
+pub mod ui_input;
 
 pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
 pub use explore::{ExploreEvent, ExploreIntent};
