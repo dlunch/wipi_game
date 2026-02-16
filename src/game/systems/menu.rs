@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::GameEvent;
@@ -44,11 +46,7 @@ impl DomainEventResolver for MenuInputResolver {
         matches!(event, GameEvent::MenuInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::MenuInput(key) = event else {
             return Err(anyhow!("Invalid event: expected MenuInput"));
         };
@@ -98,11 +96,7 @@ impl DomainEventResolver for PauseMenuInputResolver {
         matches!(event, GameEvent::PauseMenuInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::PauseMenuInput(key) = event else {
             return Err(anyhow!("Invalid event: expected PauseMenuInput"));
         };
@@ -153,11 +147,7 @@ impl DomainEventResolver for MenuActionCascadeResolver {
         matches!(event, GameEvent::Menu(MenuEvent::Action(_)))
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::Menu(MenuEvent::Action(action)) = event else {
             return Err(anyhow!("Invalid event: expected Menu(Action)"));
         };

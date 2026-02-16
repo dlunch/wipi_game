@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 
-use anyhow::{anyhow, ensure};
+use anyhow::{Result, anyhow, ensure};
 
 use crate::data::Item;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
@@ -28,11 +29,7 @@ impl DomainEventResolver for ShopInputResolver {
         matches!(event, GameEvent::ShopInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::ShopInput(input) = event else {
             return Err(anyhow!("Invalid event: expected ShopInput"));
         };
@@ -78,11 +75,7 @@ impl DomainEventResolver for OpenShopByIdResolver {
         matches!(event, GameEvent::OpenShopById(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::OpenShopById(shop_id) = event else {
             return Err(anyhow!("Invalid event: expected OpenShopById"));
         };

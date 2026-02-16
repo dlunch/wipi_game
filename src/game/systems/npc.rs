@@ -118,11 +118,7 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
         )
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract {
             facing,
             fallback_action,
@@ -164,11 +160,7 @@ impl DomainEventResolver for ExploreNpcCascadeResolver {
         )
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(Npc)"));
         };

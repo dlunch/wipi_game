@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
@@ -33,11 +35,7 @@ impl DomainEventResolver for DialogInputResolver {
         matches!(event, GameEvent::DialogInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::DialogInput(key) = event else {
             return Err(anyhow!("Invalid event: expected DialogInput"));
         };
@@ -91,11 +89,7 @@ impl DomainEventResolver for DialogCascadeResolver {
         matches!(event, GameEvent::Dialog(_))
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::Dialog(dialog_event) = event else {
             return Err(anyhow!("Invalid event: expected Dialog"));
         };

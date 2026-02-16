@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
@@ -28,11 +30,7 @@ impl DomainEventResolver for ExploreInputResolver {
         matches!(event, GameEvent::ExploreInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::ExploreInput(key) = event else {
             return Err(anyhow!("Invalid event: expected ExploreInput"));
         };
@@ -57,11 +55,7 @@ impl DomainEventResolver for ExploreUseActionCascadeResolver {
         matches!(event, GameEvent::Explore(AppExploreEvent::UseAction(_)))
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(UseAction)"));
         };
@@ -74,11 +68,7 @@ impl DomainEventResolver for ExplorePauseCascadeResolver {
         matches!(event, GameEvent::Explore(AppExploreEvent::EnterPauseMenu))
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        _event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
         Ok(alloc::vec![GameEvent::OpenPauseMenu])
     }
 }
@@ -88,11 +78,7 @@ impl DomainEventResolver for ExploreMenuCascadeResolver {
         matches!(event, GameEvent::Explore(AppExploreEvent::EnterMenu))
     }
 
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        _event: &GameEvent,
-    ) -> Result<alloc::vec::Vec<GameEvent>> {
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
         Ok(alloc::vec![GameEvent::OpenMenuFromExplore])
     }
 }

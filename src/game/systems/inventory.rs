@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use anyhow::{anyhow, ensure};
 
 use crate::game::selection::{step_down, step_up};
@@ -29,7 +31,7 @@ impl DomainEventResolver for InventoryInputResolver {
         &self,
         ctx: &mut ResolveContext<'_>,
         event: &GameEvent,
-    ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
+    ) -> anyhow::Result<Vec<GameEvent>> {
         let GameEvent::InventoryInput(key) = event else {
             return Err(anyhow!("Invalid event: expected InventoryInput"));
         };
