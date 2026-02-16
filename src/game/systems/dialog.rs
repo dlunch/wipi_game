@@ -123,10 +123,16 @@ impl DomainEventResolver for DialogCascadeResolver {
                     *transition
                 )])
             }
-            DialogEvent::Action(action, transition) => Ok(alloc::vec![
-                RuntimeEvent::ApplyDialogAction(action.clone()),
-                RuntimeEvent::ApplyDialogTransition(*transition),
-            ]),
+            DialogEvent::Action(action, transition) => {
+                let mut events = alloc::vec![RuntimeEvent::ApplyDialogTransition(*transition)];
+                match action {
+                    DialogAction::OpenShop(shop_id) => {
+                        events.push(RuntimeEvent::OpenShopById(shop_id.clone()));
+                    }
+                    _ => events.push(RuntimeEvent::ApplyDialogAction(action.clone())),
+                }
+                Ok(events)
+            }
         }
     }
 }

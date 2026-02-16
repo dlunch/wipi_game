@@ -13,11 +13,6 @@ pub trait SessionEventApplier {
     fn apply_runtime_event(&mut self, event: &RuntimeEvent) -> bool;
 }
 
-pub enum DialogActionResult {
-    None,
-    OpenShop(alloc::string::String),
-}
-
 pub struct SessionState {
     pub player: PlayerState,
     pub combat: CombatState,
@@ -249,11 +244,7 @@ impl SessionState {
         }
     }
 
-    pub fn apply_dialog_action(
-        &mut self,
-        data: &GameData,
-        action: &crate::data::DialogAction,
-    ) -> DialogActionResult {
+    pub fn apply_dialog_action(&mut self, data: &GameData, action: &crate::data::DialogAction) {
         match action {
             crate::data::DialogAction::GiveQuest(id) => {
                 if !self.player.quests.iter().any(|q| q.quest_id == *id) {
@@ -304,33 +295,21 @@ impl SessionState {
             crate::data::DialogAction::TakeGold(amount) => {
                 let _ = self.player.apply(PlayerAction::AddGold(-*amount));
             }
-            crate::data::DialogAction::OpenShop(shop_id) => {
-                return DialogActionResult::OpenShop(shop_id.clone());
-            }
+            crate::data::DialogAction::OpenShop(_) => {}
             crate::data::DialogAction::Heal => {
                 self.player.stats.current_hp = self.player.stats.max_hp;
                 self.player.stats.current_mp = self.player.stats.max_mp;
             }
         }
-
-        DialogActionResult::None
     }
 }
 
-#[derive(Clone)]
-struct IntroDialogSpec {
-    dialog_id: alloc::string::String,
-    npc_name: alloc::string::String,
-}
-
 struct SessionLifecycleApplier;
-struct SessionDialogApplier;
 
 static SESSION_LIFECYCLE_APPLIER: SessionLifecycleApplier = SessionLifecycleApplier;
-static SESSION_DIALOG_APPLIER: SessionDialogApplier = SessionDialogApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&SESSION_LIFECYCLE_APPLIER, &SESSION_DIALOG_APPLIER]
+    alloc::vec![&SESSION_LIFECYCLE_APPLIER]
 }
 
 impl DomainEventApplier for SessionLifecycleApplier {
@@ -340,6 +319,7 @@ impl DomainEventApplier for SessionLifecycleApplier {
             RuntimeEvent::StartNewGame
                 | RuntimeEvent::ContinueGame
                 | RuntimeEvent::RestoreSessionStats
+                | RuntimeEvent::ApplyDialogAction(_)
                 | RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
         )
     }
@@ -347,18 +327,25 @@ impl DomainEventApplier for SessionLifecycleApplier {
     fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         match event {
             RuntimeEvent::StartNewGame => {
-                let (state, session, intro) = start_new_game(ctx.data);
-                enter_session(ctx, state, session, intro);
+                let (state, session) = start_new_game(ctx.data);
+                enter_session(ctx, state, session);
             }
             RuntimeEvent::ContinueGame => {
-                let (state, session, intro) = continue_game(ctx.data);
-                enter_session(ctx, state, session, intro);
+                let (state, session) = continue_game(ctx.data);
+                enter_session(ctx, state, session);
             }
             RuntimeEvent::RestoreSessionStats => {
                 let s = ctx
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;
                 s.restore_stats();
+            }
+            RuntimeEvent::ApplyDialogAction(action) => {
+                let data = ctx.data_rc();
+                let s = ctx
+                    .session_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.apply_dialog_action(&data, action);
             }
             RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
                 let data = ctx.data_rc();
@@ -373,40 +360,7 @@ impl DomainEventApplier for SessionLifecycleApplier {
     }
 }
 
-impl DomainEventApplier for SessionDialogApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::ApplyDialogAction(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::ApplyDialogAction(action) = event else {
-            return Ok(());
-        };
-        let open_shop = {
-            let data = ctx.data_rc();
-            let s = ctx
-                .session_mut()
-                .ok_or_else(|| anyhow!("No active session"))?;
-            if let DialogActionResult::OpenShop(shop_id) = s.apply_dialog_action(&data, action) {
-                Some(shop_id)
-            } else {
-                None
-            }
-        };
-        if let Some(shop_id) = open_shop {
-            let _ = ctx.open_shop_by_id(&shop_id);
-        }
-        Ok(())
-    }
-}
-
-fn start_new_game(
-    data: &GameData,
-) -> (
-    crate::game::GameState,
-    SessionState,
-    Option<IntroDialogSpec>,
-) {
+fn start_new_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();
@@ -440,18 +394,15 @@ fn start_new_game(
         player.y = y;
     }
 
-    let (state, dialog_state) = if let Some((ref dialog_id, ref npc_name)) = config.intro_dialog
-        && let Some(dialog) = data.find_dialog(dialog_id)
+    let state = if config
+        .intro_dialog
+        .as_ref()
+        .and_then(|(dialog_id, _)| data.find_dialog(dialog_id))
+        .is_some()
     {
-        (
-            crate::game::GameState::Dialog,
-            Some(IntroDialogSpec {
-                dialog_id: dialog.id.clone(),
-                npc_name: npc_name.clone(),
-            }),
-        )
+        crate::game::GameState::Dialog
     } else {
-        (crate::game::GameState::Explore, None)
+        crate::game::GameState::Explore
     };
 
     let session = SessionState {
@@ -462,16 +413,10 @@ fn start_new_game(
         mp_regen_timer: 0,
     };
 
-    (state, session, dialog_state)
+    (state, session)
 }
 
-fn continue_game(
-    data: &GameData,
-) -> (
-    crate::game::GameState,
-    SessionState,
-    Option<IntroDialogSpec>,
-) {
+fn continue_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();
@@ -502,34 +447,17 @@ fn continue_game(
                 mp_regen_timer: 0,
             };
 
-            (crate::game::GameState::Explore, session, None)
+            (crate::game::GameState::Explore, session)
         }
         Ok(false) | Err(_) => start_new_game(data),
     }
 }
 
-fn dialog_state_from_intro(
-    data: &GameData,
-    intro: Option<IntroDialogSpec>,
-) -> Option<crate::game::DialogState> {
-    let spec = intro?;
-    let dialog = data.find_dialog(&spec.dialog_id)?;
-    Some(crate::game::DialogState::from_dialog(spec.npc_name, dialog))
-}
-
-fn enter_session(
-    ctx: &mut ApplyContext<'_>,
-    state: crate::game::GameState,
-    session: SessionState,
-    intro: Option<IntroDialogSpec>,
-) {
+fn enter_session(ctx: &mut ApplyContext<'_>, state: crate::game::GameState, session: SessionState) {
     *ctx.session = Some(session);
     ctx.transition_to(state);
 
     if let Some(s) = ctx.session.as_mut() {
         s.spawn_current_map_enemies(ctx.data);
     }
-
-    *ctx.ui = crate::game::UiState::default();
-    ctx.ui.dialog.set(dialog_state_from_intro(ctx.data, intro));
 }

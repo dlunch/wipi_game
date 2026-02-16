@@ -157,6 +157,8 @@ impl DomainEventApplier for UiDomainApplier {
             event,
             RuntimeEvent::Menu(_)
                 | RuntimeEvent::PauseMenu(_)
+                | RuntimeEvent::StartNewGame
+                | RuntimeEvent::ContinueGame
                 | RuntimeEvent::OpenPauseMenu
                 | RuntimeEvent::OpenMenuFromExplore
                 | RuntimeEvent::Explore(_)
@@ -171,6 +173,14 @@ impl DomainEventApplier for UiDomainApplier {
 
     fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         match event {
+            RuntimeEvent::StartNewGame | RuntimeEvent::ContinueGame => {
+                *ctx.ui = UiState::default();
+                if matches!(ctx.state, GameState::Dialog)
+                    && let Some(dialog_state) = intro_dialog_state(ctx.data)
+                {
+                    ctx.ui.dialog.set(Some(dialog_state));
+                }
+            }
             RuntimeEvent::Menu(event) => match event {
                 crate::game::MenuEvent::None => {}
                 crate::game::MenuEvent::SetSelected(selected) => {
@@ -282,6 +292,12 @@ impl DomainEventApplier for UiDomainApplier {
         }
         Ok(())
     }
+}
+
+fn intro_dialog_state(data: &crate::game::GameData) -> Option<DialogState> {
+    let (dialog_id, npc_name) = data.newgame.intro_dialog.as_ref()?;
+    let dialog = data.find_dialog(dialog_id)?;
+    Some(DialogState::from_dialog(npc_name.clone(), dialog))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
