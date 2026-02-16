@@ -7,12 +7,14 @@ pub enum DialogIntent {
     Back,
 }
 
+#[derive(Debug, Clone)]
 pub enum DialogEvent {
     None,
     Transition(DialogTransition),
     Action(DialogAction, DialogTransition),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum DialogTransition {
     SetLine(usize),
     CloseToExplore,

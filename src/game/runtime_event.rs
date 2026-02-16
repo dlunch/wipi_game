@@ -4,6 +4,7 @@ use crate::game::{
     DialogIntent, ExploreIntent, GameInput, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
     ShopIntent,
 };
+use alloc::string::String;
 
 pub enum CombatRuntimeEvent {
     EnemySpawn(FieldEnemy),
@@ -40,6 +41,15 @@ pub enum RuntimeEvent {
     DialogInput(DialogIntent),
     ShopInput(ShopIntent),
     PauseMenuInput(PauseMenuIntent),
+    StartNewGame,
+    ContinueGame,
+    OpenPauseMenu,
+    OpenMenuFromExplore,
+    OpenDialogState(crate::game::DialogState),
+    OpenShopById(String),
+    RestoreSessionStats,
+    ApplyDialogAction(crate::data::DialogAction),
+    ApplyDialogTransition(crate::game::DialogTransition),
     CombatPlayerAction(crate::game::ExploreAction),
     Loading(crate::game::LoadingEvent),
     Movement(AppMovementEvent),

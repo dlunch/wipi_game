@@ -272,8 +272,48 @@ impl GameEngine {
             RuntimeEvent::DialogInput(intent) => self.resolve_dialog_input(*intent),
             RuntimeEvent::ShopInput(intent) => self.resolve_shop_input(*intent),
             RuntimeEvent::PauseMenuInput(intent) => self.resolve_pause_menu_input(*intent),
+            RuntimeEvent::Dialog(dialog_event) => match dialog_event {
+                crate::game::DialogEvent::None => Ok(Vec::new()),
+                crate::game::DialogEvent::Transition(transition) => {
+                    Ok(vec![RuntimeEvent::ApplyDialogTransition(*transition)])
+                }
+                crate::game::DialogEvent::Action(action, transition) => Ok(vec![
+                    RuntimeEvent::ApplyDialogAction(action.clone()),
+                    RuntimeEvent::ApplyDialogTransition(*transition),
+                ]),
+            },
+            RuntimeEvent::Menu(MenuEvent::Action(action)) => match action {
+                MenuAction::NewGame => Ok(vec![RuntimeEvent::StartNewGame]),
+                MenuAction::Continue => Ok(vec![RuntimeEvent::ContinueGame]),
+                MenuAction::Exit => Ok(vec![RuntimeEvent::Exit(0)]),
+            },
+            RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)) => match npc_event {
+                crate::game::NpcEvent::OpenDialog(dialog_spec) => {
+                    let mut events = Vec::with_capacity(2);
+                    if dialog_spec.restore {
+                        events.push(RuntimeEvent::RestoreSessionStats);
+                    }
+                    events.push(RuntimeEvent::OpenDialogState(
+                        crate::game::DialogState::new(
+                            dialog_spec.npc_name.clone(),
+                            dialog_spec.lines.clone(),
+                        ),
+                    ));
+                    Ok(events)
+                }
+                crate::game::NpcEvent::OpenShop(shop_id) => {
+                    Ok(vec![RuntimeEvent::OpenShopById(shop_id.clone())])
+                }
+                crate::game::NpcEvent::RestoreStats => Ok(vec![RuntimeEvent::RestoreSessionStats]),
+            },
             RuntimeEvent::Explore(AppExploreEvent::UseAction(action)) => {
                 Ok(vec![RuntimeEvent::CombatPlayerAction(*action)])
+            }
+            RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu) => {
+                Ok(vec![RuntimeEvent::OpenPauseMenu])
+            }
+            RuntimeEvent::Explore(AppExploreEvent::EnterMenu) => {
+                Ok(vec![RuntimeEvent::OpenMenuFromExplore])
             }
             _ => Ok(Vec::new()),
         }
@@ -359,6 +399,64 @@ impl GameEngine {
             | RuntimeEvent::DialogInput(_)
             | RuntimeEvent::ShopInput(_)
             | RuntimeEvent::PauseMenuInput(_) => {}
+            RuntimeEvent::StartNewGame => {
+                let (state, session, intro) = crate::game::lifecycle::start_new_game(&self.data);
+                self.enter_session(state, session, intro);
+            }
+            RuntimeEvent::ContinueGame => {
+                let (state, session, intro) = crate::game::lifecycle::continue_game(&self.data);
+                self.enter_session(state, session, intro);
+            }
+            RuntimeEvent::OpenPauseMenu => {
+                self.ui.pause_menu.reset();
+                self.transition_to(GameState::PauseMenu);
+            }
+            RuntimeEvent::OpenMenuFromExplore => {
+                let s = self
+                    .session
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                let _ = crate::game::save_game(&s.player);
+                self.ui.menu.set_menu(MenuState::new(has_save_data()));
+                self.transition_to(GameState::Menu);
+            }
+            RuntimeEvent::OpenDialogState(dialog_state) => {
+                self.ui.dialog.open(dialog_state);
+                self.transition_to(GameState::Dialog);
+            }
+            RuntimeEvent::OpenShopById(shop_id) => {
+                let _ = self.open_shop_by_id(&shop_id);
+            }
+            RuntimeEvent::RestoreSessionStats => {
+                let s = self
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.restore_stats();
+            }
+            RuntimeEvent::ApplyDialogAction(action) => {
+                let s = self
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                if let crate::game::DialogActionResult::OpenShop(shop_id) =
+                    s.apply_dialog_action(&self.data, &action)
+                {
+                    let _ = self.open_shop_by_id(&shop_id);
+                }
+            }
+            RuntimeEvent::ApplyDialogTransition(transition) => match transition {
+                crate::game::DialogTransition::SetLine(line) => {
+                    if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
+                        dialog_state.current_line = line;
+                    }
+                    self.transition_to(GameState::Dialog);
+                }
+                crate::game::DialogTransition::CloseToExplore => {
+                    self.ui.dialog.close();
+                    self.transition_to(GameState::Explore);
+                }
+            },
             RuntimeEvent::Loading(event) => self.apply_update_loading(event),
             RuntimeEvent::Movement(event) => self.apply_update_movement(event)?,
             RuntimeEvent::Menu(event) => self.apply_menu_event(event)?,
@@ -576,18 +674,7 @@ impl GameEngine {
         match event {
             MenuEvent::None => {}
             MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
-            MenuEvent::Action(action) => match action {
-                MenuAction::NewGame => {
-                    let (state, session, intro) =
-                        crate::game::lifecycle::start_new_game(&self.data);
-                    self.enter_session(state, session, intro);
-                }
-                MenuAction::Continue => {
-                    let (state, session, intro) = crate::game::lifecycle::continue_game(&self.data);
-                    self.enter_session(state, session, intro);
-                }
-                MenuAction::Exit => self.apply_event(RuntimeEvent::Exit(0))?,
-            },
+            MenuEvent::Action(_) => {}
         }
         Ok(())
     }
@@ -601,50 +688,10 @@ impl GameEngine {
                     .ok_or_else(|| anyhow!("No active session"))?;
                 s.on_direction_pressed(direction);
             }
-            AppExploreEvent::Npc(npc_event) => {
-                let s = self
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                match npc_event {
-                    crate::game::NpcEvent::OpenDialog(dialog_spec) => {
-                        if dialog_spec.restore {
-                            s.restore_stats();
-                        }
-                        self.ui.dialog.open(crate::game::DialogState::new(
-                            dialog_spec.npc_name,
-                            dialog_spec.lines,
-                        ));
-                        self.transition_to(GameState::Dialog);
-                    }
-                    crate::game::NpcEvent::OpenShop(shop_id) => {
-                        let _ = self.open_shop_by_id(&shop_id);
-                    }
-                    crate::game::NpcEvent::RestoreStats => {
-                        s.restore_stats();
-                    }
-                }
-            }
-            AppExploreEvent::UseAction(action) => {
-                let s = self
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.apply_explore_action(&self.data, action);
-            }
-            AppExploreEvent::EnterPauseMenu => {
-                self.ui.pause_menu.reset();
-                self.transition_to(GameState::PauseMenu);
-            }
-            AppExploreEvent::EnterMenu => {
-                let s = self
-                    .session
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                let _ = crate::game::save_game(&s.player);
-                self.ui.menu.set_menu(MenuState::new(has_save_data()));
-                self.transition_to(GameState::Menu);
-            }
+            AppExploreEvent::Npc(_)
+            | AppExploreEvent::UseAction(_)
+            | AppExploreEvent::EnterPauseMenu
+            | AppExploreEvent::EnterMenu => {}
         }
         Ok(())
     }
@@ -669,48 +716,9 @@ impl GameEngine {
     }
 
     fn apply_dialog_event(&mut self, event: crate::game::DialogEvent) -> Result<()> {
-        let s = self
-            .session
-            .as_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-
         match event {
             crate::game::DialogEvent::None => {}
-            crate::game::DialogEvent::Transition(transition) => match transition {
-                crate::game::DialogTransition::SetLine(line) => {
-                    if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
-                        dialog_state.current_line = line;
-                    }
-                    self.transition_to(GameState::Dialog);
-                }
-                crate::game::DialogTransition::CloseToExplore => {
-                    self.ui.dialog.close();
-                    self.transition_to(GameState::Explore);
-                }
-            },
-            crate::game::DialogEvent::Action(action, transition) => {
-                match s.apply_dialog_action(&self.data, &action) {
-                    crate::game::DialogActionResult::None => {}
-                    crate::game::DialogActionResult::OpenShop(shop_id) => {
-                        if self.open_shop_by_id(&shop_id) {
-                            return Ok(());
-                        }
-                    }
-                }
-
-                match transition {
-                    crate::game::DialogTransition::SetLine(line) => {
-                        if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
-                            dialog_state.current_line = line;
-                        }
-                        self.transition_to(GameState::Dialog);
-                    }
-                    crate::game::DialogTransition::CloseToExplore => {
-                        self.ui.dialog.close();
-                        self.transition_to(GameState::Explore);
-                    }
-                }
-            }
+            crate::game::DialogEvent::Transition(_) | crate::game::DialogEvent::Action(_, _) => {}
         }
         Ok(())
     }
