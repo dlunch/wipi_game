@@ -21,6 +21,16 @@ pub enum ShopEvent {
     CloseToExplore,
 }
 
+pub enum ShopUiEvent {
+    None,
+    ErrorNoActiveShop,
+    SetMode(ShopMode),
+    SetSelected(usize),
+    RequestBuy(usize),
+    RequestSell(usize),
+    CloseToExplore,
+}
+
 impl ShopIntent {
     pub fn intent_for_key(key: KeyCode) -> Option<ShopIntent> {
         match key {
@@ -33,29 +43,28 @@ impl ShopIntent {
     }
 }
 
-pub fn resolve(
+pub fn resolve_ui(
     mode: ShopMode,
     selected: usize,
     shop_open: bool,
-    player_gold: i32,
     player_inventory_len: usize,
-    shop_items: &[Item],
+    shop_items_len: usize,
     intent: ShopIntent,
-) -> ShopEvent {
+) -> ShopUiEvent {
     if !shop_open {
-        return ShopEvent::ErrorNoActiveShop;
+        return ShopUiEvent::ErrorNoActiveShop;
     }
 
     match mode {
         ShopMode::Select => match intent {
             ShopIntent::MoveUp => {
                 if selected > 0 {
-                    return ShopEvent::SetSelected(selected - 1);
+                    return ShopUiEvent::SetSelected(selected - 1);
                 }
             }
             ShopIntent::MoveDown => {
                 if selected + 1 < 2 {
-                    return ShopEvent::SetSelected(selected + 1);
+                    return ShopUiEvent::SetSelected(selected + 1);
                 }
             }
             ShopIntent::Confirm => {
@@ -64,47 +73,52 @@ pub fn resolve(
                 } else {
                     ShopMode::Sell
                 };
-                return ShopEvent::SetMode(mode);
+                return ShopUiEvent::SetMode(mode);
             }
-            ShopIntent::Back => return ShopEvent::CloseToExplore,
+            ShopIntent::Back => return ShopUiEvent::CloseToExplore,
         },
         ShopMode::Buy => match intent {
             ShopIntent::MoveUp => {
                 if selected > 0 {
-                    return ShopEvent::SetSelected(selected - 1);
+                    return ShopUiEvent::SetSelected(selected - 1);
                 }
             }
             ShopIntent::MoveDown => {
-                if selected + 1 < shop_items.len() {
-                    return ShopEvent::SetSelected(selected + 1);
+                if selected + 1 < shop_items_len {
+                    return ShopUiEvent::SetSelected(selected + 1);
                 }
             }
             ShopIntent::Confirm => {
-                if let Some(item) = shop_items.get(selected).cloned()
-                    && player_gold >= item.price
-                {
-                    return ShopEvent::BuyItem(item);
-                }
+                return ShopUiEvent::RequestBuy(selected);
             }
-            ShopIntent::Back => return ShopEvent::SetMode(ShopMode::Select),
+            ShopIntent::Back => return ShopUiEvent::SetMode(ShopMode::Select),
         },
         ShopMode::Sell => match intent {
             ShopIntent::MoveUp => {
                 if selected > 0 {
-                    return ShopEvent::SetSelected(selected - 1);
+                    return ShopUiEvent::SetSelected(selected - 1);
                 }
             }
             ShopIntent::MoveDown => {
                 if selected + 1 < player_inventory_len {
-                    return ShopEvent::SetSelected(selected + 1);
+                    return ShopUiEvent::SetSelected(selected + 1);
                 }
             }
-            ShopIntent::Confirm => return ShopEvent::SellSelected(selected),
-            ShopIntent::Back => return ShopEvent::SetMode(ShopMode::Select),
+            ShopIntent::Confirm => return ShopUiEvent::RequestSell(selected),
+            ShopIntent::Back => return ShopUiEvent::SetMode(ShopMode::Select),
         },
     }
 
-    ShopEvent::None
+    ShopUiEvent::None
+}
+
+pub fn resolve_buy(selected: usize, player_gold: i32, shop_items: &[Item]) -> Option<Item> {
+    if let Some(item) = shop_items.get(selected).cloned()
+        && player_gold >= item.price
+    {
+        return Some(item);
+    }
+    None
 }
 
 #[cfg(test)]
@@ -144,11 +158,25 @@ mod tests {
     fn select_mode_confirm_enters_buy_or_sell() {
         let shop_state = make_shop_state();
 
-        let event = resolve(ShopMode::Select, 0, true, 0, 0, &shop_state.items, Confirm);
-        assert!(matches!(event, ShopEvent::SetMode(ShopMode::Buy)));
+        let event = resolve_ui(
+            ShopMode::Select,
+            0,
+            true,
+            0,
+            shop_state.items.len(),
+            Confirm,
+        );
+        assert!(matches!(event, ShopUiEvent::SetMode(ShopMode::Buy)));
 
-        let event = resolve(ShopMode::Select, 1, true, 0, 0, &shop_state.items, Confirm);
-        assert!(matches!(event, ShopEvent::SetMode(ShopMode::Sell)));
+        let event = resolve_ui(
+            ShopMode::Select,
+            1,
+            true,
+            0,
+            shop_state.items.len(),
+            Confirm,
+        );
+        assert!(matches!(event, ShopUiEvent::SetMode(ShopMode::Sell)));
     }
 
     #[test]
@@ -162,8 +190,11 @@ mod tests {
             vec![make_item("potion", 10)],
         );
 
-        let event = resolve(ShopMode::Buy, 0, true, 50, 0, &shop_state.items, Confirm);
-        assert!(matches!(event, ShopEvent::BuyItem(_)));
+        let ui_event = resolve_ui(ShopMode::Buy, 0, true, 0, shop_state.items.len(), Confirm);
+        assert!(matches!(ui_event, ShopUiEvent::RequestBuy(0)));
+
+        let tx_event = resolve_buy(0, 50, &shop_state.items);
+        assert!(tx_event.is_some());
     }
 
     #[test]
@@ -176,8 +207,8 @@ mod tests {
             },
             vec![],
         );
-        let event = resolve(ShopMode::Sell, 0, true, 0, 1, &shop_state.items, Confirm);
-        assert!(matches!(event, ShopEvent::SellSelected(0)));
+        let event = resolve_ui(ShopMode::Sell, 0, true, 1, shop_state.items.len(), Confirm);
+        assert!(matches!(event, ShopUiEvent::RequestSell(0)));
     }
 
     #[test]
@@ -191,7 +222,7 @@ mod tests {
             vec![make_item("potion", 10)],
         );
 
-        let event = resolve(ShopMode::Buy, 2, true, 0, 0, &shop_state.items, Back);
-        assert!(matches!(event, ShopEvent::SetMode(ShopMode::Select)));
+        let event = resolve_ui(ShopMode::Buy, 2, true, 0, shop_state.items.len(), Back);
+        assert!(matches!(event, ShopUiEvent::SetMode(ShopMode::Select)));
     }
 }
