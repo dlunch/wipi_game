@@ -126,18 +126,6 @@ pub fn reduce_tick(
     }
 }
 
-#[cfg(test)]
-fn tick(
-    state: &mut MovementState,
-    player: &mut PlayerState,
-    map: &Map,
-    enemy_positions: &[(usize, usize)],
-    npc_positions: &[(usize, usize)],
-) -> bool {
-    let event = reduce_tick(state, player, Some(map), enemy_positions, npc_positions);
-    state.apply_tick(player, event)
-}
-
 fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
     let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
         return false;
@@ -208,6 +196,17 @@ mod tests {
         player.x = x;
         player.y = y;
         player
+    }
+
+    fn tick(
+        state: &mut MovementState,
+        player: &mut PlayerState,
+        map: &Map,
+        enemy_positions: &[(usize, usize)],
+        npc_positions: &[(usize, usize)],
+    ) -> bool {
+        let event = reduce_tick(state, player, Some(map), enemy_positions, npc_positions);
+        state.apply_tick(player, event)
     }
 
     #[test]

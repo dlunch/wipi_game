@@ -5,12 +5,6 @@ use wipi::event::KeyCode;
 use super::npc;
 
 use crate::data::Direction;
-#[cfg(test)]
-use crate::data::Map;
-#[cfg(test)]
-use crate::data::Tile;
-#[cfg(test)]
-use crate::game::TileEvent;
 use crate::game::{ExploreAction, GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
@@ -135,38 +129,6 @@ pub fn reduce_world(
 }
 
 #[cfg(test)]
-fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
-    let tile = map.get_tile(player.x, player.y);
-
-    match tile {
-        Tile::Treasure => Some(TileEvent::Treasure),
-        Tile::Exit => {
-            for (ex, ey, target) in &map.exits {
-                if *ex == player.x && *ey == player.y {
-                    return Some(TileEvent::MapExit(target.clone()));
-                }
-            }
-            None
-        }
-        Tile::Dungeon => {
-            for (dx, dy, target) in &map.dungeons {
-                if *dx == player.x && *dy == player.y {
-                    return Some(TileEvent::DungeonEntrance(target.clone()));
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-pub fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
-    data.find_map(&player.current_map_id)
-        .and_then(|map| check_tile_event(map, player))
-}
-
-#[cfg(test)]
 mod tests {
     use alloc::string::String;
     use alloc::vec;
@@ -177,6 +139,7 @@ mod tests {
     use super::*;
     use crate::data::{Direction, Item, ItemKind, Map, Tile};
     use crate::game::state::TileApplyEvent;
+    use crate::game::TileEvent;
 
     fn make_test_map(
         id: &str,
@@ -297,6 +260,32 @@ mod tests {
         player.x = x;
         player.y = y;
         player
+    }
+
+    fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
+        let map = data.find_map(&player.current_map_id)?;
+        let tile = map.get_tile(player.x, player.y);
+
+        match tile {
+            Tile::Treasure => Some(TileEvent::Treasure),
+            Tile::Exit => {
+                for (ex, ey, target) in &map.exits {
+                    if *ex == player.x && *ey == player.y {
+                        return Some(TileEvent::MapExit(target.clone()));
+                    }
+                }
+                None
+            }
+            Tile::Dungeon => {
+                for (dx, dy, target) in &map.dungeons {
+                    if *dx == player.x && *dy == player.y {
+                        return Some(TileEvent::DungeonEntrance(target.clone()));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 
     #[test]
