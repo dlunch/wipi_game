@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::data::{Enemy, Map};
+use crate::game::SessionEvent;
 use crate::game::state::{CombatState, FieldEnemy};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -9,7 +10,6 @@ const MP_REGEN_INTERVAL: u32 = 60;
 pub struct CombatTickInput<'a> {
     pub player_x: usize,
     pub player_y: usize,
-    pub player_current_hp: i32,
     pub player_def: i32,
     pub skill_cooldowns: [u32; 3],
     pub mp_regen_timer: u32,
@@ -20,7 +20,6 @@ pub struct CombatTickInput<'a> {
 struct TickContext<'a> {
     player_x: usize,
     player_y: usize,
-    player_current_hp: i32,
     player_def: i32,
     skill_cooldowns: [u32; 3],
     mp_regen_timer: u32,
@@ -30,31 +29,23 @@ struct TickContext<'a> {
 
 #[derive(Debug, Clone)]
 pub struct CombatTickEvent {
-    pub damage_taken: i32,
-    pub player_died: bool,
-    pub next_skill_cooldowns: [u32; 3],
-    pub next_mp_regen_timer: u32,
-    pub recover_mp: i32,
-    pub next_state: CombatState,
+    pub events: Vec<SessionEvent>,
 }
 
 pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTickEvent {
     let mut next_state = state.clone();
-    let mut result = update(
+    update(
         &mut next_state,
         TickContext {
             player_x: input.player_x,
             player_y: input.player_y,
-            player_current_hp: input.player_current_hp,
             player_def: input.player_def,
             skill_cooldowns: input.skill_cooldowns,
             mp_regen_timer: input.mp_regen_timer,
             map: input.map,
             enemy_data: input.enemy_data,
         },
-    );
-    result.next_state = next_state;
-    result
+    )
 }
 
 fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatTickEvent {
@@ -103,16 +94,18 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatTickEvent {
 
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
-    let player_died = damage_taken > 0 && ctx.player_current_hp - damage_taken <= 0;
-
-    CombatTickEvent {
-        damage_taken,
-        player_died,
-        next_skill_cooldowns,
-        next_mp_regen_timer,
-        recover_mp,
-        next_state: state.clone(),
+    let mut events = Vec::with_capacity(5);
+    events.push(SessionEvent::SetCombatState(state.clone()));
+    events.push(SessionEvent::SetSkillCooldowns(next_skill_cooldowns));
+    events.push(SessionEvent::SetMpRegenTimer(next_mp_regen_timer));
+    if recover_mp > 0 {
+        events.push(SessionEvent::RecoverMp(recover_mp));
     }
+    if damage_taken > 0 {
+        events.push(SessionEvent::TakeDamage(damage_taken));
+    }
+
+    CombatTickEvent { events }
 }
 
 fn try_respawn(

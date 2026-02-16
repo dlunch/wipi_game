@@ -290,10 +290,8 @@ impl GameEngine {
             .session
             .as_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
-        let player_died = result.player_died;
 
-        s.apply_combat_tick(result);
-        if player_died {
+        if s.apply_combat_tick(result) {
             self.transition_to(GameState::GameOver);
         }
         Ok(())
@@ -425,7 +423,6 @@ impl GameEngine {
                 crate::game::combat::CombatTickInput {
                     player_x: s.player.x,
                     player_y: s.player.y,
-                    player_current_hp: s.player.stats.current_hp,
                     player_def: s.player.total_def(),
                     skill_cooldowns: s.skill_cooldowns,
                     mp_regen_timer: s.mp_regen_timer,

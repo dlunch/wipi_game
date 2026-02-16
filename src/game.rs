@@ -18,7 +18,7 @@ pub use rendering::{
     draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, render,
 };
 pub use save::{has_save_data, load_game, save_game};
-pub use session::{DialogActionResult, SessionState};
+pub use session::{DialogActionResult, SessionEvent, SessionState};
 pub use state::{
     CombatAction, CombatEvent, CombatState, GameState, MovementState, MovementTickEvent,
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,

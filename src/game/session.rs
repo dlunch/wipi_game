@@ -4,6 +4,15 @@ use crate::game::{
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
 };
 
+#[derive(Debug, Clone)]
+pub enum SessionEvent {
+    SetCombatState(CombatState),
+    SetSkillCooldowns([u32; 3]),
+    SetMpRegenTimer(u32),
+    RecoverMp(i32),
+    TakeDamage(i32),
+}
+
 pub enum DialogActionResult {
     None,
     OpenShop(alloc::string::String),
@@ -62,26 +71,46 @@ impl SessionState {
         }
     }
 
-    pub fn apply_combat_tick(&mut self, event: crate::game::combat::CombatTickEvent) {
-        let crate::game::combat::CombatTickEvent {
-            damage_taken,
-            player_died: _,
-            next_skill_cooldowns,
-            next_mp_regen_timer,
-            recover_mp,
-            next_state,
-        } = event;
-
-        self.combat = next_state;
-        self.skill_cooldowns = next_skill_cooldowns;
-        self.mp_regen_timer = next_mp_regen_timer;
-        if recover_mp > 0 {
-            self.player.stats.recover_mp(recover_mp);
+    pub fn apply_event(&mut self, event: SessionEvent) -> bool {
+        match event {
+            SessionEvent::SetCombatState(next_state) => {
+                self.combat = next_state;
+                false
+            }
+            SessionEvent::SetSkillCooldowns(next_skill_cooldowns) => {
+                self.skill_cooldowns = next_skill_cooldowns;
+                false
+            }
+            SessionEvent::SetMpRegenTimer(next_mp_regen_timer) => {
+                self.mp_regen_timer = next_mp_regen_timer;
+                false
+            }
+            SessionEvent::RecoverMp(amount) => {
+                if amount > 0 {
+                    self.player.stats.recover_mp(amount);
+                }
+                false
+            }
+            SessionEvent::TakeDamage(amount) => {
+                amount > 0
+                    && matches!(
+                        self.player.apply(PlayerAction::TakeDamage(amount)),
+                        PlayerEvent::Died
+                    )
+            }
         }
+    }
 
-        if damage_taken > 0 {
-            let _ = self.player.apply(PlayerAction::TakeDamage(damage_taken));
+    pub fn apply_events(&mut self, events: impl IntoIterator<Item = SessionEvent>) -> bool {
+        let mut player_died = false;
+        for event in events {
+            player_died |= self.apply_event(event);
         }
+        player_died
+    }
+
+    pub fn apply_combat_tick(&mut self, event: crate::game::combat::CombatTickEvent) -> bool {
+        self.apply_events(event.events)
     }
 
     pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
