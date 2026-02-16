@@ -27,31 +27,22 @@ pub struct UiState {
 }
 
 pub trait UiInputEventResolver {
-    fn resolve_input_event(
+    fn resolve_input(
         &mut self,
-        event: &RuntimeEvent,
+        input: GameInput,
         game_state: &GameState,
         session: Option<&SessionState>,
     ) -> Vec<RuntimeEvent>;
 }
 
 impl UiInputEventResolver for UiState {
-    fn resolve_input_event(
+    fn resolve_input(
         &mut self,
-        event: &RuntimeEvent,
+        input: GameInput,
         game_state: &GameState,
         session: Option<&SessionState>,
     ) -> Vec<RuntimeEvent> {
-        match event {
-            RuntimeEvent::Tick => resolve_input(GameInput::Tick, game_state, self, session),
-            RuntimeEvent::KeyDown(key) => {
-                resolve_input(GameInput::KeyDown(*key), game_state, self, session)
-            }
-            RuntimeEvent::KeyUp(key) => {
-                resolve_input(GameInput::KeyUp(*key), game_state, self, session)
-            }
-            _ => Vec::new(),
-        }
+        resolve_input(input, game_state, self, session)
     }
 }
 

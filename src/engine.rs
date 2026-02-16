@@ -44,14 +44,22 @@ impl GameEngine {
         self.dispatch(RuntimeEvent::from(GameInput::Tick));
     }
 
-    fn resolve_ui_input_event(&mut self, event: &RuntimeEvent) -> Vec<RuntimeEvent> {
+    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<RuntimeEvent> {
         self.ui
-            .resolve_input_event(event, &self.state, self.session.as_ref())
+            .resolve_input(input, &self.state, self.session.as_ref())
     }
 
     fn resolve_with_handlers(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
         let mut derived = Vec::new();
-        derived.extend(self.resolve_ui_input_event(event));
+        let input = match event {
+            RuntimeEvent::Tick => Some(GameInput::Tick),
+            RuntimeEvent::KeyDown(key) => Some(GameInput::KeyDown(*key)),
+            RuntimeEvent::KeyUp(key) => Some(GameInput::KeyUp(*key)),
+            _ => None,
+        };
+        if let Some(input) = input {
+            derived.extend(self.resolve_ui_input_event(input));
+        }
         for resolver in domain_resolvers() {
             if resolver.handles(event) {
                 let mut ctx = ResolveContext {
