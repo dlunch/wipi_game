@@ -28,9 +28,8 @@ struct TickContext<'a> {
 }
 
 pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> Vec<RuntimeEvent> {
-    let mut next_state = state.clone();
     update(
-        &mut next_state,
+        state,
         TickContext {
             player_x: input.player_x,
             player_y: input.player_y,
@@ -43,34 +42,35 @@ pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> Vec<Runt
     )
 }
 
-fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
-    state.update_counter = state.update_counter.wrapping_add(1);
+fn update(state: &CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
+    let update_counter = state.update_counter.wrapping_add(1);
+    let mut player_attack_cooldown = state.player_attack_cooldown;
+    let mut player_hit_flash = state.player_hit_flash;
+    let mut skill_effects = state.skill_effects.clone();
+    let mut enemies = state.enemies.clone();
+    let mut respawn_timer = state.respawn_timer;
 
-    if state.player_attack_cooldown > 0 {
-        state.player_attack_cooldown -= 1;
-    }
-    if state.player_hit_flash > 0 {
-        state.player_hit_flash -= 1;
-    }
+    player_attack_cooldown = player_attack_cooldown.saturating_sub(1);
+    player_hit_flash = player_hit_flash.saturating_sub(1);
 
-    for effect in &mut state.skill_effects {
+    for effect in &mut skill_effects {
         if effect.timer > 0 {
             effect.timer -= 1;
         }
     }
-    state.skill_effects.retain(|e| e.timer > 0);
+    skill_effects.retain(|e| e.timer > 0);
 
     let mut damage_taken = 0;
 
-    if state.update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
-        for enemy in &mut state.enemies {
+    if update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
+        for enemy in &mut enemies {
             if !enemy.is_dead() {
                 enemy.update(ctx.player_x, ctx.player_y, ctx.map);
             }
         }
     }
 
-    for enemy in &mut state.enemies {
+    for enemy in &mut enemies {
         if enemy.is_dead() {
             continue;
         }
@@ -79,34 +79,42 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
             let raw_damage = enemy.do_attack();
             let actual_damage = (raw_damage - ctx.player_def / 2).max(1);
             damage_taken += actual_damage;
-            state.player_hit_flash = 10;
+            player_hit_flash = 10;
         }
     }
 
-    state.enemies.retain(|e| !e.is_dead());
+    enemies.retain(|e| !e.is_dead());
 
-    try_respawn(state, ctx.player_x, ctx.player_y, ctx.map, ctx.enemy_data);
+    try_respawn(
+        &mut enemies,
+        &mut respawn_timer,
+        &state.respawn_positions,
+        ctx.player_x,
+        ctx.player_y,
+        ctx.map,
+        ctx.enemy_data,
+    );
 
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
     let mut events = Vec::with_capacity(10);
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetEnemies(
-        state.enemies.clone(),
+        enemies,
     )));
     events.push(RuntimeEvent::Combat(
-        CombatRuntimeEvent::SetPlayerAttackCooldown(state.player_attack_cooldown),
+        CombatRuntimeEvent::SetPlayerAttackCooldown(player_attack_cooldown),
     ));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
-        state.player_hit_flash,
+        player_hit_flash,
     )));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillEffects(
-        state.skill_effects.clone(),
+        skill_effects,
     )));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetUpdateCounter(
-        state.update_counter,
+        update_counter,
     )));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetRespawnTimer(
-        state.respawn_timer,
+        respawn_timer,
     )));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
         next_skill_cooldowns,
@@ -129,7 +137,9 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
 }
 
 fn try_respawn(
-    state: &mut CombatState,
+    enemies: &mut Vec<FieldEnemy>,
+    respawn_timer: &mut u32,
+    respawn_positions: &[(usize, usize, usize)],
     player_x: usize,
     player_y: usize,
     map: &Map,
@@ -138,18 +148,18 @@ fn try_respawn(
     const RESPAWN_DELAY: u32 = 300;
     const RESPAWN_DISTANCE: usize = 8;
 
-    if state.respawn_positions.is_empty() {
+    if respawn_positions.is_empty() {
         return;
     }
 
-    let max_enemies = state.respawn_positions.len();
-    if state.enemies.len() >= max_enemies {
-        state.respawn_timer = 0;
+    let max_enemies = respawn_positions.len();
+    if enemies.len() >= max_enemies {
+        *respawn_timer = 0;
         return;
     }
 
-    state.respawn_timer += 1;
-    if state.respawn_timer < RESPAWN_DELAY {
+    *respawn_timer += 1;
+    if *respawn_timer < RESPAWN_DELAY {
         return;
     }
 
@@ -163,22 +173,20 @@ fn try_respawn(
         return;
     }
 
-    for (x, y, enemy_idx) in &state.respawn_positions {
+    for (x, y, enemy_idx) in respawn_positions {
         let distance = x.abs_diff(player_x) + y.abs_diff(player_y);
         if distance < RESPAWN_DISTANCE {
             continue;
         }
 
-        let already_exists = state.enemies.iter().any(|e| e.x == *x && e.y == *y);
+        let already_exists = enemies.iter().any(|e| e.x == *x && e.y == *y);
         if already_exists {
             continue;
         }
 
         if let Some(enemy) = available_enemies.get(*enemy_idx) {
-            state
-                .enemies
-                .push(FieldEnemy::new((*enemy).clone(), *x, *y));
-            state.respawn_timer = 0;
+            enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y));
+            *respawn_timer = 0;
             return;
         }
     }
