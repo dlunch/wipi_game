@@ -32,7 +32,7 @@ enum GameEvent {
     UpdateMovement(AppMovementEvent),
     UpdateCombat(game::combat::CombatResult),
     Menu(MenuEvent),
-    Explore(game::ExploreDispatchEvent),
+    Explore(AppExploreEvent),
     Inventory(game::InventoryEvent),
     Dialog(game::DialogEvent),
     Shop(game::ShopEvent),
@@ -45,12 +45,16 @@ enum GameEvent {
     Error(String),
 }
 
+enum AppExploreEvent {
+    MoveDirection(Direction),
+    Npc(game::NpcEvent),
+    UseAction(game::ExploreAction),
+    EnterPauseMenu,
+    EnterMenu,
+}
+
 enum AppMovementEvent {
-    Tick(
-        game::movement::MovementTickEvent,
-        Option<game::TileEvent>,
-        bool,
-    ),
+    Tick(game::MovementTickEvent, Option<game::TileEvent>, bool),
 }
 
 struct GameInner {
@@ -403,18 +407,17 @@ impl GameInner {
         }
     }
 
-    fn apply_explore_event(&mut self, event: game::ExploreDispatchEvent) {
+    fn apply_explore_event(&mut self, event: AppExploreEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
 
         match event {
-            game::ExploreDispatchEvent::None => {}
-            game::ExploreDispatchEvent::MoveDirection(direction) => {
+            AppExploreEvent::MoveDirection(direction) => {
                 s.movement.on_direction_pressed(direction);
             }
-            game::ExploreDispatchEvent::Npc(npc_event) => match npc_event {
+            AppExploreEvent::Npc(npc_event) => match npc_event {
                 game::NpcEvent::OpenDialog(dialog_spec) => {
                     if dialog_spec.restore {
                         s.player.stats.current_hp = s.player.stats.max_hp;
@@ -434,14 +437,14 @@ impl GameInner {
                     s.player.stats.current_mp = s.player.stats.max_mp;
                 }
             },
-            game::ExploreDispatchEvent::UseAction(action) => {
+            AppExploreEvent::UseAction(action) => {
                 Self::apply_explore_action(s, &self.data, action);
             }
-            game::ExploreDispatchEvent::EnterPauseMenu => {
+            AppExploreEvent::EnterPauseMenu => {
                 self.ui.pause_menu.reset();
                 self.state = GameState::PauseMenu;
             }
-            game::ExploreDispatchEvent::EnterMenu => {
+            AppExploreEvent::EnterMenu => {
                 let _ = game::save_game(&s.player);
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
                 self.state = GameState::Menu;
@@ -655,12 +658,35 @@ impl GameInner {
                     .data
                     .find_map(&s.player.current_map_id)
                     .is_some_and(|map| map.peaceful);
-                GameEvent::Explore(game::explore::reduce_world(
-                    is_peaceful,
-                    &s.player,
-                    &self.data,
-                    intent,
-                ))
+                match game::explore::reduce(is_peaceful, intent) {
+                    game::ExploreEvent::None => GameEvent::None,
+                    game::ExploreEvent::MoveDirection(direction) => {
+                        GameEvent::Explore(AppExploreEvent::MoveDirection(direction))
+                    }
+                    game::ExploreEvent::TryNpcInteract {
+                        facing,
+                        fallback_action,
+                    } => {
+                        if let Some(npc_event) = game::npc::reduce(
+                            &s.player,
+                            &self.data,
+                            game::npc::NpcIntent::Interact { facing },
+                        ) {
+                            GameEvent::Explore(AppExploreEvent::Npc(npc_event))
+                        } else if let Some(action) = fallback_action {
+                            GameEvent::Explore(AppExploreEvent::UseAction(action))
+                        } else {
+                            GameEvent::None
+                        }
+                    }
+                    game::ExploreEvent::UseAction(action) => {
+                        GameEvent::Explore(AppExploreEvent::UseAction(action))
+                    }
+                    game::ExploreEvent::EnterPauseMenu => {
+                        GameEvent::Explore(AppExploreEvent::EnterPauseMenu)
+                    }
+                    game::ExploreEvent::EnterMenu => GameEvent::Explore(AppExploreEvent::EnterMenu),
+                }
             }
             GameIntent::Inventory(intent) => {
                 if !matches!(self.state, GameState::Inventory) {

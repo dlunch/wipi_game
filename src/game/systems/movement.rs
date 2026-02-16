@@ -2,15 +2,9 @@ use alloc::vec::Vec;
 
 use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
-use crate::game::{GameData, MovementState, PlayerState, TileEvent};
+use crate::game::{GameData, MovementState, MovementTickEvent, PlayerState, TileEvent};
 
 const MOVE_COOLDOWN: u32 = 5;
-
-pub struct MovementTickEvent {
-    pub next_state: MovementState,
-    pub facing: Option<(i32, i32)>,
-    pub step: Option<(i32, i32)>,
-}
 
 pub struct MovementUpdateResult {
     pub movement_event: MovementTickEvent,

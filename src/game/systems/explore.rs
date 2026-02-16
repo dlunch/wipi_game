@@ -2,10 +2,10 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use super::npc;
-
 use crate::data::Direction;
-use crate::game::{ExploreAction, GameData, PlayerState};
+use crate::game::ExploreAction;
+#[cfg(test)]
+use crate::game::{GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -26,15 +26,6 @@ pub enum ExploreEvent {
         facing: Direction,
         fallback_action: Option<ExploreAction>,
     },
-    UseAction(ExploreAction),
-    EnterPauseMenu,
-    EnterMenu,
-}
-
-pub enum ExploreDispatchEvent {
-    None,
-    MoveDirection(Direction),
-    Npc(npc::NpcEvent),
     UseAction(ExploreAction),
     EnterPauseMenu,
     EnterMenu,
@@ -97,34 +88,6 @@ pub fn reduce(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
         ExploreIntent::UseAction(_) => ExploreEvent::None,
         ExploreIntent::Pause => ExploreEvent::EnterPauseMenu,
         ExploreIntent::BackToMenu => ExploreEvent::EnterMenu,
-    }
-}
-
-pub fn reduce_world(
-    is_peaceful: bool,
-    player: &PlayerState,
-    data: &GameData,
-    intent: ExploreIntent,
-) -> ExploreDispatchEvent {
-    match reduce(is_peaceful, intent) {
-        ExploreEvent::None => ExploreDispatchEvent::None,
-        ExploreEvent::MoveDirection(direction) => ExploreDispatchEvent::MoveDirection(direction),
-        ExploreEvent::TryNpcInteract {
-            facing,
-            fallback_action,
-        } => {
-            if let Some(npc_event) = npc::reduce(player, data, npc::NpcIntent::Interact { facing })
-            {
-                ExploreDispatchEvent::Npc(npc_event)
-            } else if let Some(action) = fallback_action {
-                ExploreDispatchEvent::UseAction(action)
-            } else {
-                ExploreDispatchEvent::None
-            }
-        }
-        ExploreEvent::UseAction(action) => ExploreDispatchEvent::UseAction(action),
-        ExploreEvent::EnterPauseMenu => ExploreDispatchEvent::EnterPauseMenu,
-        ExploreEvent::EnterMenu => ExploreDispatchEvent::EnterMenu,
     }
 }
 

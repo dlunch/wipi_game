@@ -18,8 +18,8 @@ pub use rendering::{
 pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;
 pub use state::{
-    CombatAction, CombatEvent, CombatState, GameState, MovementState, PlayerAction, PlayerEffect,
-    PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
+    CombatAction, CombatEvent, CombatState, GameState, MovementState, MovementTickEvent,
+    PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
 };
 pub use systems::combat;
 pub use systems::dialog;
@@ -28,10 +28,11 @@ pub use systems::inventory;
 pub use systems::lifecycle;
 pub use systems::menu;
 pub use systems::movement;
+pub use systems::npc;
 pub use systems::shop;
 pub use systems::{
-    DialogEvent, DialogIntent, DialogTransition, ExploreDispatchEvent, ExploreIntent,
-    InventoryEvent, InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
+    DialogEvent, DialogIntent, DialogTransition, ExploreEvent, ExploreIntent, InventoryEvent,
+    InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
     PauseMenuIntent, ShopEvent, ShopIntent,
 };
 pub use ui::{

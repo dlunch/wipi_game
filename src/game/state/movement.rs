@@ -1,5 +1,4 @@
 use crate::data::Direction;
-use crate::game::systems::movement::MovementTickEvent;
 
 use super::PlayerState;
 
@@ -7,6 +6,13 @@ use super::PlayerState;
 pub struct MovementState {
     pub pressed_direction: Option<Direction>,
     pub move_cooldown: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct MovementTickEvent {
+    pub next_state: MovementState,
+    pub facing: Option<(i32, i32)>,
+    pub step: Option<(i32, i32)>,
 }
 
 impl MovementState {

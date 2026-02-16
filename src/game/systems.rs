@@ -9,7 +9,7 @@ pub mod npc;
 pub mod shop;
 
 pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
-pub use explore::{ExploreDispatchEvent, ExploreIntent};
+pub use explore::{ExploreEvent, ExploreIntent};
 pub use inventory::{InventoryEvent, InventoryIntent};
 pub use lifecycle::LoadingEvent;
 pub use menu::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
