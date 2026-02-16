@@ -279,13 +279,12 @@ impl GameRuntime {
 
         match event {
             AppExploreEvent::MoveDirection(direction) => {
-                s.movement.on_direction_pressed(direction);
+                s.on_direction_pressed(direction);
             }
             AppExploreEvent::Npc(npc_event) => match npc_event {
                 crate::game::NpcEvent::OpenDialog(dialog_spec) => {
                     if dialog_spec.restore {
-                        s.player.stats.current_hp = s.player.stats.max_hp;
-                        s.player.stats.current_mp = s.player.stats.max_mp;
+                        s.restore_stats();
                     }
                     self.ui.dialog.open(crate::game::DialogState::new(
                         dialog_spec.npc_name,
@@ -297,8 +296,7 @@ impl GameRuntime {
                     let _ = self.open_shop_by_id(&shop_id);
                 }
                 crate::game::NpcEvent::RestoreStats => {
-                    s.player.stats.current_hp = s.player.stats.max_hp;
-                    s.player.stats.current_mp = s.player.stats.max_mp;
+                    s.restore_stats();
                 }
             },
             AppExploreEvent::UseAction(action) => {
@@ -328,7 +326,7 @@ impl GameRuntime {
                 self.ui.inventory.set_selected(selected)
             }
             crate::game::InventoryEvent::UseSelected(index) => {
-                let _ = s.player.apply(crate::game::PlayerAction::UseItem { index });
+                s.use_inventory_item(index);
             }
             crate::game::InventoryEvent::CloseToExplore => self.state = GameState::Explore,
         }
@@ -396,19 +394,10 @@ impl GameRuntime {
             }
             crate::game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
             crate::game::ShopEvent::BuyItem(item) => {
-                let _ = s
-                    .player
-                    .apply(crate::game::PlayerAction::AddGold(-item.price));
-                let _ = s.player.apply(crate::game::PlayerAction::AddItem(item));
+                s.buy_shop_item(item);
             }
             crate::game::ShopEvent::SellSelected(index) => {
-                let event = s
-                    .player
-                    .apply(crate::game::PlayerAction::RemoveItemAt(index));
-                if let crate::game::PlayerEvent::ItemRemoved(Some(item)) = event {
-                    let _ = s
-                        .player
-                        .apply(crate::game::PlayerAction::AddGold(item.price / 2));
+                if s.sell_inventory_item(index).is_some() {
                     let inv_len = s.player.inventory.len();
                     if self.ui.shop.selected >= inv_len && self.ui.shop.selected > 0 {
                         self.ui.shop.set_selected(self.ui.shop.selected - 1);
@@ -453,7 +442,7 @@ impl GameRuntime {
             return;
         };
         if let Some(direction) = direction_for_key(key) {
-            s.movement.on_direction_released(direction);
+            s.on_direction_released(direction);
         }
     }
 

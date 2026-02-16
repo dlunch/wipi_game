@@ -1,3 +1,4 @@
+use crate::data::{Direction, Item};
 use crate::game::{
     CombatAction, CombatEvent, CombatState, GameData, MovementState, MovementTickEvent,
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
@@ -17,6 +18,38 @@ pub struct SessionState {
 }
 
 impl SessionState {
+    pub fn on_direction_pressed(&mut self, direction: Direction) {
+        self.movement.on_direction_pressed(direction);
+    }
+
+    pub fn on_direction_released(&mut self, direction: Direction) {
+        self.movement.on_direction_released(direction);
+    }
+
+    pub fn restore_stats(&mut self) {
+        self.player.stats.current_hp = self.player.stats.max_hp;
+        self.player.stats.current_mp = self.player.stats.max_mp;
+    }
+
+    pub fn use_inventory_item(&mut self, index: usize) {
+        let _ = self.player.apply(PlayerAction::UseItem { index });
+    }
+
+    pub fn buy_shop_item(&mut self, item: Item) {
+        let _ = self.player.apply(PlayerAction::AddGold(-item.price));
+        let _ = self.player.apply(PlayerAction::AddItem(item));
+    }
+
+    pub fn sell_inventory_item(&mut self, index: usize) -> Option<Item> {
+        let event = self.player.apply(PlayerAction::RemoveItemAt(index));
+        if let PlayerEvent::ItemRemoved(Some(item)) = event {
+            let _ = self.player.apply(PlayerAction::AddGold(item.price / 2));
+            Some(item)
+        } else {
+            None
+        }
+    }
+
     pub fn apply_movement_tick(
         &mut self,
         data: &GameData,
