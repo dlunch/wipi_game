@@ -65,19 +65,25 @@ impl SessionState {
     pub fn apply_event(&mut self, event: RuntimeEvent) -> bool {
         match event {
             RuntimeEvent::Combat(event) => match event {
-                crate::game::CombatRuntimeEvent::Tick {
-                    next_state,
-                    next_skill_cooldowns,
-                    next_mp_regen_timer,
-                    recover_mp,
-                    damage_taken,
-                } => {
+                crate::game::CombatRuntimeEvent::SetCombatState(next_state) => {
                     self.combat = next_state;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
                     self.skill_cooldowns = next_skill_cooldowns;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
                     self.mp_regen_timer = next_mp_regen_timer;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::RecoverMp(recover_mp) => {
                     if recover_mp > 0 {
                         self.player.stats.recover_mp(recover_mp);
                     }
+                    false
+                }
+                crate::game::CombatRuntimeEvent::TakeDamage(damage_taken) => {
                     damage_taken > 0
                         && matches!(
                             self.player.apply(PlayerAction::TakeDamage(damage_taken)),
