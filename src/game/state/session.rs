@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use crate::data::Tile;
 use crate::game::{
     CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, UiState,
 };
@@ -51,99 +50,6 @@ impl SessionState {
             event,
         )?;
         Ok(())
-    }
-}
-
-pub fn start_new_game(data: &GameData) -> (crate::game::GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    if let Some(ref weapon_id) = config.equip_weapon
-        && let Some(weapon) = data.find_item(weapon_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(weapon);
-        player.equipped_weapon = Some(idx);
-    }
-    if let Some(ref armor_id) = config.equip_armor
-        && let Some(armor) = data.find_item(armor_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(armor);
-        player.equipped_armor = Some(idx);
-    }
-    for start_item in &config.items {
-        if let Some(item) = data.find_item(&start_item.item_id).cloned() {
-            for _ in 0..start_item.count {
-                player.inventory.push(item.clone());
-            }
-        }
-    }
-
-    if let Some(map) = data.find_map(&config.start_map) {
-        let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-        player.current_map_id = map.id.clone();
-        player.x = x;
-        player.y = y;
-    }
-
-    let state = if config
-        .intro_dialog
-        .as_ref()
-        .and_then(|(dialog_id, _)| data.find_dialog(dialog_id))
-        .is_some()
-    {
-        crate::game::GameState::Dialog
-    } else {
-        crate::game::GameState::Explore
-    };
-
-    let session = SessionState {
-        player,
-        combat,
-        movement: MovementState::default(),
-        skill_cooldowns: [0; 3],
-        mp_regen_timer: 0,
-    };
-
-    (state, session)
-}
-
-pub fn continue_game(data: &GameData) -> (crate::game::GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    match crate::game::load_game(&mut player) {
-        Ok(true) => {
-            if data.find_map(&player.current_map_id).is_none() {
-                let (x, y) = (player.x, player.y);
-                player.current_map_id = config.fallback_map.clone();
-                player.x = x;
-                player.y = y;
-            }
-            if let Some(map) = data.find_map(&player.current_map_id)
-                && (map.get_tile(player.x, player.y) == Tile::Wall
-                    || player.x >= map.width
-                    || player.y >= map.height)
-                && let Some((x, y)) = map.find_player_start()
-            {
-                player.x = x;
-                player.y = y;
-            }
-
-            let session = SessionState {
-                player,
-                combat,
-                movement: MovementState::default(),
-                skill_cooldowns: [0; 3],
-                mp_regen_timer: 0,
-            };
-
-            (crate::game::GameState::Explore, session)
-        }
-        Ok(false) | Err(_) => start_new_game(data),
     }
 }
 
