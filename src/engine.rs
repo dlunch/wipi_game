@@ -84,7 +84,7 @@ impl SessionSlot {
     }
 }
 
-pub struct GameRuntime {
+pub struct GameEngine {
     state: GameState,
     data: Rc<GameData>,
     session: SessionSlot,
@@ -119,7 +119,7 @@ fn state_keeps_session(state: &GameState) -> bool {
     state_requires_session(state)
 }
 
-impl GameRuntime {
+impl GameEngine {
     pub fn new() -> Self {
         Self {
             state: GameState::Loading(0),

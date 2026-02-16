@@ -3,12 +3,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::{
-    AppExploreEvent, Direction, GameRuntime, GameState, MenuAction, MenuEvent, MenuState,
+    AppExploreEvent, Direction, GameEngine, GameState, MenuAction, MenuEvent, MenuState,
     RuntimeEvent, TransitionEvent, has_save_data,
 };
 use crate::game::{SceneIntent, ShopIntent};
 
-pub(super) fn apply_menu_event(runtime: &mut GameRuntime, event: MenuEvent) {
+pub(super) fn apply_menu_event(runtime: &mut GameEngine, event: MenuEvent) {
     match event {
         MenuEvent::None => {}
         MenuEvent::SetSelected(selected) => runtime.ui.menu.set_selected(selected),
@@ -26,7 +26,7 @@ pub(super) fn apply_menu_event(runtime: &mut GameRuntime, event: MenuEvent) {
     }
 }
 
-pub(super) fn apply_explore_event(runtime: &mut GameRuntime, event: AppExploreEvent) {
+pub(super) fn apply_explore_event(runtime: &mut GameEngine, event: AppExploreEvent) {
     match event {
         AppExploreEvent::MoveDirection(direction) => {
             let Some(s) = runtime.session.as_mut() else {
@@ -82,7 +82,7 @@ pub(super) fn apply_explore_event(runtime: &mut GameRuntime, event: AppExploreEv
     }
 }
 
-pub(super) fn apply_inventory_event(runtime: &mut GameRuntime, event: crate::game::InventoryEvent) {
+pub(super) fn apply_inventory_event(runtime: &mut GameEngine, event: crate::game::InventoryEvent) {
     let Some(s) = runtime.session.as_mut() else {
         runtime.state = GameState::Error(String::from("No active session"));
         return;
@@ -100,7 +100,7 @@ pub(super) fn apply_inventory_event(runtime: &mut GameRuntime, event: crate::gam
     }
 }
 
-pub(super) fn apply_dialog_event(runtime: &mut GameRuntime, event: crate::game::DialogEvent) {
+pub(super) fn apply_dialog_event(runtime: &mut GameEngine, event: crate::game::DialogEvent) {
     let Some(s) = runtime.session.as_mut() else {
         runtime.state = GameState::Error(String::from("No active session"));
         return;
@@ -146,7 +146,7 @@ pub(super) fn apply_dialog_event(runtime: &mut GameRuntime, event: crate::game::
     }
 }
 
-pub(super) fn apply_shop_event(runtime: &mut GameRuntime, event: crate::game::ShopEvent) {
+pub(super) fn apply_shop_event(runtime: &mut GameEngine, event: crate::game::ShopEvent) {
     let Some(s) = runtime.session.as_mut() else {
         runtime.state = GameState::Error(String::from("No active session"));
         return;
@@ -169,10 +169,7 @@ pub(super) fn apply_shop_event(runtime: &mut GameRuntime, event: crate::game::Sh
     }
 }
 
-pub(super) fn apply_pause_menu_event(
-    runtime: &mut GameRuntime,
-    event: crate::game::PauseMenuEvent,
-) {
+pub(super) fn apply_pause_menu_event(runtime: &mut GameEngine, event: crate::game::PauseMenuEvent) {
     let Some(s) = runtime.session.as_mut() else {
         runtime.state = GameState::Error(String::from("No active session"));
         return;
@@ -198,7 +195,7 @@ pub(super) fn apply_pause_menu_event(
     }
 }
 
-pub(super) fn apply_transition_event(runtime: &mut GameRuntime, event: TransitionEvent) {
+pub(super) fn apply_transition_event(runtime: &mut GameEngine, event: TransitionEvent) {
     match event {
         TransitionEvent::MapChanged => runtime.apply_map_changed(),
         TransitionEvent::ToExplore => runtime.transition_to(GameState::Explore),
@@ -212,7 +209,7 @@ pub(super) fn apply_transition_event(runtime: &mut GameRuntime, event: Transitio
     }
 }
 
-pub(super) fn apply_release_movement_direction(runtime: &mut GameRuntime, direction: Direction) {
+pub(super) fn apply_release_movement_direction(runtime: &mut GameEngine, direction: Direction) {
     if !matches!(runtime.state, GameState::Explore) {
         return;
     }
@@ -223,7 +220,7 @@ pub(super) fn apply_release_movement_direction(runtime: &mut GameRuntime, direct
 }
 
 pub(super) fn resolve_menu_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     intent: crate::game::MenuIntent,
 ) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::Menu) {
@@ -240,7 +237,7 @@ pub(super) fn resolve_menu_intent(
 }
 
 pub(super) fn resolve_explore_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     intent: crate::game::ExploreIntent,
 ) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::Explore) {
@@ -292,7 +289,7 @@ pub(super) fn resolve_explore_intent(
 }
 
 pub(super) fn resolve_inventory_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     intent: crate::game::InventoryIntent,
 ) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::Inventory) {
@@ -312,7 +309,7 @@ pub(super) fn resolve_inventory_intent(
 }
 
 pub(super) fn resolve_dialog_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     intent: crate::game::DialogIntent,
 ) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::Dialog) {
@@ -327,7 +324,7 @@ pub(super) fn resolve_dialog_intent(
     ))]
 }
 
-pub(super) fn resolve_shop_intent(runtime: &GameRuntime, intent: ShopIntent) -> Vec<RuntimeEvent> {
+pub(super) fn resolve_shop_intent(runtime: &GameEngine, intent: ShopIntent) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::Shop) {
         return vec![RuntimeEvent::None];
     }
@@ -348,7 +345,7 @@ pub(super) fn resolve_shop_intent(runtime: &GameRuntime, intent: ShopIntent) -> 
 }
 
 pub(super) fn resolve_pause_menu_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     intent: crate::game::PauseMenuIntent,
 ) -> Vec<RuntimeEvent> {
     if !matches!(runtime.state, GameState::PauseMenu) {
@@ -368,7 +365,7 @@ pub(super) fn resolve_pause_menu_intent(
 }
 
 pub(super) fn resolve_scene_intent(
-    runtime: &GameRuntime,
+    runtime: &GameEngine,
     scene_intent: SceneIntent,
 ) -> Vec<RuntimeEvent> {
     match scene_intent {

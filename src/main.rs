@@ -3,8 +3,8 @@
 extern crate alloc;
 
 mod data;
+mod engine;
 mod game;
-mod runtime;
 
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -17,8 +17,8 @@ use wipi::graphics::repaint;
 use wipi::timer::Timer;
 use wipi::wipi_main;
 
+use crate::engine::GameEngine;
 use crate::game::{InputKey, RenderState, render};
-use crate::runtime::GameRuntime;
 
 fn map_key(key: KeyCode) -> Option<InputKey> {
     match key {
@@ -43,7 +43,7 @@ fn map_key(key: KeyCode) -> Option<InputKey> {
 }
 
 pub struct RpgGame {
-    runtime: Rc<RefCell<GameRuntime>>,
+    engine: Rc<RefCell<GameEngine>>,
     render_state: Rc<RefCell<RenderState>>,
     _timer: Timer,
 }
@@ -55,26 +55,26 @@ impl Default for RpgGame {
 }
 
 impl RpgGame {
-    fn tick(runtime: &Rc<RefCell<GameRuntime>>, render_state: &Rc<RefCell<RenderState>>) {
-        let mut runtime = runtime.borrow_mut();
-        let rs = runtime.tick_and_build_render_state();
+    fn tick(engine: &Rc<RefCell<GameEngine>>, render_state: &Rc<RefCell<RenderState>>) {
+        let mut engine = engine.borrow_mut();
+        let rs = engine.tick_and_build_render_state();
         *render_state.borrow_mut() = rs;
-        drop(runtime);
+        drop(engine);
         repaint(0, 0, 0, 240, 320);
     }
 
     pub fn new() -> Self {
-        let runtime = Rc::new(RefCell::new(GameRuntime::new()));
+        let engine = Rc::new(RefCell::new(GameEngine::new()));
         let render_state = Rc::new(RefCell::new(RenderState::Loading { step: 0 }));
 
-        let timer_runtime = Rc::clone(&runtime);
+        let timer_engine = Rc::clone(&engine);
         let timer_render_state = Rc::clone(&render_state);
         let timer = Timer::periodic(Duration::from_millis(33), move || {
-            Self::tick(&timer_runtime, &timer_render_state);
+            Self::tick(&timer_engine, &timer_render_state);
         });
 
         Self {
-            runtime,
+            engine,
             render_state,
             _timer: timer,
         }
@@ -90,13 +90,13 @@ impl App for RpgGame {
 
     fn on_keydown(&mut self, key: KeyCode) {
         if let Some(key) = map_key(key) {
-            self.runtime.borrow_mut().on_keydown(key);
+            self.engine.borrow_mut().on_keydown(key);
         }
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
         if let Some(key) = map_key(key) {
-            self.runtime.borrow_mut().on_keyup(key);
+            self.engine.borrow_mut().on_keyup(key);
         }
     }
 }
