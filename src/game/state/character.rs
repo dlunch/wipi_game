@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
+use crate::data::{Direction, Item, ItemKind, PlayerStats};
 use crate::game::state::combat::KillReward;
 use crate::game::{GameData, GameEvent, SessionEvent};
 
@@ -12,12 +12,6 @@ pub enum TileEvent {
     Treasure,
     MapExit(String),
     DungeonEntrance(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileApplyEvent {
-    None,
-    MapChanged,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +44,6 @@ pub struct CharacterState {
     pub x: usize,
     pub y: usize,
     pub facing: Direction,
-    pub quests: Vec<QuestProgress>,
-    pub opened_treasures: Vec<(String, usize, usize)>,
 }
 
 impl CharacterState {
@@ -67,15 +59,7 @@ impl CharacterState {
             x: 0,
             y: 0,
             facing: Direction::Down,
-            quests: Vec::new(),
-            opened_treasures: Vec::new(),
         }
-    }
-
-    pub fn is_treasure_opened(&self, map_id: &str, x: usize, y: usize) -> bool {
-        self.opened_treasures
-            .iter()
-            .any(|(m, tx, ty)| m == map_id && *tx == x && *ty == y)
     }
 
     pub fn get_weapon(&self) -> Option<&Item> {
@@ -102,18 +86,6 @@ impl CharacterState {
     pub fn restore_stats(&mut self) {
         self.stats.current_hp = self.stats.max_hp;
         self.stats.current_mp = self.stats.max_mp;
-    }
-
-    pub fn has_quest(&self, quest_id: &str) -> bool {
-        self.quests
-            .iter()
-            .any(|q| q.quest_id == quest_id && !q.rewarded)
-    }
-
-    pub fn is_quest_complete(&self, quest_id: &str) -> bool {
-        self.quests
-            .iter()
-            .any(|q| q.quest_id == quest_id && q.completed)
     }
 
     pub fn has_item(&self, item_id: &str) -> bool {
@@ -159,70 +131,9 @@ impl CharacterState {
         }
     }
 
-    pub fn apply_quest_kill(&mut self, data: &GameData, enemy_id: &str) {
-        let mut updates = Vec::new();
-        for progress in &self.quests {
-            if progress.completed || progress.rewarded {
-                continue;
-            }
-
-            if let Some(quest) = data.find_quest(&progress.quest_id)
-                && quest.quest_type == QuestType::Kill
-                && quest.target_id == enemy_id
-            {
-                updates.push((progress.quest_id.clone(), quest.target_count));
-            }
-        }
-
-        for (quest_id, target_count) in updates {
-            if let Some(progress) = self.quests.iter_mut().find(|q| q.quest_id == quest_id) {
-                progress.current_count = (progress.current_count + 1).min(target_count);
-                if progress.current_count >= target_count {
-                    progress.completed = true;
-                }
-            }
-        }
-    }
-
     pub fn apply_kill_reward(&mut self, reward: &KillReward) {
         self.stats.add_exp(reward.exp);
         self.stats.gold = (self.stats.gold + reward.gold).max(0);
-    }
-
-    pub fn apply_tile_event(&mut self, data: &GameData, event: TileEvent) -> TileApplyEvent {
-        match event {
-            TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-                if !target.is_empty() && self.change_map(data, &target) {
-                    TileApplyEvent::MapChanged
-                } else {
-                    TileApplyEvent::None
-                }
-            }
-            TileEvent::Treasure => {
-                let map_id = self.current_map_id.clone();
-                if !self.is_treasure_opened(&map_id, self.x, self.y) {
-                    if let Some(item_id) = data.newgame.treasure_item.as_deref()
-                        && let Some(item) = data.find_item(item_id).cloned()
-                    {
-                        self.inventory.push(item);
-                    }
-                    self.opened_treasures.push((map_id, self.x, self.y));
-                }
-                TileApplyEvent::None
-            }
-        }
-    }
-
-    fn change_map(&mut self, data: &GameData, target_id: &str) -> bool {
-        let Some(map) = data.find_map(target_id) else {
-            return false;
-        };
-
-        let (x, y) = map.find_player_start().unwrap_or((self.x, self.y));
-        self.current_map_id = map.id.clone();
-        self.x = x;
-        self.y = y;
-        true
     }
 
     fn use_item(&mut self, index: usize) -> bool {
@@ -322,51 +233,17 @@ impl CharacterState {
                 SessionEvent::SetEquippedAccessory(index) => {
                     self.equipped_accessory = *index;
                 }
-                SessionEvent::AddQuestProgress(progress) => {
-                    self.quests.push(progress.clone());
-                }
-                SessionEvent::AddOpenedTreasure { map_id, x, y } => {
-                    if !self.is_treasure_opened(map_id, *x, *y) {
-                        self.opened_treasures.push((map_id.clone(), *x, *y));
-                    }
-                }
-                SessionEvent::SetSkillCooldowns(_)
+                SessionEvent::AddQuestProgress(_)
+                | SessionEvent::AddOpenedTreasure { .. }
+                | SessionEvent::SetSkillCooldowns(_)
                 | SessionEvent::SetMpRegenTimer(_)
                 | SessionEvent::ResetMovement
                 | SessionEvent::ResetCombat
                 | SessionEvent::SpawnCurrentMapEnemies => {}
             },
             GameEvent::ApplyDialogAction(action) => match action {
-                crate::data::DialogAction::GiveQuest(id) => {
-                    if !self.quests.iter().any(|q| q.quest_id == *id) {
-                        self.quests.push(crate::data::QuestProgress {
-                            quest_id: id.clone(),
-                            current_count: 0,
-                            completed: false,
-                            rewarded: false,
-                        });
-                    }
-                }
-                crate::data::DialogAction::CompleteQuest(id) => {
-                    let can_reward = self
-                        .quests
-                        .iter()
-                        .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
-                    if can_reward && let Some(quest) = data.find_quest(id) {
-                        self.stats.add_exp(quest.reward_exp);
-                        let _ = self.apply(PlayerAction::AddGold(quest.reward_gold));
-
-                        if let Some(item_id) = &quest.reward_item
-                            && let Some(item) = data.find_item(item_id).cloned()
-                        {
-                            let _ = self.apply(PlayerAction::AddItem(item));
-                        }
-
-                        if let Some(progress) = self.quests.iter_mut().find(|q| q.quest_id == *id) {
-                            progress.rewarded = true;
-                        }
-                    }
-                }
+                crate::data::DialogAction::GiveQuest(_)
+                | crate::data::DialogAction::CompleteQuest(_) => {}
                 crate::data::DialogAction::GiveItem(id) => {
                     if let Some(item) = data.find_item(id).cloned() {
                         let _ = self.apply(PlayerAction::AddItem(item));
@@ -412,7 +289,7 @@ impl CharacterState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::{Item, ItemKind, QuestProgress};
+    use crate::data::{Item, ItemKind};
 
     fn make_item(id: &str, kind: ItemKind) -> Item {
         Item {
@@ -445,51 +322,6 @@ mod tests {
         assert_eq!(player.current_map_id, "village");
         assert!(player.inventory.is_empty());
         assert!(player.equipped_weapon.is_none());
-        assert!(player.quests.is_empty());
-    }
-
-    #[test]
-    fn quest_lifecycle() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        assert!(!player.has_quest("q1"));
-
-        player.quests.push(QuestProgress {
-            quest_id: String::from("q1"),
-            current_count: 0,
-            completed: false,
-            rewarded: false,
-        });
-        assert!(player.has_quest("q1"));
-        assert!(!player.is_quest_complete("q1"));
-
-        player.quests[0].completed = true;
-        assert!(player.is_quest_complete("q1"));
-
-        player.quests[0].rewarded = true;
-        assert!(!player.has_quest("q1"));
-    }
-
-    #[test]
-    fn has_quest_ignores_rewarded_quest() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        player.quests.push(QuestProgress {
-            quest_id: String::from("q1"),
-            current_count: 0,
-            completed: false,
-            rewarded: true,
-        });
-        assert!(!player.has_quest("q1"));
-    }
-
-    #[test]
-    fn treasure_tracking() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        assert!(!player.is_treasure_opened("map1", 3, 4));
-
-        player.opened_treasures.push((String::from("map1"), 3, 4));
-        assert!(player.is_treasure_opened("map1", 3, 4));
-        assert!(!player.is_treasure_opened("map1", 3, 5));
-        assert!(!player.is_treasure_opened("map2", 3, 4));
     }
 
     #[test]
@@ -598,61 +430,6 @@ mod tests {
             panic!("expected ItemRemoved event");
         };
         assert!(removed.is_none());
-    }
-
-    #[test]
-    fn add_quest_no_duplicates() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        if !player.has_quest("q1") {
-            player.quests.push(QuestProgress {
-                quest_id: String::from("q1"),
-                current_count: 0,
-                completed: false,
-                rewarded: false,
-            });
-        }
-        if !player.has_quest("q1") {
-            player.quests.push(QuestProgress {
-                quest_id: String::from("q1"),
-                current_count: 0,
-                completed: false,
-                rewarded: false,
-            });
-        }
-        assert_eq!(player.quests.len(), 1);
-    }
-
-    #[test]
-    fn treasure_tracking_no_duplicates() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        if !player.is_treasure_opened("map1", 3, 4) {
-            player.opened_treasures.push((String::from("map1"), 3, 4));
-        }
-        if !player.is_treasure_opened("map1", 3, 4) {
-            player.opened_treasures.push((String::from("map1"), 3, 4));
-        }
-
-        assert!(player.is_treasure_opened("map1", 3, 4));
-        assert_eq!(player.opened_treasures.len(), 1);
-    }
-
-    #[test]
-    fn mark_quest_rewarded_intent_marks_rewarded() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        player.quests.push(QuestProgress {
-            quest_id: String::from("q1"),
-            current_count: 0,
-            completed: false,
-            rewarded: false,
-        });
-        if let Some(quest) = player
-            .quests
-            .iter_mut()
-            .find(|quest| quest.quest_id == "q1")
-        {
-            quest.rewarded = true;
-        }
-        assert!(player.quests[0].rewarded);
     }
 
     #[test]

@@ -166,19 +166,6 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
         player.equipped_accessory,
     )));
 
-    for quest in &player.quests {
-        out.push(GameEvent::Session(SessionEvent::AddQuestProgress(
-            quest.clone(),
-        )));
-    }
-    for (map_id, x, y) in &player.opened_treasures {
-        out.push(GameEvent::Session(SessionEvent::AddOpenedTreasure {
-            map_id: map_id.clone(),
-            x: *x,
-            y: *y,
-        }));
-    }
-
     out.push(GameEvent::Session(SessionEvent::SetSkillCooldowns([0; 3])));
     out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
     out.push(GameEvent::Session(SessionEvent::ResetMovement));
@@ -190,8 +177,10 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
 fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
     let config = &data.newgame;
     let mut player = CharacterState::new(config.player_name.clone(), &config.start_map);
+    let mut quests = Vec::new();
+    let mut opened_treasures = Vec::new();
 
-    match load_game(&mut player) {
+    match load_game(&mut player, &mut quests, &mut opened_treasures) {
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
                 let (x, y) = (player.x, player.y);
@@ -237,12 +226,12 @@ fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
                 player.equipped_accessory,
             )));
 
-            for quest in &player.quests {
+            for quest in &quests {
                 out.push(GameEvent::Session(SessionEvent::AddQuestProgress(
                     quest.clone(),
                 )));
             }
-            for (map_id, x, y) in &player.opened_treasures {
+            for (map_id, x, y) in &opened_treasures {
                 out.push(GameEvent::Session(SessionEvent::AddOpenedTreasure {
                     map_id: map_id.clone(),
                     x: *x,

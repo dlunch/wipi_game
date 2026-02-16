@@ -198,13 +198,12 @@ fn build_explore_render(
         max_mp: as_u32(session.leader.stats.max_mp),
         level: as_u32(session.leader.stats.level),
         active_quest_count: session
-            .leader
             .quests
             .iter()
             .filter(|quest| !quest.rewarded && !quest.completed)
             .count(),
         first_live_enemy_name,
-        opened_treasures: session.leader.opened_treasures.clone(),
+        opened_treasures: session.opened_treasures.clone(),
         enemies,
         player_hit_flash: session.combat.player_hit_flash,
         skill_effects,
@@ -340,7 +339,6 @@ pub fn build_render_state(
                 return RenderState::NoSession;
             };
             let quests = s
-                .leader
                 .quests
                 .iter()
                 .filter(|quest| !quest.rewarded)

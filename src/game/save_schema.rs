@@ -7,7 +7,11 @@ use crate::data::{Item, ItemKind, QuestProgress};
 
 const SAVE_VERSION: u32 = 1;
 
-pub fn serialize(player: &CharacterState) -> String {
+pub fn serialize(
+    player: &CharacterState,
+    quests: &[QuestProgress],
+    opened_treasures: &[(String, usize, usize)],
+) -> String {
     let mut lines = vec![
         format_args_to_string(&["VERSION", &SAVE_VERSION.to_string()]),
         format_args_to_string(&[
@@ -65,7 +69,7 @@ pub fn serialize(player: &CharacterState) -> String {
         ]));
     }
 
-    for quest in &player.quests {
+    for quest in quests {
         lines.push(format_args_to_string(&[
             "QUEST",
             &quest.quest_id,
@@ -75,7 +79,7 @@ pub fn serialize(player: &CharacterState) -> String {
         ]));
     }
 
-    for (map_id, x, y) in &player.opened_treasures {
+    for (map_id, x, y) in opened_treasures {
         lines.push(format_args_to_string(&[
             "TREASURE",
             map_id,
@@ -92,7 +96,12 @@ pub fn serialize(player: &CharacterState) -> String {
     result
 }
 
-pub fn deserialize(data: &str, player: &mut CharacterState) -> bool {
+pub fn deserialize(
+    data: &str,
+    player: &mut CharacterState,
+    quests: &mut Vec<QuestProgress>,
+    opened_treasures: &mut Vec<(String, usize, usize)>,
+) -> bool {
     let Some(normalized) = migrate_to_current_save_version(data) else {
         return false;
     };
@@ -245,8 +254,8 @@ pub fn deserialize(data: &str, player: &mut CharacterState) -> bool {
     player.stats.exp_to_next = player.stats.level * 100;
 
     player.inventory = parsed_inventory;
-    player.quests = parsed_quests;
-    player.opened_treasures = parsed_opened_treasures;
+    *quests = parsed_quests;
+    *opened_treasures = parsed_opened_treasures;
 
     player.equipped_weapon = parsed_equipped_weapon;
     player.equipped_armor = parsed_equipped_armor;
@@ -326,10 +335,19 @@ mod tests {
     fn deserialize_accepts_current_version() {
         let mut player = make_player();
         player.stats.level = 3;
-        let save = serialize(&player);
+        let quests = Vec::new();
+        let opened_treasures = Vec::new();
+        let save = serialize(&player, &quests, &opened_treasures);
 
         let mut loaded = make_player();
-        assert!(deserialize(&save, &mut loaded));
+        let mut loaded_quests = Vec::new();
+        let mut loaded_opened_treasures = Vec::new();
+        assert!(deserialize(
+            &save,
+            &mut loaded,
+            &mut loaded_quests,
+            &mut loaded_opened_treasures
+        ));
         assert_eq!(loaded.stats.level, 3);
     }
 
@@ -337,8 +355,15 @@ mod tests {
     fn deserialize_migrates_versionless_save() {
         let save = "PLAYER:Hero:village:1:2\nSTATS:2:1:50:45:20:10:10:5:7\n";
         let mut loaded = make_player();
+        let mut loaded_quests = Vec::new();
+        let mut loaded_opened_treasures = Vec::new();
 
-        assert!(deserialize(save, &mut loaded));
+        assert!(deserialize(
+            save,
+            &mut loaded,
+            &mut loaded_quests,
+            &mut loaded_opened_treasures
+        ));
         assert_eq!(loaded.name, "Hero");
         assert_eq!(loaded.x, 1);
         assert_eq!(loaded.y, 2);
@@ -349,7 +374,14 @@ mod tests {
     fn deserialize_rejects_future_version() {
         let save = "VERSION:99\nPLAYER:Hero:village:0:0\nSTATS:1:0:50:50:20:20:10:5:0\n";
         let mut loaded = make_player();
+        let mut loaded_quests = Vec::new();
+        let mut loaded_opened_treasures = Vec::new();
 
-        assert!(!deserialize(save, &mut loaded));
+        assert!(!deserialize(
+            save,
+            &mut loaded,
+            &mut loaded_quests,
+            &mut loaded_opened_treasures
+        ));
     }
 }

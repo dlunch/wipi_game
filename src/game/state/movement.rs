@@ -2,7 +2,7 @@ use crate::data::Direction;
 use anyhow::{Result, ensure};
 
 use super::CharacterState;
-use crate::game::{AppMovementEvent, GameEvent, GameState, TileApplyEvent, TransitionEvent};
+use crate::game::{AppMovementEvent, GameEvent, GameState, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -46,17 +46,14 @@ impl MovementState {
 
     pub fn apply_event(
         &mut self,
-        data: &crate::game::GameData,
         state: &GameState,
         player: &mut CharacterState,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
             GameEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) => {
-                let moved = self.apply_tick(player, *movement_event);
-                if moved && let Some(tile_event) = tile_event.clone() {
-                    let _: TileApplyEvent = player.apply_tile_event(data, tile_event);
-                }
+                let _ = tile_event;
+                self.apply_tick(player, *movement_event);
             }
             GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) => {
                 ensure!(

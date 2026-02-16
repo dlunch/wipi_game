@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, CharacterState, DialogState, GameData, GameEvent, GameState};
+use crate::game::{AppExploreEvent, DialogState, GameData, GameEvent, GameState, SessionState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -28,21 +28,21 @@ pub enum NpcIntent {
     Interact { facing: Direction },
 }
 
-pub fn resolve(player: &CharacterState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
+pub fn resolve(session: &SessionState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
     match intent {
-        NpcIntent::Interact { facing } => try_interact(player, data, facing),
+        NpcIntent::Interact { facing } => try_interact(session, data, facing),
     }
 }
 
-fn try_interact(player: &CharacterState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
-    let (target_x, target_y) = facing.apply(player.x, player.y);
+fn try_interact(session: &SessionState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
+    let (target_x, target_y) = facing.apply(session.leader.x, session.leader.y);
 
-    let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
+    let npc = data.find_npc_at(&session.leader.current_map_id, target_x, target_y)?;
 
     match npc.npc_type {
         NpcType::Healer => {
             if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-                let lines = filter_lines(player, dialog);
+                let lines = filter_lines(session, dialog);
                 if !lines.is_empty() {
                     return Some(NpcEvent::OpenDialog(DialogSpec {
                         npc_name: npc.name.clone(),
@@ -70,7 +70,7 @@ fn try_interact(player: &CharacterState, data: &GameData, facing: Direction) -> 
     }
 
     if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-        let lines = filter_lines(player, dialog);
+        let lines = filter_lines(session, dialog);
         if !lines.is_empty() {
             return Some(NpcEvent::OpenDialog(DialogSpec {
                 npc_name: npc.name.clone(),
@@ -83,16 +83,16 @@ fn try_interact(player: &CharacterState, data: &GameData, facing: Direction) -> 
     None
 }
 
-fn filter_lines(player: &CharacterState, dialog: &Dialog) -> Vec<DialogLine> {
+fn filter_lines(session: &SessionState, dialog: &Dialog) -> Vec<DialogLine> {
     dialog
         .lines
         .iter()
         .filter(|line| match &line.condition {
             None => true,
-            Some(DialogCondition::HasQuest(id)) => player.has_quest(id),
-            Some(DialogCondition::QuestComplete(id)) => player.is_quest_complete(id),
-            Some(DialogCondition::HasItem(id)) => player.has_item(id),
-            Some(DialogCondition::HasGold(amount)) => player.stats.gold >= *amount,
+            Some(DialogCondition::HasQuest(id)) => session.has_quest(id),
+            Some(DialogCondition::QuestComplete(id)) => session.is_quest_complete(id),
+            Some(DialogCondition::HasItem(id)) => session.leader.has_item(id),
+            Some(DialogCondition::HasGold(amount)) => session.leader.stats.gold >= *amount,
         })
         .cloned()
         .collect()
@@ -133,11 +133,7 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        if let Some(npc_event) = resolve(
-            &s.leader,
-            ctx.data(),
-            NpcIntent::Interact { facing: *facing },
-        ) {
+        if let Some(npc_event) = resolve(s, ctx.data(), NpcIntent::Interact { facing: *facing }) {
             return Ok(vec![GameEvent::Explore(AppExploreEvent::Npc(npc_event))]);
         }
 
@@ -187,6 +183,12 @@ mod tests {
     use super::*;
     use crate::data::{Npc, QuestProgress, Shop};
 
+    fn make_session() -> SessionState {
+        let mut session = SessionState::empty();
+        session.leader = crate::game::CharacterState::new(String::from("H"), "v");
+        session
+    }
+
     fn make_npc(npc_type: NpcType) -> Npc {
         Npc {
             id: String::from("npc1"),
@@ -235,22 +237,22 @@ mod tests {
 
     #[test]
     fn try_interact_returns_none_when_no_npc_at_facing_position() {
-        let player = CharacterState::new(String::from("H"), "v");
+        let session = make_session();
         let data = GameData::default();
 
-        let next_state = try_interact(&player, &data, Direction::Right);
+        let next_state = try_interact(&session, &data, Direction::Right);
 
         assert!(next_state.is_none());
     }
 
     #[test]
     fn try_interact_with_villager_returns_dialog_state() {
-        let player = CharacterState::new(String::from("H"), "v");
+        let session = make_session();
         let npc = make_npc(NpcType::Villager);
         let dialog = make_dialog(vec!["Hello"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&player, &data, Direction::Right);
+        let next_state = try_interact(&session, &data, Direction::Right);
 
         let Some(NpcEvent::OpenDialog(dialog_spec)) = next_state else {
             panic!("expected dialog state");
@@ -262,18 +264,18 @@ mod tests {
 
     #[test]
     fn try_interact_with_healer_requests_restore_and_returns_dialog_state() {
-        let player = CharacterState::new(String::from("H"), "v");
-        let before_hp = player.stats.current_hp;
-        let before_mp = player.stats.current_mp;
+        let session = make_session();
+        let before_hp = session.leader.stats.current_hp;
+        let before_mp = session.leader.stats.current_mp;
 
         let npc = make_npc(NpcType::Healer);
         let dialog = make_dialog(vec!["Be healed"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&player, &data, Direction::Right);
+        let next_state = try_interact(&session, &data, Direction::Right);
 
-        assert_eq!(player.stats.current_hp, before_hp);
-        assert_eq!(player.stats.current_mp, before_mp);
+        assert_eq!(session.leader.stats.current_hp, before_hp);
+        assert_eq!(session.leader.stats.current_mp, before_mp);
         assert!(matches!(
             next_state,
             Some(NpcEvent::OpenDialog(DialogSpec { restore: true, .. }))
@@ -282,33 +284,33 @@ mod tests {
 
     #[test]
     fn try_interact_with_healer_without_dialog_still_requests_restore() {
-        let mut player = CharacterState::new(String::from("H"), "v");
+        let mut session = make_session();
 
-        player.stats.current_hp = 7;
-        player.stats.current_mp = 3;
-        let before_hp = player.stats.current_hp;
-        let before_mp = player.stats.current_mp;
+        session.leader.stats.current_hp = 7;
+        session.leader.stats.current_mp = 3;
+        let before_hp = session.leader.stats.current_hp;
+        let before_mp = session.leader.stats.current_mp;
 
         let npc = make_npc(NpcType::Healer);
         let dialog = make_dialog(Vec::new());
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = try_interact(&player, &data, Direction::Right);
+        let next_state = try_interact(&session, &data, Direction::Right);
 
-        assert_eq!(player.stats.current_hp, before_hp);
-        assert_eq!(player.stats.current_mp, before_mp);
+        assert_eq!(session.leader.stats.current_hp, before_hp);
+        assert_eq!(session.leader.stats.current_mp, before_mp);
         assert!(matches!(next_state, Some(NpcEvent::RestoreStats)));
     }
 
     #[test]
     fn try_interact_with_shopkeeper_returns_shop_state() {
-        let player = CharacterState::new(String::from("H"), "v");
+        let session = make_session();
         let npc = make_npc(NpcType::ShopKeeper);
         let dialog = make_dialog(vec!["Welcome"]);
         let mut data = make_game_data_with_npc(npc, dialog);
         data.shops = vec![make_shop("s1", Vec::new())];
 
-        let next_state = try_interact(&player, &data, Direction::Right);
+        let next_state = try_interact(&session, &data, Direction::Right);
 
         let Some(NpcEvent::OpenShop(shop_id)) = next_state else {
             panic!("expected shop state");
@@ -318,18 +320,18 @@ mod tests {
 
     #[test]
     fn filter_lines_without_conditions_keeps_all_lines() {
-        let player = CharacterState::new(String::from("H"), "v");
+        let session = make_session();
         let dialog = make_dialog(vec!["A", "B", "C"]);
 
-        let filtered = filter_lines(&player, &dialog);
+        let filtered = filter_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 3);
     }
 
     #[test]
     fn filter_lines_has_quest_keeps_only_matching_lines() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        player.quests.push(QuestProgress {
+        let mut session = make_session();
+        session.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 0,
             completed: false,
@@ -337,7 +339,7 @@ mod tests {
         });
         let dialog = make_dialog(vec!["HAS_QUEST=q1:talk:q1", "HAS_QUEST=q2:talk:q2"]);
 
-        let filtered = filter_lines(&player, &dialog);
+        let filtered = filter_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "q1");
@@ -345,8 +347,8 @@ mod tests {
 
     #[test]
     fn filter_lines_quest_complete_condition_filters_correctly() {
-        let mut player = CharacterState::new(String::from("H"), "v");
-        player.quests.push(QuestProgress {
+        let mut session = make_session();
+        session.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 1,
             completed: true,
@@ -357,7 +359,7 @@ mod tests {
             "QUEST_DONE=q2:talk:not done",
         ]);
 
-        let filtered = filter_lines(&player, &dialog);
+        let filtered = filter_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "done");
@@ -365,13 +367,13 @@ mod tests {
 
     #[test]
     fn filter_lines_has_gold_condition_filters_correctly() {
-        let player = CharacterState::new(String::from("H"), "v");
+        let session = make_session();
         let dialog = make_dialog(vec![
             "HAS_GOLD=10:talk:cheap",
             "HAS_GOLD=100:talk:expensive",
         ]);
 
-        let filtered = filter_lines(&player, &dialog);
+        let filtered = filter_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "cheap");
