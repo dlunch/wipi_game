@@ -1,8 +1,7 @@
 use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
 use crate::game::{
-    DialogIntent, ExploreIntent, GameInput, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
-    ShopIntent,
+    DialogIntent, ExploreIntent, InventoryIntent, MenuIntent, PauseMenuIntent, ShopIntent,
 };
 use alloc::string::String;
 
@@ -27,9 +26,6 @@ pub enum CombatRuntimeEvent {
 }
 
 pub enum RuntimeEvent {
-    Tick,
-    KeyDown(InputKey),
-    KeyUp(InputKey),
     OverlayCloseRequested,
     GameOverConfirmRequested,
     ErrorConfirmRequested,
@@ -63,16 +59,6 @@ pub enum RuntimeEvent {
     PauseMenu(crate::game::PauseMenuEvent),
     Transition(TransitionEvent),
     Exit(i32),
-}
-
-impl From<GameInput> for RuntimeEvent {
-    fn from(input: GameInput) -> Self {
-        match input {
-            GameInput::Tick => RuntimeEvent::Tick,
-            GameInput::KeyDown(key) => RuntimeEvent::KeyDown(key),
-            GameInput::KeyUp(key) => RuntimeEvent::KeyUp(key),
-        }
-    }
 }
 
 #[derive(Clone, Copy)]

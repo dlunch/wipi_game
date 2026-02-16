@@ -28,11 +28,13 @@ impl GameEngine {
     }
 
     pub fn on_keydown(&mut self, key: InputKey) {
-        self.dispatch(RuntimeEvent::from(GameInput::KeyDown(key)));
+        let initial = self.resolve_ui_input_event(GameInput::KeyDown(key));
+        self.dispatch_all(initial);
     }
 
     pub fn on_keyup(&mut self, key: InputKey) {
-        self.dispatch(RuntimeEvent::from(GameInput::KeyUp(key)));
+        let initial = self.resolve_ui_input_event(GameInput::KeyUp(key));
+        self.dispatch_all(initial);
     }
 
     pub fn tick_and_build_render_state(&mut self) -> RenderState {
@@ -41,7 +43,8 @@ impl GameEngine {
     }
 
     fn update(&mut self) {
-        self.dispatch(RuntimeEvent::from(GameInput::Tick));
+        let initial = self.resolve_ui_input_event(GameInput::Tick);
+        self.dispatch_all(initial);
     }
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<RuntimeEvent> {
@@ -51,15 +54,6 @@ impl GameEngine {
 
     fn resolve_with_handlers(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
         let mut derived = Vec::new();
-        let input = match event {
-            RuntimeEvent::Tick => Some(GameInput::Tick),
-            RuntimeEvent::KeyDown(key) => Some(GameInput::KeyDown(*key)),
-            RuntimeEvent::KeyUp(key) => Some(GameInput::KeyUp(*key)),
-            _ => None,
-        };
-        if let Some(input) = input {
-            derived.extend(self.resolve_ui_input_event(input));
-        }
         for resolver in domain_resolvers() {
             if resolver.handles(event) {
                 let mut ctx = ResolveContext {
@@ -89,8 +83,12 @@ impl GameEngine {
         Ok(())
     }
 
-    fn dispatch(&mut self, initial: RuntimeEvent) {
-        let mut queue = VecDeque::from([initial]);
+    fn dispatch_all(&mut self, initial_events: Vec<RuntimeEvent>) {
+        if initial_events.is_empty() {
+            return;
+        }
+
+        let mut queue: VecDeque<RuntimeEvent> = initial_events.into();
         let mut processed = 0usize;
 
         while let Some(event) = queue.pop_front() {
