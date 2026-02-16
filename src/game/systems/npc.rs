@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
@@ -98,11 +98,62 @@ fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Vec<DialogLine> {
 }
 
 struct ExploreNpcCascadeResolver;
+struct ExploreNpcInteractResolver;
 
 static EXPLORE_NPC_CASCADE_RESOLVER: ExploreNpcCascadeResolver = ExploreNpcCascadeResolver;
+static EXPLORE_NPC_INTERACT_RESOLVER: ExploreNpcInteractResolver = ExploreNpcInteractResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&EXPLORE_NPC_CASCADE_RESOLVER]
+    alloc::vec![
+        &EXPLORE_NPC_INTERACT_RESOLVER,
+        &EXPLORE_NPC_CASCADE_RESOLVER
+    ]
+}
+
+impl DomainEventResolver for ExploreNpcInteractResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract { .. })
+        )
+    }
+
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract {
+            facing,
+            fallback_action,
+        }) = event
+        else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        ensure!(
+            matches!(ctx.state, crate::game::GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+
+        if let Some(npc_event) = resolve(
+            &s.player,
+            ctx.data(),
+            NpcIntent::Interact { facing: *facing },
+        ) {
+            return Ok(alloc::vec![RuntimeEvent::Explore(
+                crate::game::AppExploreEvent::Npc(npc_event),
+            )]);
+        }
+
+        if let Some(action) = fallback_action {
+            return Ok(alloc::vec![RuntimeEvent::Explore(
+                crate::game::AppExploreEvent::UseAction(*action),
+            )]);
+        }
+
+        Ok(alloc::vec::Vec::new())
+    }
 }
 
 impl DomainEventResolver for ExploreNpcCascadeResolver {

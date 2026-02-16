@@ -26,7 +26,6 @@ pub use state::{
     CombatState, GameState, MovementState, MovementTickEvent, PlayerAction, PlayerEvent,
     PlayerState, TileApplyEvent, TileEvent, domain_appliers,
 };
-pub use systems::npc;
 pub use systems::{
     ApplyContext, DialogEvent, DialogTransition, InventoryEvent, LoadingEvent, MenuEvent, NpcEvent,
     PauseMenuEvent, ResolveContext, ShopEvent, domain_resolvers,

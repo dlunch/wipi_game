@@ -667,17 +667,17 @@ impl ExploreUiState {
                 ));
             }
             InputKey::Ok => {
-                if let Some(npc_event) = crate::game::npc::resolve(
-                    player,
-                    data,
-                    crate::game::npc::NpcIntent::Interact {
-                        facing: player.facing,
+                let is_peaceful = data
+                    .find_map(&player.current_map_id)
+                    .is_some_and(|map| map.peaceful);
+                events.push(crate::game::AppExploreEvent::TryNpcInteract {
+                    facing: player.facing,
+                    fallback_action: if is_peaceful {
+                        None
+                    } else {
+                        Some(self.ok_action)
                     },
-                ) {
-                    events.push(crate::game::AppExploreEvent::Npc(npc_event));
-                } else {
-                    events.push(crate::game::AppExploreEvent::UseAction(self.ok_action));
-                }
+                });
             }
             InputKey::Key1 => {
                 if let Some(action) = self.key_actions[0] {
@@ -701,13 +701,6 @@ impl ExploreUiState {
                 events.push(crate::game::AppExploreEvent::EnterMenu);
             }
             _ => {}
-        }
-
-        let is_peaceful = data
-            .find_map(&player.current_map_id)
-            .is_some_and(|map| map.peaceful);
-        if is_peaceful {
-            events.retain(|event| !matches!(event, crate::game::AppExploreEvent::UseAction(_)));
         }
 
         events

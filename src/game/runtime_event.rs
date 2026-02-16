@@ -77,6 +77,10 @@ pub enum TransitionEvent {
 #[derive(Clone)]
 pub enum AppExploreEvent {
     MoveDirection(Direction),
+    TryNpcInteract {
+        facing: Direction,
+        fallback_action: Option<crate::game::ExploreAction>,
+    },
     Npc(crate::game::NpcEvent),
     UseAction(crate::game::ExploreAction),
     EnterPauseMenu,
