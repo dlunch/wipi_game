@@ -91,7 +91,7 @@ impl GameRuntime {
         self.dispatch(GameInput::Tick);
     }
 
-    fn collect_intents(&self, action: GameInput) -> Vec<GameIntent> {
+    fn collect_intents(&mut self, action: GameInput) -> Vec<GameIntent> {
         let mut intents = Vec::new();
 
         match action {
@@ -141,7 +141,22 @@ impl GameRuntime {
                     }
                 }
                 GameState::Shop => {
-                    if let Some(intent) = ShopIntent::intent_for_key(key) {
+                    let inventory_len = self
+                        .session
+                        .as_ref()
+                        .map(|s| s.player.inventory.len())
+                        .unwrap_or(0);
+
+                    if let Some(ui_intent) = self.ui.shop.handle_key(key, inventory_len) {
+                        let intent = match ui_intent {
+                            crate::game::ShopUiIntent::BuySelected(selected) => {
+                                ShopIntent::BuySelected(selected)
+                            }
+                            crate::game::ShopUiIntent::SellSelected(selected) => {
+                                ShopIntent::SellSelected(selected)
+                            }
+                            crate::game::ShopUiIntent::Close => ShopIntent::Close,
+                        };
                         intents.push(GameIntent::Shop(intent));
                     }
                 }
@@ -386,13 +401,6 @@ impl GameRuntime {
 
         match event {
             crate::game::ShopEvent::None => {}
-            crate::game::ShopEvent::ErrorNoActiveShop => {
-                self.state = GameState::Error(String::from("No active shop state"));
-            }
-            crate::game::ShopEvent::SetMode(mode) => {
-                self.ui.shop.set_mode(mode);
-            }
-            crate::game::ShopEvent::SetSelected(selected) => self.ui.shop.set_selected(selected),
             crate::game::ShopEvent::BuyItem(item) => {
                 s.buy_shop_item(item);
             }
@@ -587,20 +595,6 @@ impl GameRuntime {
                 let Some(s) = self.session.as_ref() else {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 };
-                let ui_event = crate::game::shop::resolve_ui(
-                    self.ui.shop.mode,
-                    self.ui.shop.selected,
-                    self.ui.shop.state.is_some(),
-                    s.player.inventory.len(),
-                    self.ui
-                        .shop
-                        .state
-                        .as_ref()
-                        .map(|state| state.items.len())
-                        .unwrap_or(0),
-                    intent,
-                );
-
                 let shop_items = self
                     .ui
                     .shop
@@ -609,37 +603,11 @@ impl GameRuntime {
                     .map(|state| state.items.as_slice())
                     .unwrap_or(&[]);
 
-                let event = match ui_event {
-                    crate::game::shop::ShopUiEvent::None => crate::game::ShopEvent::None,
-                    crate::game::shop::ShopUiEvent::ErrorNoActiveShop => {
-                        crate::game::ShopEvent::ErrorNoActiveShop
-                    }
-                    crate::game::shop::ShopUiEvent::SetMode(mode) => {
-                        crate::game::ShopEvent::SetMode(mode)
-                    }
-                    crate::game::shop::ShopUiEvent::SetSelected(selected) => {
-                        crate::game::ShopEvent::SetSelected(selected)
-                    }
-                    crate::game::shop::ShopUiEvent::RequestBuy(selected) => {
-                        if let Some(item) = crate::game::shop::resolve_buy(
-                            selected,
-                            s.player.stats.gold,
-                            shop_items,
-                        ) {
-                            crate::game::ShopEvent::BuyItem(item)
-                        } else {
-                            crate::game::ShopEvent::None
-                        }
-                    }
-                    crate::game::shop::ShopUiEvent::RequestSell(selected) => {
-                        crate::game::ShopEvent::SellSelected(selected)
-                    }
-                    crate::game::shop::ShopUiEvent::CloseToExplore => {
-                        crate::game::ShopEvent::CloseToExplore
-                    }
-                };
-
-                GameEvent::Shop(event)
+                GameEvent::Shop(crate::game::shop::resolve(
+                    intent,
+                    s.player.stats.gold,
+                    shop_items,
+                ))
             }
             GameIntent::PauseMenu(intent) => {
                 if !matches!(self.state, GameState::PauseMenu) {

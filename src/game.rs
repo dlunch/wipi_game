@@ -37,5 +37,5 @@ pub use systems::{
 };
 pub use ui::{
     DialogState, ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, MenuState, SHOP_VISIBLE_ITEMS,
-    ShopMode, ShopState, UiState,
+    ShopMode, ShopState, ShopUiIntent, UiState,
 };
