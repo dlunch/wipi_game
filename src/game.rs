@@ -1,5 +1,4 @@
 mod game_data;
-mod intent;
 mod rendering;
 mod runtime_event;
 mod save;
@@ -11,7 +10,6 @@ mod systems;
 mod ui;
 
 pub use game_data::GameData;
-pub use intent::{GameInput, InputKey};
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,
     InventoryRender, QuestLogRender, RenderState, ShopRender, StatsRender, build_render_state,
@@ -34,6 +32,6 @@ pub use systems::{
     PauseMenuIntent, ResolveContext, ShopEvent, ShopIntent, domain_resolvers,
 };
 pub use ui::{
-    DialogState, ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, MenuState, SHOP_VISIBLE_ITEMS,
-    ShopMode, ShopState, UiInputEventResolver, UiState,
+    DialogState, ExploreAction, GameInput, INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction,
+    MenuState, SHOP_VISIBLE_ITEMS, ShopMode, ShopState, UiInputEventResolver, UiState,
 };

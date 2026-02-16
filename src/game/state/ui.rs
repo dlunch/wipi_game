@@ -8,13 +8,52 @@ use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{
-    DialogIntent, ExploreIntent, GameInput, GameState, InputKey, InventoryIntent, MenuIntent,
-    PauseMenuIntent, PlayerAction, PlayerEvent, RuntimeEvent, SessionState, ShopIntent,
-    TransitionEvent, has_save_data,
+    DialogIntent, ExploreIntent, GameState, InventoryIntent, MenuIntent, PauseMenuIntent,
+    PlayerAction, PlayerEvent, RuntimeEvent, SessionState, ShopIntent, TransitionEvent,
+    has_save_data,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputKey {
+    Ok,
+    Back,
+    Up,
+    Down,
+    Left,
+    Right,
+    Key0,
+    Key1,
+    Key2,
+    Key3,
+    Key4,
+    Key5,
+    Key6,
+    Key7,
+    Key8,
+    Key9,
+}
+
+impl InputKey {
+    pub fn direction(self) -> Option<crate::data::Direction> {
+        match self {
+            InputKey::Up => Some(crate::data::Direction::Up),
+            InputKey::Down => Some(crate::data::Direction::Down),
+            InputKey::Left => Some(crate::data::Direction::Left),
+            InputKey::Right => Some(crate::data::Direction::Right),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum GameInput {
+    Tick,
+    KeyDown(InputKey),
+    KeyUp(InputKey),
+}
 
 #[derive(Debug, Default)]
 pub struct UiState {
