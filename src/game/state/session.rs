@@ -35,7 +35,6 @@ impl DomainEventApplier for SessionLifecycleApplier {
             RuntimeEvent::StartNewGame
                 | RuntimeEvent::ContinueGame
                 | RuntimeEvent::RestoreSessionStats
-                | RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
         )
     }
 
@@ -54,13 +53,6 @@ impl DomainEventApplier for SessionLifecycleApplier {
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;
                 s.player.restore_stats();
-            }
-            RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
-                let data = ctx.data_rc();
-                let s = ctx
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.spawn_current_map_enemies(&data);
             }
             _ => {}
         }

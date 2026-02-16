@@ -395,16 +395,33 @@ impl DomainEventApplier for CombatPlayerActionApplier {
 
 impl DomainEventApplier for CombatRuntimeEventApplier {
     fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Combat(_))
+        matches!(
+            event,
+            RuntimeEvent::Combat(_)
+                | RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
+        )
     }
 
     fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        if matches!(
+            event,
+            RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
+        ) {
+            let data = ctx.data_rc();
+            let s = ctx
+                .session_mut()
+                .ok_or_else(|| anyhow!("No active session"))?;
+            s.spawn_current_map_enemies(&data);
+            return Ok(());
+        }
+
         let RuntimeEvent::Combat(event) = event else {
             return Ok(());
         };
         let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
+
         match event {
             crate::game::CombatRuntimeEvent::EnemySpawn(enemy) => {
                 s.combat.enemies.push(enemy.clone());
