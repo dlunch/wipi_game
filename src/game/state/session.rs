@@ -13,10 +13,6 @@ pub struct SessionState {
 }
 
 impl SessionState {
-    pub fn restore_stats(&mut self) {
-        self.player.stats.current_hp = self.player.stats.max_hp;
-        self.player.stats.current_mp = self.player.stats.max_mp;
-    }
     pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
         if let Some(map) = data.find_map(&self.player.current_map_id) {
             self.combat.spawn_for_map(map, &data.enemies);
@@ -57,7 +53,7 @@ impl DomainEventApplier for SessionLifecycleApplier {
                 let s = ctx
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;
-                s.restore_stats();
+                s.player.restore_stats();
             }
             RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
                 let data = ctx.data_rc();

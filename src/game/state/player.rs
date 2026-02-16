@@ -100,6 +100,11 @@ impl PlayerState {
         self.stats.total_def(self.get_armor(), self.get_accessory())
     }
 
+    pub fn restore_stats(&mut self) {
+        self.stats.current_hp = self.stats.max_hp;
+        self.stats.current_mp = self.stats.max_mp;
+    }
+
     pub fn has_quest(&self, quest_id: &str) -> bool {
         self.quests
             .iter()
