@@ -396,34 +396,6 @@ impl GameRuntime {
         true
     }
 
-    fn apply_menu_event(&mut self, event: MenuEvent) {
-        scene::apply_menu_event(self, event);
-    }
-
-    fn apply_explore_event(&mut self, event: AppExploreEvent) {
-        scene::apply_explore_event(self, event);
-    }
-
-    fn apply_inventory_event(&mut self, event: crate::game::InventoryEvent) {
-        scene::apply_inventory_event(self, event);
-    }
-
-    fn apply_dialog_event(&mut self, event: crate::game::DialogEvent) {
-        scene::apply_dialog_event(self, event);
-    }
-
-    fn apply_shop_event(&mut self, event: crate::game::ShopEvent) {
-        scene::apply_shop_event(self, event);
-    }
-
-    fn apply_pause_menu_event(&mut self, event: crate::game::PauseMenuEvent) {
-        scene::apply_pause_menu_event(self, event);
-    }
-
-    fn apply_transition_event(&mut self, event: TransitionEvent) {
-        scene::apply_transition_event(self, event);
-    }
-
     fn resolve_intent(&mut self, intent: GameIntent) -> Vec<RuntimeEvent> {
         match intent {
             GameIntent::System(system_intent) => match system_intent {
@@ -519,14 +491,14 @@ impl GameRuntime {
                 DomainEvent::Loading(event) => self.apply_update_loading(event),
                 DomainEvent::Movement(event) => self.apply_update_movement(event),
                 DomainEvent::Combat(event) => self.apply_update_combat(event),
-                DomainEvent::Menu(event) => self.apply_menu_event(event),
-                DomainEvent::Explore(event) => self.apply_explore_event(event),
-                DomainEvent::Inventory(event) => self.apply_inventory_event(event),
-                DomainEvent::Dialog(event) => self.apply_dialog_event(event),
-                DomainEvent::Shop(event) => self.apply_shop_event(event),
-                DomainEvent::PauseMenu(event) => self.apply_pause_menu_event(event),
+                DomainEvent::Menu(event) => scene::apply_menu_event(self, event),
+                DomainEvent::Explore(event) => scene::apply_explore_event(self, event),
+                DomainEvent::Inventory(event) => scene::apply_inventory_event(self, event),
+                DomainEvent::Dialog(event) => scene::apply_dialog_event(self, event),
+                DomainEvent::Shop(event) => scene::apply_shop_event(self, event),
+                DomainEvent::PauseMenu(event) => scene::apply_pause_menu_event(self, event),
             },
-            RuntimeEvent::Transition(event) => self.apply_transition_event(event),
+            RuntimeEvent::Transition(event) => scene::apply_transition_event(self, event),
             RuntimeEvent::Exit(code) => wipi::kernel::exit(code),
             RuntimeEvent::Error(message) => self.state = GameState::Error(message),
         }
