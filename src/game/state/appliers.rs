@@ -7,6 +7,6 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
     handlers.extend(super::combat::domain_appliers());
     handlers.extend(super::movement::domain_appliers());
     handlers.extend(super::session::domain_appliers());
-    handlers.extend(super::ui::domain_appliers());
+    handlers.extend(super::ui_game_event::domain_appliers());
     handlers
 }

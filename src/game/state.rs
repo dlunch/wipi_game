@@ -4,6 +4,7 @@ mod movement;
 mod player;
 pub(crate) mod session;
 pub(crate) mod ui;
+mod ui_game_event;
 
 pub use appliers::domain_appliers;
 pub use combat::{CombatState, FieldEnemy, SkillEffect};
