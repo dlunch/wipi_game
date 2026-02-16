@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 pub use dialog::{DialogEvent, DialogTransition};
 pub use inventory::InventoryEvent;
-pub use lifecycle::{LifecycleEvent, LoadingEvent, continue_game, start_new_game};
+pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use menu::{MenuEvent, PauseMenuEvent};
 pub use npc::NpcEvent;
 pub use runtime::{DomainEventResolver, ResolveContext};

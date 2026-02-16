@@ -6,21 +6,20 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{
-    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionState,
-};
-
-#[derive(Clone, Copy)]
-pub enum LifecycleEvent {
-    StartNewGame,
-    ContinueGame,
-}
+use crate::game::{DialogState, GameData, GameEvent, GameState};
 
 #[derive(Clone)]
 pub enum LoadingEvent {
     Advance(usize),
     Loaded,
     Error(String),
+}
+
+#[derive(Clone, Copy)]
+pub enum LifecycleEvent {
+    ResetUi,
+    SetupNewGame,
+    SetupContinue,
 }
 
 pub fn resolve_loading(step: usize, load_result: Result<bool, String>) -> LoadingEvent {
@@ -77,106 +76,29 @@ impl DomainEventResolver for StartContinueResolver {
         matches!(event, GameEvent::StartNewGame | GameEvent::ContinueGame)
     }
 
-    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let lifecycle_event = match event {
-            GameEvent::StartNewGame => LifecycleEvent::StartNewGame,
-            GameEvent::ContinueGame => LifecycleEvent::ContinueGame,
-            _ => return Ok(Vec::new()),
-        };
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+        let mut out = Vec::new();
+        out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
 
-        Ok(alloc::vec![GameEvent::Lifecycle(lifecycle_event)])
+        match event {
+            GameEvent::StartNewGame => {
+                out.push(GameEvent::Lifecycle(LifecycleEvent::SetupNewGame));
+                if let Some(dialog_state) = intro_dialog_state(ctx.data()) {
+                    out.push(GameEvent::OpenDialogState(dialog_state));
+                }
+            }
+            GameEvent::ContinueGame => {
+                out.push(GameEvent::Lifecycle(LifecycleEvent::SetupContinue));
+            }
+            _ => {}
+        }
+
+        Ok(out)
     }
 }
 
-pub fn start_new_game(data: &GameData) -> (GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    if let Some(ref weapon_id) = config.equip_weapon
-        && let Some(weapon) = data.find_item(weapon_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(weapon);
-        player.equipped_weapon = Some(idx);
-    }
-    if let Some(ref armor_id) = config.equip_armor
-        && let Some(armor) = data.find_item(armor_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(armor);
-        player.equipped_armor = Some(idx);
-    }
-    for start_item in &config.items {
-        if let Some(item) = data.find_item(&start_item.item_id).cloned() {
-            for _ in 0..start_item.count {
-                player.inventory.push(item.clone());
-            }
-        }
-    }
-
-    if let Some(map) = data.find_map(&config.start_map) {
-        let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-        player.current_map_id = map.id.clone();
-        player.x = x;
-        player.y = y;
-    }
-
-    let state = if config
-        .intro_dialog
-        .as_ref()
-        .and_then(|(dialog_id, _)| data.find_dialog(dialog_id))
-        .is_some()
-    {
-        GameState::Dialog
-    } else {
-        GameState::Explore
-    };
-
-    let session = SessionState {
-        player,
-        combat,
-        movement: MovementState::default(),
-        skill_cooldowns: [0; 3],
-        mp_regen_timer: 0,
-    };
-
-    (state, session)
-}
-
-pub fn continue_game(data: &GameData) -> (GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    match crate::game::load_game(&mut player) {
-        Ok(true) => {
-            if data.find_map(&player.current_map_id).is_none() {
-                let (x, y) = (player.x, player.y);
-                player.current_map_id = config.fallback_map.clone();
-                player.x = x;
-                player.y = y;
-            }
-            if let Some(map) = data.find_map(&player.current_map_id)
-                && (map.get_tile(player.x, player.y) == crate::data::Tile::Wall
-                    || player.x >= map.width
-                    || player.y >= map.height)
-                && let Some((x, y)) = map.find_player_start()
-            {
-                player.x = x;
-                player.y = y;
-            }
-
-            let session = SessionState {
-                player,
-                combat,
-                movement: MovementState::default(),
-                skill_cooldowns: [0; 3],
-                mp_regen_timer: 0,
-            };
-
-            (GameState::Explore, session)
-        }
-        Ok(false) | Err(_) => start_new_game(data),
-    }
+fn intro_dialog_state(data: &GameData) -> Option<DialogState> {
+    let (dialog_id, npc_name) = data.newgame.intro_dialog.as_ref()?;
+    let dialog = data.find_dialog(dialog_id)?;
+    Some(DialogState::from_dialog(npc_name.clone(), dialog))
 }

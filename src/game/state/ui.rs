@@ -538,10 +538,6 @@ impl DialogUiState {
     pub fn close(&mut self) {
         self.state = None;
     }
-
-    pub fn set(&mut self, state: Option<DialogState>) {
-        self.state = state;
-    }
 }
 
 #[derive(Debug)]

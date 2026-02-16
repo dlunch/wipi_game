@@ -1,25 +1,18 @@
 use anyhow::Result;
 
-use crate::game::{
-    DialogState, GameEvent, GameState, MenuState, SessionState, UiState, has_save_data,
-};
+use crate::game::{GameEvent, MenuState, SessionState, UiState, has_save_data};
 
 impl UiState {
     pub fn apply_game_event(
         &mut self,
-        data: &crate::game::GameData,
-        state: &GameState,
+        _data: &crate::game::GameData,
+        _state: &crate::game::GameState,
         session: Option<&SessionState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::StartNewGame | GameEvent::ContinueGame => {
+            GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
                 *self = UiState::default();
-                if matches!(state, GameState::Dialog)
-                    && let Some(dialog_state) = intro_dialog_state(data)
-                {
-                    self.dialog.set(Some(dialog_state));
-                }
             }
             GameEvent::Menu(event) => match event {
                 crate::game::MenuEvent::None => {}
@@ -88,10 +81,4 @@ impl UiState {
         }
         Ok(())
     }
-}
-
-fn intro_dialog_state(data: &crate::game::GameData) -> Option<DialogState> {
-    let (dialog_id, npc_name) = data.newgame.intro_dialog.as_ref()?;
-    let dialog = data.find_dialog(dialog_id)?;
-    Some(DialogState::from_dialog(npc_name.clone(), dialog))
 }
