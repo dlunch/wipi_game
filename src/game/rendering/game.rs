@@ -158,7 +158,7 @@ fn build_explore_render(
         .combat
         .enemies
         .iter()
-        .find(|enemy| !enemy.is_dead())
+        .find(|enemy| enemy.hp > 0)
         .map(|enemy| enemy.data.name.clone());
 
     let enemies = session
@@ -171,7 +171,7 @@ fn build_explore_render(
             hp: enemy.hp,
             max_hp: enemy.data.hp,
             hit_flash: enemy.hit_flash,
-            dead: enemy.is_dead(),
+            dead: enemy.hp <= 0,
         })
         .collect();
 

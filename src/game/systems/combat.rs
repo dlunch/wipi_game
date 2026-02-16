@@ -11,6 +11,8 @@ use crate::game::{CombatEvent, GameEvent, GameState, SessionEvent, TransitionEve
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
+const HIT_FLASH_DURATION: u32 = 10;
+const ENEMY_ATTACK_COOLDOWN: u32 = 30;
 const PLAYER_ATTACK_COOLDOWN: u32 = 15;
 const ATTACK_EFFECT_DURATION: u32 = 6;
 const SKILL_EFFECT_DURATION: u32 = 8;
@@ -78,20 +80,20 @@ pub fn resolve_tick(
 
     if update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
         for enemy in &mut enemies {
-            if !enemy.is_dead() {
-                enemy.update(player_x, player_y, map);
+            if !enemy_is_dead(enemy) {
+                update_enemy(enemy, player_x, player_y, map);
             }
         }
     }
 
     let previous_enemies = state.enemies.clone();
     for enemy in &mut enemies {
-        if enemy.is_dead() {
+        if enemy_is_dead(enemy) {
             continue;
         }
 
-        if enemy.distance_to(player_x, player_y) <= 1 && enemy.can_attack() {
-            let raw_damage = enemy.do_attack();
+        if enemy_distance_to(enemy, player_x, player_y) <= 1 && enemy_can_attack(enemy) {
+            let raw_damage = enemy_do_attack(enemy);
             let actual_damage = (raw_damage - player_def / 2).max(1);
             damage_taken += actual_damage;
             if player_hit_flash != 10 {
@@ -103,7 +105,7 @@ pub fn resolve_tick(
         }
     }
 
-    enemies.retain(|e| !e.is_dead());
+    enemies.retain(|enemy| !enemy_is_dead(enemy));
 
     try_respawn(
         &mut enemies,
@@ -433,6 +435,71 @@ fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
     id
 }
 
+fn enemy_is_dead(enemy: &FieldEnemy) -> bool {
+    enemy.hp <= 0
+}
+
+fn enemy_take_damage(enemy: &mut FieldEnemy, damage: i32) {
+    enemy.hp = (enemy.hp - damage).max(0);
+    enemy.hit_flash = HIT_FLASH_DURATION;
+}
+
+fn enemy_distance_to(enemy: &FieldEnemy, px: usize, py: usize) -> usize {
+    enemy.x.abs_diff(px) + enemy.y.abs_diff(py)
+}
+
+fn update_enemy(enemy: &mut FieldEnemy, player_x: usize, player_y: usize, map: &Map) {
+    if enemy.hit_flash > 0 {
+        enemy.hit_flash -= 1;
+    }
+    if enemy.attack_cooldown > 0 {
+        enemy.attack_cooldown -= 1;
+    }
+
+    if enemy_distance_to(enemy, player_x, player_y) > 1 {
+        move_enemy_towards(enemy, player_x, player_y, map);
+    }
+}
+
+fn move_enemy_towards(enemy: &mut FieldEnemy, target_x: usize, target_y: usize, map: &Map) {
+    let dx: i32 = match target_x.cmp(&enemy.x) {
+        core::cmp::Ordering::Greater => 1,
+        core::cmp::Ordering::Less => -1,
+        core::cmp::Ordering::Equal => 0,
+    };
+    let dy: i32 = match target_y.cmp(&enemy.y) {
+        core::cmp::Ordering::Greater => 1,
+        core::cmp::Ordering::Less => -1,
+        core::cmp::Ordering::Equal => 0,
+    };
+
+    let new_x = enemy.x.checked_add_signed(dx as isize);
+    let new_y = enemy.y.checked_add_signed(dy as isize);
+
+    if let Some(nx) = new_x
+        && dx != 0
+        && map.get_tile(nx, enemy.y).is_passable()
+    {
+        enemy.x = nx;
+        return;
+    }
+    if let Some(ny) = new_y
+        && dy != 0
+        && map.get_tile(enemy.x, ny).is_passable()
+    {
+        enemy.y = ny;
+    }
+}
+
+fn enemy_can_attack(enemy: &FieldEnemy) -> bool {
+    enemy.attack_cooldown == 0
+}
+
+fn enemy_do_attack(enemy: &mut FieldEnemy) -> i32 {
+    enemy.attack_cooldown = ENEMY_ATTACK_COOLDOWN;
+    enemy.data.atk
+}
+
 fn build_map_enemies(
     map: &Map,
     enemy_data: &[Enemy],
@@ -495,10 +562,10 @@ fn apply_player_attack_action(
 
     let mut kill = None;
     for enemy in &mut state.enemies {
-        if enemy.x == tx && enemy.y == ty && !enemy.is_dead() {
+        if enemy.x == tx && enemy.y == ty && !enemy_is_dead(enemy) {
             let damage = (player_atk - enemy.data.def / 2).max(1);
-            enemy.take_damage(damage);
-            if enemy.is_dead() {
+            enemy_take_damage(enemy, damage);
+            if enemy_is_dead(enemy) {
                 kill = Some(KillReward {
                     enemy_id: enemy.data.id.clone(),
                     exp: enemy.data.exp,
@@ -579,10 +646,10 @@ fn apply_skill_action(
 
 fn damage_enemy_at(state: &mut CombatState, x: usize, y: usize, damage: i32) -> Option<KillReward> {
     for enemy in &mut state.enemies {
-        if enemy.x == x && enemy.y == y && !enemy.is_dead() {
+        if enemy.x == x && enemy.y == y && !enemy_is_dead(enemy) {
             let actual_damage = (damage - enemy.data.def / 2).max(1);
-            enemy.take_damage(actual_damage);
-            if enemy.is_dead() {
+            enemy_take_damage(enemy, actual_damage);
+            if enemy_is_dead(enemy) {
                 return Some(KillReward {
                     enemy_id: enemy.data.id.clone(),
                     exp: enemy.data.exp,

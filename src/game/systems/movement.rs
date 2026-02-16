@@ -29,7 +29,7 @@ pub fn resolve_world_tick(
     let map = data.find_map(&player.current_map_id);
     let enemy_positions: Vec<(usize, usize)> = enemies
         .iter()
-        .filter(|enemy| !enemy.is_dead())
+        .filter(|enemy| enemy.hp > 0)
         .map(|enemy| (enemy.x, enemy.y))
         .collect();
     let npc_positions: Vec<(usize, usize)> = data

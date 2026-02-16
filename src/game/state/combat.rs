@@ -3,11 +3,8 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::data::{Enemy, Map, SkillType};
+use crate::data::{Enemy, SkillType};
 use crate::game::{CombatEvent, GameEvent};
-
-const HIT_FLASH_DURATION: u32 = 10;
-const ENEMY_ATTACK_COOLDOWN: u32 = 30;
 
 #[derive(Debug, Clone)]
 pub struct KillReward {
@@ -47,71 +44,6 @@ impl FieldEnemy {
             attack_cooldown: 0,
             hit_flash: 0,
         }
-    }
-
-    pub fn is_dead(&self) -> bool {
-        self.hp <= 0
-    }
-
-    pub fn take_damage(&mut self, damage: i32) {
-        self.hp = (self.hp - damage).max(0);
-        self.hit_flash = HIT_FLASH_DURATION;
-    }
-
-    pub fn distance_to(&self, px: usize, py: usize) -> usize {
-        self.x.abs_diff(px) + self.y.abs_diff(py)
-    }
-
-    pub fn update(&mut self, player_x: usize, player_y: usize, map: &Map) {
-        if self.hit_flash > 0 {
-            self.hit_flash -= 1;
-        }
-        if self.attack_cooldown > 0 {
-            self.attack_cooldown -= 1;
-        }
-
-        if self.distance_to(player_x, player_y) > 1 {
-            self.move_towards(player_x, player_y, map);
-        }
-    }
-
-    fn move_towards(&mut self, target_x: usize, target_y: usize, map: &Map) {
-        let dx: i32 = match target_x.cmp(&self.x) {
-            core::cmp::Ordering::Greater => 1,
-            core::cmp::Ordering::Less => -1,
-            core::cmp::Ordering::Equal => 0,
-        };
-        let dy: i32 = match target_y.cmp(&self.y) {
-            core::cmp::Ordering::Greater => 1,
-            core::cmp::Ordering::Less => -1,
-            core::cmp::Ordering::Equal => 0,
-        };
-
-        let new_x = self.x.checked_add_signed(dx as isize);
-        let new_y = self.y.checked_add_signed(dy as isize);
-
-        if let Some(nx) = new_x
-            && dx != 0
-            && map.get_tile(nx, self.y).is_passable()
-        {
-            self.x = nx;
-            return;
-        }
-        if let Some(ny) = new_y
-            && dy != 0
-            && map.get_tile(self.x, ny).is_passable()
-        {
-            self.y = ny;
-        }
-    }
-
-    pub fn can_attack(&self) -> bool {
-        self.attack_cooldown == 0
-    }
-
-    pub fn do_attack(&mut self) -> i32 {
-        self.attack_cooldown = ENEMY_ATTACK_COOLDOWN;
-        self.data.atk
     }
 }
 
