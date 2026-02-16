@@ -30,7 +30,7 @@ enum GameEvent {
     None,
     UpdateLoading(game::LoadingEvent),
     UpdateMovement(AppMovementEvent),
-    UpdateCombat(game::combat::CombatResult),
+    UpdateCombat(game::combat::CombatTickEvent),
     Menu(MenuEvent),
     Explore(AppExploreEvent),
     Inventory(game::InventoryEvent),
@@ -191,13 +191,13 @@ impl GameInner {
         }
     }
 
-    fn apply_update_combat(&mut self, result: game::combat::CombatResult) {
+    fn apply_update_combat(&mut self, result: game::combat::CombatTickEvent) {
         let Some(s) = self.session.as_mut() else {
             self.state = GameState::Error(String::from("No active session"));
             return;
         };
 
-        let game::combat::CombatResult {
+        let game::combat::CombatTickEvent {
             damage_taken,
             next_skill_cooldowns,
             next_mp_regen_timer,

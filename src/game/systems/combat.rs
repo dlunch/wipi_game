@@ -27,7 +27,7 @@ struct TickContext<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct CombatResult {
+pub struct CombatTickEvent {
     pub damage_taken: i32,
     pub next_skill_cooldowns: [u32; 3],
     pub next_mp_regen_timer: u32,
@@ -35,7 +35,7 @@ pub struct CombatResult {
     pub next_state: CombatState,
 }
 
-pub fn reduce_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatResult {
+pub fn reduce_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTickEvent {
     let mut next_state = state.clone();
     let mut result = update(
         &mut next_state,
@@ -53,7 +53,7 @@ pub fn reduce_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatRes
     result
 }
 
-fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatResult {
+fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatTickEvent {
     state.update_counter = state.update_counter.wrapping_add(1);
 
     if state.player_attack_cooldown > 0 {
@@ -100,7 +100,7 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> CombatResult {
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
 
-    CombatResult {
+    CombatTickEvent {
         damage_taken,
         next_skill_cooldowns,
         next_mp_regen_timer,
