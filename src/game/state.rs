@@ -7,7 +7,7 @@ pub(crate) mod ui;
 mod ui_game_event;
 
 pub use appliers::domain_appliers;
-pub use combat::{CombatState, FieldEnemy, SkillEffect};
+pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
 

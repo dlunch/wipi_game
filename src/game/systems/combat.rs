@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Enemy, Map};
 
-use crate::game::state::{CombatState, FieldEnemy};
+use crate::game::state::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{CombatRuntimeEvent, GameEvent, GameState};
 
@@ -266,11 +266,13 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
 }
 
 struct UpdateCombatResolver;
+struct CombatPlayerActionResolver;
 
 static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
+static COMBAT_PLAYER_ACTION_RESOLVER: CombatPlayerActionResolver = CombatPlayerActionResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&UPDATE_COMBAT_RESOLVER]
+    alloc::vec![&UPDATE_COMBAT_RESOLVER, &COMBAT_PLAYER_ACTION_RESOLVER]
 }
 
 impl DomainEventResolver for UpdateCombatResolver {
@@ -297,6 +299,94 @@ impl DomainEventResolver for UpdateCombatResolver {
             map,
             &ctx.data().enemies,
         ))
+    }
+}
+
+impl DomainEventResolver for CombatPlayerActionResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::CombatPlayerAction(_))
+    }
+
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+        ensure!(
+            matches!(ctx.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let GameEvent::CombatPlayerAction(action) = event else {
+            return Ok(Vec::new());
+        };
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+
+        let mut next_combat = s.combat.clone();
+        let mut events = Vec::new();
+
+        if let Some((slot, skill)) = action.skill() {
+            if !s
+                .player
+                .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
+            {
+                return Ok(Vec::new());
+            }
+
+            let combat_event = next_combat.apply(CombatAction::UseSkill {
+                skill,
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_atk: s.player.total_atk(),
+                facing: s.player.facing,
+            });
+            let CombatEvent::Skill(result) = combat_event else {
+                return Ok(Vec::new());
+            };
+
+            let mut next_skill_cooldowns = s.skill_cooldowns;
+            next_skill_cooldowns[slot] = skill.cooldown;
+            events.push(GameEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
+                next_skill_cooldowns,
+            )));
+            events.push(GameEvent::Combat(CombatRuntimeEvent::RecoverMp(
+                -skill.mp_cost,
+            )));
+
+            for effect in result.player_effects {
+                match effect {
+                    PlayerEffect::Heal(amount) => {
+                        events.push(GameEvent::Combat(CombatRuntimeEvent::Heal(amount)));
+                    }
+                }
+            }
+
+            for reward in result.kills {
+                events.push(GameEvent::Combat(CombatRuntimeEvent::GrantKillReward {
+                    enemy_id: reward.enemy_id,
+                    exp: reward.exp,
+                    gold: reward.gold,
+                }));
+            }
+        } else if let CombatEvent::Attack(Some(reward)) =
+            next_combat.apply(CombatAction::PlayerAttack {
+                player_x: s.player.x,
+                player_y: s.player.y,
+                player_atk: s.player.total_atk(),
+                facing: s.player.facing,
+            })
+        {
+            events.push(GameEvent::Combat(CombatRuntimeEvent::GrantKillReward {
+                enemy_id: reward.enemy_id,
+                exp: reward.exp,
+                gold: reward.gold,
+            }));
+        }
+
+        events.push(GameEvent::Combat(
+            CombatRuntimeEvent::SetPlayerAttackCooldown(next_combat.player_attack_cooldown),
+        ));
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetSkillEffects(
+            next_combat.skill_effects.clone(),
+        )));
+        push_enemy_events(&s.combat.enemies, &next_combat.enemies, &mut events);
+
+        Ok(events)
     }
 }
 

@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{GameEvent, GameState, PlayerAction, PlayerEvent, SessionState};
+use crate::game::{GameEvent, GameState, PlayerAction, PlayerEvent};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -365,32 +365,12 @@ impl CombatState {
     }
 }
 
-struct CombatPlayerActionApplier;
 struct CombatRuntimeEventApplier;
 
-static COMBAT_PLAYER_ACTION_APPLIER: CombatPlayerActionApplier = CombatPlayerActionApplier;
 static COMBAT_RUNTIME_EVENT_APPLIER: CombatRuntimeEventApplier = CombatRuntimeEventApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER, &COMBAT_RUNTIME_EVENT_APPLIER]
-}
-
-impl DomainEventApplier for CombatPlayerActionApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::CombatPlayerAction(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::CombatPlayerAction(action) = event else {
-            return Ok(());
-        };
-        let data = alloc::rc::Rc::clone(ctx.data);
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        apply_explore_action(s, &data, *action);
-        Ok(())
-    }
+    alloc::vec![&COMBAT_RUNTIME_EVENT_APPLIER]
 }
 
 impl DomainEventApplier for CombatRuntimeEventApplier {
@@ -402,11 +382,11 @@ impl DomainEventApplier for CombatRuntimeEventApplier {
     }
 
     fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let data = ctx.data_rc();
         if matches!(
             event,
             GameEvent::Transition(crate::game::TransitionEvent::MapChanged)
         ) {
-            let data = ctx.data_rc();
             let s = ctx
                 .session_mut()
                 .ok_or_else(|| anyhow!("No active session"))?;
@@ -501,7 +481,26 @@ impl DomainEventApplier for CombatRuntimeEventApplier {
             crate::game::CombatRuntimeEvent::RecoverMp(recover_mp) => {
                 if *recover_mp > 0 {
                     s.player.stats.recover_mp(*recover_mp);
+                } else if *recover_mp < 0 {
+                    s.player.stats.current_mp = (s.player.stats.current_mp + *recover_mp).max(0);
                 }
+            }
+            crate::game::CombatRuntimeEvent::Heal(heal) => {
+                if *heal > 0 {
+                    let _ = s.player.apply(PlayerAction::Heal(*heal));
+                }
+            }
+            crate::game::CombatRuntimeEvent::GrantKillReward {
+                enemy_id,
+                exp,
+                gold,
+            } => {
+                s.player.apply_kill_reward(&KillReward {
+                    enemy_id: enemy_id.clone(),
+                    exp: *exp,
+                    gold: *gold,
+                });
+                s.player.apply_quest_kill(&data, enemy_id);
             }
             crate::game::CombatRuntimeEvent::TakeDamage(damage_taken) => {
                 if *damage_taken > 0
@@ -515,58 +514,5 @@ impl DomainEventApplier for CombatRuntimeEventApplier {
             }
         }
         Ok(())
-    }
-}
-
-fn apply_explore_action(
-    session: &mut SessionState,
-    data: &crate::game::GameData,
-    action: crate::game::ExploreAction,
-) {
-    if let Some((slot, skill)) = action.skill() {
-        if !session
-            .player
-            .can_use_skill(&session.skill_cooldowns, slot, skill.mp_cost)
-        {
-            return;
-        }
-
-        let combat_event = session.combat.apply(CombatAction::UseSkill {
-            skill,
-            player_x: session.player.x,
-            player_y: session.player.y,
-            player_atk: session.player.total_atk(),
-            facing: session.player.facing,
-        });
-        let CombatEvent::Skill(result) = combat_event else {
-            return;
-        };
-
-        session.skill_cooldowns[slot] = skill.cooldown;
-        session.player.stats.current_mp = (session.player.stats.current_mp - skill.mp_cost).max(0);
-
-        for effect in &result.player_effects {
-            match effect {
-                PlayerEffect::Heal(amount) => {
-                    let _ = session.player.apply(PlayerAction::Heal(*amount));
-                }
-            }
-        }
-
-        session.player.apply_kill_rewards(&result.kills);
-        for reward in &result.kills {
-            session.player.apply_quest_kill(data, &reward.enemy_id);
-        }
-        return;
-    }
-
-    if let CombatEvent::Attack(Some(reward)) = session.combat.apply(CombatAction::PlayerAttack {
-        player_x: session.player.x,
-        player_y: session.player.y,
-        player_atk: session.player.total_atk(),
-        facing: session.player.facing,
-    }) {
-        session.player.apply_kill_reward(&reward);
-        session.player.apply_quest_kill(data, &reward.enemy_id);
     }
 }

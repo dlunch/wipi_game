@@ -6,10 +6,23 @@ use alloc::string::String;
 pub enum CombatRuntimeEvent {
     EnemySpawn(FieldEnemy),
     EnemyDespawn(u32),
-    EnemyMove { enemy_id: u32, x: usize, y: usize },
-    EnemyHpSet { enemy_id: u32, hp: i32 },
-    EnemyAttackCooldownSet { enemy_id: u32, cooldown: u32 },
-    EnemyHitFlashSet { enemy_id: u32, hit_flash: u32 },
+    EnemyMove {
+        enemy_id: u32,
+        x: usize,
+        y: usize,
+    },
+    EnemyHpSet {
+        enemy_id: u32,
+        hp: i32,
+    },
+    EnemyAttackCooldownSet {
+        enemy_id: u32,
+        cooldown: u32,
+    },
+    EnemyHitFlashSet {
+        enemy_id: u32,
+        hit_flash: u32,
+    },
     SetPlayerAttackCooldown(u32),
     SetPlayerHitFlash(u32),
     SetSkillEffects(alloc::vec::Vec<SkillEffect>),
@@ -19,6 +32,12 @@ pub enum CombatRuntimeEvent {
     SetSkillCooldowns([u32; 3]),
     SetMpRegenTimer(u32),
     RecoverMp(i32),
+    Heal(i32),
+    GrantKillReward {
+        enemy_id: String,
+        exp: i32,
+        gold: i32,
+    },
     TakeDamage(i32),
 }
 

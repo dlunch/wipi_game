@@ -190,12 +190,6 @@ impl PlayerState {
         self.stats.gold = (self.stats.gold + reward.gold).max(0);
     }
 
-    pub fn apply_kill_rewards(&mut self, rewards: &[KillReward]) {
-        for reward in rewards {
-            self.apply_kill_reward(reward);
-        }
-    }
-
     pub fn apply_tile_event(&mut self, data: &GameData, event: TileEvent) -> TileApplyEvent {
         match event {
             TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
