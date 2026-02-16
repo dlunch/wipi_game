@@ -1,8 +1,7 @@
 use crate::data::Direction;
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, ensure};
 
 use super::PlayerState;
-use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{AppMovementEvent, GameEvent, GameState, TileApplyEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
@@ -44,6 +43,39 @@ impl MovementState {
             self.pressed_direction = None;
         }
     }
+
+    pub fn apply_event(
+        &mut self,
+        data: &crate::game::GameData,
+        state: &GameState,
+        player: &mut PlayerState,
+        event: &GameEvent,
+    ) -> Result<()> {
+        match event {
+            GameEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) => {
+                let moved = self.apply_tick(player, *movement_event);
+                if moved && let Some(tile_event) = tile_event.clone() {
+                    let _: TileApplyEvent = player.apply_tile_event(data, tile_event);
+                }
+            }
+            GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) => {
+                ensure!(
+                    matches!(state, GameState::Explore),
+                    "Invalid state: expected Explore"
+                );
+                self.on_direction_released(*direction);
+            }
+            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
+                ensure!(
+                    matches!(state, GameState::Explore),
+                    "Invalid state: expected Explore"
+                );
+                self.on_direction_pressed(*direction);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
@@ -62,94 +94,5 @@ fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
     }
     if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
         player.y = new_y;
-    }
-}
-
-struct MovementApplier;
-struct ReleaseMovementDirectionApplier;
-struct PressMovementDirectionApplier;
-
-static MOVEMENT_APPLIER: MovementApplier = MovementApplier;
-static RELEASE_MOVEMENT_DIRECTION_APPLIER: ReleaseMovementDirectionApplier =
-    ReleaseMovementDirectionApplier;
-static PRESS_MOVEMENT_DIRECTION_APPLIER: PressMovementDirectionApplier =
-    PressMovementDirectionApplier;
-
-pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![
-        &MOVEMENT_APPLIER,
-        &RELEASE_MOVEMENT_DIRECTION_APPLIER,
-        &PRESS_MOVEMENT_DIRECTION_APPLIER,
-    ]
-}
-
-impl DomainEventApplier for MovementApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Movement(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event else {
-            return Ok(());
-        };
-        let data = alloc::rc::Rc::clone(ctx.data);
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        let moved = s.movement.apply_tick(&mut s.player, *movement_event);
-        if moved && let Some(tile_event) = tile_event.clone() {
-            let _: TileApplyEvent = s.player.apply_tile_event(&data, tile_event);
-        }
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for ReleaseMovementDirectionApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) = event
-        else {
-            return Ok(());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        s.movement.on_direction_released(*direction);
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for PressMovementDirectionApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(_))
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) = event
-        else {
-            return Ok(());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        s.movement.on_direction_pressed(*direction);
-        Ok(())
     }
 }

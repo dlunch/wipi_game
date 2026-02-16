@@ -21,13 +21,13 @@ pub use runtime_event::{
     TransitionEvent, UiEvent,
 };
 pub use save::{has_save_data, load_game, save_game};
-pub use session::SessionState;
+pub use session::{SessionState, continue_game, enter_session, start_new_game};
 pub use state::{
     CombatState, GameState, MovementState, MovementTickEvent, PlayerAction, PlayerEvent,
-    PlayerState, TileApplyEvent, TileEvent, domain_appliers,
+    PlayerState, TileApplyEvent, TileEvent,
 };
 pub use systems::{
-    ApplyContext, DialogEvent, DialogTransition, InventoryEvent, LoadingEvent, MenuEvent, NpcEvent,
+    DialogEvent, DialogTransition, InventoryEvent, LoadingEvent, MenuEvent, NpcEvent,
     PauseMenuEvent, ResolveContext, ShopEvent, domain_resolvers,
 };
 pub use ui::{

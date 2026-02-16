@@ -1,11 +1,10 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
 use crate::game::state::combat::KillReward;
-use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{GameData, GameEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -290,121 +289,78 @@ impl PlayerState {
     }
 }
 
-struct DialogActionApplier;
-struct InventoryAndShopApplier;
-
-static DIALOG_ACTION_APPLIER: DialogActionApplier = DialogActionApplier;
-static INVENTORY_AND_SHOP_APPLIER: InventoryAndShopApplier = InventoryAndShopApplier;
-
-pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&DIALOG_ACTION_APPLIER, &INVENTORY_AND_SHOP_APPLIER]
-}
-
-impl DomainEventApplier for DialogActionApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::ApplyDialogAction(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::ApplyDialogAction(action) = event else {
-            return Ok(());
-        };
-        let data = alloc::rc::Rc::clone(ctx.data);
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-
-        match action {
-            crate::data::DialogAction::GiveQuest(id) => {
-                if !s.player.quests.iter().any(|q| q.quest_id == *id) {
-                    s.player.quests.push(crate::data::QuestProgress {
-                        quest_id: id.clone(),
-                        current_count: 0,
-                        completed: false,
-                        rewarded: false,
-                    });
-                }
-            }
-            crate::data::DialogAction::CompleteQuest(id) => {
-                let can_reward = s
-                    .player
-                    .quests
-                    .iter()
-                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
-                if can_reward && let Some(quest) = data.find_quest(id) {
-                    s.player.stats.add_exp(quest.reward_exp);
-                    let _ = s.player.apply(PlayerAction::AddGold(quest.reward_gold));
-
-                    if let Some(item_id) = &quest.reward_item
-                        && let Some(item) = data.find_item(item_id).cloned()
-                    {
-                        let _ = s.player.apply(PlayerAction::AddItem(item));
-                    }
-
-                    if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
-                        progress.rewarded = true;
-                    }
-                }
-            }
-            crate::data::DialogAction::GiveItem(id) => {
-                if let Some(item) = data.find_item(id).cloned() {
-                    let _ = s.player.apply(PlayerAction::AddItem(item));
-                }
-            }
-            crate::data::DialogAction::TakeItem(id) => {
-                if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
-                    let _ = s.player.apply(PlayerAction::RemoveItemAt(index));
-                }
-            }
-            crate::data::DialogAction::GiveGold(amount) => {
-                let _ = s.player.apply(PlayerAction::AddGold(*amount));
-            }
-            crate::data::DialogAction::TakeGold(amount) => {
-                let _ = s.player.apply(PlayerAction::AddGold(-*amount));
-            }
-            crate::data::DialogAction::OpenShop(_) => {}
-            crate::data::DialogAction::Heal => {
-                s.player.stats.current_hp = s.player.stats.max_hp;
-                s.player.stats.current_mp = s.player.stats.max_mp;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl DomainEventApplier for InventoryAndShopApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(_))
-                | GameEvent::Shop(crate::game::ShopEvent::BuyItem(_))
-                | GameEvent::Shop(crate::game::ShopEvent::SellSelected(_))
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let s = ctx
-            .session_mut()
-            .ok_or_else(|| anyhow!("No active session"))?;
-
+impl PlayerState {
+    pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
+            GameEvent::ApplyDialogAction(action) => match action {
+                crate::data::DialogAction::GiveQuest(id) => {
+                    if !self.quests.iter().any(|q| q.quest_id == *id) {
+                        self.quests.push(crate::data::QuestProgress {
+                            quest_id: id.clone(),
+                            current_count: 0,
+                            completed: false,
+                            rewarded: false,
+                        });
+                    }
+                }
+                crate::data::DialogAction::CompleteQuest(id) => {
+                    let can_reward = self
+                        .quests
+                        .iter()
+                        .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+                    if can_reward && let Some(quest) = data.find_quest(id) {
+                        self.stats.add_exp(quest.reward_exp);
+                        let _ = self.apply(PlayerAction::AddGold(quest.reward_gold));
+
+                        if let Some(item_id) = &quest.reward_item
+                            && let Some(item) = data.find_item(item_id).cloned()
+                        {
+                            let _ = self.apply(PlayerAction::AddItem(item));
+                        }
+
+                        if let Some(progress) = self.quests.iter_mut().find(|q| q.quest_id == *id) {
+                            progress.rewarded = true;
+                        }
+                    }
+                }
+                crate::data::DialogAction::GiveItem(id) => {
+                    if let Some(item) = data.find_item(id).cloned() {
+                        let _ = self.apply(PlayerAction::AddItem(item));
+                    }
+                }
+                crate::data::DialogAction::TakeItem(id) => {
+                    if let Some(index) = self.inventory.iter().position(|item| item.id == *id) {
+                        let _ = self.apply(PlayerAction::RemoveItemAt(index));
+                    }
+                }
+                crate::data::DialogAction::GiveGold(amount) => {
+                    let _ = self.apply(PlayerAction::AddGold(*amount));
+                }
+                crate::data::DialogAction::TakeGold(amount) => {
+                    let _ = self.apply(PlayerAction::AddGold(-*amount));
+                }
+                crate::data::DialogAction::OpenShop(_) => {}
+                crate::data::DialogAction::Heal => {
+                    self.stats.current_hp = self.stats.max_hp;
+                    self.stats.current_mp = self.stats.max_mp;
+                }
+            },
             GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(index)) => {
-                let _ = s.player.apply(PlayerAction::UseItem { index: *index });
+                let _ = self.apply(PlayerAction::UseItem { index: *index });
             }
             GameEvent::Shop(crate::game::ShopEvent::BuyItem(item)) => {
-                let _ = s.player.apply(PlayerAction::AddGold(-item.price));
-                let _ = s.player.apply(PlayerAction::AddItem(item.clone()));
+                let _ = self.apply(PlayerAction::AddGold(-item.price));
+                let _ = self.apply(PlayerAction::AddItem(item.clone()));
             }
             GameEvent::Shop(crate::game::ShopEvent::SellSelected(index)) => {
                 if let PlayerEvent::ItemRemoved(Some(item)) =
-                    s.player.apply(PlayerAction::RemoveItemAt(*index))
+                    self.apply(PlayerAction::RemoveItemAt(*index))
                 {
-                    let _ = s.player.apply(PlayerAction::AddGold(item.price / 2));
+                    let _ = self.apply(PlayerAction::AddGold(item.price / 2));
                 }
             }
             _ => {}
         }
-
         Ok(())
     }
 }

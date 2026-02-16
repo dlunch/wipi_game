@@ -17,7 +17,7 @@ pub use inventory::InventoryEvent;
 pub use lifecycle::LoadingEvent;
 pub use menu::{MenuEvent, PauseMenuEvent};
 pub use npc::NpcEvent;
-pub use runtime::{ApplyContext, DomainEventResolver, ResolveContext};
+pub use runtime::{DomainEventResolver, ResolveContext};
 pub use shop::ShopEvent;
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {

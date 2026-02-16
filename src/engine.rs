@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    ApplyContext, GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext,
-    SessionState, UiEventApplier, UiInputEventResolver, UiState, build_render_state,
-    domain_appliers, domain_resolvers,
+    GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext, SessionState,
+    UiEventApplier, UiInputEventResolver, UiState, build_render_state, continue_game,
+    domain_resolvers, enter_session, start_new_game,
 };
 
 pub struct GameEngine {
@@ -87,17 +87,39 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        let mut ctx = ApplyContext {
-            state: &mut self.state,
-            data: &self.data,
-            session: &mut self.session,
-            ui: &mut self.ui,
-        };
-        for applier in domain_appliers() {
-            if applier.handles(&event) {
-                applier.apply(&mut ctx, &event)?;
+        self.state
+            .apply_event(&mut self.ui, &mut self.session, &event)?;
+
+        match event {
+            GameEvent::StartNewGame => {
+                let (next_state, session) = start_new_game(&self.data);
+                enter_session(
+                    &mut self.state,
+                    &mut self.session,
+                    next_state,
+                    session,
+                    &self.data,
+                );
             }
+            GameEvent::ContinueGame => {
+                let (next_state, session) = continue_game(&self.data);
+                enter_session(
+                    &mut self.state,
+                    &mut self.session,
+                    next_state,
+                    session,
+                    &self.data,
+                );
+            }
+            _ => {}
         }
+
+        if let Some(session) = self.session.as_mut() {
+            session.apply_event(&self.data, &mut self.state, &mut self.ui, &event)?;
+        }
+
+        self.ui
+            .apply_game_event(&self.data, &mut self.state, &mut self.session, &event)?;
         Ok(())
     }
 

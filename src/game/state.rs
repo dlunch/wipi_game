@@ -1,4 +1,3 @@
-mod appliers;
 mod combat;
 mod movement;
 mod player;
@@ -6,7 +5,6 @@ pub(crate) mod session;
 pub(crate) mod ui;
 mod ui_game_event;
 
-pub use appliers::domain_appliers;
 pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
@@ -14,7 +12,6 @@ pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEve
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
 
 #[derive(Debug)]
@@ -134,38 +131,30 @@ impl GameState {
     }
 }
 
-struct GameStateApplier;
-
-static GAME_STATE_APPLIER: GameStateApplier = GameStateApplier;
-
-pub fn state_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&GAME_STATE_APPLIER]
-}
-
-impl DomainEventApplier for GameStateApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Loading(_) | GameEvent::Transition(_) | GameEvent::Exit(_)
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+impl GameState {
+    pub fn apply_event(
+        &mut self,
+        ui: &mut crate::game::UiState,
+        session: &mut Option<crate::game::SessionState>,
+        event: &GameEvent,
+    ) -> Result<()> {
         match event {
             GameEvent::Loading(event) => match event {
-                LoadingEvent::Advance(step) => ctx.transition_to(GameState::Loading(*step)),
-                LoadingEvent::Loaded => {
-                    ctx.transition_to(GameState::Menu);
-                    ctx.ui.menu.set_menu(MenuState::new(has_save_data()));
+                LoadingEvent::Advance(step) => {
+                    transition_to(self, session, GameState::Loading(*step))
                 }
-                LoadingEvent::Error(msg) => ctx.set_error(msg.clone()),
+                LoadingEvent::Loaded => {
+                    transition_to(self, session, GameState::Menu);
+                    ui.menu.set_menu(MenuState::new(has_save_data()));
+                }
+                LoadingEvent::Error(msg) => set_error(self, msg.clone()),
             },
             GameEvent::Transition(TransitionEvent::ToExplore) => {
-                ctx.transition_to(GameState::Explore)
+                transition_to(self, session, GameState::Explore)
             }
             GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
-                ctx.transition_to(GameState::Menu);
-                ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
+                transition_to(self, session, GameState::Menu);
+                ui.menu.set_menu(MenuState::new(has_save_data()));
             }
             GameEvent::Exit(code) => {
                 wipi::kernel::exit(*code);
@@ -174,6 +163,38 @@ impl DomainEventApplier for GameStateApplier {
         }
         Ok(())
     }
+}
+
+pub(crate) fn transition_to(
+    state: &mut GameState,
+    session: &mut Option<crate::game::SessionState>,
+    next: GameState,
+) {
+    if next.requires_session() && session.is_none() {
+        *state = GameState::Error(alloc::format!(
+            "Missing session for state transition: {:?}",
+            next
+        ));
+        return;
+    }
+
+    if state.can_transition_to(&next) {
+        *state = next;
+        if !state.requires_session() {
+            *session = None;
+        }
+        return;
+    }
+
+    *state = GameState::Error(alloc::format!(
+        "Invalid state transition: {:?} -> {:?}",
+        state,
+        next
+    ));
+}
+
+pub(crate) fn set_error(state: &mut GameState, message: String) {
+    *state = GameState::Error(message);
 }
 
 #[cfg(test)]

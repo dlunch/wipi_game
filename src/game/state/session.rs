@@ -1,8 +1,9 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::data::Tile;
-use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{CombatState, GameData, GameEvent, MovementState, PlayerState};
+use crate::game::{
+    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, UiState,
+};
 
 pub struct SessionState {
     pub player: PlayerState,
@@ -18,85 +19,45 @@ impl SessionState {
             self.combat.spawn_for_map(map, &data.enemies);
         }
     }
-}
 
-struct SessionLifecycleApplier;
-struct SessionSaveApplier;
-struct SessionShopOpenApplier;
-
-static SESSION_LIFECYCLE_APPLIER: SessionLifecycleApplier = SessionLifecycleApplier;
-static SESSION_SAVE_APPLIER: SessionSaveApplier = SessionSaveApplier;
-static SESSION_SHOP_OPEN_APPLIER: SessionShopOpenApplier = SessionShopOpenApplier;
-
-pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![
-        &SESSION_LIFECYCLE_APPLIER,
-        &SESSION_SAVE_APPLIER,
-        &SESSION_SHOP_OPEN_APPLIER,
-    ]
-}
-
-impl DomainEventApplier for SessionLifecycleApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::StartNewGame | GameEvent::ContinueGame | GameEvent::RestoreSessionStats
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+    pub fn apply_event(
+        &mut self,
+        data: &GameData,
+        state: &mut GameState,
+        ui: &mut UiState,
+        event: &GameEvent,
+    ) -> Result<()> {
         match event {
-            GameEvent::StartNewGame => {
-                let (state, session) = start_new_game(ctx.data);
-                enter_session(ctx, state, session);
+            GameEvent::RestoreSessionStats => self.player.restore_stats(),
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
+            | GameEvent::OpenMenuFromExplore => {
+                let _ = crate::game::save_game(&self.player);
             }
-            GameEvent::ContinueGame => {
-                let (state, session) = continue_game(ctx.data);
-                enter_session(ctx, state, session);
+            GameEvent::OpenShopById(shop_id) => {
+                let _ = open_shop_by_id(data, state, ui, shop_id);
             }
-            GameEvent::RestoreSessionStats => {
-                let s = ctx
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.player.restore_stats();
+            GameEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
+                self.spawn_current_map_enemies(data);
             }
             _ => {}
         }
-        Ok(())
-    }
-}
 
-impl DomainEventApplier for SessionSaveApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
+        self.player.apply_event(data, event)?;
+        self.movement
+            .apply_event(data, state, &mut self.player, event)?;
+        self.combat.apply_event(
+            data,
+            state,
+            &mut self.player,
+            &mut self.skill_cooldowns,
+            &mut self.mp_regen_timer,
             event,
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
-                | GameEvent::OpenMenuFromExplore
-        )
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &GameEvent) -> Result<()> {
-        let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
-        let _ = crate::game::save_game(&s.player);
+        )?;
         Ok(())
     }
 }
 
-impl DomainEventApplier for SessionShopOpenApplier {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::OpenShopById(_))
-    }
-
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
-        let GameEvent::OpenShopById(shop_id) = event else {
-            return Ok(());
-        };
-        let _ = ctx.open_shop_by_id(shop_id);
-        Ok(())
-    }
-}
-
-fn start_new_game(data: &GameData) -> (crate::game::GameState, SessionState) {
+pub fn start_new_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();
@@ -152,7 +113,7 @@ fn start_new_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     (state, session)
 }
 
-fn continue_game(data: &GameData) -> (crate::game::GameState, SessionState) {
+pub fn continue_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
     let combat = CombatState::default();
@@ -189,11 +150,42 @@ fn continue_game(data: &GameData) -> (crate::game::GameState, SessionState) {
     }
 }
 
-fn enter_session(ctx: &mut ApplyContext<'_>, state: crate::game::GameState, session: SessionState) {
-    *ctx.session = Some(session);
-    ctx.transition_to(state);
-
-    if let Some(s) = ctx.session.as_mut() {
-        s.spawn_current_map_enemies(ctx.data);
+pub fn enter_session(
+    state: &mut crate::game::GameState,
+    session_slot: &mut Option<SessionState>,
+    next_state: crate::game::GameState,
+    session: SessionState,
+    data: &GameData,
+) {
+    *session_slot = Some(session);
+    crate::game::state::transition_to(state, session_slot, next_state);
+    if let Some(s) = session_slot.as_mut() {
+        s.spawn_current_map_enemies(data);
     }
+}
+
+fn open_shop_by_id(
+    data: &GameData,
+    state: &mut GameState,
+    ui: &mut UiState,
+    shop_id: &str,
+) -> bool {
+    let Some(shop) = data.find_shop(shop_id).cloned() else {
+        return false;
+    };
+    let shop_items = data.get_shop_items(&shop);
+    ui.shop.open(crate::game::ShopState::new(shop, shop_items));
+    if state.can_transition_to(&GameState::Shop) {
+        *state = GameState::Shop;
+    } else {
+        crate::game::state::set_error(
+            state,
+            alloc::format!(
+                "Invalid state transition: {:?} -> {:?}",
+                state,
+                GameState::Shop
+            ),
+        );
+    }
+    true
 }
