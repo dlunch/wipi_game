@@ -48,7 +48,7 @@ enum GameEvent {
 enum AppMovementEvent {
     Tick(
         game::movement::MovementTickEvent,
-        Option<game::explore::TileEvent>,
+        Option<game::TileEvent>,
         bool,
     ),
 }
@@ -183,7 +183,7 @@ impl GameInner {
         let AppMovementEvent::Tick(movement_event, tile_event, _) = event;
         let moved = s.movement.apply_tick(&mut s.player, movement_event);
         if moved && let Some(tile_event) = tile_event {
-            let _ = s.player.apply_tile_event(&self.data, tile_event);
+            let _: game::TileApplyEvent = s.player.apply_tile_event(&self.data, tile_event);
         }
     }
 

@@ -19,7 +19,7 @@ pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;
 pub use state::{
     CombatAction, CombatEvent, CombatState, GameState, MovementState, PlayerAction, PlayerEffect,
-    PlayerEvent, PlayerState,
+    PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
 };
 pub use systems::combat;
 pub use systems::dialog;

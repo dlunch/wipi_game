@@ -4,7 +4,19 @@ use alloc::vec::Vec;
 use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
 use crate::game::GameData;
 use crate::game::state::combat::KillReward;
-use crate::game::systems::explore::{TileApplyEvent, TileEvent};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TileEvent {
+    Treasure,
+    MapExit(String),
+    DungeonEntrance(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileApplyEvent {
+    None,
+    MapChanged,
+}
 
 #[derive(Debug, Clone)]
 pub enum PlayerAction {

@@ -4,7 +4,7 @@ mod player;
 
 pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect};
 pub use movement::MovementState;
-pub use player::{PlayerAction, PlayerEvent, PlayerState};
+pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
 
 use alloc::string::String;
 

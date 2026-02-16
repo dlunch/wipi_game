@@ -1,15 +1,17 @@
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
 use super::npc;
 
+use crate::data::Direction;
 #[cfg(test)]
 use crate::data::Map;
-use crate::data::{Direction, Tile};
-use crate::game::PlayerState;
-use crate::game::{ExploreAction, GameData};
+#[cfg(test)]
+use crate::data::Tile;
+#[cfg(test)]
+use crate::game::TileEvent;
+use crate::game::{ExploreAction, GameData, PlayerState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExploreIntent {
@@ -132,19 +134,6 @@ pub fn reduce_world(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TileEvent {
-    Treasure,
-    MapExit(String),
-    DungeonEntrance(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileApplyEvent {
-    None,
-    MapChanged,
-}
-
 #[cfg(test)]
 fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     let tile = map.get_tile(player.x, player.y);
@@ -171,37 +160,6 @@ fn check_tile_event(map: &Map, player: &PlayerState) -> Option<TileEvent> {
     }
 }
 
-pub fn tile_event_for_position(
-    map_id: &str,
-    x: usize,
-    y: usize,
-    data: &GameData,
-) -> Option<TileEvent> {
-    let map = data.find_map(map_id)?;
-    let tile = map.get_tile(x, y);
-
-    match tile {
-        Tile::Treasure => Some(TileEvent::Treasure),
-        Tile::Exit => {
-            for (ex, ey, target) in &map.exits {
-                if *ex == x && *ey == y {
-                    return Some(TileEvent::MapExit(target.clone()));
-                }
-            }
-            None
-        }
-        Tile::Dungeon => {
-            for (dx, dy, target) in &map.dungeons {
-                if *dx == x && *dy == y {
-                    return Some(TileEvent::DungeonEntrance(target.clone()));
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 pub fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
     data.find_map(&player.current_map_id)
@@ -218,6 +176,7 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Item, ItemKind, Map, Tile};
+    use crate::game::state::TileApplyEvent;
 
     fn make_test_map(
         id: &str,

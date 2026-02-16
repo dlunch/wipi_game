@@ -1,9 +1,8 @@
 use alloc::vec::Vec;
 
-use crate::data::{Direction, Map};
-use crate::game::explore::{TileEvent, tile_event_for_position};
+use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
-use crate::game::{GameData, MovementState, PlayerState};
+use crate::game::{GameData, MovementState, PlayerState, TileEvent};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -151,6 +150,32 @@ fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
 
 fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
     positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
+}
+
+fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) -> Option<TileEvent> {
+    let map = data.find_map(map_id)?;
+    let tile = map.get_tile(x, y);
+
+    match tile {
+        Tile::Treasure => Some(TileEvent::Treasure),
+        Tile::Exit => {
+            for (ex, ey, target) in &map.exits {
+                if *ex == x && *ey == y {
+                    return Some(TileEvent::MapExit(target.clone()));
+                }
+            }
+            None
+        }
+        Tile::Dungeon => {
+            for (dx, dy, target) in &map.dungeons {
+                if *dx == x && *dy == y {
+                    return Some(TileEvent::DungeonEntrance(target.clone()));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]
