@@ -1,8 +1,12 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
-use crate::game::{GameData, PlayerState};
+use crate::engine::GameEngine;
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{GameData, GameState, PlayerState, RuntimeEvent};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -91,6 +95,109 @@ fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Vec<DialogLine> {
         })
         .cloned()
         .collect()
+}
+
+struct ExploreNpcCascadeResolver;
+struct OpenDialogStateApplier;
+struct OpenShopByIdApplier;
+struct RestoreSessionStatsApplier;
+
+static EXPLORE_NPC_CASCADE_RESOLVER: ExploreNpcCascadeResolver = ExploreNpcCascadeResolver;
+static OPEN_DIALOG_STATE_APPLIER: OpenDialogStateApplier = OpenDialogStateApplier;
+static OPEN_SHOP_BY_ID_APPLIER: OpenShopByIdApplier = OpenShopByIdApplier;
+static RESTORE_SESSION_STATS_APPLIER: RestoreSessionStatsApplier = RestoreSessionStatsApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&EXPLORE_NPC_CASCADE_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![
+        &OPEN_DIALOG_STATE_APPLIER,
+        &OPEN_SHOP_BY_ID_APPLIER,
+        &RESTORE_SESSION_STATS_APPLIER,
+    ]
+}
+
+impl DomainEventResolver for ExploreNpcCascadeResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Explore(crate::game::AppExploreEvent::Npc(_))
+        )
+    }
+
+    fn resolve(
+        &self,
+        _engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        match npc_event {
+            NpcEvent::OpenDialog(dialog_spec) => {
+                let mut events = alloc::vec::Vec::with_capacity(2);
+                if dialog_spec.restore {
+                    events.push(RuntimeEvent::RestoreSessionStats);
+                }
+                events.push(RuntimeEvent::OpenDialogState(
+                    crate::game::DialogState::new(
+                        dialog_spec.npc_name.clone(),
+                        dialog_spec.lines.clone(),
+                    ),
+                ));
+                Ok(events)
+            }
+            NpcEvent::OpenShop(shop_id) => {
+                Ok(alloc::vec![RuntimeEvent::OpenShopById(shop_id.clone(),)])
+            }
+            NpcEvent::RestoreStats => Ok(alloc::vec![RuntimeEvent::RestoreSessionStats]),
+        }
+    }
+}
+
+impl DomainEventApplier for OpenDialogStateApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::OpenDialogState(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::OpenDialogState(dialog_state) = event else {
+            return Ok(());
+        };
+        engine.ui_mut().dialog.open(dialog_state.clone());
+        engine.transition_to(GameState::Dialog);
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for OpenShopByIdApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::OpenShopById(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::OpenShopById(shop_id) = event else {
+            return Ok(());
+        };
+        let _ = engine.open_shop_by_id(shop_id);
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for RestoreSessionStatsApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::RestoreSessionStats)
+    }
+
+    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+        let s = engine
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.restore_stats();
+        Ok(())
+    }
 }
 
 #[cfg(test)]

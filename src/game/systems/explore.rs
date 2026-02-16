@@ -1,5 +1,10 @@
 use crate::data::Direction;
+use anyhow::{Result, anyhow, ensure};
+
+use crate::engine::GameEngine;
 use crate::game::ExploreAction;
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{AppExploreEvent, GameState, RuntimeEvent};
 #[cfg(test)]
 use crate::game::{GameData, PlayerState};
 
@@ -48,6 +53,169 @@ pub fn resolve_many(is_peaceful: bool, intent: ExploreIntent) -> alloc::vec::Vec
     match resolve(is_peaceful, intent) {
         ExploreEvent::None => alloc::vec::Vec::new(),
         event => alloc::vec![event],
+    }
+}
+
+struct ExploreInputResolver;
+struct ExploreUseActionCascadeResolver;
+struct ExplorePauseCascadeResolver;
+struct ExploreMenuCascadeResolver;
+struct ExploreApplier;
+
+static EXPLORE_INPUT_RESOLVER: ExploreInputResolver = ExploreInputResolver;
+static EXPLORE_USE_ACTION_CASCADE_RESOLVER: ExploreUseActionCascadeResolver =
+    ExploreUseActionCascadeResolver;
+static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePauseCascadeResolver;
+static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCascadeResolver;
+static EXPLORE_APPLIER: ExploreApplier = ExploreApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![
+        &EXPLORE_INPUT_RESOLVER,
+        &EXPLORE_USE_ACTION_CASCADE_RESOLVER,
+        &EXPLORE_PAUSE_CASCADE_RESOLVER,
+        &EXPLORE_MENU_CASCADE_RESOLVER,
+    ]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&EXPLORE_APPLIER]
+}
+
+impl DomainEventResolver for ExploreInputResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::ExploreInput(_))
+    }
+
+    fn resolve(
+        &self,
+        engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::ExploreInput(intent) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        ensure!(
+            matches!(engine.state(), GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        let is_peaceful = engine
+            .data()
+            .find_map(&s.player.current_map_id)
+            .is_some_and(|map| map.peaceful);
+
+        let mut events = alloc::vec::Vec::new();
+        for explore_event in resolve_many(is_peaceful, *intent) {
+            match explore_event {
+                ExploreEvent::None => {}
+                ExploreEvent::MoveDirection(direction) => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::MoveDirection(
+                        direction,
+                    )));
+                }
+                ExploreEvent::TryNpcInteract {
+                    facing,
+                    fallback_action,
+                } => {
+                    if let Some(npc_event) = crate::game::npc::resolve(
+                        &s.player,
+                        engine.data(),
+                        crate::game::npc::NpcIntent::Interact { facing },
+                    ) {
+                        events.push(RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)));
+                    } else if let Some(action) = fallback_action {
+                        events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
+                    }
+                }
+                ExploreEvent::UseAction(action) => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::UseAction(action)));
+                }
+                ExploreEvent::EnterPauseMenu => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu));
+                }
+                ExploreEvent::EnterMenu => {
+                    events.push(RuntimeEvent::Explore(AppExploreEvent::EnterMenu));
+                }
+            }
+        }
+        Ok(events)
+    }
+}
+
+impl DomainEventResolver for ExploreUseActionCascadeResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Explore(AppExploreEvent::UseAction(_)))
+    }
+
+    fn resolve(
+        &self,
+        _engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        Ok(alloc::vec![RuntimeEvent::CombatPlayerAction(*action)])
+    }
+}
+
+impl DomainEventResolver for ExplorePauseCascadeResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu)
+        )
+    }
+
+    fn resolve(
+        &self,
+        _engine: &mut GameEngine,
+        _event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        Ok(alloc::vec![RuntimeEvent::OpenPauseMenu])
+    }
+}
+
+impl DomainEventResolver for ExploreMenuCascadeResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Explore(AppExploreEvent::EnterMenu))
+    }
+
+    fn resolve(
+        &self,
+        _engine: &mut GameEngine,
+        _event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        Ok(alloc::vec![RuntimeEvent::OpenMenuFromExplore])
+    }
+}
+
+impl DomainEventApplier for ExploreApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Explore(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Explore(event) = event else {
+            return Ok(());
+        };
+        match event {
+            AppExploreEvent::MoveDirection(direction) => {
+                let s = engine
+                    .session_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.on_direction_pressed(*direction);
+            }
+            AppExploreEvent::Npc(_)
+            | AppExploreEvent::UseAction(_)
+            | AppExploreEvent::EnterPauseMenu
+            | AppExploreEvent::EnterMenu => {}
+        }
+        Ok(())
     }
 }
 

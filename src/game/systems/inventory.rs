@@ -1,4 +1,9 @@
 use crate::game::selection::{step_down, step_up};
+use anyhow::{Result, anyhow, ensure};
+
+use crate::engine::GameEngine;
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InventoryIntent {
@@ -47,6 +52,80 @@ pub fn resolve_many(
     match resolve(selected, inventory_len, intent) {
         InventoryEvent::None => alloc::vec::Vec::new(),
         event => alloc::vec![event],
+    }
+}
+
+struct InventoryInputResolver;
+struct InventoryApplier;
+
+static INVENTORY_INPUT_RESOLVER: InventoryInputResolver = InventoryInputResolver;
+static INVENTORY_APPLIER: InventoryApplier = InventoryApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&INVENTORY_INPUT_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&INVENTORY_APPLIER]
+}
+
+impl DomainEventResolver for InventoryInputResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::InventoryInput(_))
+    }
+
+    fn resolve(
+        &self,
+        engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::InventoryInput(intent) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        ensure!(
+            matches!(engine.state(), GameState::Inventory),
+            "Invalid state: expected Inventory"
+        );
+        let s = engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        Ok(resolve_many(
+            engine.ui().inventory.selected,
+            s.player.inventory.len(),
+            *intent,
+        )
+        .into_iter()
+        .map(RuntimeEvent::Inventory)
+        .collect())
+    }
+}
+
+impl DomainEventApplier for InventoryApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Inventory(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Inventory(event) = event else {
+            return Ok(());
+        };
+
+        match event {
+            InventoryEvent::None => {}
+            InventoryEvent::SetSelected(selected) => {
+                engine.ui_mut().inventory.set_selected(*selected)
+            }
+            InventoryEvent::UseSelected(index) => {
+                let s = engine
+                    .session_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.use_inventory_item(*index);
+            }
+            InventoryEvent::CloseToExplore => engine.transition_to(GameState::Explore),
+        }
+
+        Ok(())
     }
 }
 

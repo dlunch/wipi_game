@@ -1,8 +1,15 @@
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow, ensure};
+
 use crate::data::{Direction, Map, Tile};
+use crate::engine::GameEngine;
 use crate::game::state::FieldEnemy;
-use crate::game::{GameData, MovementState, MovementTickEvent, PlayerState, TileEvent};
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{
+    AppMovementEvent, GameData, GameState, MovementState, MovementTickEvent, PlayerState,
+    RuntimeEvent, TileEvent, TransitionEvent,
+};
 
 const MOVE_COOLDOWN: u32 = 5;
 
@@ -157,6 +164,67 @@ fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) ->
             None
         }
         _ => None,
+    }
+}
+
+struct UpdateMovementResolver;
+struct MovementApplier;
+
+static UPDATE_MOVEMENT_RESOLVER: UpdateMovementResolver = UpdateMovementResolver;
+static MOVEMENT_APPLIER: MovementApplier = MovementApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&UPDATE_MOVEMENT_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&MOVEMENT_APPLIER]
+}
+
+impl DomainEventResolver for UpdateMovementResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::UpdateMovement)
+    }
+
+    fn resolve(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(engine.state(), GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        let movement = resolve_world_tick(&s.movement, &s.player, &s.combat.enemies, engine.data());
+
+        let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
+        events.push(RuntimeEvent::Movement(AppMovementEvent::Tick(
+            movement.movement_event,
+            movement.tile_event,
+        )));
+        if movement.map_changed {
+            events.push(RuntimeEvent::Transition(TransitionEvent::MapChanged));
+        }
+        Ok(events)
+    }
+}
+
+impl DomainEventApplier for MovementApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Movement(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event
+        else {
+            return Ok(());
+        };
+        let data = engine.data_rc();
+        let s = engine
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.apply_movement_tick(&data, *movement_event, tile_event.clone());
+        Ok(())
     }
 }
 

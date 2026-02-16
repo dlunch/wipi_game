@@ -1,5 +1,10 @@
 use crate::data::DialogAction;
+use anyhow::{Result, anyhow, ensure};
+
+use crate::engine::GameEngine;
 use crate::game::DialogState;
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{DialogActionResult, GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -60,6 +65,148 @@ pub fn resolve_many(
     match resolve(dialog_state, intent) {
         DialogEvent::None => alloc::vec::Vec::new(),
         event => alloc::vec![event],
+    }
+}
+
+struct DialogInputResolver;
+struct DialogCascadeResolver;
+struct DialogEventApplier;
+struct ApplyDialogActionApplier;
+struct ApplyDialogTransitionApplier;
+
+static DIALOG_INPUT_RESOLVER: DialogInputResolver = DialogInputResolver;
+static DIALOG_CASCADE_RESOLVER: DialogCascadeResolver = DialogCascadeResolver;
+static DIALOG_EVENT_APPLIER: DialogEventApplier = DialogEventApplier;
+static APPLY_DIALOG_ACTION_APPLIER: ApplyDialogActionApplier = ApplyDialogActionApplier;
+static APPLY_DIALOG_TRANSITION_APPLIER: ApplyDialogTransitionApplier = ApplyDialogTransitionApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![
+        &DIALOG_EVENT_APPLIER,
+        &APPLY_DIALOG_ACTION_APPLIER,
+        &APPLY_DIALOG_TRANSITION_APPLIER,
+    ]
+}
+
+impl DomainEventResolver for DialogInputResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::DialogInput(_))
+    }
+
+    fn resolve(
+        &self,
+        engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::DialogInput(intent) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        ensure!(
+            matches!(engine.state(), GameState::Dialog),
+            "Invalid state: expected Dialog"
+        );
+        engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        Ok(resolve_many(engine.ui().dialog.state.as_ref(), *intent)
+            .into_iter()
+            .map(RuntimeEvent::Dialog)
+            .collect())
+    }
+}
+
+impl DomainEventResolver for DialogCascadeResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Dialog(_))
+    }
+
+    fn resolve(
+        &self,
+        _engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::Dialog(dialog_event) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        match dialog_event {
+            DialogEvent::None => Ok(alloc::vec::Vec::new()),
+            DialogEvent::Transition(transition) => {
+                Ok(alloc::vec![RuntimeEvent::ApplyDialogTransition(
+                    *transition
+                )])
+            }
+            DialogEvent::Action(action, transition) => Ok(alloc::vec![
+                RuntimeEvent::ApplyDialogAction(action.clone()),
+                RuntimeEvent::ApplyDialogTransition(*transition),
+            ]),
+        }
+    }
+}
+
+impl DomainEventApplier for DialogEventApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Dialog(_))
+    }
+
+    fn apply(&self, _engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for ApplyDialogActionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::ApplyDialogAction(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::ApplyDialogAction(action) = event else {
+            return Ok(());
+        };
+        let open_shop = {
+            let data = engine.data_rc();
+            let s = engine
+                .session_mut()
+                .ok_or_else(|| anyhow!("No active session"))?;
+            if let DialogActionResult::OpenShop(shop_id) = s.apply_dialog_action(&data, action) {
+                Some(shop_id)
+            } else {
+                None
+            }
+        };
+        if let Some(shop_id) = open_shop {
+            let _ = engine.open_shop_by_id(&shop_id);
+        }
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for ApplyDialogTransitionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::ApplyDialogTransition(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::ApplyDialogTransition(transition) = event else {
+            return Ok(());
+        };
+        match transition {
+            DialogTransition::SetLine(line) => {
+                if let Some(dialog_state) = engine.ui_mut().dialog.state.as_mut() {
+                    dialog_state.current_line = *line;
+                }
+                engine.transition_to(GameState::Dialog);
+            }
+            DialogTransition::CloseToExplore => {
+                engine.ui_mut().dialog.close();
+                engine.transition_to(GameState::Explore);
+            }
+        }
+        Ok(())
     }
 }
 

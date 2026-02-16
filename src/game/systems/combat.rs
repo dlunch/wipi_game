@@ -1,8 +1,12 @@
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow, ensure};
+
 use crate::data::{Enemy, Map};
+use crate::engine::GameEngine;
 use crate::game::state::{CombatState, FieldEnemy};
-use crate::game::{CombatRuntimeEvent, RuntimeEvent};
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{CombatRuntimeEvent, GameState, RuntimeEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -258,6 +262,67 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
                 hit_flash: enemy.hit_flash,
             }));
         }
+    }
+}
+
+struct UpdateCombatResolver;
+struct CombatPlayerActionApplier;
+
+static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
+static COMBAT_PLAYER_ACTION_APPLIER: CombatPlayerActionApplier = CombatPlayerActionApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&UPDATE_COMBAT_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER]
+}
+
+impl DomainEventResolver for UpdateCombatResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::UpdateCombat)
+    }
+
+    fn resolve(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(engine.state(), GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        let Some(map) = engine.data().find_map(&s.player.current_map_id) else {
+            return Ok(Vec::new());
+        };
+
+        Ok(resolve_tick(
+            &s.combat,
+            s.player.x,
+            s.player.y,
+            s.player.total_def(),
+            (s.skill_cooldowns, s.mp_regen_timer),
+            map,
+            &engine.data().enemies,
+        ))
+    }
+}
+
+impl DomainEventApplier for CombatPlayerActionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::CombatPlayerAction(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::CombatPlayerAction(action) = event else {
+            return Ok(());
+        };
+        let data = engine.data_rc();
+        let s = engine
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.apply_explore_action(&data, *action);
+        Ok(())
     }
 }
 

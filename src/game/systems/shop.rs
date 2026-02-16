@@ -1,4 +1,9 @@
 use crate::data::Item;
+use anyhow::{Result, anyhow, ensure};
+
+use crate::engine::GameEngine;
+use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShopIntent {
@@ -38,6 +43,93 @@ pub fn resolve_many(
     match resolve(intent, player_gold, shop_items) {
         ShopEvent::None => alloc::vec::Vec::new(),
         event => alloc::vec![event],
+    }
+}
+
+struct ShopInputResolver;
+struct ShopApplier;
+
+static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
+static SHOP_APPLIER: ShopApplier = ShopApplier;
+
+pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+    alloc::vec![&SHOP_INPUT_RESOLVER]
+}
+
+pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&SHOP_APPLIER]
+}
+
+impl DomainEventResolver for ShopInputResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::ShopInput(_))
+    }
+
+    fn resolve(
+        &self,
+        engine: &mut GameEngine,
+        event: &RuntimeEvent,
+    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
+        let RuntimeEvent::ShopInput(intent) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        ensure!(
+            matches!(engine.state(), GameState::Shop),
+            "Invalid state: expected Shop"
+        );
+        let s = engine
+            .session()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        let shop_items = engine
+            .ui()
+            .shop
+            .state
+            .as_ref()
+            .map(|state| state.items.as_slice())
+            .unwrap_or(&[]);
+
+        Ok(resolve_many(*intent, s.player.stats.gold, shop_items)
+            .into_iter()
+            .map(RuntimeEvent::Shop)
+            .collect())
+    }
+}
+
+impl DomainEventApplier for ShopApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Shop(_))
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Shop(event) = event else {
+            return Ok(());
+        };
+        match event {
+            ShopEvent::None => {}
+            ShopEvent::BuyItem(item) => {
+                let s = engine
+                    .session_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.buy_shop_item(item.clone());
+            }
+            ShopEvent::SellSelected(index) => {
+                let (sold, len_after) = {
+                    let s = engine
+                        .session_mut()
+                        .ok_or_else(|| anyhow!("No active session"))?;
+                    let sold = s.sell_inventory_item(*index).is_some();
+                    (sold, s.player.inventory.len())
+                };
+                if sold {
+                    let current_selected = engine.ui().shop.selected;
+                    if current_selected >= len_after && current_selected > 0 {
+                        engine.ui_mut().shop.set_selected(current_selected - 1);
+                    }
+                }
+            }
+            ShopEvent::CloseToExplore => engine.transition_to(GameState::Explore),
+        }
+        Ok(())
     }
 }
 
