@@ -12,10 +12,7 @@ pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEve
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{
-    GameData, GameEvent, LifecycleEvent, LoadingEvent, MenuState, SessionState, TransitionEvent,
-    has_save_data,
-};
+use crate::game::{GameData, GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -137,19 +134,14 @@ impl GameState {
 impl GameState {
     pub fn apply_event(
         &mut self,
-        data: &GameData,
+        _data: &GameData,
         ui: &mut crate::game::UiState,
         session: &mut Option<crate::game::SessionState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::Lifecycle(LifecycleEvent::SetupNewGame) => {
-                let (next_state, next_session) = setup_new_game_session(data);
-                crate::game::enter_session(self, session, next_state, next_session, data);
-            }
-            GameEvent::Lifecycle(LifecycleEvent::SetupContinue) => {
-                let (next_state, next_session) = setup_continue_session(data);
-                crate::game::enter_session(self, session, next_state, next_session, data);
+            GameEvent::SetSession(next_session) => {
+                *session = Some((**next_session).clone());
             }
             GameEvent::Loading(event) => match event {
                 LoadingEvent::Advance(step) => {
@@ -226,88 +218,6 @@ impl GameState {
 
     pub(crate) fn set_error(&mut self, message: String) {
         *self = GameState::Error(message);
-    }
-}
-
-fn setup_new_game_session(data: &GameData) -> (GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    if let Some(ref weapon_id) = config.equip_weapon
-        && let Some(weapon) = data.find_item(weapon_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(weapon);
-        player.equipped_weapon = Some(idx);
-    }
-    if let Some(ref armor_id) = config.equip_armor
-        && let Some(armor) = data.find_item(armor_id).cloned()
-    {
-        let idx = player.inventory.len();
-        player.inventory.push(armor);
-        player.equipped_armor = Some(idx);
-    }
-    for start_item in &config.items {
-        if let Some(item) = data.find_item(&start_item.item_id).cloned() {
-            for _ in 0..start_item.count {
-                player.inventory.push(item.clone());
-            }
-        }
-    }
-
-    if let Some(map) = data.find_map(&config.start_map) {
-        let (x, y) = map.find_player_start().unwrap_or((player.x, player.y));
-        player.current_map_id = map.id.clone();
-        player.x = x;
-        player.y = y;
-    }
-
-    let session = SessionState {
-        player,
-        combat,
-        movement: MovementState::default(),
-        skill_cooldowns: [0; 3],
-        mp_regen_timer: 0,
-    };
-
-    (GameState::Explore, session)
-}
-
-fn setup_continue_session(data: &GameData) -> (GameState, SessionState) {
-    let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
-
-    match crate::game::load_game(&mut player) {
-        Ok(true) => {
-            if data.find_map(&player.current_map_id).is_none() {
-                let (x, y) = (player.x, player.y);
-                player.current_map_id = config.fallback_map.clone();
-                player.x = x;
-                player.y = y;
-            }
-            if let Some(map) = data.find_map(&player.current_map_id)
-                && (map.get_tile(player.x, player.y) == crate::data::Tile::Wall
-                    || player.x >= map.width
-                    || player.y >= map.height)
-                && let Some((x, y)) = map.find_player_start()
-            {
-                player.x = x;
-                player.y = y;
-            }
-
-            let session = SessionState {
-                player,
-                combat,
-                movement: MovementState::default(),
-                skill_cooldowns: [0; 3],
-                mp_regen_timer: 0,
-            };
-
-            (GameState::Explore, session)
-        }
-        Ok(false) | Err(_) => setup_new_game_session(data),
     }
 }
 

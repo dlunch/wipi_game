@@ -38,7 +38,7 @@ pub enum PlayerEvent {
     ItemRemoved(Option<Item>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlayerState {
     pub name: String,
     pub stats: PlayerStats,

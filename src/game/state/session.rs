@@ -4,6 +4,7 @@ use crate::game::{
     CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, UiState,
 };
 
+#[derive(Clone)]
 pub struct SessionState {
     pub player: PlayerState,
     pub combat: CombatState,
@@ -50,20 +51,6 @@ impl SessionState {
             event,
         )?;
         Ok(())
-    }
-}
-
-pub fn enter_session(
-    state: &mut crate::game::GameState,
-    session_slot: &mut Option<SessionState>,
-    next_state: crate::game::GameState,
-    session: SessionState,
-    data: &GameData,
-) {
-    *session_slot = Some(session);
-    state.transition_to(session_slot, next_state);
-    if let Some(s) = session_slot.as_mut() {
-        s.spawn_current_map_enemies(data);
     }
 }
 

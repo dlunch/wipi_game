@@ -21,7 +21,7 @@ pub use runtime_event::{
     TransitionEvent, UiEvent,
 };
 pub use save::{has_save_data, load_game, save_game};
-pub use session::{SessionState, enter_session};
+pub use session::SessionState;
 pub use state::{
     CombatState, GameState, MovementState, MovementTickEvent, PlayerAction, PlayerEvent,
     PlayerState, TileApplyEvent, TileEvent,

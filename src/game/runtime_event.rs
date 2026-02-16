@@ -1,5 +1,6 @@
 use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
+use alloc::boxed::Box;
 use alloc::string::String;
 
 #[derive(Clone)]
@@ -53,6 +54,7 @@ pub enum GameEvent {
     ShopInput(ShopInputEvent),
     StartNewGame,
     ContinueGame,
+    SetSession(Box<crate::game::SessionState>),
     OpenPauseMenu,
     OpenMenuFromExplore,
     OpenDialogState(crate::game::DialogState),
