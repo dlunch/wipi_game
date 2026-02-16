@@ -88,6 +88,8 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
+        let is_session_event = matches!(event, GameEvent::Session(_));
+
         if matches!(event, GameEvent::Session(crate::game::SessionEvent::Create)) {
             self.session = Some(SessionState::empty());
         }
@@ -106,7 +108,7 @@ impl GameEngine {
             return Ok(());
         }
 
-        if !self.state.requires_session() {
+        if !self.state.requires_session() && !is_session_event {
             self.session = None;
         }
 
