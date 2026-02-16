@@ -1,7 +1,8 @@
 use alloc::rc::Rc;
-use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+
+use anyhow::{Result, anyhow, ensure};
 
 use crate::data::Direction;
 use crate::game::{
@@ -51,56 +52,10 @@ enum AppMovementEvent {
     ),
 }
 
-enum EngineError {
-    NoActiveSession,
-    InvalidState(&'static str),
-}
-
-impl EngineError {
-    fn into_message(self) -> String {
-        match self {
-            EngineError::NoActiveSession => String::from("No active session"),
-            EngineError::InvalidState(expected) => {
-                alloc::format!("Invalid state: expected {}", expected)
-            }
-        }
-    }
-}
-
-struct SessionSlot {
-    state: Option<SessionState>,
-}
-
-impl SessionSlot {
-    fn inactive() -> Self {
-        Self { state: None }
-    }
-
-    fn activate(&mut self, session: SessionState) {
-        self.state = Some(session);
-    }
-
-    fn deactivate(&mut self) {
-        self.state = None;
-    }
-
-    fn as_ref(&self) -> Option<&SessionState> {
-        self.state.as_ref()
-    }
-
-    fn as_mut(&mut self) -> Option<&mut SessionState> {
-        self.state.as_mut()
-    }
-
-    fn is_active(&self) -> bool {
-        self.state.is_some()
-    }
-}
-
 pub struct GameEngine {
     state: GameState,
     data: Rc<GameData>,
-    session: SessionSlot,
+    session: Option<SessionState>,
     ui: UiState,
 }
 
@@ -109,7 +64,7 @@ impl GameEngine {
         Self {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
-            session: SessionSlot::inactive(),
+            session: None,
             ui: UiState::default(),
         }
     }
@@ -167,7 +122,7 @@ impl GameEngine {
 
     fn collect_keyup_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(self.state, GameState::Explore)
-            && self.session.is_active()
+            && self.session.is_some()
             && let Some(direction) = key.direction()
         {
             vec![GameIntent::System(SystemIntent::ReleaseMovementDirection(
@@ -283,7 +238,7 @@ impl GameEngine {
     }
 
     fn transition_to(&mut self, next: GameState) {
-        if next.requires_session() && !self.session.is_active() {
+        if next.requires_session() && self.session.is_none() {
             self.state = GameState::Error(alloc::format!(
                 "Missing session for state transition: {:?}",
                 next
@@ -294,7 +249,7 @@ impl GameEngine {
         if self.state.can_transition_to(&next) {
             self.state = next;
             if !self.state.requires_session() {
-                self.session.deactivate();
+                self.session = None;
             }
             return;
         }
@@ -319,28 +274,36 @@ impl GameEngine {
         }
     }
 
-    fn apply_update_movement(&mut self, event: AppMovementEvent) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_update_movement(&mut self, event: AppMovementEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         let AppMovementEvent::Tick(movement_event, tile_event) = event;
         s.apply_movement_tick(&self.data, movement_event, tile_event);
         Ok(())
     }
 
-    fn apply_update_combat(
-        &mut self,
-        result: crate::game::combat::CombatTickEvent,
-    ) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_update_combat(&mut self, result: crate::game::combat::CombatTickEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        let player_died = result.player_died;
 
-        if s.apply_combat_tick(result) {
+        s.apply_combat_tick(result);
+        if player_died {
             self.transition_to(GameState::GameOver);
         }
         Ok(())
     }
 
-    fn apply_map_changed(&mut self) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_map_changed(&mut self) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
         s.spawn_current_map_enemies(&self.data);
         Ok(())
     }
@@ -360,10 +323,10 @@ impl GameEngine {
         session: SessionState,
         intro: Option<crate::game::lifecycle::IntroDialogSpec>,
     ) {
-        self.session.activate(session);
+        self.session = Some(session);
         self.transition_to(state);
         if let Err(e) = self.apply_event(RuntimeEvent::Transition(TransitionEvent::MapChanged)) {
-            self.state = GameState::Error(e.into_message());
+            self.state = GameState::Error(alloc::format!("{e}"));
             return;
         }
         self.ui = UiState::default();
@@ -382,7 +345,7 @@ impl GameEngine {
         true
     }
 
-    fn resolve_intent(&mut self, intent: GameIntent) -> Result<Vec<RuntimeEvent>, EngineError> {
+    fn resolve_intent(&mut self, intent: GameIntent) -> Result<Vec<RuntimeEvent>> {
         match intent {
             GameIntent::System(system_intent) => match system_intent {
                 SystemIntent::UpdateLoading => self.resolve_update_loading_intent(),
@@ -405,9 +368,9 @@ impl GameEngine {
         }
     }
 
-    fn resolve_update_loading_intent(&mut self) -> Result<Vec<RuntimeEvent>, EngineError> {
+    fn resolve_update_loading_intent(&mut self) -> Result<Vec<RuntimeEvent>> {
         let GameState::Loading(step) = self.state else {
-            return Err(EngineError::InvalidState("Loading"));
+            return Err(anyhow!("Invalid state: expected Loading"));
         };
 
         let load_result = crate::game::lifecycle::load_step(&mut self.data, step);
@@ -416,11 +379,15 @@ impl GameEngine {
         ))])
     }
 
-    fn resolve_update_movement_intent(&self) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Explore) {
-            return Err(EngineError::InvalidState("Explore"));
-        }
-        let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    fn resolve_update_movement_intent(&self) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         let movement = crate::game::movement::resolve_world_tick(
             &s.movement,
@@ -439,11 +406,15 @@ impl GameEngine {
         Ok(events)
     }
 
-    fn resolve_update_combat_intent(&self) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Explore) {
-            return Err(EngineError::InvalidState("Explore"));
-        }
-        let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    fn resolve_update_combat_intent(&self) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
         let Some(map) = self.data.find_map(&s.player.current_map_id) else {
             return Ok(vec![RuntimeEvent::None]);
         };
@@ -454,6 +425,7 @@ impl GameEngine {
                 crate::game::combat::CombatTickInput {
                     player_x: s.player.x,
                     player_y: s.player.y,
+                    player_current_hp: s.player.stats.current_hp,
                     player_def: s.player.total_def(),
                     skill_cooldowns: s.skill_cooldowns,
                     mp_regen_timer: s.mp_regen_timer,
@@ -464,7 +436,7 @@ impl GameEngine {
         ))])
     }
 
-    fn apply_event(&mut self, event: RuntimeEvent) -> Result<(), EngineError> {
+    fn apply_event(&mut self, event: RuntimeEvent) -> Result<()> {
         match event {
             RuntimeEvent::None => {}
             RuntimeEvent::Domain(domain_event) => match domain_event {
@@ -490,23 +462,20 @@ impl GameEngine {
             let events = match self.resolve_intent(intent) {
                 Ok(events) => events,
                 Err(e) => {
-                    self.state = GameState::Error(e.into_message());
+                    self.state = GameState::Error(alloc::format!("{e}"));
                     return;
                 }
             };
             for event in events {
                 if let Err(e) = self.apply_event(event) {
-                    self.state = GameState::Error(e.into_message());
+                    self.state = GameState::Error(alloc::format!("{e}"));
                     return;
                 }
             }
         }
     }
 
-    fn resolve_scene_intent(
-        &self,
-        scene_intent: SceneIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
+    fn resolve_scene_intent(&self, scene_intent: SceneIntent) -> Result<Vec<RuntimeEvent>> {
         match scene_intent {
             SceneIntent::Menu(intent) => self.resolve_menu_intent(intent),
             SceneIntent::Explore(intent) => self.resolve_explore_intent(intent),
@@ -517,13 +486,11 @@ impl GameEngine {
         }
     }
 
-    fn resolve_menu_intent(
-        &self,
-        intent: crate::game::MenuIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Menu) {
-            return Err(EngineError::InvalidState("Menu"));
-        }
+    fn resolve_menu_intent(&self, intent: crate::game::MenuIntent) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Menu),
+            "Invalid state: expected Menu"
+        );
 
         Ok(vec![RuntimeEvent::Domain(DomainEvent::Menu(
             crate::game::menu::resolve(self.ui.menu.selected, &self.ui.menu.state.items, intent),
@@ -533,11 +500,15 @@ impl GameEngine {
     fn resolve_explore_intent(
         &self,
         intent: crate::game::ExploreIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Explore) {
-            return Err(EngineError::InvalidState("Explore"));
-        }
-        let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    ) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         let is_peaceful = self
             .data
@@ -581,11 +552,15 @@ impl GameEngine {
     fn resolve_inventory_intent(
         &self,
         intent: crate::game::InventoryIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Inventory) {
-            return Err(EngineError::InvalidState("Inventory"));
-        }
-        let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    ) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Inventory),
+            "Invalid state: expected Inventory"
+        );
+        let s = self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         Ok(vec![RuntimeEvent::Domain(DomainEvent::Inventory(
             crate::game::inventory::resolve(
@@ -599,22 +574,29 @@ impl GameEngine {
     fn resolve_dialog_intent(
         &self,
         intent: crate::game::DialogIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Dialog) {
-            return Err(EngineError::InvalidState("Dialog"));
-        }
-        self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    ) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Dialog),
+            "Invalid state: expected Dialog"
+        );
+        self.session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         Ok(vec![RuntimeEvent::Domain(DomainEvent::Dialog(
             crate::game::dialog::resolve(self.ui.dialog.state.as_ref(), intent),
         ))])
     }
 
-    fn resolve_shop_intent(&self, intent: ShopIntent) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::Shop) {
-            return Err(EngineError::InvalidState("Shop"));
-        }
-        let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    fn resolve_shop_intent(&self, intent: ShopIntent) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::Shop),
+            "Invalid state: expected Shop"
+        );
+        let s = self
+            .session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
         let shop_items = self
             .ui
             .shop
@@ -631,11 +613,14 @@ impl GameEngine {
     fn resolve_pause_menu_intent(
         &self,
         intent: crate::game::PauseMenuIntent,
-    ) -> Result<Vec<RuntimeEvent>, EngineError> {
-        if !matches!(self.state, GameState::PauseMenu) {
-            return Err(EngineError::InvalidState("PauseMenu"));
-        }
-        self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+    ) -> Result<Vec<RuntimeEvent>> {
+        ensure!(
+            matches!(self.state, GameState::PauseMenu),
+            "Invalid state: expected PauseMenu"
+        );
+        self.session
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         Ok(vec![RuntimeEvent::Domain(DomainEvent::PauseMenu(
             crate::game::menu::resolve_pause(
@@ -646,7 +631,7 @@ impl GameEngine {
         ))])
     }
 
-    fn apply_menu_event(&mut self, event: MenuEvent) -> Result<(), EngineError> {
+    fn apply_menu_event(&mut self, event: MenuEvent) -> Result<()> {
         match event {
             MenuEvent::None => {}
             MenuEvent::SetSelected(selected) => self.ui.menu.set_selected(selected),
@@ -666,14 +651,20 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_explore_event(&mut self, event: AppExploreEvent) -> Result<(), EngineError> {
+    fn apply_explore_event(&mut self, event: AppExploreEvent) -> Result<()> {
         match event {
             AppExploreEvent::MoveDirection(direction) => {
-                let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+                let s = self
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
                 s.on_direction_pressed(direction);
             }
             AppExploreEvent::Npc(npc_event) => {
-                let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+                let s = self
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
                 match npc_event {
                     crate::game::NpcEvent::OpenDialog(dialog_spec) => {
                         if dialog_spec.restore {
@@ -694,7 +685,10 @@ impl GameEngine {
                 }
             }
             AppExploreEvent::UseAction(action) => {
-                let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+                let s = self
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
                 s.apply_explore_action(&self.data, action);
             }
             AppExploreEvent::EnterPauseMenu => {
@@ -702,7 +696,10 @@ impl GameEngine {
                 self.transition_to(GameState::PauseMenu);
             }
             AppExploreEvent::EnterMenu => {
-                let s = self.session.as_ref().ok_or(EngineError::NoActiveSession)?;
+                let s = self
+                    .session
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("No active session"))?;
                 let _ = crate::game::save_game(&s.player);
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
                 self.transition_to(GameState::Menu);
@@ -711,11 +708,11 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_inventory_event(
-        &mut self,
-        event: crate::game::InventoryEvent,
-    ) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_inventory_event(&mut self, event: crate::game::InventoryEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         match event {
             crate::game::InventoryEvent::None => {}
@@ -730,8 +727,11 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_dialog_event(&mut self, event: crate::game::DialogEvent) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_dialog_event(&mut self, event: crate::game::DialogEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         match event {
             crate::game::DialogEvent::None => {}
@@ -774,8 +774,11 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_shop_event(&mut self, event: crate::game::ShopEvent) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_shop_event(&mut self, event: crate::game::ShopEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         match event {
             crate::game::ShopEvent::None => {}
@@ -795,11 +798,11 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_pause_menu_event(
-        &mut self,
-        event: crate::game::PauseMenuEvent,
-    ) -> Result<(), EngineError> {
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_pause_menu_event(&mut self, event: crate::game::PauseMenuEvent) -> Result<()> {
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
 
         match event {
             crate::game::PauseMenuEvent::None => {}
@@ -822,7 +825,7 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_transition_event(&mut self, event: TransitionEvent) -> Result<(), EngineError> {
+    fn apply_transition_event(&mut self, event: TransitionEvent) -> Result<()> {
         match event {
             TransitionEvent::MapChanged => self.apply_map_changed()?,
             TransitionEvent::ToExplore => self.transition_to(GameState::Explore),
@@ -837,14 +840,15 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_release_movement_direction(
-        &mut self,
-        direction: Direction,
-    ) -> Result<(), EngineError> {
-        if !matches!(self.state, GameState::Explore) {
-            return Err(EngineError::InvalidState("Explore"));
-        }
-        let s = self.session.as_mut().ok_or(EngineError::NoActiveSession)?;
+    fn apply_release_movement_direction(&mut self, direction: Direction) -> Result<()> {
+        ensure!(
+            matches!(self.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = self
+            .session
+            .as_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
         s.on_direction_released(direction);
         Ok(())
     }

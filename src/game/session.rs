@@ -62,9 +62,10 @@ impl SessionState {
         }
     }
 
-    pub fn apply_combat_tick(&mut self, event: crate::game::combat::CombatTickEvent) -> bool {
+    pub fn apply_combat_tick(&mut self, event: crate::game::combat::CombatTickEvent) {
         let crate::game::combat::CombatTickEvent {
             damage_taken,
+            player_died: _,
             next_skill_cooldowns,
             next_mp_regen_timer,
             recover_mp,
@@ -78,16 +79,9 @@ impl SessionState {
             self.player.stats.recover_mp(recover_mp);
         }
 
-        if damage_taken > 0
-            && matches!(
-                self.player.apply(PlayerAction::TakeDamage(damage_taken)),
-                PlayerEvent::Died
-            )
-        {
-            return true;
+        if damage_taken > 0 {
+            let _ = self.player.apply(PlayerAction::TakeDamage(damage_taken));
         }
-
-        false
     }
 
     pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
