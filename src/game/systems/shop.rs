@@ -1,5 +1,7 @@
 use alloc::boxed::Box;
 
+use anyhow::{anyhow, ensure};
+
 use crate::data::Item;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{GameEvent, GameState, ShopInputEvent, ShopState};
@@ -34,12 +36,11 @@ impl DomainEventResolver for ShopInputResolver {
         let GameEvent::ShopInput(input) = event else {
             return Ok(alloc::vec::Vec::new());
         };
-        if !matches!(ctx.state, GameState::Shop) {
-            return Ok(alloc::vec::Vec::new());
-        }
-        let Some(s) = ctx.session else {
-            return Ok(alloc::vec::Vec::new());
-        };
+        ensure!(
+            matches!(ctx.state, GameState::Shop),
+            "Invalid state: expected Shop"
+        );
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         let event = match input {
             ShopInputEvent::BuySelected(selected) => {
