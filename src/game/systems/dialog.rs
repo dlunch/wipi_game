@@ -5,20 +5,7 @@ use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{DialogCommand, GameEvent, GameState};
-
-#[derive(Debug, Clone)]
-pub enum DialogEvent {
-    None,
-    Transition(DialogTransition),
-    Action(DialogAction, DialogTransition),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum DialogTransition {
-    SetLine(usize),
-    CloseToExplore,
-}
+use crate::game::{DialogCommand, DialogEvent, DialogTransition, GameEvent, GameState};
 
 struct DialogCascadeResolver;
 struct DialogInputResolver;

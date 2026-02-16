@@ -2,7 +2,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
+use crate::data::{Dialog, DialogAction, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{ExploreCommand, GameEvent, GameState, SessionState, TransitionEvent};
 
@@ -126,6 +126,19 @@ pub enum InventoryEvent {
 pub enum DialogCommand {
     Confirm,
     Back,
+}
+
+#[derive(Debug, Clone)]
+pub enum DialogEvent {
+    None,
+    Transition(DialogTransition),
+    Action(DialogAction, DialogTransition),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DialogTransition {
+    SetLine(usize),
+    CloseToExplore,
 }
 
 #[derive(Clone, Copy)]

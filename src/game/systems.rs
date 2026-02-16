@@ -10,7 +10,6 @@ pub mod shop;
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub use dialog::{DialogEvent, DialogTransition};
 pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use npc::NpcEvent;
 pub use runtime::{DomainEventResolver, ResolveContext};
