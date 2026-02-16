@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{
-    DialogInputEvent, ExploreInputEvent, GameEvent, GameState, InventoryInputEvent, SessionState,
-    ShopInputEvent, TransitionEvent, UiEvent,
+    DialogInputEvent, ExploreInputEvent, GameEvent, GameState, SessionState, ShopInputEvent,
+    TransitionEvent, UiEvent,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -81,7 +81,7 @@ impl UiInputEventResolver for UiState {
 }
 
 pub trait UiEventApplier {
-    fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent>;
+    fn apply_ui_event(&mut self, session: Option<&SessionState>, event: UiEvent) -> Vec<GameEvent>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -102,8 +102,16 @@ pub enum PauseMenuEvent {
     BackToExplore,
 }
 
+#[derive(Clone)]
+pub enum InventoryEvent {
+    None,
+    SetSelected(usize),
+    UseSelected(usize),
+    CloseToExplore,
+}
+
 impl UiEventApplier for UiState {
-    fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent> {
+    fn apply_ui_event(&mut self, session: Option<&SessionState>, event: UiEvent) -> Vec<GameEvent> {
         match event {
             UiEvent::OverlayCloseRequested => {
                 vec![GameEvent::Transition(TransitionEvent::ToExplore)]
@@ -118,7 +126,7 @@ impl UiEventApplier for UiState {
             UiEvent::MenuInput(key) => self.resolve_menu_input(key),
             UiEvent::PauseMenuInput(key) => self.resolve_pause_menu_input(key),
             UiEvent::ExploreInput(key) => self.resolve_explore_input(key),
-            UiEvent::InventoryInput(key) => self.resolve_inventory_input(key),
+            UiEvent::InventoryInput(key) => self.resolve_inventory_input(session, key),
             UiEvent::DialogInput(key) => self.resolve_dialog_input(key),
             UiEvent::ShopBuySelected(selected) => {
                 vec![GameEvent::ShopInput(ShopInputEvent::BuySelected(selected))]
@@ -150,16 +158,42 @@ impl UiState {
         event.map(GameEvent::ExploreInput).into_iter().collect()
     }
 
-    fn resolve_inventory_input(&self, key: InputKey) -> Vec<GameEvent> {
-        let event = match key {
-            InputKey::Up => Some(InventoryInputEvent::Up),
-            InputKey::Down => Some(InventoryInputEvent::Down),
-            InputKey::Ok => Some(InventoryInputEvent::Confirm),
-            InputKey::Back => Some(InventoryInputEvent::Back),
-            _ => None,
+    fn resolve_inventory_input(
+        &self,
+        session: Option<&SessionState>,
+        key: InputKey,
+    ) -> Vec<GameEvent> {
+        let Some(s) = session else {
+            return Vec::new();
         };
 
-        event.map(GameEvent::InventoryInput).into_iter().collect()
+        let selected = self.inventory.selected;
+        let event = match key {
+            InputKey::Up => {
+                let next = step_up(selected);
+                if next != selected {
+                    InventoryEvent::SetSelected(next)
+                } else {
+                    InventoryEvent::None
+                }
+            }
+            InputKey::Down => {
+                let next = step_down(selected, s.leader.inventory.len());
+                if next != selected {
+                    InventoryEvent::SetSelected(next)
+                } else {
+                    InventoryEvent::None
+                }
+            }
+            InputKey::Ok => InventoryEvent::UseSelected(selected),
+            InputKey::Back => InventoryEvent::CloseToExplore,
+            _ => InventoryEvent::None,
+        };
+
+        match event {
+            InventoryEvent::None => Vec::new(),
+            event => vec![GameEvent::Inventory(event)],
+        }
     }
 
     fn resolve_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
@@ -395,7 +429,6 @@ impl ExploreUiState {
             Vec::new()
         }
     }
-
 }
 
 #[derive(Debug)]

@@ -48,7 +48,6 @@ pub enum GameEvent {
     UpdateMovement,
     UpdateCombat,
     ExploreInput(ExploreInputEvent),
-    InventoryInput(InventoryInputEvent),
     DialogInput(DialogInputEvent),
     ShopInput(ShopInputEvent),
     StartNewGame,
@@ -112,14 +111,6 @@ pub enum ExploreInputEvent {
     UseSlot(usize),
     OpenPauseMenu,
     OpenMenu,
-}
-
-#[derive(Clone, Copy)]
-pub enum InventoryInputEvent {
-    Up,
-    Down,
-    Confirm,
-    Back,
 }
 
 #[derive(Clone, Copy)]
