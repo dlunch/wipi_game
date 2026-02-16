@@ -103,7 +103,7 @@ struct ExploreNpcInteractResolver;
 static EXPLORE_NPC_CASCADE_RESOLVER: ExploreNpcCascadeResolver = ExploreNpcCascadeResolver;
 static EXPLORE_NPC_INTERACT_RESOLVER: ExploreNpcInteractResolver = ExploreNpcInteractResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
         &EXPLORE_NPC_INTERACT_RESOLVER,
         &EXPLORE_NPC_CASCADE_RESOLVER

@@ -20,7 +20,7 @@ struct OpenShopByIdResolver;
 static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&SHOP_INPUT_RESOLVER, &OPEN_SHOP_BY_ID_RESOLVER]
 }
 

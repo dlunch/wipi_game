@@ -16,7 +16,7 @@ static EXPLORE_USE_ACTION_CASCADE_RESOLVER: ExploreUseActionCascadeResolver =
 static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePauseCascadeResolver;
 static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCascadeResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
         &EXPLORE_INPUT_RESOLVER,
         &EXPLORE_USE_ACTION_CASCADE_RESOLVER,

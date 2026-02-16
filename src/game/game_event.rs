@@ -2,6 +2,7 @@ use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
 use alloc::boxed::Box;
 use alloc::string::String;
+use alloc::vec::Vec;
 
 #[derive(Clone)]
 pub enum CombatRuntimeEvent {
@@ -26,7 +27,7 @@ pub enum CombatRuntimeEvent {
     },
     SetPlayerAttackCooldown(u32),
     SetPlayerHitFlash(u32),
-    SetSkillEffects(alloc::vec::Vec<SkillEffect>),
+    SetSkillEffects(Vec<SkillEffect>),
     SetUpdateCounter(u32),
     SetRespawnTimer(u32),
     SetNextEnemyInstanceId(u32),

@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use anyhow::Result;
@@ -48,7 +49,7 @@ pub enum PlayerEffect {
 
 #[derive(Debug, Clone)]
 pub struct KillReward {
-    pub enemy_id: alloc::string::String,
+    pub enemy_id: String,
     pub exp: i32,
     pub gold: i32,
 }

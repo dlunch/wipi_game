@@ -47,7 +47,7 @@ struct StartContinueResolver;
 static UPDATE_LOADING_RESOLVER: UpdateLoadingResolver = UpdateLoadingResolver;
 static START_CONTINUE_RESOLVER: StartContinueResolver = StartContinueResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_LOADING_RESOLVER, &START_CONTINUE_RESOLVER]
 }
 

@@ -171,7 +171,7 @@ struct UpdateMovementResolver;
 
 static UPDATE_MOVEMENT_RESOLVER: UpdateMovementResolver = UpdateMovementResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_MOVEMENT_RESOLVER]
 }
 

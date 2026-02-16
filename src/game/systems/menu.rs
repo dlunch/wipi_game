@@ -33,7 +33,7 @@ static MENU_ACTION_CASCADE_RESOLVER: MenuActionCascadeResolver = MenuActionCasca
 static MENU_INPUT_RESOLVER: MenuInputResolver = MenuInputResolver;
 static PAUSE_MENU_INPUT_RESOLVER: PauseMenuInputResolver = PauseMenuInputResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![
         &MENU_INPUT_RESOLVER,
         &PAUSE_MENU_INPUT_RESOLVER,

@@ -26,7 +26,7 @@ struct DialogInputResolver;
 static DIALOG_CASCADE_RESOLVER: DialogCascadeResolver = DialogCascadeResolver;
 static DIALOG_INPUT_RESOLVER: DialogInputResolver = DialogInputResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
 }
 

@@ -271,7 +271,7 @@ struct CombatPlayerActionResolver;
 static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
 static COMBAT_PLAYER_ACTION_RESOLVER: CombatPlayerActionResolver = CombatPlayerActionResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&UPDATE_COMBAT_RESOLVER, &COMBAT_PLAYER_ACTION_RESOLVER]
 }
 

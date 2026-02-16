@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use anyhow::{anyhow, ensure};
+use anyhow::{Result, anyhow, ensure};
 
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
@@ -18,7 +18,7 @@ struct InventoryInputResolver;
 
 static INVENTORY_INPUT_RESOLVER: InventoryInputResolver = InventoryInputResolver;
 
-pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
+pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
     alloc::vec![&INVENTORY_INPUT_RESOLVER]
 }
 
@@ -27,11 +27,7 @@ impl DomainEventResolver for InventoryInputResolver {
         matches!(event, GameEvent::InventoryInput(_))
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-    ) -> anyhow::Result<Vec<GameEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let GameEvent::InventoryInput(key) = event else {
             return Err(anyhow!("Invalid event: expected InventoryInput"));
         };

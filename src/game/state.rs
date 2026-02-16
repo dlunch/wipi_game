@@ -226,6 +226,8 @@ impl GameState {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::String;
+
     use super::GameState;
 
     fn states() -> [GameState; 11] {
@@ -240,7 +242,7 @@ mod tests {
             GameState::QuestLog,
             GameState::PauseMenu,
             GameState::GameOver,
-            GameState::Error(alloc::string::String::from("error")),
+            GameState::Error(String::from("error")),
         ]
     }
 
