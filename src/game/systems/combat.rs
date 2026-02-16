@@ -35,7 +35,7 @@ pub struct CombatTickEvent {
     pub next_state: CombatState,
 }
 
-pub fn reduce_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTickEvent {
+pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> CombatTickEvent {
     let mut next_state = state.clone();
     let mut result = update(
         &mut next_state,

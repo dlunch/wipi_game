@@ -18,7 +18,7 @@ pub enum LoadingEvent {
     Error(String),
 }
 
-pub fn reduce_loading(step: usize, load_result: Result<bool, String>) -> LoadingEvent {
+pub fn resolve_loading(step: usize, load_result: Result<bool, String>) -> LoadingEvent {
     match load_result {
         Ok(true) => LoadingEvent::Loaded,
         Ok(false) => LoadingEvent::Advance(step + 1),

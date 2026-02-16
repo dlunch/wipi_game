@@ -446,7 +446,7 @@ impl GameRuntime {
         }
     }
 
-    fn reduce_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
+    fn resolve_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
         let event = match intent {
             GameIntent::UpdateLoading => {
                 let GameState::Loading(step) = self.state else {
@@ -454,7 +454,7 @@ impl GameRuntime {
                 };
 
                 let load_result = crate::game::lifecycle::load_step(&mut self.data, step);
-                GameEvent::UpdateLoading(crate::game::lifecycle::reduce_loading(step, load_result))
+                GameEvent::UpdateLoading(crate::game::lifecycle::resolve_loading(step, load_result))
             }
             GameIntent::UpdateMovement => {
                 if !matches!(self.state, GameState::Explore) {
@@ -464,7 +464,7 @@ impl GameRuntime {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 };
 
-                let movement = crate::game::movement::reduce_world_tick(
+                let movement = crate::game::movement::resolve_world_tick(
                     &s.movement,
                     &s.player,
                     &s.combat.enemies,
@@ -488,7 +488,7 @@ impl GameRuntime {
                     return vec![GameEvent::None];
                 };
 
-                GameEvent::UpdateCombat(crate::game::combat::reduce_tick(
+                GameEvent::UpdateCombat(crate::game::combat::resolve_tick(
                     &s.combat,
                     crate::game::combat::CombatTickInput {
                         player_x: s.player.x,
@@ -505,7 +505,7 @@ impl GameRuntime {
                 if !matches!(self.state, GameState::Menu) {
                     GameEvent::None
                 } else {
-                    GameEvent::Menu(crate::game::menu::reduce(
+                    GameEvent::Menu(crate::game::menu::resolve(
                         self.ui.menu.selected,
                         &self.ui.menu.state.items,
                         intent,
@@ -523,7 +523,7 @@ impl GameRuntime {
                     .data
                     .find_map(&s.player.current_map_id)
                     .is_some_and(|map| map.peaceful);
-                match crate::game::explore::reduce(is_peaceful, intent) {
+                match crate::game::explore::resolve(is_peaceful, intent) {
                     crate::game::ExploreEvent::None => GameEvent::None,
                     crate::game::ExploreEvent::MoveDirection(direction) => {
                         GameEvent::Explore(AppExploreEvent::MoveDirection(direction))
@@ -532,7 +532,7 @@ impl GameRuntime {
                         facing,
                         fallback_action,
                     } => {
-                        if let Some(npc_event) = crate::game::npc::reduce(
+                        if let Some(npc_event) = crate::game::npc::resolve(
                             &s.player,
                             &self.data,
                             crate::game::npc::NpcIntent::Interact { facing },
@@ -562,7 +562,7 @@ impl GameRuntime {
                 let Some(s) = self.session.as_ref() else {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 };
-                GameEvent::Inventory(crate::game::inventory::reduce(
+                GameEvent::Inventory(crate::game::inventory::resolve(
                     self.ui.inventory.selected,
                     s.player.inventory.len(),
                     intent,
@@ -575,7 +575,7 @@ impl GameRuntime {
                 if self.session.is_none() {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 }
-                GameEvent::Dialog(crate::game::dialog::reduce(
+                GameEvent::Dialog(crate::game::dialog::resolve(
                     self.ui.dialog.state.as_ref(),
                     intent,
                 ))
@@ -587,7 +587,7 @@ impl GameRuntime {
                 let Some(s) = self.session.as_ref() else {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 };
-                GameEvent::Shop(crate::game::shop::reduce(
+                GameEvent::Shop(crate::game::shop::resolve(
                     self.ui.shop.mode,
                     self.ui.shop.selected,
                     self.ui.shop.state.is_some(),
@@ -609,7 +609,7 @@ impl GameRuntime {
                 if self.session.is_none() {
                     return vec![GameEvent::Error(String::from("No active session"))];
                 }
-                GameEvent::PauseMenu(crate::game::menu::reduce_pause(
+                GameEvent::PauseMenu(crate::game::menu::resolve_pause(
                     self.ui.pause_menu.selected,
                     self.ui.pause_menu.state.items.len(),
                     intent,
@@ -669,7 +669,7 @@ impl GameRuntime {
     fn dispatch(&mut self, action: GameInput) {
         let intents = self.collect_intents(action);
         for intent in intents {
-            let events = self.reduce_intent(intent);
+            let events = self.resolve_intent(intent);
             for event in events {
                 self.apply_event(event);
             }

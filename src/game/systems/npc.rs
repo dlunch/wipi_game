@@ -23,7 +23,7 @@ pub enum NpcIntent {
     Interact { facing: Direction },
 }
 
-pub fn reduce(player: &PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
+pub fn resolve(player: &PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
     }

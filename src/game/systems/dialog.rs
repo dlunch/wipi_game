@@ -30,7 +30,7 @@ pub enum DialogTransition {
     CloseToExplore,
 }
 
-pub fn reduce(dialog_state: Option<&DialogState>, intent: DialogIntent) -> DialogEvent {
+pub fn resolve(dialog_state: Option<&DialogState>, intent: DialogIntent) -> DialogEvent {
     match intent {
         DialogIntent::Confirm => {
             if let Some(dialog_state_ref) = dialog_state {
@@ -69,7 +69,7 @@ mod tests {
 
     use wipi::event::KeyCode;
 
-    use super::{DialogEvent, DialogIntent, DialogTransition, reduce};
+    use super::{DialogEvent, DialogIntent, DialogTransition, resolve};
     use crate::data::{Dialog, DialogAction, parse_dialogs};
     use crate::game::DialogState;
 
@@ -125,7 +125,7 @@ mod tests {
 
         let dialog_state = DialogState::from_dialog(String::from("NPC"), &dialog);
 
-        let event = reduce(Some(&dialog_state), DialogIntent::Back);
+        let event = resolve(Some(&dialog_state), DialogIntent::Back);
 
         assert!(matches!(
             event,
@@ -139,7 +139,7 @@ mod tests {
 
         let dialog_state = DialogState::from_dialog(String::from("NPC"), &dialog);
 
-        let event = reduce(Some(&dialog_state), DialogIntent::Confirm);
+        let event = resolve(Some(&dialog_state), DialogIntent::Confirm);
 
         let DialogEvent::Transition(DialogTransition::SetLine(line)) = event else {
             panic!("expected set line event");
@@ -153,7 +153,7 @@ mod tests {
 
         let dialog_state = DialogState::from_dialog(String::from("NPC"), &dialog);
 
-        let event = reduce(Some(&dialog_state), DialogIntent::Confirm);
+        let event = resolve(Some(&dialog_state), DialogIntent::Confirm);
 
         assert!(matches!(
             event,
@@ -168,7 +168,7 @@ mod tests {
 
         let dialog_state = DialogState::from_dialog(String::from("NPC"), &dialog);
 
-        let event = reduce(Some(&dialog_state), DialogIntent::Confirm);
+        let event = resolve(Some(&dialog_state), DialogIntent::Confirm);
 
         let DialogEvent::Action(DialogAction::OpenShop(shop_id), DialogTransition::CloseToExplore) =
             event
@@ -185,7 +185,7 @@ mod tests {
 
         let dialog_state = DialogState::from_dialog(String::from("NPC"), &dialog);
 
-        let event = reduce(Some(&dialog_state), DialogIntent::Confirm);
+        let event = resolve(Some(&dialog_state), DialogIntent::Confirm);
 
         assert!(matches!(
             event,

@@ -74,7 +74,7 @@ impl ExploreIntent {
     }
 }
 
-pub fn reduce(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
+pub fn resolve(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
     match intent {
         ExploreIntent::MoveDirection(direction) => ExploreEvent::MoveDirection(direction),
         ExploreIntent::TryNpcInteract {
@@ -404,15 +404,15 @@ mod tests {
     }
 
     #[test]
-    fn reduce_pause_switches_to_pause_menu_state() {
-        let event = reduce(false, ExploreIntent::Pause);
+    fn resolve_pause_switches_to_pause_menu_state() {
+        let event = resolve(false, ExploreIntent::Pause);
 
         assert!(matches!(event, ExploreEvent::EnterPauseMenu));
     }
 
     #[test]
-    fn reduce_attack_has_no_effect_in_peaceful_zone() {
-        let event = reduce(true, ExploreIntent::UseAction(ExploreAction::BasicAttack));
+    fn resolve_attack_has_no_effect_in_peaceful_zone() {
+        let event = resolve(true, ExploreIntent::UseAction(ExploreAction::BasicAttack));
 
         assert!(matches!(event, ExploreEvent::None));
     }

@@ -12,7 +12,7 @@ pub struct MovementUpdateResult {
     pub map_changed: bool,
 }
 
-pub fn reduce_world_tick(
+pub fn resolve_world_tick(
     state: &MovementState,
     player: &PlayerState,
     enemies: &[FieldEnemy],
@@ -31,7 +31,7 @@ pub fn reduce_world_tick(
         .map(|npc| (npc.x, npc.y))
         .collect();
 
-    let movement_event = reduce_tick(state, player, map, &enemy_positions, &npc_positions);
+    let movement_event = resolve_tick(state, player, map, &enemy_positions, &npc_positions);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
         if let Some(next_x) = player.x.checked_add_signed(dx as isize) {
             if let Some(next_y) = player.y.checked_add_signed(dy as isize) {
@@ -60,7 +60,7 @@ pub fn reduce_world_tick(
     }
 }
 
-pub fn reduce_tick(
+pub fn resolve_tick(
     state: &MovementState,
     player: &PlayerState,
     map: Option<&Map>,
@@ -371,7 +371,7 @@ mod tests {
             move_cooldown: 2,
         };
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -407,7 +407,7 @@ mod tests {
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState::default();
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -446,7 +446,7 @@ mod tests {
             move_cooldown: 1,
         };
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -454,7 +454,7 @@ mod tests {
             &npc_positions,
         );
         let moved_while_cooling = state.apply_tick(&mut player, event);
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -495,7 +495,7 @@ mod tests {
             move_cooldown: 0,
         };
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -534,7 +534,7 @@ mod tests {
             move_cooldown: 0,
         };
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -573,7 +573,7 @@ mod tests {
             move_cooldown: 0,
         };
 
-        let event = reduce_tick(
+        let event = resolve_tick(
             &state,
             &player,
             Some(&map),
@@ -588,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn reduce_world_tick_sets_treasure_tile_event_without_map_change() {
+    fn resolve_world_tick_sets_treasure_tile_event_without_map_change() {
         let data = make_world_data();
         let enemies: Vec<FieldEnemy> = Vec::new();
         let state = MovementState {
@@ -597,14 +597,14 @@ mod tests {
         };
         let player = make_player_at(1, 0, "field");
 
-        let result = reduce_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &enemies, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::Treasure)));
         assert!(!result.map_changed);
     }
 
     #[test]
-    fn reduce_world_tick_sets_exit_tile_event_with_map_change() {
+    fn resolve_world_tick_sets_exit_tile_event_with_map_change() {
         let data = make_world_data();
         let enemies: Vec<FieldEnemy> = Vec::new();
         let state = MovementState {
@@ -613,14 +613,14 @@ mod tests {
         };
         let player = make_player_at(1, 1, "field");
 
-        let result = reduce_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &enemies, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::MapExit(target)) if target == "town"));
         assert!(result.map_changed);
     }
 
     #[test]
-    fn reduce_world_tick_sets_dungeon_tile_event_with_map_change() {
+    fn resolve_world_tick_sets_dungeon_tile_event_with_map_change() {
         let data = make_world_data();
         let enemies: Vec<FieldEnemy> = Vec::new();
         let state = MovementState {
@@ -629,7 +629,7 @@ mod tests {
         };
         let player = make_player_at(1, 1, "field");
 
-        let result = reduce_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &enemies, &data);
 
         assert!(
             matches!(result.tile_event, Some(TileEvent::DungeonEntrance(target)) if target == "cave")
@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn reduce_world_tick_sets_no_tile_event_on_floor() {
+    fn resolve_world_tick_sets_no_tile_event_on_floor() {
         let data = make_world_data();
         let enemies: Vec<FieldEnemy> = Vec::new();
         let state = MovementState {
@@ -647,7 +647,7 @@ mod tests {
         };
         let player = make_player_at(0, 0, "field");
 
-        let result = reduce_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &enemies, &data);
 
         assert!(result.tile_event.is_none());
         assert!(!result.map_changed);
