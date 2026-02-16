@@ -269,11 +269,11 @@ impl CharacterState {
             GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(index)) => {
                 let _ = self.apply(PlayerAction::UseItem { index: *index });
             }
-            GameEvent::Shop(crate::game::ShopEvent::BuyItem(item)) => {
+            GameEvent::ShopBuyItem(item) => {
                 let _ = self.apply(PlayerAction::AddGold(-item.price));
                 let _ = self.apply(PlayerAction::AddItem(item.clone()));
             }
-            GameEvent::Shop(crate::game::ShopEvent::SellSelected(index)) => {
+            GameEvent::ShopSellSelected(index) => {
                 if let PlayerEvent::ItemRemoved(Some(item)) =
                     self.apply(PlayerAction::RemoveItemAt(*index))
                 {

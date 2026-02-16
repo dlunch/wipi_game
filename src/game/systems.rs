@@ -13,7 +13,6 @@ use alloc::vec::Vec;
 pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use npc::NpcEvent;
 pub use runtime::{DomainEventResolver, ResolveContext};
-pub use shop::ShopEvent;
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];

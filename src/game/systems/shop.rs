@@ -4,16 +4,8 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::data::Item;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, ShopCommand, ShopState};
-
-#[derive(Clone)]
-pub enum ShopEvent {
-    BuyItem(Item),
-    SellSelected(usize),
-    CloseToExplore,
-}
+use crate::game::{GameEvent, GameState, ShopCommand, ShopState, TransitionEvent};
 
 struct ShopInputResolver;
 struct OpenShopByIdResolver;
@@ -51,7 +43,7 @@ impl DomainEventResolver for ShopInputResolver {
                     .unwrap_or(&[]);
                 if let Some(item) = shop_items.get(*selected).cloned() {
                     if s.leader.stats.gold >= item.price {
-                        Some(ShopEvent::BuyItem(item))
+                        Some(GameEvent::ShopBuyItem(item))
                     } else {
                         None
                     }
@@ -59,12 +51,12 @@ impl DomainEventResolver for ShopInputResolver {
                     None
                 }
             }
-            ShopCommand::SellSelected(selected) => Some(ShopEvent::SellSelected(*selected)),
-            ShopCommand::Close => Some(ShopEvent::CloseToExplore),
+            ShopCommand::SellSelected(selected) => Some(GameEvent::ShopSellSelected(*selected)),
+            ShopCommand::Close => Some(GameEvent::Transition(TransitionEvent::ToExplore)),
         };
 
         if let Some(event) = event {
-            Ok(vec![GameEvent::Shop(event)])
+            Ok(vec![event])
         } else {
             Ok(Vec::new())
         }

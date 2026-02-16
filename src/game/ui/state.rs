@@ -2,7 +2,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::data::{Dialog, DialogAction, DialogLine, Direction, Item, Shop, Skill};
+use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{ExploreCommand, GameEvent, GameState, SessionState, TransitionEvent};
 
@@ -128,13 +128,6 @@ pub enum DialogCommand {
     Back,
 }
 
-#[derive(Debug, Clone)]
-pub enum DialogEvent {
-    None,
-    Transition(DialogTransition),
-    Action(DialogAction, DialogTransition),
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum DialogTransition {
     SetLine(usize),
@@ -244,7 +237,7 @@ impl UiState {
         event.map(GameEvent::DialogCommand).into_iter().collect()
     }
 
-    fn resolve_menu_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn resolve_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
         let selected = self.menu.selected;
         let items = &self.menu.state.items;
 
@@ -278,7 +271,8 @@ impl UiState {
         match event {
             MenuEvent::None => Vec::new(),
             MenuEvent::SetSelected(selected) => {
-                vec![GameEvent::Menu(MenuEvent::SetSelected(selected))]
+                self.menu.set_selected(selected);
+                Vec::new()
             }
             MenuEvent::Action(action) => match action {
                 MenuAction::NewGame => vec![GameEvent::StartNewGame],

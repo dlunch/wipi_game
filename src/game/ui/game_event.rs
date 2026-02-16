@@ -12,11 +12,6 @@ impl UiState {
             GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
                 *self = UiState::default();
             }
-            GameEvent::Menu(event) => match event {
-                crate::game::MenuEvent::None => {}
-                crate::game::MenuEvent::SetSelected(selected) => self.menu.set_selected(*selected),
-                crate::game::MenuEvent::Action(_) => {}
-            },
             GameEvent::PauseMenu(event) => match event {
                 crate::game::PauseMenuEvent::None => {}
                 crate::game::PauseMenuEvent::SetSelected(selected) => {
@@ -60,22 +55,17 @@ impl UiState {
                     self.dialog.close();
                 }
             },
-            GameEvent::Shop(event) => match event {
-                crate::game::ShopEvent::BuyItem(_) => {}
-                crate::game::ShopEvent::SellSelected(index) => {
-                    if let Some(s) = session.as_ref() {
-                        let len_after = s.leader.inventory.len();
-                        let current_selected = self.shop.selected;
-                        if *index >= len_after
-                            && current_selected >= len_after
-                            && current_selected > 0
-                        {
-                            self.shop.set_selected(current_selected - 1);
-                        }
+            GameEvent::ShopBuyItem(_) => {}
+            GameEvent::ShopSellSelected(index) => {
+                if let Some(s) = session.as_ref() {
+                    let len_after = s.leader.inventory.len();
+                    let current_selected = self.shop.selected;
+                    if *index >= len_after && current_selected >= len_after && current_selected > 0
+                    {
+                        self.shop.set_selected(current_selected - 1);
                     }
                 }
-                crate::game::ShopEvent::CloseToExplore => {}
-            },
+            }
             GameEvent::OpenDialogState(dialog_state) => {
                 self.dialog.open(dialog_state.clone());
             }

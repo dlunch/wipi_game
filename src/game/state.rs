@@ -156,7 +156,6 @@ impl GameState {
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
             | GameEvent::PauseMenu(crate::game::PauseMenuEvent::BackToExplore)
             | GameEvent::Inventory(crate::game::InventoryEvent::CloseToExplore)
-            | GameEvent::Shop(crate::game::ShopEvent::CloseToExplore)
             | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
                 self.transition_to(GameState::Explore)
             }
