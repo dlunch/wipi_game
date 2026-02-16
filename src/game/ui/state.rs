@@ -4,9 +4,7 @@ use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
-use crate::game::{
-    DialogCommand, ExploreCommand, GameEvent, GameState, SessionState, ShopCommand, TransitionEvent,
-};
+use crate::game::{ExploreCommand, GameEvent, GameState, SessionState, TransitionEvent};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -122,6 +120,19 @@ pub enum InventoryEvent {
     SetSelected(usize),
     UseSelected(usize),
     CloseToExplore,
+}
+
+#[derive(Clone, Copy)]
+pub enum DialogCommand {
+    Confirm,
+    Back,
+}
+
+#[derive(Clone, Copy)]
+pub enum ShopCommand {
+    BuySelected(usize),
+    SellSelected(usize),
+    Close,
 }
 
 impl UiEventApplier for UiState {

@@ -48,8 +48,8 @@ pub enum GameEvent {
     UpdateMovement,
     UpdateCombat,
     ExploreCommand(ExploreCommand),
-    DialogCommand(DialogCommand),
-    ShopCommand(ShopCommand),
+    DialogCommand(crate::game::DialogCommand),
+    ShopCommand(crate::game::ShopCommand),
     StartNewGame,
     ContinueGame,
     Session(SessionEvent),
@@ -98,25 +98,12 @@ pub enum SessionEvent {
 }
 
 #[derive(Clone, Copy)]
-pub enum ShopCommand {
-    BuySelected(usize),
-    SellSelected(usize),
-    Close,
-}
-
-#[derive(Clone, Copy)]
 pub enum ExploreCommand {
     Move(Direction),
     Confirm,
     UseSlot(usize),
     OpenPauseMenu,
     OpenMenu,
-}
-
-#[derive(Clone, Copy)]
-pub enum DialogCommand {
-    Confirm,
-    Back,
 }
 
 #[derive(Clone, Copy)]
