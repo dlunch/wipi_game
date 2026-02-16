@@ -36,9 +36,8 @@ mod tests {
 
     use super::*;
     use crate::data::{Item, ItemKind, Shop};
-    use crate::game::{ShopMode, ShopState};
     use crate::game::ui::ShopUiState;
-    use wipi::event::KeyCode;
+    use crate::game::{InputKey, ShopMode, ShopState};
 
     fn make_item(id: &str, price: i32) -> Item {
         Item {
@@ -69,13 +68,13 @@ mod tests {
         let mut ui = ShopUiState::default();
         ui.open(shop_state);
 
-        let intent = ui.handle_key(KeyCode::Ok, 0);
+        let intent = ui.handle_key(InputKey::Ok, 0);
         assert!(intent.is_none());
         assert!(matches!(ui.mode, ShopMode::Buy));
 
         ui.mode = ShopMode::Select;
         ui.set_selected(1);
-        let intent = ui.handle_key(KeyCode::Ok, 0);
+        let intent = ui.handle_key(InputKey::Ok, 0);
         assert!(intent.is_none());
         assert!(matches!(ui.mode, ShopMode::Sell));
     }
@@ -116,7 +115,7 @@ mod tests {
         ui.mode = ShopMode::Buy;
         ui.set_selected(2);
 
-        let intent = ui.handle_key(KeyCode::Back, 0);
+        let intent = ui.handle_key(InputKey::Back, 0);
         assert!(intent.is_none());
         assert!(matches!(ui.mode, ShopMode::Select));
     }

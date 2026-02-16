@@ -17,8 +17,30 @@ use wipi::graphics::repaint;
 use wipi::timer::Timer;
 use wipi::wipi_main;
 
-use crate::game::{RenderState, render};
+use crate::game::{InputKey, RenderState, render};
 use crate::runtime::GameRuntime;
+
+fn map_key(key: KeyCode) -> Option<InputKey> {
+    match key {
+        KeyCode::Ok => Some(InputKey::Ok),
+        KeyCode::Back => Some(InputKey::Back),
+        KeyCode::Up => Some(InputKey::Up),
+        KeyCode::Down => Some(InputKey::Down),
+        KeyCode::Left => Some(InputKey::Left),
+        KeyCode::Right => Some(InputKey::Right),
+        KeyCode::Key0 => Some(InputKey::Key0),
+        KeyCode::Key1 => Some(InputKey::Key1),
+        KeyCode::Key2 => Some(InputKey::Key2),
+        KeyCode::Key3 => Some(InputKey::Key3),
+        KeyCode::Key4 => Some(InputKey::Key4),
+        KeyCode::Key5 => Some(InputKey::Key5),
+        KeyCode::Key6 => Some(InputKey::Key6),
+        KeyCode::Key7 => Some(InputKey::Key7),
+        KeyCode::Key8 => Some(InputKey::Key8),
+        KeyCode::Key9 => Some(InputKey::Key9),
+        _ => None,
+    }
+}
 
 pub struct RpgGame {
     runtime: Rc<RefCell<GameRuntime>>,
@@ -67,11 +89,15 @@ impl App for RpgGame {
     }
 
     fn on_keydown(&mut self, key: KeyCode) {
-        self.runtime.borrow_mut().on_keydown(key);
+        if let Some(key) = map_key(key) {
+            self.runtime.borrow_mut().on_keydown(key);
+        }
     }
 
     fn on_keyup(&mut self, key: KeyCode) {
-        self.runtime.borrow_mut().on_keyup(key);
+        if let Some(key) = map_key(key) {
+            self.runtime.borrow_mut().on_keyup(key);
+        }
     }
 }
 

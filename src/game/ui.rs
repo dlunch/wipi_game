@@ -2,9 +2,8 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
 use crate::data::{Dialog, DialogLine, Item, Shop, Skill};
+use crate::game::InputKey;
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -171,7 +170,7 @@ impl ShopUiState {
         self.selected = selected;
     }
 
-    pub fn handle_key(&mut self, key: KeyCode, inventory_len: usize) -> Option<ShopUiIntent> {
+    pub fn handle_key(&mut self, key: InputKey, inventory_len: usize) -> Option<ShopUiIntent> {
         let shop_items_len = self
             .state
             .as_ref()
@@ -180,19 +179,19 @@ impl ShopUiState {
 
         match self.mode {
             ShopMode::Select => match key {
-                KeyCode::Up => {
+                InputKey::Up => {
                     if self.selected > 0 {
                         self.selected -= 1;
                     }
                     None
                 }
-                KeyCode::Down => {
+                InputKey::Down => {
                     if self.selected + 1 < 2 {
                         self.selected += 1;
                     }
                     None
                 }
-                KeyCode::Ok => {
+                InputKey::Ok => {
                     if self.selected == 0 {
                         self.mode = ShopMode::Buy;
                     } else {
@@ -201,24 +200,24 @@ impl ShopUiState {
                     self.selected = 0;
                     None
                 }
-                KeyCode::Back => Some(ShopUiIntent::Close),
+                InputKey::Back => Some(ShopUiIntent::Close),
                 _ => None,
             },
             ShopMode::Buy => match key {
-                KeyCode::Up => {
+                InputKey::Up => {
                     if self.selected > 0 {
                         self.selected -= 1;
                     }
                     None
                 }
-                KeyCode::Down => {
+                InputKey::Down => {
                     if self.selected + 1 < shop_items_len {
                         self.selected += 1;
                     }
                     None
                 }
-                KeyCode::Ok => Some(ShopUiIntent::BuySelected(self.selected)),
-                KeyCode::Back => {
+                InputKey::Ok => Some(ShopUiIntent::BuySelected(self.selected)),
+                InputKey::Back => {
                     self.mode = ShopMode::Select;
                     self.selected = 0;
                     None
@@ -226,20 +225,20 @@ impl ShopUiState {
                 _ => None,
             },
             ShopMode::Sell => match key {
-                KeyCode::Up => {
+                InputKey::Up => {
                     if self.selected > 0 {
                         self.selected -= 1;
                     }
                     None
                 }
-                KeyCode::Down => {
+                InputKey::Down => {
                     if self.selected + 1 < inventory_len {
                         self.selected += 1;
                     }
                     None
                 }
-                KeyCode::Ok => Some(ShopUiIntent::SellSelected(self.selected)),
-                KeyCode::Back => {
+                InputKey::Ok => Some(ShopUiIntent::SellSelected(self.selected)),
+                InputKey::Back => {
                     self.mode = ShopMode::Select;
                     self.selected = 0;
                     None

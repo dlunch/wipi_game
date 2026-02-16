@@ -1,7 +1,5 @@
-use wipi::event::KeyCode;
-
 use crate::data::DialogAction;
-use crate::game::DialogState;
+use crate::game::{DialogState, InputKey};
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
@@ -10,10 +8,10 @@ pub enum DialogIntent {
 }
 
 impl DialogIntent {
-    pub fn intent_for_key(key: KeyCode) -> Option<DialogIntent> {
+    pub fn intent_for_key(key: InputKey) -> Option<DialogIntent> {
         match key {
-            KeyCode::Ok => Some(DialogIntent::Confirm),
-            KeyCode::Back => Some(DialogIntent::Back),
+            InputKey::Ok => Some(DialogIntent::Confirm),
+            InputKey::Back => Some(DialogIntent::Back),
             _ => None,
         }
     }
@@ -67,11 +65,9 @@ pub fn resolve(dialog_state: Option<&DialogState>, intent: DialogIntent) -> Dial
 mod tests {
     use alloc::string::String;
 
-    use wipi::event::KeyCode;
-
     use super::{DialogEvent, DialogIntent, DialogTransition, resolve};
     use crate::data::{Dialog, DialogAction, parse_dialogs};
-    use crate::game::DialogState;
+    use crate::game::{DialogState, InputKey};
 
     fn make_dialog(id: &str, lines_count: usize) -> Dialog {
         let mut raw = alloc::format!("@DIALOG:{id}\n");
@@ -196,13 +192,13 @@ mod tests {
     #[test]
     fn intent_for_key_maps_expected_keys() {
         assert!(matches!(
-            DialogIntent::intent_for_key(KeyCode::Ok),
+            DialogIntent::intent_for_key(InputKey::Ok),
             Some(DialogIntent::Confirm)
         ));
         assert!(matches!(
-            DialogIntent::intent_for_key(KeyCode::Back),
+            DialogIntent::intent_for_key(InputKey::Back),
             Some(DialogIntent::Back)
         ));
-        assert!(matches!(DialogIntent::intent_for_key(KeyCode::Up), None));
+        assert!(matches!(DialogIntent::intent_for_key(InputKey::Up), None));
     }
 }

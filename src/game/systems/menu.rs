@@ -1,4 +1,4 @@
-use wipi::event::KeyCode;
+use crate::game::InputKey;
 
 use crate::game::MenuAction;
 
@@ -10,11 +10,11 @@ pub enum MenuIntent {
 }
 
 impl MenuIntent {
-    pub fn intent_for_key(key: KeyCode) -> Option<MenuIntent> {
+    pub fn intent_for_key(key: InputKey) -> Option<MenuIntent> {
         match key {
-            KeyCode::Up => Some(MenuIntent::MoveUp),
-            KeyCode::Down => Some(MenuIntent::MoveDown),
-            KeyCode::Ok => Some(MenuIntent::Select),
+            InputKey::Up => Some(MenuIntent::MoveUp),
+            InputKey::Down => Some(MenuIntent::MoveDown),
+            InputKey::Ok => Some(MenuIntent::Select),
             _ => None,
         }
     }
@@ -46,12 +46,12 @@ pub enum PauseMenuIntent {
 }
 
 impl PauseMenuIntent {
-    pub fn intent_for_key(key: KeyCode) -> Option<PauseMenuIntent> {
+    pub fn intent_for_key(key: InputKey) -> Option<PauseMenuIntent> {
         match key {
-            KeyCode::Up => Some(PauseMenuIntent::MoveUp),
-            KeyCode::Down => Some(PauseMenuIntent::MoveDown),
-            KeyCode::Ok => Some(PauseMenuIntent::Select),
-            KeyCode::Back | KeyCode::Key0 => Some(PauseMenuIntent::Back),
+            InputKey::Up => Some(PauseMenuIntent::MoveUp),
+            InputKey::Down => Some(PauseMenuIntent::MoveDown),
+            InputKey::Ok => Some(PauseMenuIntent::Select),
+            InputKey::Back | InputKey::Key0 => Some(PauseMenuIntent::Back),
             _ => None,
         }
     }

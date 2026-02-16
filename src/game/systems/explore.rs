@@ -1,9 +1,7 @@
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
 use crate::data::Direction;
-use crate::game::ExploreAction;
+use crate::game::{ExploreAction, InputKey};
 #[cfg(test)]
 use crate::game::{GameData, PlayerState};
 
@@ -33,40 +31,40 @@ pub enum ExploreEvent {
 
 impl ExploreIntent {
     pub fn intent_for_key(
-        key: KeyCode,
+        key: InputKey,
         facing: Direction,
         ok_action: ExploreAction,
         key_actions: [Option<ExploreAction>; 3],
     ) -> Vec<ExploreIntent> {
         let mut intents = Vec::new();
         match key {
-            KeyCode::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
-            KeyCode::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
-            KeyCode::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
-            KeyCode::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
-            KeyCode::Ok => {
+            InputKey::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
+            InputKey::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
+            InputKey::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
+            InputKey::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
+            InputKey::Ok => {
                 intents.push(ExploreIntent::TryNpcInteract {
                     facing,
                     fallback_action: Some(ok_action),
                 });
             }
-            KeyCode::Key1 => {
+            InputKey::Key1 => {
                 if let Some(action) = key_actions[0] {
                     intents.push(ExploreIntent::UseAction(action));
                 }
             }
-            KeyCode::Key2 => {
+            InputKey::Key2 => {
                 if let Some(action) = key_actions[1] {
                     intents.push(ExploreIntent::UseAction(action));
                 }
             }
-            KeyCode::Key3 => {
+            InputKey::Key3 => {
                 if let Some(action) = key_actions[2] {
                     intents.push(ExploreIntent::UseAction(action));
                 }
             }
-            KeyCode::Key0 => intents.push(ExploreIntent::Pause),
-            KeyCode::Back => intents.push(ExploreIntent::BackToMenu),
+            InputKey::Key0 => intents.push(ExploreIntent::Pause),
+            InputKey::Back => intents.push(ExploreIntent::BackToMenu),
             _ => {}
         }
 
@@ -97,12 +95,10 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
-    use wipi::event::KeyCode;
-
     use super::*;
     use crate::data::{Direction, Item, ItemKind, Map, Tile};
-    use crate::game::TileEvent;
     use crate::game::state::TileApplyEvent;
+    use crate::game::{InputKey, TileEvent};
 
     fn make_test_map(
         id: &str,
@@ -232,7 +228,12 @@ mod tests {
             Some(ExploreAction::Heal),
             Some(ExploreAction::SpinAttack),
         ];
-        for key in [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right] {
+        for key in [
+            InputKey::Up,
+            InputKey::Down,
+            InputKey::Left,
+            InputKey::Right,
+        ] {
             let intents = ExploreIntent::intent_for_key(
                 key,
                 Direction::Down,
@@ -253,7 +254,7 @@ mod tests {
     #[test]
     fn intent_for_key_ok_returns_interact_with_fallback_action() {
         let intents = ExploreIntent::intent_for_key(
-            KeyCode::Ok,
+            InputKey::Ok,
             Direction::Up,
             ExploreAction::BasicAttack,
             [
@@ -280,7 +281,7 @@ mod tests {
         ];
         assert!(matches!(
             ExploreIntent::intent_for_key(
-                KeyCode::Key1,
+                InputKey::Key1,
                 Direction::Down,
                 ExploreAction::BasicAttack,
                 key_actions
@@ -290,7 +291,7 @@ mod tests {
         ));
         assert!(matches!(
             ExploreIntent::intent_for_key(
-                KeyCode::Key2,
+                InputKey::Key2,
                 Direction::Down,
                 ExploreAction::BasicAttack,
                 key_actions
@@ -300,7 +301,7 @@ mod tests {
         ));
         assert!(matches!(
             ExploreIntent::intent_for_key(
-                KeyCode::Key3,
+                InputKey::Key3,
                 Direction::Down,
                 ExploreAction::BasicAttack,
                 key_actions
@@ -319,7 +320,7 @@ mod tests {
         ];
         assert!(matches!(
             ExploreIntent::intent_for_key(
-                KeyCode::Key0,
+                InputKey::Key0,
                 Direction::Down,
                 ExploreAction::BasicAttack,
                 key_actions
@@ -329,7 +330,7 @@ mod tests {
         ));
         assert!(matches!(
             ExploreIntent::intent_for_key(
-                KeyCode::Back,
+                InputKey::Back,
                 Direction::Down,
                 ExploreAction::BasicAttack,
                 key_actions

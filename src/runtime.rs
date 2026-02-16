@@ -3,13 +3,11 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use wipi::event::KeyCode;
-
 use crate::data::Direction;
 use crate::game::{
-    DialogIntent, ExploreIntent, GameData, GameInput, GameIntent, GameState, InventoryIntent,
-    MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
-    ShopIntent, UiState, build_render_state, has_save_data,
+    DialogIntent, ExploreIntent, GameData, GameInput, GameIntent, GameState, InputKey,
+    InventoryIntent, MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState,
+    SessionState, ShopIntent, UiState, build_render_state, has_save_data,
 };
 
 enum GameEvent {
@@ -26,7 +24,7 @@ enum GameEvent {
     MapChanged,
     ReturnToExplore,
     ReturnToMenuFromGameOver,
-    ReleaseMovementKey(KeyCode),
+    ReleaseMovementDirection(Direction),
     Exit(i32),
     Error(String),
 }
@@ -54,12 +52,12 @@ pub struct GameRuntime {
     ui: UiState,
 }
 
-fn direction_for_key(key: KeyCode) -> Option<Direction> {
+fn direction_for_key(key: InputKey) -> Option<Direction> {
     match key {
-        KeyCode::Up => Some(Direction::Up),
-        KeyCode::Down => Some(Direction::Down),
-        KeyCode::Left => Some(Direction::Left),
-        KeyCode::Right => Some(Direction::Right),
+        InputKey::Up => Some(Direction::Up),
+        InputKey::Down => Some(Direction::Down),
+        InputKey::Left => Some(Direction::Left),
+        InputKey::Right => Some(Direction::Right),
         _ => None,
     }
 }
@@ -74,11 +72,11 @@ impl GameRuntime {
         }
     }
 
-    pub fn on_keydown(&mut self, key: KeyCode) {
+    pub fn on_keydown(&mut self, key: InputKey) {
         self.dispatch(GameInput::KeyDown(key));
     }
 
-    pub fn on_keyup(&mut self, key: KeyCode) {
+    pub fn on_keyup(&mut self, key: InputKey) {
         self.dispatch(GameInput::KeyUp(key));
     }
 
@@ -131,7 +129,7 @@ impl GameRuntime {
                     }
                 }
                 GameState::Stats | GameState::QuestLog => {
-                    if matches!(key, KeyCode::Back | KeyCode::Ok) {
+                    if matches!(key, InputKey::Back | InputKey::Ok) {
                         intents.push(GameIntent::ReturnToExplore);
                     }
                 }
@@ -166,12 +164,12 @@ impl GameRuntime {
                     }
                 }
                 GameState::GameOver => {
-                    if matches!(key, KeyCode::Ok) {
+                    if matches!(key, InputKey::Ok) {
                         intents.push(GameIntent::ReturnToMenuFromGameOver);
                     }
                 }
                 GameState::Error(_) => {
-                    if matches!(key, KeyCode::Ok) {
+                    if matches!(key, InputKey::Ok) {
                         intents.push(GameIntent::Exit(1));
                     }
                 }
@@ -181,12 +179,7 @@ impl GameRuntime {
                     && self.session.is_some()
                     && let Some(direction) = direction_for_key(key)
                 {
-                    intents.push(GameIntent::ReleaseMovementKey(match direction {
-                        Direction::Up => KeyCode::Up,
-                        Direction::Down => KeyCode::Down,
-                        Direction::Left => KeyCode::Left,
-                        Direction::Right => KeyCode::Right,
-                    }));
+                    intents.push(GameIntent::ReleaseMovementDirection(direction));
                 }
             }
         }
@@ -442,16 +435,14 @@ impl GameRuntime {
         }
     }
 
-    fn apply_release_movement_key(&mut self, key: KeyCode) {
+    fn apply_release_movement_direction(&mut self, direction: Direction) {
         if !matches!(self.state, GameState::Explore) {
             return;
         }
         let Some(s) = self.session.as_mut() else {
             return;
         };
-        if let Some(direction) = direction_for_key(key) {
-            s.on_direction_released(direction);
-        }
+        s.on_direction_released(direction);
     }
 
     fn resolve_intent(&mut self, intent: GameIntent) -> Vec<GameEvent> {
@@ -624,7 +615,9 @@ impl GameRuntime {
             }
             GameIntent::ReturnToExplore => GameEvent::ReturnToExplore,
             GameIntent::ReturnToMenuFromGameOver => GameEvent::ReturnToMenuFromGameOver,
-            GameIntent::ReleaseMovementKey(key) => GameEvent::ReleaseMovementKey(key),
+            GameIntent::ReleaseMovementDirection(direction) => {
+                GameEvent::ReleaseMovementDirection(direction)
+            }
             GameIntent::Exit(code) => GameEvent::Exit(code),
         };
 
@@ -667,7 +660,9 @@ impl GameRuntime {
                 self.state = GameState::Menu;
                 self.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
-            GameEvent::ReleaseMovementKey(key) => self.apply_release_movement_key(key),
+            GameEvent::ReleaseMovementDirection(direction) => {
+                self.apply_release_movement_direction(direction)
+            }
             GameEvent::Exit(code) => wipi::kernel::exit(code),
             GameEvent::Error(message) => self.state = GameState::Error(message),
         }

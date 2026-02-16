@@ -8,7 +8,7 @@ mod systems;
 mod ui;
 
 pub use game_data::GameData;
-pub use intent::{GameInput, GameIntent};
+pub use intent::{GameInput, GameIntent, InputKey};
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,
     InventoryRender, QuestLogRender, RenderState, ShopRender, StatsRender, build_render_state,
