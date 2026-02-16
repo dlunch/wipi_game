@@ -19,6 +19,293 @@ pub struct GameEngine {
     ui: UiState,
 }
 
+trait DomainEventResolver {
+    fn handles(&self, event: &RuntimeEvent) -> bool;
+    fn resolve(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>>;
+}
+
+trait DomainEventApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool;
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()>;
+}
+
+struct CoreResolveHandler;
+struct CascadeResolveHandler;
+struct CoreApplyHandler;
+struct SystemApplyHandler;
+
+static CORE_RESOLVE_HANDLER: CoreResolveHandler = CoreResolveHandler;
+static CASCADE_RESOLVE_HANDLER: CascadeResolveHandler = CascadeResolveHandler;
+static CORE_APPLY_HANDLER: CoreApplyHandler = CoreApplyHandler;
+static SYSTEM_APPLY_HANDLER: SystemApplyHandler = SystemApplyHandler;
+
+impl DomainEventResolver for CoreResolveHandler {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::OverlayCloseRequested
+                | RuntimeEvent::GameOverConfirmRequested
+                | RuntimeEvent::ErrorConfirmRequested
+                | RuntimeEvent::UpdateLoading
+                | RuntimeEvent::UpdateMovement
+                | RuntimeEvent::UpdateCombat
+                | RuntimeEvent::MenuInput(_)
+                | RuntimeEvent::ExploreInput(_)
+                | RuntimeEvent::InventoryInput(_)
+                | RuntimeEvent::DialogInput(_)
+                | RuntimeEvent::ShopInput(_)
+                | RuntimeEvent::PauseMenuInput(_)
+        )
+    }
+
+    fn resolve(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+        match event {
+            RuntimeEvent::OverlayCloseRequested => {
+                Ok(vec![RuntimeEvent::Transition(TransitionEvent::ToExplore)])
+            }
+            RuntimeEvent::GameOverConfirmRequested => Ok(vec![RuntimeEvent::Transition(
+                TransitionEvent::ToMenuFromGameOver,
+            )]),
+            RuntimeEvent::ErrorConfirmRequested => Ok(vec![RuntimeEvent::Exit(1)]),
+            RuntimeEvent::UpdateLoading => engine.resolve_update_loading_event(),
+            RuntimeEvent::UpdateMovement => engine.resolve_update_movement_event(),
+            RuntimeEvent::UpdateCombat => engine.resolve_update_combat_event(),
+            RuntimeEvent::MenuInput(intent) => engine.resolve_menu_input(*intent),
+            RuntimeEvent::ExploreInput(intent) => engine.resolve_explore_input(*intent),
+            RuntimeEvent::InventoryInput(intent) => engine.resolve_inventory_input(*intent),
+            RuntimeEvent::DialogInput(intent) => engine.resolve_dialog_input(*intent),
+            RuntimeEvent::ShopInput(intent) => engine.resolve_shop_input(*intent),
+            RuntimeEvent::PauseMenuInput(intent) => engine.resolve_pause_menu_input(*intent),
+            _ => Ok(Vec::new()),
+        }
+    }
+}
+
+impl DomainEventResolver for CascadeResolveHandler {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Dialog(_) | RuntimeEvent::Menu(_) | RuntimeEvent::Explore(_)
+        )
+    }
+
+    fn resolve(&self, _engine: &mut GameEngine, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+        match event {
+            RuntimeEvent::Dialog(dialog_event) => match dialog_event {
+                crate::game::DialogEvent::None => Ok(Vec::new()),
+                crate::game::DialogEvent::Transition(transition) => {
+                    Ok(vec![RuntimeEvent::ApplyDialogTransition(*transition)])
+                }
+                crate::game::DialogEvent::Action(action, transition) => Ok(vec![
+                    RuntimeEvent::ApplyDialogAction(action.clone()),
+                    RuntimeEvent::ApplyDialogTransition(*transition),
+                ]),
+            },
+            RuntimeEvent::Menu(MenuEvent::Action(action)) => match action {
+                MenuAction::NewGame => Ok(vec![RuntimeEvent::StartNewGame]),
+                MenuAction::Continue => Ok(vec![RuntimeEvent::ContinueGame]),
+                MenuAction::Exit => Ok(vec![RuntimeEvent::Exit(0)]),
+            },
+            RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)) => match npc_event {
+                crate::game::NpcEvent::OpenDialog(dialog_spec) => {
+                    let mut events = Vec::with_capacity(2);
+                    if dialog_spec.restore {
+                        events.push(RuntimeEvent::RestoreSessionStats);
+                    }
+                    events.push(RuntimeEvent::OpenDialogState(
+                        crate::game::DialogState::new(
+                            dialog_spec.npc_name.clone(),
+                            dialog_spec.lines.clone(),
+                        ),
+                    ));
+                    Ok(events)
+                }
+                crate::game::NpcEvent::OpenShop(shop_id) => {
+                    Ok(vec![RuntimeEvent::OpenShopById(shop_id.clone())])
+                }
+                crate::game::NpcEvent::RestoreStats => Ok(vec![RuntimeEvent::RestoreSessionStats]),
+            },
+            RuntimeEvent::Explore(AppExploreEvent::UseAction(action)) => {
+                Ok(vec![RuntimeEvent::CombatPlayerAction(*action)])
+            }
+            RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu) => {
+                Ok(vec![RuntimeEvent::OpenPauseMenu])
+            }
+            RuntimeEvent::Explore(AppExploreEvent::EnterMenu) => {
+                Ok(vec![RuntimeEvent::OpenMenuFromExplore])
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
+}
+
+impl DomainEventApplier for CoreApplyHandler {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Tick
+                | RuntimeEvent::KeyDown(_)
+                | RuntimeEvent::KeyUp(_)
+                | RuntimeEvent::OverlayCloseRequested
+                | RuntimeEvent::GameOverConfirmRequested
+                | RuntimeEvent::ErrorConfirmRequested
+                | RuntimeEvent::UpdateLoading
+                | RuntimeEvent::UpdateMovement
+                | RuntimeEvent::UpdateCombat
+                | RuntimeEvent::MenuInput(_)
+                | RuntimeEvent::ExploreInput(_)
+                | RuntimeEvent::InventoryInput(_)
+                | RuntimeEvent::DialogInput(_)
+                | RuntimeEvent::ShopInput(_)
+                | RuntimeEvent::PauseMenuInput(_)
+                | RuntimeEvent::StartNewGame
+                | RuntimeEvent::ContinueGame
+                | RuntimeEvent::OpenPauseMenu
+                | RuntimeEvent::OpenMenuFromExplore
+                | RuntimeEvent::OpenDialogState(_)
+                | RuntimeEvent::OpenShopById(_)
+                | RuntimeEvent::RestoreSessionStats
+                | RuntimeEvent::ApplyDialogAction(_)
+                | RuntimeEvent::ApplyDialogTransition(_)
+        )
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        match event {
+            RuntimeEvent::Tick
+            | RuntimeEvent::KeyDown(_)
+            | RuntimeEvent::KeyUp(_)
+            | RuntimeEvent::OverlayCloseRequested
+            | RuntimeEvent::GameOverConfirmRequested
+            | RuntimeEvent::ErrorConfirmRequested
+            | RuntimeEvent::UpdateLoading
+            | RuntimeEvent::UpdateMovement
+            | RuntimeEvent::UpdateCombat
+            | RuntimeEvent::MenuInput(_)
+            | RuntimeEvent::ExploreInput(_)
+            | RuntimeEvent::InventoryInput(_)
+            | RuntimeEvent::DialogInput(_)
+            | RuntimeEvent::ShopInput(_)
+            | RuntimeEvent::PauseMenuInput(_) => {}
+            RuntimeEvent::StartNewGame => {
+                let (state, session, intro) = crate::game::lifecycle::start_new_game(&engine.data);
+                engine.enter_session(state, session, intro);
+            }
+            RuntimeEvent::ContinueGame => {
+                let (state, session, intro) = crate::game::lifecycle::continue_game(&engine.data);
+                engine.enter_session(state, session, intro);
+            }
+            RuntimeEvent::OpenPauseMenu => {
+                engine.ui.pause_menu.reset();
+                engine.transition_to(GameState::PauseMenu);
+            }
+            RuntimeEvent::OpenMenuFromExplore => {
+                let s = engine
+                    .session
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                let _ = crate::game::save_game(&s.player);
+                engine.ui.menu.set_menu(MenuState::new(has_save_data()));
+                engine.transition_to(GameState::Menu);
+            }
+            RuntimeEvent::OpenDialogState(dialog_state) => {
+                engine.ui.dialog.open(dialog_state.clone());
+                engine.transition_to(GameState::Dialog);
+            }
+            RuntimeEvent::OpenShopById(shop_id) => {
+                let _ = engine.open_shop_by_id(shop_id);
+            }
+            RuntimeEvent::RestoreSessionStats => {
+                let s = engine
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.restore_stats();
+            }
+            RuntimeEvent::ApplyDialogAction(action) => {
+                let s = engine
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                if let crate::game::DialogActionResult::OpenShop(shop_id) =
+                    s.apply_dialog_action(&engine.data, action)
+                {
+                    let _ = engine.open_shop_by_id(&shop_id);
+                }
+            }
+            RuntimeEvent::ApplyDialogTransition(transition) => match transition {
+                crate::game::DialogTransition::SetLine(line) => {
+                    if let Some(dialog_state) = engine.ui.dialog.state.as_mut() {
+                        dialog_state.current_line = *line;
+                    }
+                    engine.transition_to(GameState::Dialog);
+                }
+                crate::game::DialogTransition::CloseToExplore => {
+                    engine.ui.dialog.close();
+                    engine.transition_to(GameState::Explore);
+                }
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for SystemApplyHandler {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Loading(_)
+                | RuntimeEvent::Movement(_)
+                | RuntimeEvent::Menu(_)
+                | RuntimeEvent::Explore(_)
+                | RuntimeEvent::Inventory(_)
+                | RuntimeEvent::Dialog(_)
+                | RuntimeEvent::Shop(_)
+                | RuntimeEvent::PauseMenu(_)
+                | RuntimeEvent::CombatPlayerAction(_)
+                | RuntimeEvent::Transition(_)
+                | RuntimeEvent::Exit(_)
+                | RuntimeEvent::Combat(_)
+        )
+    }
+
+    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+        match event {
+            RuntimeEvent::Loading(event) => engine.apply_update_loading(event.clone()),
+            RuntimeEvent::Movement(event) => engine.apply_update_movement(event.clone())?,
+            RuntimeEvent::Menu(event) => engine.apply_menu_event(*event)?,
+            RuntimeEvent::Explore(event) => engine.apply_explore_event(event.clone())?,
+            RuntimeEvent::Inventory(event) => engine.apply_inventory_event(event.clone())?,
+            RuntimeEvent::Dialog(event) => engine.apply_dialog_event(event.clone())?,
+            RuntimeEvent::Shop(event) => engine.apply_shop_event(event.clone())?,
+            RuntimeEvent::PauseMenu(event) => engine.apply_pause_menu_event(*event)?,
+            RuntimeEvent::Combat(_) => {}
+            RuntimeEvent::CombatPlayerAction(action) => {
+                let s = engine
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.apply_explore_action(&engine.data, *action);
+            }
+            RuntimeEvent::Transition(event) => engine.apply_transition_event(*event)?,
+            RuntimeEvent::Exit(code) => wipi::kernel::exit(*code),
+            _ => {}
+        }
+
+        Ok(())
+    }
+}
+
+fn domain_resolvers() -> [&'static dyn DomainEventResolver; 2] {
+    [&CORE_RESOLVE_HANDLER, &CASCADE_RESOLVE_HANDLER]
+}
+
+fn domain_appliers() -> [&'static dyn DomainEventApplier; 2] {
+    [&CORE_APPLY_HANDLER, &SYSTEM_APPLY_HANDLER]
+}
+
 impl GameEngine {
     pub fn new() -> Self {
         Self {
@@ -147,74 +434,6 @@ impl GameEngine {
         true
     }
 
-    fn resolve_domain_event(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
-        match event {
-            RuntimeEvent::Tick | RuntimeEvent::KeyDown(_) | RuntimeEvent::KeyUp(_) => {
-                Ok(self.resolve_ui_input_event(event))
-            }
-            RuntimeEvent::OverlayCloseRequested => {
-                Ok(vec![RuntimeEvent::Transition(TransitionEvent::ToExplore)])
-            }
-            RuntimeEvent::GameOverConfirmRequested => Ok(vec![RuntimeEvent::Transition(
-                TransitionEvent::ToMenuFromGameOver,
-            )]),
-            RuntimeEvent::ErrorConfirmRequested => Ok(vec![RuntimeEvent::Exit(1)]),
-            RuntimeEvent::UpdateLoading => self.resolve_update_loading_event(),
-            RuntimeEvent::UpdateMovement => self.resolve_update_movement_event(),
-            RuntimeEvent::UpdateCombat => self.resolve_update_combat_event(),
-            RuntimeEvent::MenuInput(intent) => self.resolve_menu_input(*intent),
-            RuntimeEvent::ExploreInput(intent) => self.resolve_explore_input(*intent),
-            RuntimeEvent::InventoryInput(intent) => self.resolve_inventory_input(*intent),
-            RuntimeEvent::DialogInput(intent) => self.resolve_dialog_input(*intent),
-            RuntimeEvent::ShopInput(intent) => self.resolve_shop_input(*intent),
-            RuntimeEvent::PauseMenuInput(intent) => self.resolve_pause_menu_input(*intent),
-            RuntimeEvent::Dialog(dialog_event) => match dialog_event {
-                crate::game::DialogEvent::None => Ok(Vec::new()),
-                crate::game::DialogEvent::Transition(transition) => {
-                    Ok(vec![RuntimeEvent::ApplyDialogTransition(*transition)])
-                }
-                crate::game::DialogEvent::Action(action, transition) => Ok(vec![
-                    RuntimeEvent::ApplyDialogAction(action.clone()),
-                    RuntimeEvent::ApplyDialogTransition(*transition),
-                ]),
-            },
-            RuntimeEvent::Menu(MenuEvent::Action(action)) => match action {
-                MenuAction::NewGame => Ok(vec![RuntimeEvent::StartNewGame]),
-                MenuAction::Continue => Ok(vec![RuntimeEvent::ContinueGame]),
-                MenuAction::Exit => Ok(vec![RuntimeEvent::Exit(0)]),
-            },
-            RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)) => match npc_event {
-                crate::game::NpcEvent::OpenDialog(dialog_spec) => {
-                    let mut events = Vec::with_capacity(2);
-                    if dialog_spec.restore {
-                        events.push(RuntimeEvent::RestoreSessionStats);
-                    }
-                    events.push(RuntimeEvent::OpenDialogState(
-                        crate::game::DialogState::new(
-                            dialog_spec.npc_name.clone(),
-                            dialog_spec.lines.clone(),
-                        ),
-                    ));
-                    Ok(events)
-                }
-                crate::game::NpcEvent::OpenShop(shop_id) => {
-                    Ok(vec![RuntimeEvent::OpenShopById(shop_id.clone())])
-                }
-                crate::game::NpcEvent::RestoreStats => Ok(vec![RuntimeEvent::RestoreSessionStats]),
-            },
-            RuntimeEvent::Explore(AppExploreEvent::UseAction(action)) => {
-                Ok(vec![RuntimeEvent::CombatPlayerAction(*action)])
-            }
-            RuntimeEvent::Explore(AppExploreEvent::EnterPauseMenu) => {
-                Ok(vec![RuntimeEvent::OpenPauseMenu])
-            }
-            RuntimeEvent::Explore(AppExploreEvent::EnterMenu) => {
-                Ok(vec![RuntimeEvent::OpenMenuFromExplore])
-            }
-            _ => Ok(Vec::new()),
-        }
-    }
-
     fn resolve_update_loading_event(&mut self) -> Result<Vec<RuntimeEvent>> {
         let GameState::Loading(step) = self.state else {
             return Err(anyhow!("Invalid state: expected Loading"));
@@ -278,112 +497,23 @@ impl GameEngine {
         ))
     }
 
-    fn apply_domain_event(&mut self, event: &RuntimeEvent) -> Result<()> {
-        match event {
-            RuntimeEvent::Tick
-            | RuntimeEvent::KeyDown(_)
-            | RuntimeEvent::KeyUp(_)
-            | RuntimeEvent::OverlayCloseRequested
-            | RuntimeEvent::GameOverConfirmRequested
-            | RuntimeEvent::ErrorConfirmRequested
-            | RuntimeEvent::UpdateLoading
-            | RuntimeEvent::UpdateMovement
-            | RuntimeEvent::UpdateCombat
-            | RuntimeEvent::MenuInput(_)
-            | RuntimeEvent::ExploreInput(_)
-            | RuntimeEvent::InventoryInput(_)
-            | RuntimeEvent::DialogInput(_)
-            | RuntimeEvent::ShopInput(_)
-            | RuntimeEvent::PauseMenuInput(_) => {}
-            RuntimeEvent::StartNewGame => {
-                let (state, session, intro) = crate::game::lifecycle::start_new_game(&self.data);
-                self.enter_session(state, session, intro);
-            }
-            RuntimeEvent::ContinueGame => {
-                let (state, session, intro) = crate::game::lifecycle::continue_game(&self.data);
-                self.enter_session(state, session, intro);
-            }
-            RuntimeEvent::OpenPauseMenu => {
-                self.ui.pause_menu.reset();
-                self.transition_to(GameState::PauseMenu);
-            }
-            RuntimeEvent::OpenMenuFromExplore => {
-                let s = self
-                    .session
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                let _ = crate::game::save_game(&s.player);
-                self.ui.menu.set_menu(MenuState::new(has_save_data()));
-                self.transition_to(GameState::Menu);
-            }
-            RuntimeEvent::OpenDialogState(dialog_state) => {
-                self.ui.dialog.open(dialog_state.clone());
-                self.transition_to(GameState::Dialog);
-            }
-            RuntimeEvent::OpenShopById(shop_id) => {
-                let _ = self.open_shop_by_id(shop_id);
-            }
-            RuntimeEvent::RestoreSessionStats => {
-                let s = self
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.restore_stats();
-            }
-            RuntimeEvent::ApplyDialogAction(action) => {
-                let s = self
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                if let crate::game::DialogActionResult::OpenShop(shop_id) =
-                    s.apply_dialog_action(&self.data, action)
-                {
-                    let _ = self.open_shop_by_id(&shop_id);
-                }
-            }
-            RuntimeEvent::ApplyDialogTransition(transition) => match transition {
-                crate::game::DialogTransition::SetLine(line) => {
-                    if let Some(dialog_state) = self.ui.dialog.state.as_mut() {
-                        dialog_state.current_line = *line;
-                    }
-                    self.transition_to(GameState::Dialog);
-                }
-                crate::game::DialogTransition::CloseToExplore => {
-                    self.ui.dialog.close();
-                    self.transition_to(GameState::Explore);
-                }
-            },
-            RuntimeEvent::Loading(event) => self.apply_update_loading(event.clone()),
-            RuntimeEvent::Movement(event) => self.apply_update_movement(event.clone())?,
-            RuntimeEvent::Menu(event) => self.apply_menu_event(*event)?,
-            RuntimeEvent::Explore(event) => self.apply_explore_event(event.clone())?,
-            RuntimeEvent::Inventory(event) => self.apply_inventory_event(event.clone())?,
-            RuntimeEvent::Dialog(event) => self.apply_dialog_event(event.clone())?,
-            RuntimeEvent::Shop(event) => self.apply_shop_event(event.clone())?,
-            RuntimeEvent::PauseMenu(event) => self.apply_pause_menu_event(*event)?,
-            RuntimeEvent::Combat(_) => {}
-            RuntimeEvent::CombatPlayerAction(action) => {
-                let s = self
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.apply_explore_action(&self.data, *action);
-            }
-            RuntimeEvent::Transition(event) => self.apply_transition_event(*event)?,
-            RuntimeEvent::Exit(code) => wipi::kernel::exit(*code),
-        }
-        Ok(())
-    }
-
     fn resolve_with_handlers(&mut self, event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
         let mut derived = Vec::new();
         derived.extend(self.resolve_ui_input_event(event));
-        derived.extend(self.resolve_domain_event(event)?);
+        for resolver in domain_resolvers() {
+            if resolver.handles(event) {
+                derived.extend(resolver.resolve(self, event)?);
+            }
+        }
         Ok(derived)
     }
 
     fn apply_with_handlers(&mut self, event: RuntimeEvent) -> Result<()> {
-        self.apply_domain_event(&event)?;
+        for applier in domain_appliers() {
+            if applier.handles(&event) {
+                applier.apply(self, &event)?;
+            }
+        }
         if let Some(s) = self.session.as_mut()
             && s.handles_event(&event)
             && s.apply_runtime_event(&event)
