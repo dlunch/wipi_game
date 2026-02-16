@@ -197,10 +197,7 @@ impl GameRuntime {
         };
 
         let AppMovementEvent::Tick(movement_event, tile_event, _) = event;
-        let moved = s.movement.apply_tick(&mut s.player, movement_event);
-        if moved && let Some(tile_event) = tile_event {
-            let _: crate::game::TileApplyEvent = s.player.apply_tile_event(&self.data, tile_event);
-        }
+        s.apply_movement_tick(&self.data, movement_event, tile_event);
     }
 
     fn apply_update_combat(&mut self, result: crate::game::combat::CombatTickEvent) {
@@ -209,28 +206,7 @@ impl GameRuntime {
             return;
         };
 
-        let crate::game::combat::CombatTickEvent {
-            damage_taken,
-            next_skill_cooldowns,
-            next_mp_regen_timer,
-            recover_mp,
-            next_state,
-        } = result;
-
-        s.combat = next_state;
-        s.skill_cooldowns = next_skill_cooldowns;
-        s.mp_regen_timer = next_mp_regen_timer;
-        if recover_mp > 0 {
-            s.player.stats.recover_mp(recover_mp);
-        }
-
-        if damage_taken > 0
-            && matches!(
-                s.player
-                    .apply(crate::game::PlayerAction::TakeDamage(damage_taken)),
-                crate::game::PlayerEvent::Died
-            )
-        {
+        if s.apply_combat_tick(result) {
             self.state = GameState::GameOver;
         }
     }
@@ -239,9 +215,7 @@ impl GameRuntime {
         let Some(s) = self.session.as_mut() else {
             return;
         };
-        if let Some(map) = self.data.find_map(&s.player.current_map_id) {
-            s.combat.spawn_for_map(map, &self.data.enemies);
-        }
+        s.spawn_current_map_enemies(&self.data);
     }
 
     fn dialog_state_from_intro(
@@ -276,61 +250,6 @@ impl GameRuntime {
             .open(crate::game::ShopState::new(shop, shop_items));
         self.state = GameState::Shop;
         true
-    }
-
-    fn apply_explore_action(
-        s: &mut SessionState,
-        data: &GameData,
-        action: crate::game::ExploreAction,
-    ) {
-        if let Some((slot, skill)) = action.skill() {
-            if !s
-                .player
-                .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
-            {
-                return;
-            }
-
-            let combat_event = s.combat.apply(crate::game::CombatAction::UseSkill {
-                skill,
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_atk: s.player.total_atk(),
-                facing: s.player.facing,
-            });
-            let crate::game::CombatEvent::Skill(result) = combat_event else {
-                return;
-            };
-
-            s.skill_cooldowns[slot] = skill.cooldown;
-            s.player.stats.current_mp = (s.player.stats.current_mp - skill.mp_cost).max(0);
-
-            for effect in &result.player_effects {
-                match effect {
-                    crate::game::PlayerEffect::Heal(amount) => {
-                        let _ = s.player.apply(crate::game::PlayerAction::Heal(*amount));
-                    }
-                }
-            }
-
-            s.player.apply_kill_rewards(&result.kills);
-            for reward in &result.kills {
-                s.player.apply_quest_kill(data, &reward.enemy_id);
-            }
-            return;
-        }
-
-        if let crate::game::CombatEvent::Attack(Some(reward)) =
-            s.combat.apply(crate::game::CombatAction::PlayerAttack {
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_atk: s.player.total_atk(),
-                facing: s.player.facing,
-            })
-        {
-            s.player.apply_kill_reward(&reward);
-            s.player.apply_quest_kill(data, &reward.enemy_id);
-        }
     }
 
     fn apply_dialog_action(
@@ -460,7 +379,7 @@ impl GameRuntime {
                 }
             },
             AppExploreEvent::UseAction(action) => {
-                Self::apply_explore_action(s, &self.data, action);
+                s.apply_explore_action(&self.data, action);
             }
             AppExploreEvent::EnterPauseMenu => {
                 self.ui.pause_menu.reset();
