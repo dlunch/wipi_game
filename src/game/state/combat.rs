@@ -3,49 +3,11 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
+use crate::data::{Enemy, Map, SkillType, Tile};
 use crate::game::{CombatEvent, GameEvent};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
-const PLAYER_ATTACK_COOLDOWN: u32 = 15;
-const ATTACK_EFFECT_DURATION: u32 = 6;
-const SKILL_EFFECT_DURATION: u32 = 8;
-const HEAL_EFFECT_DURATION: u32 = 15;
-
-#[derive(Debug)]
-pub enum CombatAction<'a> {
-    PlayerAttack {
-        player_x: usize,
-        player_y: usize,
-        player_atk: i32,
-        facing: Direction,
-    },
-    UseSkill {
-        skill: &'a Skill,
-        player_x: usize,
-        player_y: usize,
-        player_atk: i32,
-        facing: Direction,
-    },
-}
-
-#[derive(Debug)]
-pub enum CombatActionEvent {
-    Attack(Option<KillReward>),
-    Skill(SkillResult),
-}
-
-#[derive(Debug, Clone)]
-pub struct SkillResult {
-    pub player_effects: Vec<PlayerEffect>,
-    pub kills: Vec<KillReward>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum PlayerEffect {
-    Heal(i32),
-}
 
 #[derive(Debug, Clone)]
 pub struct KillReward {
@@ -166,28 +128,6 @@ pub struct CombatState {
 }
 
 impl CombatState {
-    pub fn apply(&mut self, action: CombatAction<'_>) -> CombatActionEvent {
-        match action {
-            CombatAction::PlayerAttack {
-                player_x,
-                player_y,
-                player_atk,
-                facing,
-            } => CombatActionEvent::Attack(
-                self.player_attack(player_x, player_y, player_atk, facing),
-            ),
-            CombatAction::UseSkill {
-                skill,
-                player_x,
-                player_y,
-                player_atk,
-                facing,
-            } => CombatActionEvent::Skill(
-                self.use_skill(skill, player_x, player_y, player_atk, facing),
-            ),
-        }
-    }
-
     pub fn spawn_for_map(&mut self, map: &Map, enemy_data: &[Enemy]) {
         self.enemies.clear();
         self.respawn_positions.clear();
@@ -238,134 +178,6 @@ impl CombatState {
             self.next_enemy_instance_id = 1;
         }
         id.max(1)
-    }
-
-    fn player_attack(
-        &mut self,
-        player_x: usize,
-        player_y: usize,
-        player_atk: i32,
-        facing: Direction,
-    ) -> Option<KillReward> {
-        if self.player_attack_cooldown > 0 {
-            return None;
-        }
-
-        let (tx, ty) = facing.apply(player_x, player_y);
-
-        self.skill_effects.push(SkillEffect {
-            x: tx,
-            y: ty,
-            effect_type: SkillType::Attack,
-            timer: ATTACK_EFFECT_DURATION,
-        });
-
-        for enemy in &mut self.enemies {
-            if enemy.x == tx && enemy.y == ty && !enemy.is_dead() {
-                let damage = (player_atk - enemy.data.def / 2).max(1);
-                enemy.take_damage(damage);
-                self.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
-
-                return if enemy.is_dead() {
-                    Some(KillReward {
-                        enemy_id: enemy.data.id.clone(),
-                        exp: enemy.data.exp,
-                        gold: enemy.data.gold,
-                    })
-                } else {
-                    None
-                };
-            }
-        }
-
-        self.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
-        None
-    }
-
-    fn use_skill(
-        &mut self,
-        skill: &Skill,
-        player_x: usize,
-        player_y: usize,
-        player_atk: i32,
-        facing: Direction,
-    ) -> SkillResult {
-        let mut player_effects = Vec::new();
-        let mut kills = Vec::new();
-        let damage = skill.power + player_atk / 2;
-
-        match skill.skill_type {
-            SkillType::Attack => {}
-            SkillType::Ranged => {
-                for dist in 1..=skill.range {
-                    let (tx, ty) = facing.apply_distance(player_x, player_y, dist);
-                    self.skill_effects.push(SkillEffect {
-                        x: tx,
-                        y: ty,
-                        effect_type: SkillType::Ranged,
-                        timer: SKILL_EFFECT_DURATION,
-                    });
-                    if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
-                        kills.push(kill);
-                        break;
-                    }
-                }
-            }
-            SkillType::Area => {
-                for dir in [
-                    Direction::Up,
-                    Direction::Down,
-                    Direction::Left,
-                    Direction::Right,
-                ] {
-                    let (tx, ty) = dir.apply(player_x, player_y);
-                    self.skill_effects.push(SkillEffect {
-                        x: tx,
-                        y: ty,
-                        effect_type: SkillType::Area,
-                        timer: SKILL_EFFECT_DURATION,
-                    });
-                    if let Some(kill) = self.damage_enemy_at(tx, ty, damage) {
-                        kills.push(kill);
-                    }
-                }
-            }
-            SkillType::Heal => {}
-        }
-
-        if skill.heal_power > 0 {
-            self.skill_effects.push(SkillEffect {
-                x: player_x,
-                y: player_y,
-                effect_type: SkillType::Heal,
-                timer: HEAL_EFFECT_DURATION,
-            });
-            player_effects.push(PlayerEffect::Heal(skill.heal_power));
-        }
-
-        SkillResult {
-            player_effects,
-            kills,
-        }
-    }
-
-    fn damage_enemy_at(&mut self, x: usize, y: usize, damage: i32) -> Option<KillReward> {
-        for enemy in &mut self.enemies {
-            if enemy.x == x && enemy.y == y && !enemy.is_dead() {
-                let actual_damage = (damage - enemy.data.def / 2).max(1);
-                enemy.take_damage(actual_damage);
-
-                if enemy.is_dead() {
-                    return Some(KillReward {
-                        enemy_id: enemy.data.id.clone(),
-                        exp: enemy.data.exp,
-                        gold: enemy.data.gold,
-                    });
-                }
-                return None;
-            }
-        }
-        None
     }
 }
 

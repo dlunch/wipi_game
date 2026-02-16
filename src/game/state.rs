@@ -4,9 +4,7 @@ mod movement;
 pub(crate) mod session;
 
 pub use character::{CharacterState, PlayerAction, PlayerEvent, TileEvent};
-pub use combat::{
-    CombatAction, CombatActionEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect,
-};
+pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 
 use alloc::format;

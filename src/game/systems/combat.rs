@@ -3,14 +3,28 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::data::{Enemy, Map};
+use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
-use crate::game::state::{CombatAction, CombatActionEvent, CombatState, FieldEnemy, PlayerEffect};
+use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{CombatEvent, GameEvent, GameState};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
+const PLAYER_ATTACK_COOLDOWN: u32 = 15;
+const ATTACK_EFFECT_DURATION: u32 = 6;
+const SKILL_EFFECT_DURATION: u32 = 8;
+const HEAL_EFFECT_DURATION: u32 = 15;
+
+enum CombatActionResult {
+    Attack(Option<KillReward>),
+    Skill(SkillActionResult),
+}
+
+struct SkillActionResult {
+    heal_amount: i32,
+    kills: Vec<KillReward>,
+}
 
 pub fn resolve_tick(
     state: &CombatState,
@@ -323,14 +337,15 @@ impl DomainEventResolver for CombatPlayerActionResolver {
                 return Ok(Vec::new());
             }
 
-            let combat_event = next_combat.apply(CombatAction::UseSkill {
+            let combat_event = apply_skill_action(
+                &mut next_combat,
                 skill,
-                player_x: s.leader.x,
-                player_y: s.leader.y,
-                player_atk: s.leader.total_atk(),
-                facing: s.leader.facing,
-            });
-            let CombatActionEvent::Skill(result) = combat_event else {
+                s.leader.x,
+                s.leader.y,
+                s.leader.total_atk(),
+                s.leader.facing,
+            );
+            let CombatActionResult::Skill(result) = combat_event else {
                 return Ok(Vec::new());
             };
 
@@ -341,12 +356,8 @@ impl DomainEventResolver for CombatPlayerActionResolver {
             )));
             events.push(GameEvent::Combat(CombatEvent::RecoverMp(-skill.mp_cost)));
 
-            for effect in result.player_effects {
-                match effect {
-                    PlayerEffect::Heal(amount) => {
-                        events.push(GameEvent::Combat(CombatEvent::Heal(amount)));
-                    }
-                }
+            if result.heal_amount > 0 {
+                events.push(GameEvent::Combat(CombatEvent::Heal(result.heal_amount)));
             }
 
             for reward in result.kills {
@@ -356,14 +367,13 @@ impl DomainEventResolver for CombatPlayerActionResolver {
                     gold: reward.gold,
                 }));
             }
-        } else if let CombatActionEvent::Attack(Some(reward)) =
-            next_combat.apply(CombatAction::PlayerAttack {
-                player_x: s.leader.x,
-                player_y: s.leader.y,
-                player_atk: s.leader.total_atk(),
-                facing: s.leader.facing,
-            })
-        {
+        } else if let CombatActionResult::Attack(Some(reward)) = apply_player_attack_action(
+            &mut next_combat,
+            s.leader.x,
+            s.leader.y,
+            s.leader.total_atk(),
+            s.leader.facing,
+        ) {
             events.push(GameEvent::Combat(CombatEvent::GrantKillReward {
                 enemy_id: reward.enemy_id,
                 exp: reward.exp,
@@ -390,4 +400,125 @@ fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
         *next_enemy_instance_id = 1;
     }
     id
+}
+
+fn apply_player_attack_action(
+    state: &mut CombatState,
+    player_x: usize,
+    player_y: usize,
+    player_atk: i32,
+    facing: Direction,
+) -> CombatActionResult {
+    if state.player_attack_cooldown > 0 {
+        return CombatActionResult::Attack(None);
+    }
+
+    let (tx, ty) = facing.apply(player_x, player_y);
+    state.skill_effects.push(SkillEffect {
+        x: tx,
+        y: ty,
+        effect_type: SkillType::Attack,
+        timer: ATTACK_EFFECT_DURATION,
+    });
+
+    let mut kill = None;
+    for enemy in &mut state.enemies {
+        if enemy.x == tx && enemy.y == ty && !enemy.is_dead() {
+            let damage = (player_atk - enemy.data.def / 2).max(1);
+            enemy.take_damage(damage);
+            if enemy.is_dead() {
+                kill = Some(KillReward {
+                    enemy_id: enemy.data.id.clone(),
+                    exp: enemy.data.exp,
+                    gold: enemy.data.gold,
+                });
+            }
+            break;
+        }
+    }
+    state.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
+    CombatActionResult::Attack(kill)
+}
+
+fn apply_skill_action(
+    state: &mut CombatState,
+    skill: &Skill,
+    player_x: usize,
+    player_y: usize,
+    player_atk: i32,
+    facing: Direction,
+) -> CombatActionResult {
+    let mut kills = Vec::new();
+    let damage = skill.power + player_atk / 2;
+
+    match skill.skill_type {
+        SkillType::Attack => {}
+        SkillType::Ranged => {
+            for dist in 1..=skill.range {
+                let (tx, ty) = facing.apply_distance(player_x, player_y, dist);
+                state.skill_effects.push(SkillEffect {
+                    x: tx,
+                    y: ty,
+                    effect_type: SkillType::Ranged,
+                    timer: SKILL_EFFECT_DURATION,
+                });
+                if let Some(kill) = damage_enemy_at(state, tx, ty, damage) {
+                    kills.push(kill);
+                    break;
+                }
+            }
+        }
+        SkillType::Area => {
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let (tx, ty) = dir.apply(player_x, player_y);
+                state.skill_effects.push(SkillEffect {
+                    x: tx,
+                    y: ty,
+                    effect_type: SkillType::Area,
+                    timer: SKILL_EFFECT_DURATION,
+                });
+                if let Some(kill) = damage_enemy_at(state, tx, ty, damage) {
+                    kills.push(kill);
+                }
+            }
+        }
+        SkillType::Heal => {}
+    }
+
+    let heal_amount = if skill.heal_power > 0 {
+        state.skill_effects.push(SkillEffect {
+            x: player_x,
+            y: player_y,
+            effect_type: SkillType::Heal,
+            timer: HEAL_EFFECT_DURATION,
+        });
+        skill.heal_power
+    } else {
+        0
+    };
+
+    CombatActionResult::Skill(SkillActionResult { heal_amount, kills })
+}
+
+fn damage_enemy_at(state: &mut CombatState, x: usize, y: usize, damage: i32) -> Option<KillReward> {
+    for enemy in &mut state.enemies {
+        if enemy.x == x && enemy.y == y && !enemy.is_dead() {
+            let actual_damage = (damage - enemy.data.def / 2).max(1);
+            enemy.take_damage(actual_damage);
+            if enemy.is_dead() {
+                return Some(KillReward {
+                    enemy_id: enemy.data.id.clone(),
+                    exp: enemy.data.exp,
+                    gold: enemy.data.gold,
+                });
+            }
+            return None;
+        }
+    }
+    None
 }
