@@ -2,11 +2,14 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
+use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{
     DialogIntent, ExploreIntent, GameInput, GameState, InputKey, InventoryIntent, MenuIntent,
-    PauseMenuIntent, RuntimeEvent, SessionState, ShopIntent, TransitionEvent,
+    PauseMenuIntent, RuntimeEvent, SessionState, ShopIntent, TransitionEvent, has_save_data,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -137,6 +140,147 @@ fn resolve_keyup(
         )]
     } else {
         Vec::new()
+    }
+}
+
+struct UiDomainApplier;
+
+static UI_DOMAIN_APPLIER: UiDomainApplier = UiDomainApplier;
+
+pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&UI_DOMAIN_APPLIER]
+}
+
+impl DomainEventApplier for UiDomainApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Menu(_)
+                | RuntimeEvent::PauseMenu(_)
+                | RuntimeEvent::OpenPauseMenu
+                | RuntimeEvent::OpenMenuFromExplore
+                | RuntimeEvent::Explore(_)
+                | RuntimeEvent::Inventory(_)
+                | RuntimeEvent::Dialog(_)
+                | RuntimeEvent::ApplyDialogTransition(_)
+                | RuntimeEvent::Shop(_)
+                | RuntimeEvent::OpenDialogState(_)
+                | RuntimeEvent::OpenShopById(_)
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        match event {
+            RuntimeEvent::Menu(event) => match event {
+                crate::game::MenuEvent::None => {}
+                crate::game::MenuEvent::SetSelected(selected) => {
+                    ctx.ui_mut().menu.set_selected(*selected)
+                }
+                crate::game::MenuEvent::Action(_) => {}
+            },
+            RuntimeEvent::PauseMenu(event) => match event {
+                crate::game::PauseMenuEvent::None => {}
+                crate::game::PauseMenuEvent::SetSelected(selected) => {
+                    ctx.ui_mut().pause_menu.set_selected(*selected)
+                }
+                crate::game::PauseMenuEvent::OpenInventory => {
+                    ctx.ui_mut().inventory.reset();
+                    ctx.transition_to(GameState::Inventory);
+                }
+                crate::game::PauseMenuEvent::OpenStats => ctx.transition_to(GameState::Stats),
+                crate::game::PauseMenuEvent::OpenQuestLog => ctx.transition_to(GameState::QuestLog),
+                crate::game::PauseMenuEvent::SaveAndReturnExplore => {
+                    {
+                        let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
+                        let _ = crate::game::save_game(&s.player);
+                    }
+                    ctx.ui_mut().shop.reset();
+                    ctx.transition_to(GameState::Explore);
+                }
+                crate::game::PauseMenuEvent::BackToExplore => ctx.transition_to(GameState::Explore),
+            },
+            RuntimeEvent::OpenPauseMenu => {
+                ctx.ui_mut().pause_menu.reset();
+                ctx.transition_to(GameState::PauseMenu);
+            }
+            RuntimeEvent::OpenMenuFromExplore => {
+                {
+                    let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
+                    let _ = crate::game::save_game(&s.player);
+                }
+                ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
+                ctx.transition_to(GameState::Menu);
+            }
+            RuntimeEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
+                let s = ctx
+                    .session_mut()
+                    .ok_or_else(|| anyhow!("No active session"))?;
+                s.on_direction_pressed(*direction);
+            }
+            RuntimeEvent::Explore(_) => {}
+            RuntimeEvent::Inventory(event) => match event {
+                crate::game::InventoryEvent::None => {}
+                crate::game::InventoryEvent::SetSelected(selected) => {
+                    ctx.ui_mut().inventory.set_selected(*selected)
+                }
+                crate::game::InventoryEvent::UseSelected(index) => {
+                    let s = ctx
+                        .session_mut()
+                        .ok_or_else(|| anyhow!("No active session"))?;
+                    s.use_inventory_item(*index);
+                }
+                crate::game::InventoryEvent::CloseToExplore => {
+                    ctx.transition_to(GameState::Explore)
+                }
+            },
+            RuntimeEvent::Dialog(_) => {}
+            RuntimeEvent::ApplyDialogTransition(transition) => match transition {
+                crate::game::DialogTransition::SetLine(line) => {
+                    if let Some(dialog_state) = ctx.ui_mut().dialog.state.as_mut() {
+                        dialog_state.current_line = *line;
+                    }
+                    ctx.transition_to(GameState::Dialog);
+                }
+                crate::game::DialogTransition::CloseToExplore => {
+                    ctx.ui_mut().dialog.close();
+                    ctx.transition_to(GameState::Explore);
+                }
+            },
+            RuntimeEvent::Shop(event) => match event {
+                crate::game::ShopEvent::None => {}
+                crate::game::ShopEvent::BuyItem(item) => {
+                    let s = ctx
+                        .session_mut()
+                        .ok_or_else(|| anyhow!("No active session"))?;
+                    s.buy_shop_item(item.clone());
+                }
+                crate::game::ShopEvent::SellSelected(index) => {
+                    let (sold, len_after) = {
+                        let s = ctx
+                            .session_mut()
+                            .ok_or_else(|| anyhow!("No active session"))?;
+                        let sold = s.sell_inventory_item(*index).is_some();
+                        (sold, s.player.inventory.len())
+                    };
+                    if sold {
+                        let current_selected = ctx.ui.shop.selected;
+                        if current_selected >= len_after && current_selected > 0 {
+                            ctx.ui_mut().shop.set_selected(current_selected - 1);
+                        }
+                    }
+                }
+                crate::game::ShopEvent::CloseToExplore => ctx.transition_to(GameState::Explore),
+            },
+            RuntimeEvent::OpenDialogState(dialog_state) => {
+                ctx.ui_mut().dialog.open(dialog_state.clone());
+                ctx.transition_to(GameState::Dialog);
+            }
+            RuntimeEvent::OpenShopById(shop_id) => {
+                let _ = ctx.open_shop_by_id(shop_id);
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

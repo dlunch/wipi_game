@@ -1,6 +1,9 @@
 use crate::data::Direction;
+use anyhow::{Result, anyhow, ensure};
 
 use super::PlayerState;
+use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
+use crate::game::{AppMovementEvent, GameState, RuntimeEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -59,5 +62,60 @@ fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
     }
     if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
         player.y = new_y;
+    }
+}
+
+struct MovementApplier;
+struct ReleaseMovementDirectionApplier;
+
+static MOVEMENT_APPLIER: MovementApplier = MovementApplier;
+static RELEASE_MOVEMENT_DIRECTION_APPLIER: ReleaseMovementDirectionApplier =
+    ReleaseMovementDirectionApplier;
+
+pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&MOVEMENT_APPLIER, &RELEASE_MOVEMENT_DIRECTION_APPLIER]
+}
+
+impl DomainEventApplier for MovementApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Movement(_))
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event
+        else {
+            return Ok(());
+        };
+        let data = alloc::rc::Rc::clone(ctx.data);
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.apply_movement_tick(&data, *movement_event, tile_event.clone());
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for ReleaseMovementDirectionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) = event
+        else {
+            return Ok(());
+        };
+        ensure!(
+            matches!(ctx.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.on_direction_released(*direction);
+        Ok(())
     }
 }

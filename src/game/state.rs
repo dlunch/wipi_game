@@ -9,6 +9,10 @@ pub use movement::{MovementState, MovementTickEvent};
 pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
 
 use alloc::string::String;
+use anyhow::Result;
+
+use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
+use crate::game::{LoadingEvent, MenuState, RuntimeEvent, TransitionEvent, has_save_data};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -124,6 +128,48 @@ impl GameState {
             GameStateKind::GameOver => matches!(target, GameStateKind::Menu | GameStateKind::Error),
             GameStateKind::Error => false,
         }
+    }
+}
+
+struct GameStateApplier;
+
+static GAME_STATE_APPLIER: GameStateApplier = GameStateApplier;
+
+pub fn state_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&GAME_STATE_APPLIER]
+}
+
+impl DomainEventApplier for GameStateApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(
+            event,
+            RuntimeEvent::Loading(_) | RuntimeEvent::Transition(_) | RuntimeEvent::Exit(_)
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        match event {
+            RuntimeEvent::Loading(event) => match event {
+                LoadingEvent::Advance(step) => ctx.transition_to(GameState::Loading(*step)),
+                LoadingEvent::Loaded => {
+                    ctx.transition_to(GameState::Menu);
+                    ctx.ui.menu.set_menu(MenuState::new(has_save_data()));
+                }
+                LoadingEvent::Error(msg) => ctx.set_error(msg.clone()),
+            },
+            RuntimeEvent::Transition(TransitionEvent::ToExplore) => {
+                ctx.transition_to(GameState::Explore)
+            }
+            RuntimeEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
+                ctx.transition_to(GameState::Menu);
+                ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
+            }
+            RuntimeEvent::Exit(code) => {
+                wipi::kernel::exit(*code);
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

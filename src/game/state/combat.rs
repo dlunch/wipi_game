@@ -1,6 +1,10 @@
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
+use crate::game::RuntimeEvent;
+use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -358,5 +362,31 @@ impl CombatState {
             }
         }
         None
+    }
+}
+
+struct CombatPlayerActionApplier;
+
+static COMBAT_PLAYER_ACTION_APPLIER: CombatPlayerActionApplier = CombatPlayerActionApplier;
+
+pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER]
+}
+
+impl DomainEventApplier for CombatPlayerActionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::CombatPlayerAction(_))
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::CombatPlayerAction(action) = event else {
+            return Ok(());
+        };
+        let data = alloc::rc::Rc::clone(ctx.data);
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.apply_explore_action(&data, *action);
+        Ok(())
     }
 }
