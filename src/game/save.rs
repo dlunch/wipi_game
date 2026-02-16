@@ -9,6 +9,7 @@ use super::PlayerState;
 use crate::data::{Item, ItemKind, QuestProgress};
 
 const SAVE_DB_NAME: &str = "save";
+const SAVE_VERSION: u32 = 1;
 
 pub fn save_game(player: &PlayerState) -> Result<()> {
     let data = serialize_save(player);
@@ -37,7 +38,7 @@ pub fn has_save_data() -> bool {
 
 fn serialize_save(player: &PlayerState) -> String {
     let mut lines = vec![
-        String::from("VERSION:1"),
+        format_args_to_string(&["VERSION", &SAVE_VERSION.to_string()]),
         format_args_to_string(&[
             "PLAYER",
             &player.name,
@@ -132,6 +133,10 @@ fn format_args_to_string(parts: &[&str]) -> String {
 }
 
 fn deserialize_save(data: &str, player: &mut PlayerState) -> bool {
+    let Some(normalized) = migrate_to_current_save_version(data) else {
+        return false;
+    };
+
     player.inventory.clear();
     player.quests.clear();
     player.opened_treasures.clear();
@@ -139,7 +144,7 @@ fn deserialize_save(data: &str, player: &mut PlayerState) -> bool {
     let mut has_player = false;
     let mut has_stats = false;
 
-    for line in data.lines() {
+    for line in normalized.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with("VERSION:") {
             continue;
@@ -248,4 +253,92 @@ fn deserialize_save(data: &str, player: &mut PlayerState) -> bool {
     }
 
     true
+}
+
+fn migrate_to_current_save_version(data: &str) -> Option<String> {
+    let (version, has_version_header) = extract_save_version(data);
+
+    if version > SAVE_VERSION {
+        return None;
+    }
+
+    if version == SAVE_VERSION {
+        return Some(data.into());
+    }
+
+    if !has_version_header {
+        return migrate_v0_to_v1(data);
+    }
+
+    None
+}
+
+fn extract_save_version(data: &str) -> (u32, bool) {
+    let Some(first_line) = data.lines().next() else {
+        return (0, false);
+    };
+    let line = first_line.trim();
+    if !line.starts_with("VERSION:") {
+        return (0, false);
+    }
+
+    let version = line
+        .split(':')
+        .nth(1)
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    (version, true)
+}
+
+fn migrate_v0_to_v1(data: &str) -> Option<String> {
+    if data.trim().is_empty() {
+        return None;
+    }
+
+    let mut migrated = String::from("VERSION:1\n");
+    migrated.push_str(data);
+    if !data.ends_with('\n') {
+        migrated.push('\n');
+    }
+    Some(migrated)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_player() -> PlayerState {
+        PlayerState::new(String::from("Hero"), "village")
+    }
+
+    #[test]
+    fn deserialize_accepts_current_version() {
+        let mut player = make_player();
+        player.stats.level = 3;
+        let save = serialize_save(&player);
+
+        let mut loaded = make_player();
+        assert!(deserialize_save(&save, &mut loaded));
+        assert_eq!(loaded.stats.level, 3);
+    }
+
+    #[test]
+    fn deserialize_migrates_versionless_save() {
+        let save = "PLAYER:Hero:village:1:2\nSTATS:2:1:50:45:20:10:10:5:7\n";
+        let mut loaded = make_player();
+
+        assert!(deserialize_save(save, &mut loaded));
+        assert_eq!(loaded.name, "Hero");
+        assert_eq!(loaded.x, 1);
+        assert_eq!(loaded.y, 2);
+        assert_eq!(loaded.stats.level, 2);
+    }
+
+    #[test]
+    fn deserialize_rejects_future_version() {
+        let save = "VERSION:99\nPLAYER:Hero:village:0:0\nSTATS:1:0:50:50:20:20:10:5:0\n";
+        let mut loaded = make_player();
+
+        assert!(!deserialize_save(save, &mut loaded));
+    }
 }

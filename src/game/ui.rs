@@ -431,3 +431,91 @@ pub enum ShopMode {
     Sell,
     Select,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::Direction;
+
+    #[test]
+    fn explore_ui_maps_ok_to_npc_interact_with_fallback_action() {
+        let ui = ExploreUiState::default();
+        let intents = ui.intents_for_key(InputKey::Ok, Direction::Left);
+
+        assert!(matches!(
+            intents.as_slice(),
+            [ExploreIntent::TryNpcInteract {
+                facing: Direction::Left,
+                fallback_action: Some(ExploreAction::BasicAttack)
+            }]
+        ));
+    }
+
+    #[test]
+    fn menu_ui_maps_up_down_ok_keys() {
+        let ui = MenuUiState::default();
+
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Up),
+            Some(MenuIntent::MoveUp)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Down),
+            Some(MenuIntent::MoveDown)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Ok),
+            Some(MenuIntent::Select)
+        ));
+    }
+
+    #[test]
+    fn pause_menu_ui_maps_back_and_zero_to_back_intent() {
+        let ui = PauseMenuUiState::default();
+
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Back),
+            Some(PauseMenuIntent::Back)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Key0),
+            Some(PauseMenuIntent::Back)
+        ));
+    }
+
+    #[test]
+    fn inventory_ui_maps_expected_keys() {
+        let ui = InventoryUiState::default();
+
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Up),
+            Some(InventoryIntent::MoveUp)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Down),
+            Some(InventoryIntent::MoveDown)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Ok),
+            Some(InventoryIntent::UseSelected)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Back),
+            Some(InventoryIntent::Back)
+        ));
+    }
+
+    #[test]
+    fn dialog_ui_maps_expected_keys() {
+        let ui = DialogUiState::default();
+
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Ok),
+            Some(DialogIntent::Confirm)
+        ));
+        assert!(matches!(
+            ui.intent_for_key(InputKey::Back),
+            Some(DialogIntent::Back)
+        ));
+    }
+}
