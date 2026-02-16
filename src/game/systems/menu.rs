@@ -107,7 +107,7 @@ pub fn resolve_pause(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve, resolve_pause, MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
+    use super::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent, resolve, resolve_pause};
     use crate::game::{MenuAction, MenuState};
 
     #[test]
