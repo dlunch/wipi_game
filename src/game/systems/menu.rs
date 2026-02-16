@@ -1,4 +1,5 @@
 use crate::game::MenuAction;
+use crate::game::selection::{step_down, step_up};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MenuIntent {
@@ -35,13 +36,15 @@ pub enum PauseMenuIntent {
 pub fn resolve(selected: usize, items: &[(&str, MenuAction)], intent: MenuIntent) -> MenuEvent {
     match intent {
         MenuIntent::MoveUp => {
-            if selected > 0 {
-                return MenuEvent::SetSelected(selected - 1);
+            let next = step_up(selected);
+            if next != selected {
+                return MenuEvent::SetSelected(next);
             }
         }
         MenuIntent::MoveDown => {
-            if selected + 1 < items.len() {
-                return MenuEvent::SetSelected(selected + 1);
+            let next = step_down(selected, items.len());
+            if next != selected {
+                return MenuEvent::SetSelected(next);
             }
         }
         MenuIntent::Select => {
@@ -60,11 +63,17 @@ pub fn resolve_pause(
     intent: PauseMenuIntent,
 ) -> PauseMenuEvent {
     match intent {
-        PauseMenuIntent::MoveUp if selected > 0 => {
-            return PauseMenuEvent::SetSelected(selected - 1);
+        PauseMenuIntent::MoveUp => {
+            let next = step_up(selected);
+            if next != selected {
+                return PauseMenuEvent::SetSelected(next);
+            }
         }
-        PauseMenuIntent::MoveDown if selected + 1 < item_count => {
-            return PauseMenuEvent::SetSelected(selected + 1);
+        PauseMenuIntent::MoveDown => {
+            let next = step_down(selected, item_count);
+            if next != selected {
+                return PauseMenuEvent::SetSelected(next);
+            }
         }
         PauseMenuIntent::Select => match selected {
             0 => return PauseMenuEvent::OpenInventory,
@@ -74,7 +83,6 @@ pub fn resolve_pause(
             _ => {}
         },
         PauseMenuIntent::Back => return PauseMenuEvent::BackToExplore,
-        _ => {}
     }
 
     PauseMenuEvent::None

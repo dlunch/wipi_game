@@ -6,7 +6,8 @@ use alloc::vec::Vec;
 use crate::data::Direction;
 use crate::game::{
     GameData, GameInput, GameIntent, GameState, InputKey, MenuAction, MenuEvent, MenuState,
-    RenderState, SessionState, ShopIntent, UiState, build_render_state, has_save_data,
+    RenderState, SceneIntent, SessionState, ShopIntent, SystemIntent, UiState, build_render_state,
+    has_save_data,
 };
 
 enum RuntimeEvent {
@@ -51,10 +52,36 @@ enum AppMovementEvent {
     ),
 }
 
+struct SessionSlot {
+    state: Option<SessionState>,
+}
+
+impl SessionSlot {
+    fn inactive() -> Self {
+        Self { state: None }
+    }
+
+    fn activate(&mut self, session: SessionState) {
+        self.state = Some(session);
+    }
+
+    fn as_ref(&self) -> Option<&SessionState> {
+        self.state.as_ref()
+    }
+
+    fn as_mut(&mut self) -> Option<&mut SessionState> {
+        self.state.as_mut()
+    }
+
+    fn is_active(&self) -> bool {
+        self.state.is_some()
+    }
+}
+
 pub struct GameRuntime {
     state: GameState,
     data: Rc<GameData>,
-    session: Option<SessionState>,
+    session: SessionSlot,
     ui: UiState,
 }
 
@@ -68,12 +95,26 @@ fn direction_for_key(key: InputKey) -> Option<Direction> {
     }
 }
 
+fn state_requires_session(state: &GameState) -> bool {
+    matches!(
+        state,
+        GameState::Explore
+            | GameState::Inventory
+            | GameState::Stats
+            | GameState::Dialog
+            | GameState::Shop
+            | GameState::QuestLog
+            | GameState::PauseMenu
+            | GameState::GameOver
+    )
+}
+
 impl GameRuntime {
     pub fn new() -> Self {
         Self {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
-            session: None,
+            session: SessionSlot::inactive(),
             ui: UiState::default(),
         }
     }
@@ -105,8 +146,11 @@ impl GameRuntime {
 
     fn collect_tick_intents(&self) -> Vec<GameIntent> {
         match self.state {
-            GameState::Loading(_) => vec![GameIntent::UpdateLoading],
-            GameState::Explore => vec![GameIntent::UpdateMovement, GameIntent::UpdateCombat],
+            GameState::Loading(_) => vec![GameIntent::System(SystemIntent::UpdateLoading)],
+            GameState::Explore => vec![
+                GameIntent::System(SystemIntent::UpdateMovement),
+                GameIntent::System(SystemIntent::UpdateCombat),
+            ],
             _ => Vec::new(),
         }
     }
@@ -128,10 +172,12 @@ impl GameRuntime {
 
     fn collect_keyup_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(self.state, GameState::Explore)
-            && self.session.is_some()
+            && self.session.is_active()
             && let Some(direction) = direction_for_key(key)
         {
-            vec![GameIntent::ReleaseMovementDirection(direction)]
+            vec![GameIntent::System(SystemIntent::ReleaseMovementDirection(
+                direction,
+            ))]
         } else {
             Vec::new()
         }
@@ -141,7 +187,8 @@ impl GameRuntime {
         self.ui
             .menu
             .intent_for_key(key)
-            .map(GameIntent::Menu)
+            .map(SceneIntent::Menu)
+            .map(GameIntent::Scene)
             .into_iter()
             .collect()
     }
@@ -156,7 +203,8 @@ impl GameRuntime {
             .explore
             .intents_for_key(key, facing)
             .into_iter()
-            .map(GameIntent::Explore)
+            .map(SceneIntent::Explore)
+            .map(GameIntent::Scene)
             .collect()
     }
 
@@ -164,14 +212,15 @@ impl GameRuntime {
         self.ui
             .inventory
             .intent_for_key(key)
-            .map(GameIntent::Inventory)
+            .map(SceneIntent::Inventory)
+            .map(GameIntent::Scene)
             .into_iter()
             .collect()
     }
 
     fn collect_overlay_keydown_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(key, InputKey::Back | InputKey::Ok) {
-            vec![GameIntent::ReturnToExplore]
+            vec![GameIntent::System(SystemIntent::ReturnToExplore)]
         } else {
             Vec::new()
         }
@@ -181,7 +230,8 @@ impl GameRuntime {
         self.ui
             .dialog
             .intent_for_key(key)
-            .map(GameIntent::Dialog)
+            .map(SceneIntent::Dialog)
+            .map(GameIntent::Scene)
             .into_iter()
             .collect()
     }
@@ -198,12 +248,14 @@ impl GameRuntime {
             .handle_key(key, inventory_len)
             .map(|ui_intent| match ui_intent {
                 crate::game::ShopUiIntent::BuySelected(selected) => {
-                    GameIntent::Shop(ShopIntent::BuySelected(selected))
+                    GameIntent::Scene(SceneIntent::Shop(ShopIntent::BuySelected(selected)))
                 }
                 crate::game::ShopUiIntent::SellSelected(selected) => {
-                    GameIntent::Shop(ShopIntent::SellSelected(selected))
+                    GameIntent::Scene(SceneIntent::Shop(ShopIntent::SellSelected(selected)))
                 }
-                crate::game::ShopUiIntent::Close => GameIntent::Shop(ShopIntent::Close),
+                crate::game::ShopUiIntent::Close => {
+                    GameIntent::Scene(SceneIntent::Shop(ShopIntent::Close))
+                }
             })
             .into_iter()
             .collect()
@@ -213,14 +265,15 @@ impl GameRuntime {
         self.ui
             .pause_menu
             .intent_for_key(key)
-            .map(GameIntent::PauseMenu)
+            .map(SceneIntent::PauseMenu)
+            .map(GameIntent::Scene)
             .into_iter()
             .collect()
     }
 
     fn collect_game_over_keydown_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(key, InputKey::Ok) {
-            vec![GameIntent::ReturnToMenuFromGameOver]
+            vec![GameIntent::System(SystemIntent::ReturnToMenuFromGameOver)]
         } else {
             Vec::new()
         }
@@ -228,13 +281,21 @@ impl GameRuntime {
 
     fn collect_error_keydown_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(key, InputKey::Ok) {
-            vec![GameIntent::Exit(1)]
+            vec![GameIntent::System(SystemIntent::Exit(1))]
         } else {
             Vec::new()
         }
     }
 
     fn transition_to(&mut self, next: GameState) {
+        if state_requires_session(&next) && !self.session.is_active() {
+            self.state = GameState::Error(alloc::format!(
+                "Missing session for state transition: {:?}",
+                next
+            ));
+            return;
+        }
+
         if self.state.can_transition_to(&next) {
             self.state = next;
             return;
@@ -303,8 +364,8 @@ impl GameRuntime {
         session: SessionState,
         intro: Option<crate::game::lifecycle::IntroDialogSpec>,
     ) {
+        self.session.activate(session);
         self.transition_to(state);
-        self.session = Some(session);
         self.apply_event(RuntimeEvent::Transition(TransitionEvent::MapChanged));
         self.ui = UiState::default();
         self.ui.dialog.set(self.dialog_state_from_intro(intro));
@@ -523,27 +584,33 @@ impl GameRuntime {
 
     fn resolve_intent(&mut self, intent: GameIntent) -> Vec<RuntimeEvent> {
         match intent {
-            GameIntent::UpdateLoading => self.resolve_update_loading_intent(),
-            GameIntent::UpdateMovement => self.resolve_update_movement_intent(),
-            GameIntent::UpdateCombat => self.resolve_update_combat_intent(),
-            GameIntent::Menu(intent) => self.resolve_menu_intent(intent),
-            GameIntent::Explore(intent) => self.resolve_explore_intent(intent),
-            GameIntent::Inventory(intent) => self.resolve_inventory_intent(intent),
-            GameIntent::Dialog(intent) => self.resolve_dialog_intent(intent),
-            GameIntent::Shop(intent) => self.resolve_shop_intent(intent),
-            GameIntent::PauseMenu(intent) => self.resolve_pause_menu_intent(intent),
-            GameIntent::ReturnToExplore => {
-                vec![RuntimeEvent::Transition(TransitionEvent::ToExplore)]
-            }
-            GameIntent::ReturnToMenuFromGameOver => {
-                vec![RuntimeEvent::Transition(
-                    TransitionEvent::ToMenuFromGameOver,
-                )]
-            }
-            GameIntent::ReleaseMovementDirection(direction) => vec![RuntimeEvent::Transition(
-                TransitionEvent::ReleaseMovementDirection(direction),
-            )],
-            GameIntent::Exit(code) => vec![RuntimeEvent::Exit(code)],
+            GameIntent::System(system_intent) => match system_intent {
+                SystemIntent::UpdateLoading => self.resolve_update_loading_intent(),
+                SystemIntent::UpdateMovement => self.resolve_update_movement_intent(),
+                SystemIntent::UpdateCombat => self.resolve_update_combat_intent(),
+                SystemIntent::ReturnToExplore => {
+                    vec![RuntimeEvent::Transition(TransitionEvent::ToExplore)]
+                }
+                SystemIntent::ReturnToMenuFromGameOver => {
+                    vec![RuntimeEvent::Transition(
+                        TransitionEvent::ToMenuFromGameOver,
+                    )]
+                }
+                SystemIntent::ReleaseMovementDirection(direction) => {
+                    vec![RuntimeEvent::Transition(
+                        TransitionEvent::ReleaseMovementDirection(direction),
+                    )]
+                }
+                SystemIntent::Exit(code) => vec![RuntimeEvent::Exit(code)],
+            },
+            GameIntent::Scene(scene_intent) => match scene_intent {
+                SceneIntent::Menu(intent) => self.resolve_menu_intent(intent),
+                SceneIntent::Explore(intent) => self.resolve_explore_intent(intent),
+                SceneIntent::Inventory(intent) => self.resolve_inventory_intent(intent),
+                SceneIntent::Dialog(intent) => self.resolve_dialog_intent(intent),
+                SceneIntent::Shop(intent) => self.resolve_shop_intent(intent),
+                SceneIntent::PauseMenu(intent) => self.resolve_pause_menu_intent(intent),
+            },
         }
     }
 
@@ -688,7 +755,7 @@ impl GameRuntime {
         if !matches!(self.state, GameState::Dialog) {
             return vec![RuntimeEvent::None];
         }
-        if self.session.is_none() {
+        if !self.session.is_active() {
             return vec![RuntimeEvent::Error(String::from("No active session"))];
         }
 
@@ -721,7 +788,7 @@ impl GameRuntime {
         if !matches!(self.state, GameState::PauseMenu) {
             return vec![RuntimeEvent::None];
         }
-        if self.session.is_none() {
+        if !self.session.is_active() {
             return vec![RuntimeEvent::Error(String::from("No active session"))];
         }
 

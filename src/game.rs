@@ -2,13 +2,15 @@ mod game_data;
 mod intent;
 mod rendering;
 mod save;
+mod save_schema;
+mod selection;
 mod session;
 mod state;
 mod systems;
 mod ui;
 
 pub use game_data::GameData;
-pub use intent::{GameInput, GameIntent, InputKey};
+pub use intent::{GameInput, GameIntent, InputKey, SceneIntent, SystemIntent};
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,
     InventoryRender, QuestLogRender, RenderState, ShopRender, StatsRender, build_render_state,

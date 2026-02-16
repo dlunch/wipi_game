@@ -3,6 +3,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
+use crate::game::selection::{step_down, step_up};
 use crate::game::{
     DialogIntent, ExploreIntent, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
 };
@@ -248,15 +249,11 @@ impl ShopUiState {
         match self.mode {
             ShopMode::Select => match key {
                 InputKey::Up => {
-                    if self.selected > 0 {
-                        self.selected -= 1;
-                    }
+                    self.selected = step_up(self.selected);
                     None
                 }
                 InputKey::Down => {
-                    if self.selected + 1 < 2 {
-                        self.selected += 1;
-                    }
+                    self.selected = step_down(self.selected, 2);
                     None
                 }
                 InputKey::Ok => {
@@ -273,15 +270,11 @@ impl ShopUiState {
             },
             ShopMode::Buy => match key {
                 InputKey::Up => {
-                    if self.selected > 0 {
-                        self.selected -= 1;
-                    }
+                    self.selected = step_up(self.selected);
                     None
                 }
                 InputKey::Down => {
-                    if self.selected + 1 < shop_items_len {
-                        self.selected += 1;
-                    }
+                    self.selected = step_down(self.selected, shop_items_len);
                     None
                 }
                 InputKey::Ok => Some(ShopUiIntent::BuySelected(self.selected)),
@@ -294,15 +287,11 @@ impl ShopUiState {
             },
             ShopMode::Sell => match key {
                 InputKey::Up => {
-                    if self.selected > 0 {
-                        self.selected -= 1;
-                    }
+                    self.selected = step_up(self.selected);
                     None
                 }
                 InputKey::Down => {
-                    if self.selected + 1 < inventory_len {
-                        self.selected += 1;
-                    }
+                    self.selected = step_down(self.selected, inventory_len);
                     None
                 }
                 InputKey::Ok => Some(ShopUiIntent::SellSelected(self.selected)),

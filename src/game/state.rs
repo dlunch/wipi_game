@@ -115,6 +115,53 @@ impl GameState {
 mod tests {
     use super::GameState;
 
+    fn states() -> [GameState; 11] {
+        [
+            GameState::Loading(0),
+            GameState::Menu,
+            GameState::Explore,
+            GameState::Inventory,
+            GameState::Stats,
+            GameState::Dialog,
+            GameState::Shop,
+            GameState::QuestLog,
+            GameState::PauseMenu,
+            GameState::GameOver,
+            GameState::Error(alloc::string::String::from("error")),
+        ]
+    }
+
+    fn expected_allowed(from: &GameState, to: &GameState) -> bool {
+        use GameState as S;
+
+        match from {
+            S::Loading(_) => matches!(to, S::Loading(_) | S::Menu | S::Error(_)),
+            S::Menu => matches!(to, S::Menu | S::Explore | S::Dialog | S::Error(_)),
+            S::Explore => matches!(
+                to,
+                S::Explore
+                    | S::Menu
+                    | S::Inventory
+                    | S::Dialog
+                    | S::Shop
+                    | S::PauseMenu
+                    | S::GameOver
+                    | S::Error(_)
+            ),
+            S::Inventory => matches!(to, S::Inventory | S::Explore | S::Error(_)),
+            S::Stats => matches!(to, S::Stats | S::Explore | S::Error(_)),
+            S::Dialog => matches!(to, S::Dialog | S::Explore | S::Shop | S::Error(_)),
+            S::Shop => matches!(to, S::Shop | S::Explore | S::Error(_)),
+            S::QuestLog => matches!(to, S::QuestLog | S::Explore | S::Error(_)),
+            S::PauseMenu => matches!(
+                to,
+                S::PauseMenu | S::Explore | S::Inventory | S::Stats | S::QuestLog | S::Error(_)
+            ),
+            S::GameOver => matches!(to, S::GameOver | S::Menu | S::Error(_)),
+            S::Error(_) => matches!(to, S::Error(_)),
+        }
+    }
+
     #[test]
     fn game_state_transitions_allow_expected_paths() {
         assert!(GameState::Loading(0).can_transition_to(&GameState::Menu));
@@ -132,5 +179,22 @@ mod tests {
         assert!(!GameState::Inventory.can_transition_to(&GameState::Dialog));
         assert!(!GameState::Stats.can_transition_to(&GameState::PauseMenu));
         assert!(!GameState::GameOver.can_transition_to(&GameState::Explore));
+    }
+
+    #[test]
+    fn game_state_transition_matrix_matches_rules_table() {
+        let all = states();
+
+        for from in &all {
+            for to in &all {
+                assert_eq!(
+                    from.can_transition_to(to),
+                    expected_allowed(from, to),
+                    "transition mismatch: {:?} -> {:?}",
+                    from,
+                    to
+                );
+            }
+        }
     }
 }

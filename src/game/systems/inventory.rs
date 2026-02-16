@@ -1,3 +1,5 @@
+use crate::game::selection::{step_down, step_up};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InventoryIntent {
     MoveUp,
@@ -16,13 +18,15 @@ pub enum InventoryEvent {
 pub fn resolve(selected: usize, inventory_len: usize, intent: InventoryIntent) -> InventoryEvent {
     match intent {
         InventoryIntent::MoveUp => {
-            if selected > 0 {
-                return InventoryEvent::SetSelected(selected - 1);
+            let next = step_up(selected);
+            if next != selected {
+                return InventoryEvent::SetSelected(next);
             }
         }
         InventoryIntent::MoveDown => {
-            if inventory_len > 0 && selected < inventory_len - 1 {
-                return InventoryEvent::SetSelected(selected + 1);
+            let next = step_down(selected, inventory_len);
+            if next != selected {
+                return InventoryEvent::SetSelected(next);
             }
         }
         InventoryIntent::UseSelected => {
