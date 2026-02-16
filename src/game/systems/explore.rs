@@ -138,8 +138,8 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Item, ItemKind, Map, Tile};
-    use crate::game::state::TileApplyEvent;
     use crate::game::TileEvent;
+    use crate::game::state::TileApplyEvent;
 
     fn make_test_map(
         id: &str,
