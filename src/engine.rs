@@ -7,8 +7,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext, SessionState,
-    UiEvent, UiEventApplier, UiInputEventResolver, UiState, build_render_state, domain_resolvers,
+    DomainEventResolver, GameData, GameEvent, GameInput, GameState, InputKey, RenderState,
+    ResolveContext, SessionState, UiEvent, UiEventApplier, UiInputEventResolver, UiState,
+    build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -16,6 +17,7 @@ pub struct GameEngine {
     data: Rc<GameData>,
     session: Option<SessionState>,
     ui: UiState,
+    resolvers: Vec<&'static dyn DomainEventResolver>,
 }
 
 impl GameEngine {
@@ -25,6 +27,7 @@ impl GameEngine {
             data: Rc::new(GameData::default()),
             session: None,
             ui: UiState::default(),
+            resolvers: domain_resolvers(),
         }
     }
 
@@ -73,7 +76,7 @@ impl GameEngine {
 
     fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let mut derived = Vec::new();
-        for resolver in domain_resolvers() {
+        for resolver in &self.resolvers {
             if resolver.handles(event) {
                 let mut ctx = ResolveContext {
                     state: &self.state,
@@ -81,7 +84,7 @@ impl GameEngine {
                     session: self.session.as_ref(),
                     ui: &self.ui,
                 };
-                derived.extend(resolver.resolve(&mut ctx, event)?);
+                derived.extend((*resolver).resolve(&mut ctx, event)?);
             }
         }
         Ok(derived)

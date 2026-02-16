@@ -24,7 +24,9 @@ pub use session::SessionState;
 pub use state::{
     CharacterState, CombatState, GameState, MovementState, MovementTickEvent, TileEvent,
 };
-pub use systems::{LifecycleEvent, LoadingEvent, NpcEvent, ResolveContext, domain_resolvers};
+pub use systems::{
+    DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, ResolveContext, domain_resolvers,
+};
 pub use ui::{
     DialogState, DialogTransition, ExploreAction, ExploreCommand, GameInput,
     INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction, MenuState, SHOP_VISIBLE_ITEMS, ShopMode,
