@@ -107,6 +107,7 @@ pub enum TransitionEvent {
     ToInventory,
     ToStats,
     ToQuestLog,
+    ToGameOver,
     ToMenuFromGameOver,
     ReleaseMovementDirection(Direction),
 }

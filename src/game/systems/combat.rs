@@ -297,9 +297,6 @@ impl DomainEventResolver for CombatPlayerActionResolver {
                     gold: reward.gold,
                 }));
             }
-            events.push(GameEvent::Combat(CombatEvent::SetPlayerAttackCooldown(
-                s.combat.player_attack_cooldown,
-            )));
             events.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
                 result.skill_effects,
             )));

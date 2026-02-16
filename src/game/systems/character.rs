@@ -23,6 +23,7 @@ impl DomainEventResolver for CharacterMutationResolver {
             GameEvent::UseInventorySelected(_)
                 | GameEvent::ShopBuyItem(_)
                 | GameEvent::ShopSellSelected(_)
+                | GameEvent::RestoreHpMp
                 | GameEvent::ApplyDialogAction(_)
         )
     }
@@ -37,6 +38,7 @@ impl DomainEventResolver for CharacterMutationResolver {
             GameEvent::UseInventorySelected(index) => Ok(resolve_use_item(leader, *index)),
             GameEvent::ShopBuyItem(item) => Ok(resolve_shop_buy(leader, item)),
             GameEvent::ShopSellSelected(index) => Ok(resolve_shop_sell(leader, *index)),
+            GameEvent::RestoreHpMp => Ok(resolve_restore_hp_mp(leader)),
             GameEvent::ApplyDialogAction(action) => resolve_dialog_action(ctx, leader, action),
             _ => Ok(Vec::new()),
         }
@@ -175,6 +177,13 @@ fn resolve_dialog_action(
         character.equipped_armor,
         character.equipped_accessory,
     ))
+}
+
+fn resolve_restore_hp_mp(character: &CharacterState) -> Vec<GameEvent> {
+    let mut stats = character.stats.clone();
+    stats.current_hp = stats.max_hp;
+    stats.current_mp = stats.max_mp;
+    vec![GameEvent::Session(SessionEvent::SetPlayerStats(stats))]
 }
 
 fn emit_character_events(

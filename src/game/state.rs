@@ -156,6 +156,9 @@ impl GameState {
             GameEvent::Transition(TransitionEvent::ToQuestLog) => {
                 self.transition_to(GameState::QuestLog);
             }
+            GameEvent::Transition(TransitionEvent::ToGameOver) => {
+                self.transition_to(GameState::GameOver);
+            }
             GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
                 self.transition_to(GameState::Menu);
             }
