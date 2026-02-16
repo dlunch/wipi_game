@@ -28,11 +28,10 @@ pub use systems::inventory;
 pub use systems::lifecycle;
 pub use systems::menu;
 pub use systems::movement;
-pub use systems::npc;
 pub use systems::shop;
 pub use systems::{
-    DialogEvent, DialogIntent, DialogTransition, ExploreEvent, ExploreIntent, InventoryEvent,
-    InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, NpcIntent, PauseMenuEvent,
+    DialogEvent, DialogIntent, DialogTransition, ExploreDispatchEvent, ExploreIntent,
+    InventoryEvent, InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
     PauseMenuIntent, ShopEvent, ShopIntent,
 };
 pub use ui::{
