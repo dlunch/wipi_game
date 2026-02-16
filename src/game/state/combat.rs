@@ -3,8 +3,8 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::RuntimeEvent;
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
+use crate::game::{GameState, PlayerAction, PlayerEvent, RuntimeEvent, SessionState};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -366,11 +366,13 @@ impl CombatState {
 }
 
 struct CombatPlayerActionApplier;
+struct CombatRuntimeEventApplier;
 
 static COMBAT_PLAYER_ACTION_APPLIER: CombatPlayerActionApplier = CombatPlayerActionApplier;
+static COMBAT_RUNTIME_EVENT_APPLIER: CombatRuntimeEventApplier = CombatRuntimeEventApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER]
+    alloc::vec![&COMBAT_PLAYER_ACTION_APPLIER, &COMBAT_RUNTIME_EVENT_APPLIER]
 }
 
 impl DomainEventApplier for CombatPlayerActionApplier {
@@ -386,7 +388,169 @@ impl DomainEventApplier for CombatPlayerActionApplier {
         let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
-        s.apply_explore_action(&data, *action);
+        apply_explore_action(s, &data, *action);
         Ok(())
+    }
+}
+
+impl DomainEventApplier for CombatRuntimeEventApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::Combat(_))
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::Combat(event) = event else {
+            return Ok(());
+        };
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        match event {
+            crate::game::CombatRuntimeEvent::EnemySpawn(enemy) => {
+                s.combat.enemies.push(enemy.clone());
+            }
+            crate::game::CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
+                s.combat
+                    .enemies
+                    .retain(|enemy| enemy.instance_id != *enemy_id);
+            }
+            crate::game::CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
+                if let Some(enemy) = s
+                    .combat
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.instance_id == *enemy_id)
+                {
+                    enemy.x = *x;
+                    enemy.y = *y;
+                }
+            }
+            crate::game::CombatRuntimeEvent::EnemyHpSet { enemy_id, hp } => {
+                if let Some(enemy) = s
+                    .combat
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.instance_id == *enemy_id)
+                {
+                    enemy.hp = *hp;
+                }
+            }
+            crate::game::CombatRuntimeEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
+                if let Some(enemy) = s
+                    .combat
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.instance_id == *enemy_id)
+                {
+                    enemy.attack_cooldown = *cooldown;
+                }
+            }
+            crate::game::CombatRuntimeEvent::EnemyHitFlashSet {
+                enemy_id,
+                hit_flash,
+            } => {
+                if let Some(enemy) = s
+                    .combat
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.instance_id == *enemy_id)
+                {
+                    enemy.hit_flash = *hit_flash;
+                }
+            }
+            crate::game::CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
+                s.combat.player_attack_cooldown = *cooldown;
+            }
+            crate::game::CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
+                s.combat.player_hit_flash = *hit_flash;
+            }
+            crate::game::CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
+                s.combat.skill_effects = skill_effects.clone();
+            }
+            crate::game::CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
+                s.combat.update_counter = *update_counter;
+            }
+            crate::game::CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
+                s.combat.respawn_timer = *respawn_timer;
+            }
+            crate::game::CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
+                s.combat.next_enemy_instance_id = *next_enemy_instance_id;
+            }
+            crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
+                s.skill_cooldowns = *next_skill_cooldowns;
+            }
+            crate::game::CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
+                s.mp_regen_timer = *next_mp_regen_timer;
+            }
+            crate::game::CombatRuntimeEvent::RecoverMp(recover_mp) => {
+                if *recover_mp > 0 {
+                    s.player.stats.recover_mp(*recover_mp);
+                }
+            }
+            crate::game::CombatRuntimeEvent::TakeDamage(damage_taken) => {
+                if *damage_taken > 0
+                    && matches!(
+                        s.player.apply(PlayerAction::TakeDamage(*damage_taken)),
+                        PlayerEvent::Died
+                    )
+                {
+                    ctx.transition_to(GameState::GameOver);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn apply_explore_action(
+    session: &mut SessionState,
+    data: &crate::game::GameData,
+    action: crate::game::ExploreAction,
+) {
+    if let Some((slot, skill)) = action.skill() {
+        if !session
+            .player
+            .can_use_skill(&session.skill_cooldowns, slot, skill.mp_cost)
+        {
+            return;
+        }
+
+        let combat_event = session.combat.apply(CombatAction::UseSkill {
+            skill,
+            player_x: session.player.x,
+            player_y: session.player.y,
+            player_atk: session.player.total_atk(),
+            facing: session.player.facing,
+        });
+        let CombatEvent::Skill(result) = combat_event else {
+            return;
+        };
+
+        session.skill_cooldowns[slot] = skill.cooldown;
+        session.player.stats.current_mp = (session.player.stats.current_mp - skill.mp_cost).max(0);
+
+        for effect in &result.player_effects {
+            match effect {
+                PlayerEffect::Heal(amount) => {
+                    let _ = session.player.apply(PlayerAction::Heal(*amount));
+                }
+            }
+        }
+
+        session.player.apply_kill_rewards(&result.kills);
+        for reward in &result.kills {
+            session.player.apply_quest_kill(data, &reward.enemy_id);
+        }
+        return;
+    }
+
+    if let CombatEvent::Attack(Some(reward)) = session.combat.apply(CombatAction::PlayerAttack {
+        player_x: session.player.x,
+        player_y: session.player.y,
+        player_atk: session.player.total_atk(),
+        facing: session.player.facing,
+    }) {
+        session.player.apply_kill_reward(&reward);
+        session.player.apply_quest_kill(data, &reward.enemy_id);
     }
 }

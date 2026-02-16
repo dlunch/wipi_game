@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use super::PlayerState;
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{AppMovementEvent, GameState, RuntimeEvent, TransitionEvent};
+use crate::game::{AppMovementEvent, GameState, RuntimeEvent, TileApplyEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -90,7 +90,10 @@ impl DomainEventApplier for MovementApplier {
         let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
-        s.apply_movement_tick(&data, *movement_event, tile_event.clone());
+        let moved = s.movement.apply_tick(&mut s.player, *movement_event);
+        if moved && let Some(tile_event) = tile_event.clone() {
+            let _: TileApplyEvent = s.player.apply_tile_event(&data, tile_event);
+        }
         Ok(())
     }
 }
@@ -115,7 +118,7 @@ impl DomainEventApplier for ReleaseMovementDirectionApplier {
         let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
-        s.on_direction_released(*direction);
+        s.movement.on_direction_released(*direction);
         Ok(())
     }
 }

@@ -9,7 +9,8 @@ use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
 use crate::game::{
     DialogIntent, ExploreIntent, GameInput, GameState, InputKey, InventoryIntent, MenuIntent,
-    PauseMenuIntent, RuntimeEvent, SessionState, ShopIntent, TransitionEvent, has_save_data,
+    PauseMenuIntent, PlayerAction, PlayerEvent, RuntimeEvent, SessionState, ShopIntent,
+    TransitionEvent, has_save_data,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -225,7 +226,7 @@ impl DomainEventApplier for UiDomainApplier {
                 let s = ctx
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;
-                s.on_direction_pressed(*direction);
+                s.movement.on_direction_pressed(*direction);
             }
             RuntimeEvent::Explore(_) => {}
             RuntimeEvent::Inventory(event) => match event {
@@ -237,7 +238,7 @@ impl DomainEventApplier for UiDomainApplier {
                     let s = ctx
                         .session_mut()
                         .ok_or_else(|| anyhow!("No active session"))?;
-                    s.use_inventory_item(*index);
+                    let _ = s.player.apply(PlayerAction::UseItem { index: *index });
                 }
                 crate::game::InventoryEvent::CloseToExplore => {
                     ctx.transition_to(GameState::Explore)
@@ -262,14 +263,22 @@ impl DomainEventApplier for UiDomainApplier {
                     let s = ctx
                         .session_mut()
                         .ok_or_else(|| anyhow!("No active session"))?;
-                    s.buy_shop_item(item.clone());
+                    let _ = s.player.apply(PlayerAction::AddGold(-item.price));
+                    let _ = s.player.apply(PlayerAction::AddItem(item.clone()));
                 }
                 crate::game::ShopEvent::SellSelected(index) => {
                     let (sold, len_after) = {
                         let s = ctx
                             .session_mut()
                             .ok_or_else(|| anyhow!("No active session"))?;
-                        let sold = s.sell_inventory_item(*index).is_some();
+                        let sold = if let PlayerEvent::ItemRemoved(Some(item)) =
+                            s.player.apply(PlayerAction::RemoveItemAt(*index))
+                        {
+                            let _ = s.player.apply(PlayerAction::AddGold(item.price / 2));
+                            true
+                        } else {
+                            false
+                        };
                         (sold, s.player.inventory.len())
                     };
                     if sold {

@@ -6,8 +6,8 @@ use anyhow::Result;
 
 use crate::game::{
     ApplyContext, GameData, GameInput, GameState, InputKey, RenderState, ResolveContext,
-    RuntimeEvent, SessionEventApplier, SessionState, UiInputEventResolver, UiState,
-    build_render_state, domain_appliers, domain_resolvers,
+    RuntimeEvent, SessionState, UiInputEventResolver, UiState, build_render_state, domain_appliers,
+    domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -77,12 +77,6 @@ impl GameEngine {
             if applier.handles(&event) {
                 applier.apply(&mut ctx, &event)?;
             }
-        }
-        if let Some(s) = ctx.session.as_mut()
-            && s.handles_event(&event)
-            && s.apply_runtime_event(&event)
-        {
-            ctx.transition_to(GameState::GameOver);
         }
         Ok(())
     }

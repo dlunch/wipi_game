@@ -1,9 +1,12 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
-use crate::game::GameData;
 use crate::game::state::combat::KillReward;
+use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
+use crate::game::{GameData, RuntimeEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TileEvent {
@@ -285,6 +288,86 @@ impl PlayerState {
                 self.equipped_accessory = None;
             }
         }
+    }
+}
+
+struct DialogActionApplier;
+
+static DIALOG_ACTION_APPLIER: DialogActionApplier = DialogActionApplier;
+
+pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
+    alloc::vec![&DIALOG_ACTION_APPLIER]
+}
+
+impl DomainEventApplier for DialogActionApplier {
+    fn handles(&self, event: &RuntimeEvent) -> bool {
+        matches!(event, RuntimeEvent::ApplyDialogAction(_))
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+        let RuntimeEvent::ApplyDialogAction(action) = event else {
+            return Ok(());
+        };
+        let data = alloc::rc::Rc::clone(ctx.data);
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        match action {
+            crate::data::DialogAction::GiveQuest(id) => {
+                if !s.player.quests.iter().any(|q| q.quest_id == *id) {
+                    s.player.quests.push(crate::data::QuestProgress {
+                        quest_id: id.clone(),
+                        current_count: 0,
+                        completed: false,
+                        rewarded: false,
+                    });
+                }
+            }
+            crate::data::DialogAction::CompleteQuest(id) => {
+                let can_reward = s
+                    .player
+                    .quests
+                    .iter()
+                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+                if can_reward && let Some(quest) = data.find_quest(id) {
+                    s.player.stats.add_exp(quest.reward_exp);
+                    let _ = s.player.apply(PlayerAction::AddGold(quest.reward_gold));
+
+                    if let Some(item_id) = &quest.reward_item
+                        && let Some(item) = data.find_item(item_id).cloned()
+                    {
+                        let _ = s.player.apply(PlayerAction::AddItem(item));
+                    }
+
+                    if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
+                        progress.rewarded = true;
+                    }
+                }
+            }
+            crate::data::DialogAction::GiveItem(id) => {
+                if let Some(item) = data.find_item(id).cloned() {
+                    let _ = s.player.apply(PlayerAction::AddItem(item));
+                }
+            }
+            crate::data::DialogAction::TakeItem(id) => {
+                if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
+                    let _ = s.player.apply(PlayerAction::RemoveItemAt(index));
+                }
+            }
+            crate::data::DialogAction::GiveGold(amount) => {
+                let _ = s.player.apply(PlayerAction::AddGold(*amount));
+            }
+            crate::data::DialogAction::TakeGold(amount) => {
+                let _ = s.player.apply(PlayerAction::AddGold(-*amount));
+            }
+            crate::data::DialogAction::OpenShop(_) => {}
+            crate::data::DialogAction::Heal => {
+                s.player.stats.current_hp = s.player.stats.max_hp;
+                s.player.stats.current_mp = s.player.stats.max_mp;
+            }
+        }
+        Ok(())
     }
 }
 
