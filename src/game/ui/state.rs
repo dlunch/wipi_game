@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{
-    AppExploreEvent, CharacterState, GameData, GameEvent, GameState, SessionState, ShopInputEvent,
-    TransitionEvent, UiEvent,
+    DialogInputEvent, ExploreInputEvent, GameEvent, GameState, InventoryInputEvent, SessionState,
+    ShopInputEvent, TransitionEvent, UiEvent,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -117,9 +117,9 @@ impl UiEventApplier for UiState {
             )],
             UiEvent::MenuInput(key) => self.resolve_menu_input(key),
             UiEvent::PauseMenuInput(key) => self.resolve_pause_menu_input(key),
-            UiEvent::ExploreInput(key) => vec![GameEvent::ExploreInput(key)],
-            UiEvent::InventoryInput(key) => vec![GameEvent::InventoryInput(key)],
-            UiEvent::DialogInput(key) => vec![GameEvent::DialogInput(key)],
+            UiEvent::ExploreInput(key) => self.resolve_explore_input(key),
+            UiEvent::InventoryInput(key) => self.resolve_inventory_input(key),
+            UiEvent::DialogInput(key) => self.resolve_dialog_input(key),
             UiEvent::ShopBuySelected(selected) => {
                 vec![GameEvent::ShopInput(ShopInputEvent::BuySelected(selected))]
             }
@@ -132,6 +132,46 @@ impl UiEventApplier for UiState {
 }
 
 impl UiState {
+    fn resolve_explore_input(&self, key: InputKey) -> Vec<GameEvent> {
+        let event = match key {
+            InputKey::Up => Some(ExploreInputEvent::Move(Direction::Up)),
+            InputKey::Down => Some(ExploreInputEvent::Move(Direction::Down)),
+            InputKey::Left => Some(ExploreInputEvent::Move(Direction::Left)),
+            InputKey::Right => Some(ExploreInputEvent::Move(Direction::Right)),
+            InputKey::Ok => Some(ExploreInputEvent::Confirm),
+            InputKey::Key1 => Some(ExploreInputEvent::UseSlot(0)),
+            InputKey::Key2 => Some(ExploreInputEvent::UseSlot(1)),
+            InputKey::Key3 => Some(ExploreInputEvent::UseSlot(2)),
+            InputKey::Key0 => Some(ExploreInputEvent::OpenPauseMenu),
+            InputKey::Back => Some(ExploreInputEvent::OpenMenu),
+            _ => None,
+        };
+
+        event.map(GameEvent::ExploreInput).into_iter().collect()
+    }
+
+    fn resolve_inventory_input(&self, key: InputKey) -> Vec<GameEvent> {
+        let event = match key {
+            InputKey::Up => Some(InventoryInputEvent::Up),
+            InputKey::Down => Some(InventoryInputEvent::Down),
+            InputKey::Ok => Some(InventoryInputEvent::Confirm),
+            InputKey::Back => Some(InventoryInputEvent::Back),
+            _ => None,
+        };
+
+        event.map(GameEvent::InventoryInput).into_iter().collect()
+    }
+
+    fn resolve_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
+        let event = match key {
+            InputKey::Ok => Some(DialogInputEvent::Confirm),
+            InputKey::Back => Some(DialogInputEvent::Back),
+            _ => None,
+        };
+
+        event.map(GameEvent::DialogInput).into_iter().collect()
+    }
+
     fn resolve_menu_input(&self, key: InputKey) -> Vec<GameEvent> {
         let selected = self.menu.selected;
         let items = &self.menu.state.items;
@@ -356,66 +396,6 @@ impl ExploreUiState {
         }
     }
 
-    pub fn resolve_events_for_key(
-        &self,
-        key: InputKey,
-        player: &CharacterState,
-        data: &GameData,
-    ) -> Vec<AppExploreEvent> {
-        let mut events = Vec::new();
-
-        match key {
-            InputKey::Up => {
-                events.push(AppExploreEvent::MoveDirection(Direction::Up));
-            }
-            InputKey::Down => {
-                events.push(AppExploreEvent::MoveDirection(Direction::Down));
-            }
-            InputKey::Left => {
-                events.push(AppExploreEvent::MoveDirection(Direction::Left));
-            }
-            InputKey::Right => {
-                events.push(AppExploreEvent::MoveDirection(Direction::Right));
-            }
-            InputKey::Ok => {
-                let is_peaceful = data
-                    .find_map(&player.current_map_id)
-                    .is_some_and(|map| map.peaceful);
-                events.push(AppExploreEvent::TryNpcInteract {
-                    facing: player.facing,
-                    fallback_action: if is_peaceful {
-                        None
-                    } else {
-                        Some(self.ok_action)
-                    },
-                });
-            }
-            InputKey::Key1 => {
-                if let Some(action) = self.key_actions[0] {
-                    events.push(AppExploreEvent::UseAction(action));
-                }
-            }
-            InputKey::Key2 => {
-                if let Some(action) = self.key_actions[1] {
-                    events.push(AppExploreEvent::UseAction(action));
-                }
-            }
-            InputKey::Key3 => {
-                if let Some(action) = self.key_actions[2] {
-                    events.push(AppExploreEvent::UseAction(action));
-                }
-            }
-            InputKey::Key0 => {
-                events.push(AppExploreEvent::EnterPauseMenu);
-            }
-            InputKey::Back => {
-                events.push(AppExploreEvent::EnterMenu);
-            }
-            _ => {}
-        }
-
-        events
-    }
 }
 
 #[derive(Debug)]

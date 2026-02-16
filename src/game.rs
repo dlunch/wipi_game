@@ -11,8 +11,8 @@ mod ui;
 
 pub use game_data::GameData;
 pub use game_event::{
-    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, GameEvent, SessionEvent, ShopInputEvent,
-    TransitionEvent, UiEvent,
+    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, DialogInputEvent, ExploreInputEvent,
+    GameEvent, InventoryInputEvent, SessionEvent, ShopInputEvent, TransitionEvent, UiEvent,
 };
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,

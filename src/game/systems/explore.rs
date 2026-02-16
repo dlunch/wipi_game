@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, GameEvent, GameState};
+use crate::game::{AppExploreEvent, ExploreInputEvent, GameEvent, GameState};
 
 struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
@@ -32,7 +32,7 @@ impl DomainEventResolver for ExploreInputResolver {
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::ExploreInput(key) = event else {
+        let GameEvent::ExploreInput(input) = event else {
             return Err(anyhow!("Invalid event: expected ExploreInput"));
         };
         ensure!(
@@ -41,13 +41,40 @@ impl DomainEventResolver for ExploreInputResolver {
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(ctx
-            .ui
-            .explore
-            .resolve_events_for_key(*key, &s.leader, ctx.data())
-            .into_iter()
-            .map(GameEvent::Explore)
-            .collect())
+        let mut out = Vec::new();
+        match input {
+            ExploreInputEvent::Move(direction) => {
+                out.push(GameEvent::Explore(AppExploreEvent::MoveDirection(
+                    *direction,
+                )));
+            }
+            ExploreInputEvent::Confirm => {
+                let is_peaceful = ctx
+                    .data()
+                    .find_map(&s.leader.current_map_id)
+                    .is_some_and(|map| map.peaceful);
+                out.push(GameEvent::Explore(AppExploreEvent::TryNpcInteract {
+                    facing: s.leader.facing,
+                    fallback_action: if is_peaceful {
+                        None
+                    } else {
+                        Some(ctx.ui.explore.ok_action)
+                    },
+                }));
+            }
+            ExploreInputEvent::UseSlot(slot) => {
+                if let Some(action) = ctx.ui.explore.key_actions.get(*slot).and_then(|a| *a) {
+                    out.push(GameEvent::Explore(AppExploreEvent::UseAction(action)));
+                }
+            }
+            ExploreInputEvent::OpenPauseMenu => {
+                out.push(GameEvent::Explore(AppExploreEvent::EnterPauseMenu));
+            }
+            ExploreInputEvent::OpenMenu => {
+                out.push(GameEvent::Explore(AppExploreEvent::EnterMenu));
+            }
+        }
+        Ok(out)
     }
 }
 

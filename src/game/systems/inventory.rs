@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, InputKey};
+use crate::game::{GameEvent, GameState, InventoryInputEvent};
 
 #[derive(Clone)]
 pub enum InventoryEvent {
@@ -29,7 +29,7 @@ impl DomainEventResolver for InventoryInputResolver {
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::InventoryInput(key) = event else {
+        let GameEvent::InventoryInput(input) = event else {
             return Err(anyhow!("Invalid event: expected InventoryInput"));
         };
         ensure!(
@@ -39,8 +39,8 @@ impl DomainEventResolver for InventoryInputResolver {
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         let selected = ctx.ui.inventory.selected;
-        let event = match key {
-            InputKey::Up => {
+        let event = match input {
+            InventoryInputEvent::Up => {
                 let next = step_up(selected);
                 if next != selected {
                     InventoryEvent::SetSelected(next)
@@ -48,7 +48,7 @@ impl DomainEventResolver for InventoryInputResolver {
                     InventoryEvent::None
                 }
             }
-            InputKey::Down => {
+            InventoryInputEvent::Down => {
                 let next = step_down(selected, s.leader.inventory.len());
                 if next != selected {
                     InventoryEvent::SetSelected(next)
@@ -56,9 +56,8 @@ impl DomainEventResolver for InventoryInputResolver {
                     InventoryEvent::None
                 }
             }
-            InputKey::Ok => InventoryEvent::UseSelected(selected),
-            InputKey::Back => InventoryEvent::CloseToExplore,
-            _ => InventoryEvent::None,
+            InventoryInputEvent::Confirm => InventoryEvent::UseSelected(selected),
+            InventoryInputEvent::Back => InventoryEvent::CloseToExplore,
         };
 
         match event {

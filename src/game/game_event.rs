@@ -47,9 +47,9 @@ pub enum GameEvent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    ExploreInput(crate::game::InputKey),
-    InventoryInput(crate::game::InputKey),
-    DialogInput(crate::game::InputKey),
+    ExploreInput(ExploreInputEvent),
+    InventoryInput(InventoryInputEvent),
+    DialogInput(DialogInputEvent),
     ShopInput(ShopInputEvent),
     StartNewGame,
     ContinueGame,
@@ -103,6 +103,29 @@ pub enum ShopInputEvent {
     BuySelected(usize),
     SellSelected(usize),
     Close,
+}
+
+#[derive(Clone, Copy)]
+pub enum ExploreInputEvent {
+    Move(Direction),
+    Confirm,
+    UseSlot(usize),
+    OpenPauseMenu,
+    OpenMenu,
+}
+
+#[derive(Clone, Copy)]
+pub enum InventoryInputEvent {
+    Up,
+    Down,
+    Confirm,
+    Back,
+}
+
+#[derive(Clone, Copy)]
+pub enum DialogInputEvent {
+    Confirm,
+    Back,
 }
 
 pub enum UiEvent {

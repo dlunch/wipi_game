@@ -5,7 +5,7 @@ use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, InputKey};
+use crate::game::{DialogInputEvent, GameEvent, GameState};
 
 #[derive(Debug, Clone)]
 pub enum DialogEvent {
@@ -36,7 +36,7 @@ impl DomainEventResolver for DialogInputResolver {
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::DialogInput(key) = event else {
+        let GameEvent::DialogInput(input) = event else {
             return Err(anyhow!("Invalid event: expected DialogInput"));
         };
         ensure!(
@@ -44,9 +44,9 @@ impl DomainEventResolver for DialogInputResolver {
             "Invalid state: expected Dialog"
         );
 
-        let event = match key {
-            InputKey::Back => DialogEvent::Transition(DialogTransition::CloseToExplore),
-            InputKey::Ok => {
+        let event = match input {
+            DialogInputEvent::Back => DialogEvent::Transition(DialogTransition::CloseToExplore),
+            DialogInputEvent::Confirm => {
                 if let Some(dialog_state_ref) = ctx.ui.dialog.state.as_ref() {
                     if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
                         DialogEvent::Transition(DialogTransition::CloseToExplore)
@@ -72,7 +72,6 @@ impl DomainEventResolver for DialogInputResolver {
                     DialogEvent::None
                 }
             }
-            _ => DialogEvent::None,
         };
 
         match event {
