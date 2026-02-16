@@ -2,6 +2,8 @@ mod appliers;
 mod combat;
 mod movement;
 mod player;
+pub(crate) mod session;
+pub(crate) mod ui;
 
 pub use appliers::domain_appliers;
 pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect};
