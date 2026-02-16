@@ -8,8 +8,8 @@ impl UiState {
     pub fn apply_game_event(
         &mut self,
         data: &crate::game::GameData,
-        state: &mut GameState,
-        session: &mut Option<SessionState>,
+        state: &GameState,
+        session: Option<&SessionState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
@@ -33,29 +33,19 @@ impl UiState {
                 }
                 crate::game::PauseMenuEvent::OpenInventory => {
                     self.inventory.reset();
-                    state.transition_to(session, GameState::Inventory);
                 }
-                crate::game::PauseMenuEvent::OpenStats => {
-                    state.transition_to(session, GameState::Stats)
-                }
-                crate::game::PauseMenuEvent::OpenQuestLog => {
-                    state.transition_to(session, GameState::QuestLog)
-                }
+                crate::game::PauseMenuEvent::OpenStats => {}
+                crate::game::PauseMenuEvent::OpenQuestLog => {}
                 crate::game::PauseMenuEvent::SaveAndReturnExplore => {
                     self.shop.reset();
-                    state.transition_to(session, GameState::Explore);
                 }
-                crate::game::PauseMenuEvent::BackToExplore => {
-                    state.transition_to(session, GameState::Explore)
-                }
+                crate::game::PauseMenuEvent::BackToExplore => {}
             },
             GameEvent::OpenPauseMenu => {
                 self.pause_menu.reset();
-                state.transition_to(session, GameState::PauseMenu);
             }
             GameEvent::OpenMenuFromExplore => {
                 self.menu.set_menu(MenuState::new(has_save_data()));
-                state.transition_to(session, GameState::Menu);
             }
             GameEvent::Inventory(event) => match event {
                 crate::game::InventoryEvent::None => {}
@@ -63,20 +53,16 @@ impl UiState {
                     self.inventory.set_selected(*selected)
                 }
                 crate::game::InventoryEvent::UseSelected(_) => {}
-                crate::game::InventoryEvent::CloseToExplore => {
-                    state.transition_to(session, GameState::Explore)
-                }
+                crate::game::InventoryEvent::CloseToExplore => {}
             },
             GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
                     if let Some(dialog_state) = self.dialog.state.as_mut() {
                         dialog_state.current_line = *line;
                     }
-                    state.transition_to(session, GameState::Dialog);
                 }
                 crate::game::DialogTransition::CloseToExplore => {
                     self.dialog.close();
-                    state.transition_to(session, GameState::Explore);
                 }
             },
             GameEvent::Shop(event) => match event {
@@ -93,13 +79,10 @@ impl UiState {
                         }
                     }
                 }
-                crate::game::ShopEvent::CloseToExplore => {
-                    state.transition_to(session, GameState::Explore)
-                }
+                crate::game::ShopEvent::CloseToExplore => {}
             },
             GameEvent::OpenDialogState(dialog_state) => {
                 self.dialog.open(dialog_state.clone());
-                state.transition_to(session, GameState::Dialog);
             }
             _ => {}
         }

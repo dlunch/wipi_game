@@ -156,6 +156,26 @@ impl GameState {
                 self.transition_to(session, GameState::Menu);
                 ui.menu.set_menu(MenuState::new(has_save_data()));
             }
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenInventory) => {
+                self.transition_to(session, GameState::Inventory)
+            }
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenStats) => {
+                self.transition_to(session, GameState::Stats)
+            }
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenQuestLog) => {
+                self.transition_to(session, GameState::QuestLog)
+            }
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
+            | GameEvent::PauseMenu(crate::game::PauseMenuEvent::BackToExplore)
+            | GameEvent::Inventory(crate::game::InventoryEvent::CloseToExplore)
+            | GameEvent::Shop(crate::game::ShopEvent::CloseToExplore)
+            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
+                self.transition_to(session, GameState::Explore)
+            }
+            GameEvent::OpenPauseMenu => self.transition_to(session, GameState::PauseMenu),
+            GameEvent::OpenMenuFromExplore => self.transition_to(session, GameState::Menu),
+            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
+            | GameEvent::OpenDialogState(_) => self.transition_to(session, GameState::Dialog),
             GameEvent::Exit(code) => {
                 wipi::kernel::exit(*code);
             }

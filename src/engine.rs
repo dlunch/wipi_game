@@ -119,7 +119,7 @@ impl GameEngine {
         }
 
         self.ui
-            .apply_game_event(&self.data, &mut self.state, &mut self.session, &event)?;
+            .apply_game_event(&self.data, &self.state, self.session.as_ref(), &event)?;
         Ok(())
     }
 
