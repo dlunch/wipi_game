@@ -7,42 +7,16 @@ use crate::game::{CombatRuntimeEvent, RuntimeEvent};
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
 
-pub struct CombatTickInput<'a> {
-    pub player_x: usize,
-    pub player_y: usize,
-    pub player_def: i32,
-    pub skill_cooldowns: [u32; 3],
-    pub mp_regen_timer: u32,
-    pub map: &'a Map,
-    pub enemy_data: &'a [Enemy],
-}
-
-struct TickContext<'a> {
+pub fn resolve_tick(
+    state: &CombatState,
     player_x: usize,
     player_y: usize,
     player_def: i32,
-    skill_cooldowns: [u32; 3],
-    mp_regen_timer: u32,
-    map: &'a Map,
-    enemy_data: &'a [Enemy],
-}
-
-pub fn resolve_tick(state: &CombatState, input: CombatTickInput<'_>) -> Vec<RuntimeEvent> {
-    update(
-        state,
-        TickContext {
-            player_x: input.player_x,
-            player_y: input.player_y,
-            player_def: input.player_def,
-            skill_cooldowns: input.skill_cooldowns,
-            mp_regen_timer: input.mp_regen_timer,
-            map: input.map,
-            enemy_data: input.enemy_data,
-        },
-    )
-}
-
-fn update(state: &CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
+    resources: ([u32; 3], u32),
+    map: &Map,
+    enemy_data: &[Enemy],
+) -> Vec<RuntimeEvent> {
+    let (skill_cooldowns, mp_regen_timer) = resources;
     let update_counter = state.update_counter.wrapping_add(1);
     let mut player_attack_cooldown = state.player_attack_cooldown;
     let mut player_hit_flash = state.player_hit_flash;
@@ -65,7 +39,7 @@ fn update(state: &CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
     if update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
         for enemy in &mut enemies {
             if !enemy.is_dead() {
-                enemy.update(ctx.player_x, ctx.player_y, ctx.map);
+                enemy.update(player_x, player_y, map);
             }
         }
     }
@@ -75,9 +49,9 @@ fn update(state: &CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
             continue;
         }
 
-        if enemy.distance_to(ctx.player_x, ctx.player_y) <= 1 && enemy.can_attack() {
+        if enemy.distance_to(player_x, player_y) <= 1 && enemy.can_attack() {
             let raw_damage = enemy.do_attack();
-            let actual_damage = (raw_damage - ctx.player_def / 2).max(1);
+            let actual_damage = (raw_damage - player_def / 2).max(1);
             damage_taken += actual_damage;
             player_hit_flash = 10;
         }
@@ -89,14 +63,14 @@ fn update(state: &CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
         &mut enemies,
         &mut respawn_timer,
         &state.respawn_positions,
-        ctx.player_x,
-        ctx.player_y,
-        ctx.map,
-        ctx.enemy_data,
+        player_x,
+        player_y,
+        map,
+        enemy_data,
     );
 
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
-        tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
+        tick_resource_state(skill_cooldowns, mp_regen_timer);
     let mut events = Vec::with_capacity(10);
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetEnemies(
         enemies,

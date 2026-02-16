@@ -379,15 +379,12 @@ impl GameEngine {
 
         Ok(crate::game::combat::resolve_tick(
             &s.combat,
-            crate::game::combat::CombatTickInput {
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_def: s.player.total_def(),
-                skill_cooldowns: s.skill_cooldowns,
-                mp_regen_timer: s.mp_regen_timer,
-                map,
-                enemy_data: &self.data.enemies,
-            },
+            s.player.x,
+            s.player.y,
+            s.player.total_def(),
+            (s.skill_cooldowns, s.mp_regen_timer),
+            map,
+            &self.data.enemies,
         ))
     }
 
