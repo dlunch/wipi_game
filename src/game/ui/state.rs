@@ -357,7 +357,9 @@ impl UiState {
                 self.inventory.reset();
                 vec![GameEvent::Transition(TransitionEvent::ToInventory)]
             }
-            PauseMenuAction::OpenStats => vec![GameEvent::Transition(TransitionEvent::ToStats)],
+            PauseMenuAction::OpenStats => {
+                vec![GameEvent::Transition(TransitionEvent::ToStats)]
+            }
             PauseMenuAction::OpenQuestLog => {
                 vec![GameEvent::Transition(TransitionEvent::ToQuestLog)]
             }

@@ -2,7 +2,7 @@ use crate::data::Direction;
 use anyhow::{Result, ensure};
 
 use super::CharacterState;
-use crate::game::{AppMovementEvent, GameEvent, GameState, TransitionEvent};
+use crate::game::{GameEvent, GameState, MovementEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -51,7 +51,7 @@ impl MovementState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) => {
+            GameEvent::Movement(MovementEvent::Tick(movement_event, tile_event)) => {
                 let _ = tile_event;
                 self.apply_tick(player, *movement_event);
             }
@@ -62,7 +62,7 @@ impl MovementState {
                 );
                 self.on_direction_released(*direction);
             }
-            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
+            GameEvent::Explore(crate::game::ExploreEvent::MoveDirection(direction)) => {
                 ensure!(
                     matches!(state, GameState::Explore),
                     "Invalid state: expected Explore"

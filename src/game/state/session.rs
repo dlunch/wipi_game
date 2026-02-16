@@ -9,7 +9,7 @@ use crate::data::{QuestProgress, QuestType};
 use super::combat::KillReward;
 
 use crate::game::{
-    CharacterState, CombatRuntimeEvent, CombatState, GameData, GameEvent, GameState, MovementState,
+    CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameState, MovementState,
     PlayerAction, PlayerEvent, SessionEvent, TransitionEvent,
 };
 
@@ -197,13 +197,13 @@ impl SessionState {
                 _ => {}
             },
             GameEvent::Combat(combat_event) => match combat_event {
-                CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
+                CombatEvent::SetSkillCooldowns(next_skill_cooldowns) => {
                     self.skill_cooldowns = *next_skill_cooldowns;
                 }
-                CombatRuntimeEvent::SetMpRegenTimer(next_mp_regen_timer) => {
+                CombatEvent::SetMpRegenTimer(next_mp_regen_timer) => {
                     self.mp_regen_timer = *next_mp_regen_timer;
                 }
-                CombatRuntimeEvent::RecoverMp(recover_mp) => {
+                CombatEvent::RecoverMp(recover_mp) => {
                     if *recover_mp > 0 {
                         self.leader.stats.recover_mp(*recover_mp);
                     } else if *recover_mp < 0 {
@@ -211,12 +211,12 @@ impl SessionState {
                             (self.leader.stats.current_mp + *recover_mp).max(0);
                     }
                 }
-                CombatRuntimeEvent::Heal(heal) => {
+                CombatEvent::Heal(heal) => {
                     if *heal > 0 {
                         let _ = self.leader.apply(PlayerAction::Heal(*heal));
                     }
                 }
-                CombatRuntimeEvent::GrantKillReward {
+                CombatEvent::GrantKillReward {
                     enemy_id,
                     exp,
                     gold,
@@ -228,7 +228,7 @@ impl SessionState {
                     });
                     self.apply_quest_kill(data, enemy_id);
                 }
-                CombatRuntimeEvent::TakeDamage(damage_taken) => {
+                CombatEvent::TakeDamage(damage_taken) => {
                     if *damage_taken > 0
                         && matches!(
                             self.leader.apply(PlayerAction::TakeDamage(*damage_taken)),
@@ -248,7 +248,7 @@ impl SessionState {
                 }
                 _ => {}
             },
-            GameEvent::Movement(crate::game::AppMovementEvent::Tick(_, maybe_tile_event)) => {
+            GameEvent::Movement(crate::game::MovementEvent::Tick(_, maybe_tile_event)) => {
                 if let Some(tile_event) = maybe_tile_event.clone() {
                     self.apply_tile_event(data, tile_event);
                 }

@@ -8,7 +8,7 @@ use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    AppMovementEvent, CharacterState, GameData, GameEvent, GameState, MovementState,
+    CharacterState, GameData, GameEvent, GameState, MovementEvent, MovementState,
     MovementTickEvent, TileEvent, TransitionEvent,
 };
 
@@ -191,7 +191,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         let movement = resolve_world_tick(&s.movement, &s.leader, &s.combat.enemies, ctx.data());
 
         let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
-        events.push(GameEvent::Movement(AppMovementEvent::Tick(
+        events.push(GameEvent::Movement(MovementEvent::Tick(
             movement.movement_event,
             movement.tile_event,
         )));

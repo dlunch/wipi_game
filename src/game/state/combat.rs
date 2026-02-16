@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::{CombatRuntimeEvent, GameEvent};
+use crate::game::{CombatEvent, GameEvent};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -31,7 +31,7 @@ pub enum CombatAction<'a> {
 }
 
 #[derive(Debug)]
-pub enum CombatEvent {
+pub enum CombatActionEvent {
     Attack(Option<KillReward>),
     Skill(SkillResult),
 }
@@ -166,21 +166,25 @@ pub struct CombatState {
 }
 
 impl CombatState {
-    pub fn apply(&mut self, action: CombatAction<'_>) -> CombatEvent {
+    pub fn apply(&mut self, action: CombatAction<'_>) -> CombatActionEvent {
         match action {
             CombatAction::PlayerAttack {
                 player_x,
                 player_y,
                 player_atk,
                 facing,
-            } => CombatEvent::Attack(self.player_attack(player_x, player_y, player_atk, facing)),
+            } => CombatActionEvent::Attack(
+                self.player_attack(player_x, player_y, player_atk, facing),
+            ),
             CombatAction::UseSkill {
                 skill,
                 player_x,
                 player_y,
                 player_atk,
                 facing,
-            } => CombatEvent::Skill(self.use_skill(skill, player_x, player_y, player_atk, facing)),
+            } => CombatActionEvent::Skill(
+                self.use_skill(skill, player_x, player_y, player_atk, facing),
+            ),
         }
     }
 
@@ -371,13 +375,13 @@ impl CombatState {
             return Ok(());
         };
         match event {
-            CombatRuntimeEvent::EnemySpawn(enemy) => {
+            CombatEvent::EnemySpawn(enemy) => {
                 self.enemies.push(enemy.clone());
             }
-            CombatRuntimeEvent::EnemyDespawn(enemy_id) => {
+            CombatEvent::EnemyDespawn(enemy_id) => {
                 self.enemies.retain(|enemy| enemy.instance_id != *enemy_id);
             }
-            CombatRuntimeEvent::EnemyMove { enemy_id, x, y } => {
+            CombatEvent::EnemyMove { enemy_id, x, y } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -387,7 +391,7 @@ impl CombatState {
                     enemy.y = *y;
                 }
             }
-            CombatRuntimeEvent::EnemyHpSet { enemy_id, hp } => {
+            CombatEvent::EnemyHpSet { enemy_id, hp } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -396,7 +400,7 @@ impl CombatState {
                     enemy.hp = *hp;
                 }
             }
-            CombatRuntimeEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
+            CombatEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
                 if let Some(enemy) = self
                     .enemies
                     .iter_mut()
@@ -405,7 +409,7 @@ impl CombatState {
                     enemy.attack_cooldown = *cooldown;
                 }
             }
-            CombatRuntimeEvent::EnemyHitFlashSet {
+            CombatEvent::EnemyHitFlashSet {
                 enemy_id,
                 hit_flash,
             } => {
@@ -417,30 +421,30 @@ impl CombatState {
                     enemy.hit_flash = *hit_flash;
                 }
             }
-            CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
+            CombatEvent::SetPlayerAttackCooldown(cooldown) => {
                 self.player_attack_cooldown = *cooldown;
             }
-            CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
+            CombatEvent::SetPlayerHitFlash(hit_flash) => {
                 self.player_hit_flash = *hit_flash;
             }
-            CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
+            CombatEvent::SetSkillEffects(skill_effects) => {
                 self.skill_effects = skill_effects.clone();
             }
-            CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
+            CombatEvent::SetUpdateCounter(update_counter) => {
                 self.update_counter = *update_counter;
             }
-            CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
+            CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;
             }
-            CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
+            CombatEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
                 self.next_enemy_instance_id = *next_enemy_instance_id;
             }
-            CombatRuntimeEvent::SetSkillCooldowns(_)
-            | CombatRuntimeEvent::SetMpRegenTimer(_)
-            | CombatRuntimeEvent::RecoverMp(_)
-            | CombatRuntimeEvent::Heal(_)
-            | CombatRuntimeEvent::GrantKillReward { .. }
-            | CombatRuntimeEvent::TakeDamage(_) => {}
+            CombatEvent::SetSkillCooldowns(_)
+            | CombatEvent::SetMpRegenTimer(_)
+            | CombatEvent::RecoverMp(_)
+            | CombatEvent::Heal(_)
+            | CombatEvent::GrantKillReward { .. }
+            | CombatEvent::TakeDamage(_) => {}
         }
         Ok(())
     }

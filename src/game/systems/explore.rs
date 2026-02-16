@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, ExploreCommand, GameEvent, GameState};
+use crate::game::{ExploreCommand, ExploreEvent, GameEvent, GameState};
 
 struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
@@ -44,16 +44,14 @@ impl DomainEventResolver for ExploreInputResolver {
         let mut out = Vec::new();
         match input {
             ExploreCommand::Move(direction) => {
-                out.push(GameEvent::Explore(AppExploreEvent::MoveDirection(
-                    *direction,
-                )));
+                out.push(GameEvent::Explore(ExploreEvent::MoveDirection(*direction)));
             }
             ExploreCommand::Confirm => {
                 let is_peaceful = ctx
                     .data()
                     .find_map(&s.leader.current_map_id)
                     .is_some_and(|map| map.peaceful);
-                out.push(GameEvent::Explore(AppExploreEvent::TryNpcInteract {
+                out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
                     facing: s.leader.facing,
                     fallback_action: if is_peaceful {
                         None
@@ -64,14 +62,14 @@ impl DomainEventResolver for ExploreInputResolver {
             }
             ExploreCommand::UseSlot(slot) => {
                 if let Some(action) = ctx.ui.explore.key_actions.get(*slot).and_then(|a| *a) {
-                    out.push(GameEvent::Explore(AppExploreEvent::UseAction(action)));
+                    out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
                 }
             }
             ExploreCommand::OpenPauseMenu => {
-                out.push(GameEvent::Explore(AppExploreEvent::EnterPauseMenu));
+                out.push(GameEvent::Explore(ExploreEvent::EnterPauseMenu));
             }
             ExploreCommand::OpenMenu => {
-                out.push(GameEvent::Explore(AppExploreEvent::EnterMenu));
+                out.push(GameEvent::Explore(ExploreEvent::EnterMenu));
             }
         }
         Ok(out)
@@ -80,11 +78,11 @@ impl DomainEventResolver for ExploreInputResolver {
 
 impl DomainEventResolver for ExploreUseActionCascadeResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(AppExploreEvent::UseAction(_)))
+        matches!(event, GameEvent::Explore(ExploreEvent::UseAction(_)))
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
+        let GameEvent::Explore(ExploreEvent::UseAction(action)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(UseAction)"));
         };
         Ok(vec![GameEvent::CombatPlayerAction(*action)])
@@ -93,7 +91,7 @@ impl DomainEventResolver for ExploreUseActionCascadeResolver {
 
 impl DomainEventResolver for ExplorePauseCascadeResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(AppExploreEvent::EnterPauseMenu))
+        matches!(event, GameEvent::Explore(ExploreEvent::EnterPauseMenu))
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
@@ -105,7 +103,7 @@ impl DomainEventResolver for ExplorePauseCascadeResolver {
 
 impl DomainEventResolver for ExploreMenuCascadeResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(AppExploreEvent::EnterMenu))
+        matches!(event, GameEvent::Explore(ExploreEvent::EnterMenu))
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {

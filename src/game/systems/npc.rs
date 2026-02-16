@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, DialogState, GameData, GameEvent, GameState, SessionState};
+use crate::game::{DialogState, ExploreEvent, GameData, GameEvent, GameState, SessionState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -115,12 +115,12 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
     fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            GameEvent::Explore(AppExploreEvent::TryNpcInteract { .. })
+            GameEvent::Explore(ExploreEvent::TryNpcInteract { .. })
         )
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::Explore(AppExploreEvent::TryNpcInteract {
+        let GameEvent::Explore(ExploreEvent::TryNpcInteract {
             facing,
             fallback_action,
         }) = event
@@ -134,13 +134,11 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         if let Some(npc_event) = resolve(s, ctx.data(), NpcIntent::Interact { facing: *facing }) {
-            return Ok(vec![GameEvent::Explore(AppExploreEvent::Npc(npc_event))]);
+            return Ok(vec![GameEvent::Explore(ExploreEvent::Npc(npc_event))]);
         }
 
         if let Some(action) = fallback_action {
-            return Ok(vec![GameEvent::Explore(AppExploreEvent::UseAction(
-                *action,
-            ))]);
+            return Ok(vec![GameEvent::Explore(ExploreEvent::UseAction(*action))]);
         }
 
         Ok(Vec::new())
@@ -149,11 +147,11 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
 
 impl DomainEventResolver for ExploreNpcCascadeResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(AppExploreEvent::Npc(_)))
+        matches!(event, GameEvent::Explore(ExploreEvent::Npc(_)))
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::Explore(AppExploreEvent::Npc(npc_event)) = event else {
+        let GameEvent::Explore(ExploreEvent::Npc(npc_event)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(Npc)"));
         };
         match npc_event {

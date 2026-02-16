@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 #[derive(Clone)]
-pub enum CombatRuntimeEvent {
+pub enum CombatEvent {
     EnemySpawn(FieldEnemy),
     EnemyDespawn(u32),
     EnemyMove {
@@ -63,9 +63,9 @@ pub enum GameEvent {
     ShopSellSelected(usize),
     CombatPlayerAction(crate::game::ExploreAction),
     Loading(crate::game::LoadingEvent),
-    Movement(AppMovementEvent),
-    Combat(CombatRuntimeEvent),
-    Explore(AppExploreEvent),
+    Movement(MovementEvent),
+    Combat(CombatEvent),
+    Explore(ExploreEvent),
     Lifecycle(crate::game::LifecycleEvent),
     Transition(TransitionEvent),
     Exit(i32),
@@ -106,7 +106,7 @@ pub enum TransitionEvent {
 }
 
 #[derive(Clone)]
-pub enum AppExploreEvent {
+pub enum ExploreEvent {
     MoveDirection(Direction),
     TryNpcInteract {
         facing: Direction,
@@ -119,7 +119,7 @@ pub enum AppExploreEvent {
 }
 
 #[derive(Clone)]
-pub enum AppMovementEvent {
+pub enum MovementEvent {
     Tick(
         crate::game::MovementTickEvent,
         Option<crate::game::TileEvent>,
