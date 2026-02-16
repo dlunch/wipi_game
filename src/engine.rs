@@ -90,7 +90,7 @@ impl GameEngine {
             .apply_event(&self.data, &mut self.ui, &mut self.session, &event)?;
 
         if let Some(session) = self.session.as_mut() {
-            session.apply_event(&self.data, &mut self.state, &mut self.ui, &event)?;
+            session.apply_event(&self.data, &mut self.state, &event)?;
         }
 
         self.ui.apply_game_event(self.session.as_ref(), &event)?;

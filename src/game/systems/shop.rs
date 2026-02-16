@@ -1,6 +1,8 @@
+use alloc::boxed::Box;
+
 use crate::data::Item;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, ShopInputEvent};
+use crate::game::{GameEvent, GameState, ShopInputEvent, ShopState};
 
 #[derive(Clone)]
 pub enum ShopEvent {
@@ -10,11 +12,13 @@ pub enum ShopEvent {
 }
 
 struct ShopInputResolver;
+struct OpenShopByIdResolver;
 
 static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
+static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&SHOP_INPUT_RESOLVER]
+    alloc::vec![&SHOP_INPUT_RESOLVER, &OPEN_SHOP_BY_ID_RESOLVER]
 }
 
 impl DomainEventResolver for ShopInputResolver {
@@ -65,5 +69,29 @@ impl DomainEventResolver for ShopInputResolver {
         } else {
             Ok(alloc::vec::Vec::new())
         }
+    }
+}
+
+impl DomainEventResolver for OpenShopByIdResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::OpenShopById(_))
+    }
+
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+    ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::OpenShopById(shop_id) = event else {
+            return Ok(alloc::vec::Vec::new());
+        };
+
+        let Some(shop) = ctx.data().find_shop(shop_id).cloned() else {
+            return Ok(alloc::vec::Vec::new());
+        };
+        let shop_items = ctx.data().get_shop_items(&shop);
+        Ok(alloc::vec![GameEvent::OpenShopState(Box::new(
+            ShopState::new(shop, shop_items),
+        ))])
     }
 }

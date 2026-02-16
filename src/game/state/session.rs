@@ -3,7 +3,7 @@ use alloc::string::String;
 use anyhow::Result;
 
 use crate::game::{
-    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionEvent, UiState,
+    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionEvent,
 };
 
 #[derive(Clone)]
@@ -36,7 +36,6 @@ impl SessionState {
         &mut self,
         data: &GameData,
         state: &mut GameState,
-        ui: &mut UiState,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
@@ -64,9 +63,6 @@ impl SessionState {
             | GameEvent::OpenMenuFromExplore => {
                 let _ = crate::game::save_game(&self.player);
             }
-            GameEvent::OpenShopById(shop_id) => {
-                let _ = open_shop_by_id(data, state, ui, shop_id);
-            }
             _ => {}
         }
 
@@ -83,27 +79,4 @@ impl SessionState {
         )?;
         Ok(())
     }
-}
-
-fn open_shop_by_id(
-    data: &GameData,
-    state: &mut GameState,
-    ui: &mut UiState,
-    shop_id: &str,
-) -> bool {
-    let Some(shop) = data.find_shop(shop_id).cloned() else {
-        return false;
-    };
-    let shop_items = data.get_shop_items(&shop);
-    ui.shop.open(crate::game::ShopState::new(shop, shop_items));
-    if state.can_transition_to(&GameState::Shop) {
-        *state = GameState::Shop;
-    } else {
-        state.set_error(alloc::format!(
-            "Invalid state transition: {:?} -> {:?}",
-            state,
-            GameState::Shop
-        ));
-    }
-    true
 }

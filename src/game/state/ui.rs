@@ -609,7 +609,7 @@ impl DialogState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShopState {
     pub shop: Shop,
     pub items: Vec<Item>,

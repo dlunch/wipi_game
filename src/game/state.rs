@@ -182,6 +182,7 @@ impl GameState {
             GameEvent::OpenMenuFromExplore => self.transition_to(session, GameState::Menu),
             GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => self.transition_to(session, GameState::Dialog),
+            GameEvent::OpenShopState(_) => self.transition_to(session, GameState::Shop),
             GameEvent::Exit(code) => {
                 wipi::kernel::exit(*code);
             }

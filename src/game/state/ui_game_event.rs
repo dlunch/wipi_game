@@ -75,6 +75,9 @@ impl UiState {
             GameEvent::OpenDialogState(dialog_state) => {
                 self.dialog.open(dialog_state.clone());
             }
+            GameEvent::OpenShopState(shop_state) => {
+                self.shop.open((**shop_state).clone());
+            }
             _ => {}
         }
         Ok(())
