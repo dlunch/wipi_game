@@ -97,12 +97,31 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
         return false;
     };
 
-    player.inventory.clear();
-    player.quests.clear();
-    player.opened_treasures.clear();
-
     let mut has_player = false;
     let mut has_stats = false;
+
+    let mut parsed_name = String::new();
+    let mut parsed_map_id = String::new();
+    let mut parsed_x = 0usize;
+    let mut parsed_y = 0usize;
+
+    let mut parsed_level = 1;
+    let mut parsed_exp = 0;
+    let mut parsed_max_hp = 50;
+    let mut parsed_current_hp = 50;
+    let mut parsed_max_mp = 20;
+    let mut parsed_current_mp = 20;
+    let mut parsed_base_atk = 10;
+    let mut parsed_base_def = 5;
+    let mut parsed_gold = 0;
+
+    let mut parsed_equipped_weapon = None;
+    let mut parsed_equipped_armor = None;
+    let mut parsed_equipped_accessory = None;
+
+    let mut parsed_inventory = Vec::new();
+    let mut parsed_quests = Vec::new();
+    let mut parsed_opened_treasures = Vec::new();
 
     for line in normalized.lines() {
         let line = line.trim();
@@ -117,39 +136,36 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
 
         match parts[0] {
             "PLAYER" if parts.len() >= 5 => {
-                player.name = parts[1].into();
-                player.current_map_id = parts[2].into();
-                player.x = parts[3].parse().unwrap_or(0);
-                player.y = parts[4].parse().unwrap_or(0);
+                parsed_name = parts[1].into();
+                parsed_map_id = parts[2].into();
+                parsed_x = parts[3].parse().unwrap_or(0);
+                parsed_y = parts[4].parse().unwrap_or(0);
                 has_player = true;
             }
             "STATS" if parts.len() >= 10 => {
-                player.stats.level = parts[1].parse().unwrap_or(1).max(1);
-                player.stats.exp = parts[2].parse().unwrap_or(0).max(0);
-                player.stats.max_hp = parts[3].parse().unwrap_or(50).max(1);
-                player.stats.current_hp = parts[4].parse().unwrap_or(50);
-                player.stats.max_mp = parts[5].parse().unwrap_or(20).max(0);
-                player.stats.current_mp = parts[6].parse().unwrap_or(20);
-                player.stats.base_atk = parts[7].parse().unwrap_or(10).max(0);
-                player.stats.base_def = parts[8].parse().unwrap_or(5).max(0);
-                player.stats.gold = parts[9].parse().unwrap_or(0).max(0);
-                player.stats.exp_to_next = player.stats.level * 100;
-                player.stats.current_hp = player.stats.current_hp.clamp(0, player.stats.max_hp);
-                player.stats.current_mp = player.stats.current_mp.clamp(0, player.stats.max_mp);
+                parsed_level = parts[1].parse().unwrap_or(1).max(1);
+                parsed_exp = parts[2].parse().unwrap_or(0).max(0);
+                parsed_max_hp = parts[3].parse().unwrap_or(50).max(1);
+                parsed_current_hp = parts[4].parse().unwrap_or(50);
+                parsed_max_mp = parts[5].parse().unwrap_or(20).max(0);
+                parsed_current_mp = parts[6].parse().unwrap_or(20);
+                parsed_base_atk = parts[7].parse().unwrap_or(10).max(0);
+                parsed_base_def = parts[8].parse().unwrap_or(5).max(0);
+                parsed_gold = parts[9].parse().unwrap_or(0).max(0);
                 has_stats = true;
             }
             "EQUIP" if parts.len() >= 4 => {
-                player.equipped_weapon = parts[1]
+                parsed_equipped_weapon = parts[1]
                     .parse::<i32>()
                     .ok()
                     .filter(|&i| i >= 0)
                     .map(|i| i as usize);
-                player.equipped_armor = parts[2]
+                parsed_equipped_armor = parts[2]
                     .parse::<i32>()
                     .ok()
                     .filter(|&i| i >= 0)
                     .map(|i| i as usize);
-                player.equipped_accessory = parts[3]
+                parsed_equipped_accessory = parts[3]
                     .parse::<i32>()
                     .ok()
                     .filter(|&i| i >= 0)
@@ -163,7 +179,7 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
                     "I" => ItemKind::Consumable,
                     _ => continue,
                 };
-                player.inventory.push(Item {
+                parsed_inventory.push(Item {
                     id: parts[2].into(),
                     name: parts[3].into(),
                     kind,
@@ -174,7 +190,7 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
                 });
             }
             "QUEST" if parts.len() >= 5 => {
-                player.quests.push(QuestProgress {
+                parsed_quests.push(QuestProgress {
                     quest_id: parts[1].into(),
                     current_count: parts[2].parse().unwrap_or(0),
                     completed: parts[3] == "1",
@@ -185,7 +201,7 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
                 let map_id = parts[1].into();
                 let x = parts[2].parse().unwrap_or(0);
                 let y = parts[3].parse().unwrap_or(0);
-                player.opened_treasures.push((map_id, x, y));
+                parsed_opened_treasures.push((map_id, x, y));
             }
             _ => {}
         }
@@ -195,22 +211,46 @@ pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
         return false;
     }
 
-    let inv_len = player.inventory.len();
-    if let Some(idx) = player.equipped_weapon
+    let inv_len = parsed_inventory.len();
+    if let Some(idx) = parsed_equipped_weapon
         && idx >= inv_len
     {
-        player.equipped_weapon = None;
+        parsed_equipped_weapon = None;
     }
-    if let Some(idx) = player.equipped_armor
+    if let Some(idx) = parsed_equipped_armor
         && idx >= inv_len
     {
-        player.equipped_armor = None;
+        parsed_equipped_armor = None;
     }
-    if let Some(idx) = player.equipped_accessory
+    if let Some(idx) = parsed_equipped_accessory
         && idx >= inv_len
     {
-        player.equipped_accessory = None;
+        parsed_equipped_accessory = None;
     }
+
+    player.name = parsed_name;
+    player.current_map_id = parsed_map_id;
+    player.x = parsed_x;
+    player.y = parsed_y;
+
+    player.stats.level = parsed_level;
+    player.stats.exp = parsed_exp;
+    player.stats.max_hp = parsed_max_hp;
+    player.stats.current_hp = parsed_current_hp.clamp(0, parsed_max_hp);
+    player.stats.max_mp = parsed_max_mp;
+    player.stats.current_mp = parsed_current_mp.clamp(0, parsed_max_mp);
+    player.stats.base_atk = parsed_base_atk;
+    player.stats.base_def = parsed_base_def;
+    player.stats.gold = parsed_gold;
+    player.stats.exp_to_next = player.stats.level * 100;
+
+    player.inventory = parsed_inventory;
+    player.quests = parsed_quests;
+    player.opened_treasures = parsed_opened_treasures;
+
+    player.equipped_weapon = parsed_equipped_weapon;
+    player.equipped_armor = parsed_equipped_armor;
+    player.equipped_accessory = parsed_equipped_accessory;
 
     true
 }
