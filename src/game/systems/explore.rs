@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, ExploreInputEvent, GameEvent, GameState};
+use crate::game::{AppExploreEvent, ExploreCommand, GameEvent, GameState};
 
 struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
@@ -28,12 +28,12 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 
 impl DomainEventResolver for ExploreInputResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::ExploreInput(_))
+        matches!(event, GameEvent::ExploreCommand(_))
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::ExploreInput(input) = event else {
-            return Err(anyhow!("Invalid event: expected ExploreInput"));
+        let GameEvent::ExploreCommand(input) = event else {
+            return Err(anyhow!("Invalid event: expected ExploreCommand"));
         };
         ensure!(
             matches!(ctx.state, GameState::Explore),
@@ -43,12 +43,12 @@ impl DomainEventResolver for ExploreInputResolver {
 
         let mut out = Vec::new();
         match input {
-            ExploreInputEvent::Move(direction) => {
+            ExploreCommand::Move(direction) => {
                 out.push(GameEvent::Explore(AppExploreEvent::MoveDirection(
                     *direction,
                 )));
             }
-            ExploreInputEvent::Confirm => {
+            ExploreCommand::Confirm => {
                 let is_peaceful = ctx
                     .data()
                     .find_map(&s.leader.current_map_id)
@@ -62,15 +62,15 @@ impl DomainEventResolver for ExploreInputResolver {
                     },
                 }));
             }
-            ExploreInputEvent::UseSlot(slot) => {
+            ExploreCommand::UseSlot(slot) => {
                 if let Some(action) = ctx.ui.explore.key_actions.get(*slot).and_then(|a| *a) {
                     out.push(GameEvent::Explore(AppExploreEvent::UseAction(action)));
                 }
             }
-            ExploreInputEvent::OpenPauseMenu => {
+            ExploreCommand::OpenPauseMenu => {
                 out.push(GameEvent::Explore(AppExploreEvent::EnterPauseMenu));
             }
-            ExploreInputEvent::OpenMenu => {
+            ExploreCommand::OpenMenu => {
                 out.push(GameEvent::Explore(AppExploreEvent::EnterMenu));
             }
         }

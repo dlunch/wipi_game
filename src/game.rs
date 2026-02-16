@@ -11,8 +11,8 @@ mod ui;
 
 pub use game_data::GameData;
 pub use game_event::{
-    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, DialogInputEvent, ExploreInputEvent,
-    GameEvent, SessionEvent, ShopInputEvent, TransitionEvent, UiEvent,
+    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, DialogCommand, ExploreCommand,
+    GameEvent, SessionEvent, ShopCommand, TransitionEvent,
 };
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,
@@ -33,5 +33,5 @@ pub use systems::{
 pub use ui::{
     DialogState, ExploreAction, GameInput, INVENTORY_VISIBLE_ITEMS, InputKey, InventoryEvent,
     MenuAction, MenuEvent, MenuState, PauseMenuEvent, SHOP_VISIBLE_ITEMS, ShopMode, ShopState,
-    UiEventApplier, UiInputEventResolver, UiState,
+    UiEvent, UiEventApplier, UiInputEventResolver, UiState,
 };

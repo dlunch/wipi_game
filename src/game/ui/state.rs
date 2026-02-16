@@ -5,8 +5,7 @@ use alloc::vec::Vec;
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{
-    DialogInputEvent, ExploreInputEvent, GameEvent, GameState, SessionState, ShopInputEvent,
-    TransitionEvent, UiEvent,
+    DialogCommand, ExploreCommand, GameEvent, GameState, SessionState, ShopCommand, TransitionEvent,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -69,6 +68,21 @@ pub trait UiInputEventResolver {
     ) -> Vec<UiEvent>;
 }
 
+pub enum UiEvent {
+    OverlayCloseRequested,
+    GameOverConfirmRequested,
+    ErrorConfirmRequested,
+    MovementKeyReleased(Direction),
+    MenuInput(InputKey),
+    ExploreInput(InputKey),
+    InventoryInput(InputKey),
+    DialogInput(InputKey),
+    PauseMenuInput(InputKey),
+    ShopBuySelected(usize),
+    ShopSellSelected(usize),
+    ShopClose,
+}
+
 impl UiInputEventResolver for UiState {
     fn resolve_input(
         &mut self,
@@ -129,12 +143,12 @@ impl UiEventApplier for UiState {
             UiEvent::InventoryInput(key) => self.resolve_inventory_input(session, key),
             UiEvent::DialogInput(key) => self.resolve_dialog_input(key),
             UiEvent::ShopBuySelected(selected) => {
-                vec![GameEvent::ShopInput(ShopInputEvent::BuySelected(selected))]
+                vec![GameEvent::ShopCommand(ShopCommand::BuySelected(selected))]
             }
             UiEvent::ShopSellSelected(selected) => {
-                vec![GameEvent::ShopInput(ShopInputEvent::SellSelected(selected))]
+                vec![GameEvent::ShopCommand(ShopCommand::SellSelected(selected))]
             }
-            UiEvent::ShopClose => vec![GameEvent::ShopInput(ShopInputEvent::Close)],
+            UiEvent::ShopClose => vec![GameEvent::ShopCommand(ShopCommand::Close)],
         }
     }
 }
@@ -142,20 +156,20 @@ impl UiEventApplier for UiState {
 impl UiState {
     fn resolve_explore_input(&self, key: InputKey) -> Vec<GameEvent> {
         let event = match key {
-            InputKey::Up => Some(ExploreInputEvent::Move(Direction::Up)),
-            InputKey::Down => Some(ExploreInputEvent::Move(Direction::Down)),
-            InputKey::Left => Some(ExploreInputEvent::Move(Direction::Left)),
-            InputKey::Right => Some(ExploreInputEvent::Move(Direction::Right)),
-            InputKey::Ok => Some(ExploreInputEvent::Confirm),
-            InputKey::Key1 => Some(ExploreInputEvent::UseSlot(0)),
-            InputKey::Key2 => Some(ExploreInputEvent::UseSlot(1)),
-            InputKey::Key3 => Some(ExploreInputEvent::UseSlot(2)),
-            InputKey::Key0 => Some(ExploreInputEvent::OpenPauseMenu),
-            InputKey::Back => Some(ExploreInputEvent::OpenMenu),
+            InputKey::Up => Some(ExploreCommand::Move(Direction::Up)),
+            InputKey::Down => Some(ExploreCommand::Move(Direction::Down)),
+            InputKey::Left => Some(ExploreCommand::Move(Direction::Left)),
+            InputKey::Right => Some(ExploreCommand::Move(Direction::Right)),
+            InputKey::Ok => Some(ExploreCommand::Confirm),
+            InputKey::Key1 => Some(ExploreCommand::UseSlot(0)),
+            InputKey::Key2 => Some(ExploreCommand::UseSlot(1)),
+            InputKey::Key3 => Some(ExploreCommand::UseSlot(2)),
+            InputKey::Key0 => Some(ExploreCommand::OpenPauseMenu),
+            InputKey::Back => Some(ExploreCommand::OpenMenu),
             _ => None,
         };
 
-        event.map(GameEvent::ExploreInput).into_iter().collect()
+        event.map(GameEvent::ExploreCommand).into_iter().collect()
     }
 
     fn resolve_inventory_input(
@@ -198,12 +212,12 @@ impl UiState {
 
     fn resolve_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
         let event = match key {
-            InputKey::Ok => Some(DialogInputEvent::Confirm),
-            InputKey::Back => Some(DialogInputEvent::Back),
+            InputKey::Ok => Some(DialogCommand::Confirm),
+            InputKey::Back => Some(DialogCommand::Back),
             _ => None,
         };
 
-        event.map(GameEvent::DialogInput).into_iter().collect()
+        event.map(GameEvent::DialogCommand).into_iter().collect()
     }
 
     fn resolve_menu_input(&self, key: InputKey) -> Vec<GameEvent> {

@@ -47,9 +47,9 @@ pub enum GameEvent {
     UpdateLoading,
     UpdateMovement,
     UpdateCombat,
-    ExploreInput(ExploreInputEvent),
-    DialogInput(DialogInputEvent),
-    ShopInput(ShopInputEvent),
+    ExploreCommand(ExploreCommand),
+    DialogCommand(DialogCommand),
+    ShopCommand(ShopCommand),
     StartNewGame,
     ContinueGame,
     Session(SessionEvent),
@@ -98,14 +98,14 @@ pub enum SessionEvent {
 }
 
 #[derive(Clone, Copy)]
-pub enum ShopInputEvent {
+pub enum ShopCommand {
     BuySelected(usize),
     SellSelected(usize),
     Close,
 }
 
 #[derive(Clone, Copy)]
-pub enum ExploreInputEvent {
+pub enum ExploreCommand {
     Move(Direction),
     Confirm,
     UseSlot(usize),
@@ -114,24 +114,9 @@ pub enum ExploreInputEvent {
 }
 
 #[derive(Clone, Copy)]
-pub enum DialogInputEvent {
+pub enum DialogCommand {
     Confirm,
     Back,
-}
-
-pub enum UiEvent {
-    OverlayCloseRequested,
-    GameOverConfirmRequested,
-    ErrorConfirmRequested,
-    MovementKeyReleased(Direction),
-    MenuInput(crate::game::InputKey),
-    ExploreInput(crate::game::InputKey),
-    InventoryInput(crate::game::InputKey),
-    DialogInput(crate::game::InputKey),
-    PauseMenuInput(crate::game::InputKey),
-    ShopBuySelected(usize),
-    ShopSellSelected(usize),
-    ShopClose,
 }
 
 #[derive(Clone, Copy)]

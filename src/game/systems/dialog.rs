@@ -5,7 +5,7 @@ use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{DialogInputEvent, GameEvent, GameState};
+use crate::game::{DialogCommand, GameEvent, GameState};
 
 #[derive(Debug, Clone)]
 pub enum DialogEvent {
@@ -32,12 +32,12 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 
 impl DomainEventResolver for DialogInputResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::DialogInput(_))
+        matches!(event, GameEvent::DialogCommand(_))
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::DialogInput(input) = event else {
-            return Err(anyhow!("Invalid event: expected DialogInput"));
+        let GameEvent::DialogCommand(input) = event else {
+            return Err(anyhow!("Invalid event: expected DialogCommand"));
         };
         ensure!(
             matches!(ctx.state, GameState::Dialog),
@@ -45,8 +45,8 @@ impl DomainEventResolver for DialogInputResolver {
         );
 
         let event = match input {
-            DialogInputEvent::Back => DialogEvent::Transition(DialogTransition::CloseToExplore),
-            DialogInputEvent::Confirm => {
+            DialogCommand::Back => DialogEvent::Transition(DialogTransition::CloseToExplore),
+            DialogCommand::Confirm => {
                 if let Some(dialog_state_ref) = ctx.ui.dialog.state.as_ref() {
                     if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
                         DialogEvent::Transition(DialogTransition::CloseToExplore)

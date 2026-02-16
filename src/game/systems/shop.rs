@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::Item;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, ShopInputEvent, ShopState};
+use crate::game::{GameEvent, GameState, ShopCommand, ShopState};
 
 #[derive(Clone)]
 pub enum ShopEvent {
@@ -27,12 +27,12 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 
 impl DomainEventResolver for ShopInputResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::ShopInput(_))
+        matches!(event, GameEvent::ShopCommand(_))
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::ShopInput(input) = event else {
-            return Err(anyhow!("Invalid event: expected ShopInput"));
+        let GameEvent::ShopCommand(input) = event else {
+            return Err(anyhow!("Invalid event: expected ShopCommand"));
         };
         ensure!(
             matches!(ctx.state, GameState::Shop),
@@ -41,7 +41,7 @@ impl DomainEventResolver for ShopInputResolver {
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         let event = match input {
-            ShopInputEvent::BuySelected(selected) => {
+            ShopCommand::BuySelected(selected) => {
                 let shop_items = ctx
                     .ui
                     .shop
@@ -59,8 +59,8 @@ impl DomainEventResolver for ShopInputResolver {
                     None
                 }
             }
-            ShopInputEvent::SellSelected(selected) => Some(ShopEvent::SellSelected(*selected)),
-            ShopInputEvent::Close => Some(ShopEvent::CloseToExplore),
+            ShopCommand::SellSelected(selected) => Some(ShopEvent::SellSelected(*selected)),
+            ShopCommand::Close => Some(ShopEvent::CloseToExplore),
         };
 
         if let Some(event) = event {
