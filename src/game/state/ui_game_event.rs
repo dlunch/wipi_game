@@ -5,8 +5,6 @@ use crate::game::{GameEvent, MenuState, SessionState, UiState, has_save_data};
 impl UiState {
     pub fn apply_game_event(
         &mut self,
-        _data: &crate::game::GameData,
-        _state: &crate::game::GameState,
         session: Option<&SessionState>,
         event: &GameEvent,
     ) -> Result<()> {

@@ -93,8 +93,7 @@ impl GameEngine {
             session.apply_event(&self.data, &mut self.state, &mut self.ui, &event)?;
         }
 
-        self.ui
-            .apply_game_event(&self.data, &self.state, self.session.as_ref(), &event)?;
+        self.ui.apply_game_event(self.session.as_ref(), &event)?;
         Ok(())
     }
 
