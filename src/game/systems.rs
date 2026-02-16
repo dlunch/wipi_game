@@ -13,14 +13,13 @@ pub mod transition;
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub use dialog::{DialogEvent, DialogIntent, DialogTransition};
-pub use explore::ExploreIntent;
-pub use inventory::{InventoryEvent, InventoryIntent};
+pub use dialog::{DialogEvent, DialogTransition};
+pub use inventory::InventoryEvent;
 pub use lifecycle::LoadingEvent;
-pub use menu::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
+pub use menu::{MenuEvent, PauseMenuEvent};
 pub use npc::NpcEvent;
 pub use runtime::{ApplyContext, DomainEventResolver, ResolveContext};
-pub use shop::{ShopEvent, ShopIntent};
+pub use shop::ShopEvent;
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];

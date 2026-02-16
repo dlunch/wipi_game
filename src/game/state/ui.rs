@@ -7,12 +7,10 @@ use anyhow::{Result, anyhow};
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::systems::{dialog, explore, inventory, menu, shop};
-use crate::game::{
-    DialogIntent, ExploreIntent, GameState, InventoryIntent, MenuIntent, PauseMenuIntent,
-    PlayerAction, PlayerEvent, SessionState, ShopIntent, TransitionEvent, has_save_data,
-};
 use crate::game::{GameEvent, RuntimeEvent, UiEvent};
+use crate::game::{
+    GameState, PlayerAction, PlayerEvent, SessionState, TransitionEvent, has_save_data,
+};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -114,91 +112,47 @@ impl UiEventApplier for UiState {
             UiEvent::MovementKeyReleased(direction) => alloc::vec![GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
             )],
-            UiEvent::MenuInput(intent) => {
-                menu::resolve_many(self.menu.selected, &self.menu.state.items, intent)
+            UiEvent::MenuInput(key) => {
+                resolve_menu_events(self.menu.selected, &self.menu.state.items, key)
                     .into_iter()
                     .map(GameEvent::Menu)
                     .collect()
             }
-            UiEvent::PauseMenuInput(intent) => menu::resolve_pause_many(
+            UiEvent::PauseMenuInput(key) => resolve_pause_menu_events(
                 self.pause_menu.selected,
                 self.pause_menu.state.items.len(),
-                intent,
+                key,
             )
             .into_iter()
             .map(GameEvent::PauseMenu)
             .collect(),
-            UiEvent::ExploreInput(intent) => {
+            UiEvent::ExploreInput(key) => {
                 if !matches!(game_state, GameState::Explore) {
                     return Vec::new();
                 }
                 let Some(s) = session else {
                     return Vec::new();
                 };
-                let is_peaceful = data
-                    .find_map(&s.player.current_map_id)
-                    .is_some_and(|map| map.peaceful);
-                let mut events = Vec::new();
-                for explore_event in explore::resolve_many(is_peaceful, intent) {
-                    match explore_event {
-                        explore::ExploreEvent::None => {}
-                        explore::ExploreEvent::MoveDirection(direction) => {
-                            events.push(GameEvent::Explore(
-                                crate::game::AppExploreEvent::MoveDirection(direction),
-                            ));
-                        }
-                        explore::ExploreEvent::TryNpcInteract {
-                            facing,
-                            fallback_action,
-                        } => {
-                            if let Some(npc_event) = crate::game::npc::resolve(
-                                &s.player,
-                                data,
-                                crate::game::npc::NpcIntent::Interact { facing },
-                            ) {
-                                events.push(GameEvent::Explore(crate::game::AppExploreEvent::Npc(
-                                    npc_event,
-                                )));
-                            } else if let Some(action) = fallback_action {
-                                events.push(GameEvent::Explore(
-                                    crate::game::AppExploreEvent::UseAction(action),
-                                ));
-                            }
-                        }
-                        explore::ExploreEvent::UseAction(action) => {
-                            events.push(GameEvent::Explore(
-                                crate::game::AppExploreEvent::UseAction(action),
-                            ));
-                        }
-                        explore::ExploreEvent::EnterPauseMenu => {
-                            events.push(GameEvent::Explore(
-                                crate::game::AppExploreEvent::EnterPauseMenu,
-                            ));
-                        }
-                        explore::ExploreEvent::EnterMenu => {
-                            events
-                                .push(GameEvent::Explore(crate::game::AppExploreEvent::EnterMenu));
-                        }
-                    }
-                }
-                events
+                self.explore
+                    .resolve_events_for_key(key, &s.player, data)
+                    .into_iter()
+                    .map(GameEvent::Explore)
+                    .collect()
             }
-            UiEvent::InventoryInput(intent) => {
+            UiEvent::InventoryInput(key) => {
                 let Some(s) = session else {
                     return Vec::new();
                 };
-                inventory::resolve_many(self.inventory.selected, s.player.inventory.len(), intent)
+                resolve_inventory_events(self.inventory.selected, s.player.inventory.len(), key)
                     .into_iter()
                     .map(GameEvent::Inventory)
                     .collect()
             }
-            UiEvent::DialogInput(intent) => {
-                dialog::resolve_many(self.dialog.state.as_ref(), intent)
-                    .into_iter()
-                    .map(GameEvent::Dialog)
-                    .collect()
-            }
-            UiEvent::ShopInput(intent) => {
+            UiEvent::DialogInput(key) => resolve_dialog_events(self.dialog.state.as_ref(), key)
+                .into_iter()
+                .map(GameEvent::Dialog)
+                .collect(),
+            UiEvent::ShopBuySelected(selected) => {
                 let Some(s) = session else {
                     return Vec::new();
                 };
@@ -208,10 +162,21 @@ impl UiEventApplier for UiState {
                     .as_ref()
                     .map(|state| state.items.as_slice())
                     .unwrap_or(&[]);
-                shop::resolve_many(intent, s.player.stats.gold, shop_items)
-                    .into_iter()
-                    .map(GameEvent::Shop)
-                    .collect()
+                if let Some(item) = shop_items.get(selected).cloned()
+                    && s.player.stats.gold >= item.price
+                {
+                    alloc::vec![GameEvent::Shop(crate::game::ShopEvent::BuyItem(item))]
+                } else {
+                    Vec::new()
+                }
+            }
+            UiEvent::ShopSellSelected(selected) => {
+                alloc::vec![GameEvent::Shop(crate::game::ShopEvent::SellSelected(
+                    selected
+                ))]
+            }
+            UiEvent::ShopClose => {
+                alloc::vec![GameEvent::Shop(crate::game::ShopEvent::CloseToExplore)]
             }
         }
     }
@@ -238,12 +203,7 @@ fn resolve_keydown(
     match game_state {
         GameState::Loading(_) => Vec::new(),
         GameState::Menu => ui.menu.event_for_key(key).into_iter().collect(),
-        GameState::Explore => {
-            let facing = session
-                .map(|session_state| session_state.player.facing)
-                .unwrap_or(Direction::Down);
-            ui.explore.events_for_key(key, facing)
-        }
+        GameState::Explore => ui.explore.events_for_key(key),
         GameState::Inventory => ui.inventory.event_for_key(key).into_iter().collect(),
         GameState::Stats | GameState::QuestLog => {
             if matches!(key, InputKey::Back | InputKey::Ok) {
@@ -292,6 +252,162 @@ fn resolve_keyup(
         vec![UiEvent::MovementKeyReleased(direction)]
     } else {
         Vec::new()
+    }
+}
+
+fn resolve_menu_events(
+    selected: usize,
+    items: &[(&str, MenuAction)],
+    key: InputKey,
+) -> Vec<crate::game::MenuEvent> {
+    let event = match key {
+        InputKey::Up => {
+            let next = step_up(selected);
+            if next != selected {
+                crate::game::MenuEvent::SetSelected(next)
+            } else {
+                crate::game::MenuEvent::None
+            }
+        }
+        InputKey::Down => {
+            let next = step_down(selected, items.len());
+            if next != selected {
+                crate::game::MenuEvent::SetSelected(next)
+            } else {
+                crate::game::MenuEvent::None
+            }
+        }
+        InputKey::Ok => {
+            if let Some((_, action)) = items.get(selected).copied() {
+                crate::game::MenuEvent::Action(action)
+            } else {
+                crate::game::MenuEvent::None
+            }
+        }
+        _ => crate::game::MenuEvent::None,
+    };
+
+    match event {
+        crate::game::MenuEvent::None => Vec::new(),
+        event => vec![event],
+    }
+}
+
+fn resolve_pause_menu_events(
+    selected: usize,
+    item_count: usize,
+    key: InputKey,
+) -> Vec<crate::game::PauseMenuEvent> {
+    let event = match key {
+        InputKey::Up => {
+            let next = step_up(selected);
+            if next != selected {
+                crate::game::PauseMenuEvent::SetSelected(next)
+            } else {
+                crate::game::PauseMenuEvent::None
+            }
+        }
+        InputKey::Down => {
+            let next = step_down(selected, item_count);
+            if next != selected {
+                crate::game::PauseMenuEvent::SetSelected(next)
+            } else {
+                crate::game::PauseMenuEvent::None
+            }
+        }
+        InputKey::Ok => match selected {
+            0 => crate::game::PauseMenuEvent::OpenInventory,
+            1 => crate::game::PauseMenuEvent::OpenStats,
+            2 => crate::game::PauseMenuEvent::OpenQuestLog,
+            3 => crate::game::PauseMenuEvent::SaveAndReturnExplore,
+            _ => crate::game::PauseMenuEvent::None,
+        },
+        InputKey::Back | InputKey::Key0 => crate::game::PauseMenuEvent::BackToExplore,
+        _ => crate::game::PauseMenuEvent::None,
+    };
+
+    match event {
+        crate::game::PauseMenuEvent::None => Vec::new(),
+        event => vec![event],
+    }
+}
+
+fn resolve_inventory_events(
+    selected: usize,
+    inventory_len: usize,
+    key: InputKey,
+) -> Vec<crate::game::InventoryEvent> {
+    let event = match key {
+        InputKey::Up => {
+            let next = step_up(selected);
+            if next != selected {
+                crate::game::InventoryEvent::SetSelected(next)
+            } else {
+                crate::game::InventoryEvent::None
+            }
+        }
+        InputKey::Down => {
+            let next = step_down(selected, inventory_len);
+            if next != selected {
+                crate::game::InventoryEvent::SetSelected(next)
+            } else {
+                crate::game::InventoryEvent::None
+            }
+        }
+        InputKey::Ok => crate::game::InventoryEvent::UseSelected(selected),
+        InputKey::Back => crate::game::InventoryEvent::CloseToExplore,
+        _ => crate::game::InventoryEvent::None,
+    };
+
+    match event {
+        crate::game::InventoryEvent::None => Vec::new(),
+        event => vec![event],
+    }
+}
+
+fn resolve_dialog_events(
+    dialog_state: Option<&DialogState>,
+    key: InputKey,
+) -> Vec<crate::game::DialogEvent> {
+    let event = match key {
+        InputKey::Back => {
+            crate::game::DialogEvent::Transition(crate::game::DialogTransition::CloseToExplore)
+        }
+        InputKey::Ok => {
+            if let Some(dialog_state_ref) = dialog_state {
+                if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
+                    crate::game::DialogEvent::Transition(
+                        crate::game::DialogTransition::CloseToExplore,
+                    )
+                } else {
+                    let transition = if dialog_state_ref.current_line + 1
+                        < dialog_state_ref.lines.len()
+                    {
+                        crate::game::DialogTransition::SetLine(dialog_state_ref.current_line + 1)
+                    } else {
+                        crate::game::DialogTransition::CloseToExplore
+                    };
+                    if let Some(action) = dialog_state_ref
+                        .lines
+                        .get(dialog_state_ref.current_line)
+                        .and_then(|line| line.action.as_ref())
+                        .cloned()
+                    {
+                        crate::game::DialogEvent::Action(action, transition)
+                    } else {
+                        crate::game::DialogEvent::Transition(transition)
+                    }
+                }
+            } else {
+                crate::game::DialogEvent::None
+            }
+        }
+        _ => crate::game::DialogEvent::None,
+    };
+
+    match event {
+        crate::game::DialogEvent::None => Vec::new(),
+        event => vec![event],
     }
 }
 
@@ -409,7 +525,6 @@ impl DomainEventApplier for UiDomainApplier {
                 }
             },
             RuntimeEvent::Shop(event) => match event {
-                crate::game::ShopEvent::None => {}
                 crate::game::ShopEvent::BuyItem(item) => {
                     let s = ctx
                         .session_mut()
@@ -508,46 +623,94 @@ impl Default for ExploreUiState {
 }
 
 impl ExploreUiState {
-    pub fn events_for_key(&self, key: InputKey, facing: Direction) -> Vec<UiEvent> {
-        self.intents_for_key(key, facing)
-            .into_iter()
-            .map(UiEvent::ExploreInput)
-            .collect()
+    pub fn events_for_key(&self, key: InputKey) -> Vec<UiEvent> {
+        if matches!(
+            key,
+            InputKey::Up
+                | InputKey::Down
+                | InputKey::Left
+                | InputKey::Right
+                | InputKey::Ok
+                | InputKey::Key0
+                | InputKey::Key1
+                | InputKey::Key2
+                | InputKey::Key3
+                | InputKey::Back
+        ) {
+            vec![UiEvent::ExploreInput(key)]
+        } else {
+            Vec::new()
+        }
     }
 
-    pub fn intents_for_key(&self, key: InputKey, facing: Direction) -> Vec<ExploreIntent> {
-        let mut intents = Vec::new();
+    pub fn resolve_events_for_key(
+        &self,
+        key: InputKey,
+        player: &crate::game::PlayerState,
+        data: &crate::game::GameData,
+    ) -> Vec<crate::game::AppExploreEvent> {
+        let mut events = Vec::new();
+
         match key {
-            InputKey::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
-            InputKey::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
-            InputKey::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
-            InputKey::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
+            InputKey::Up => {
+                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Up));
+            }
+            InputKey::Down => {
+                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Down));
+            }
+            InputKey::Left => {
+                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Left));
+            }
+            InputKey::Right => {
+                events.push(crate::game::AppExploreEvent::MoveDirection(
+                    Direction::Right,
+                ));
+            }
             InputKey::Ok => {
-                intents.push(ExploreIntent::TryNpcInteract {
-                    facing,
-                    fallback_action: Some(self.ok_action),
-                });
+                if let Some(npc_event) = crate::game::npc::resolve(
+                    player,
+                    data,
+                    crate::game::npc::NpcIntent::Interact {
+                        facing: player.facing,
+                    },
+                ) {
+                    events.push(crate::game::AppExploreEvent::Npc(npc_event));
+                } else {
+                    events.push(crate::game::AppExploreEvent::UseAction(self.ok_action));
+                }
             }
             InputKey::Key1 => {
                 if let Some(action) = self.key_actions[0] {
-                    intents.push(ExploreIntent::UseAction(action));
+                    events.push(crate::game::AppExploreEvent::UseAction(action));
                 }
             }
             InputKey::Key2 => {
                 if let Some(action) = self.key_actions[1] {
-                    intents.push(ExploreIntent::UseAction(action));
+                    events.push(crate::game::AppExploreEvent::UseAction(action));
                 }
             }
             InputKey::Key3 => {
                 if let Some(action) = self.key_actions[2] {
-                    intents.push(ExploreIntent::UseAction(action));
+                    events.push(crate::game::AppExploreEvent::UseAction(action));
                 }
             }
-            InputKey::Key0 => intents.push(ExploreIntent::Pause),
-            InputKey::Back => intents.push(ExploreIntent::BackToMenu),
+            InputKey::Key0 => {
+                events.push(crate::game::AppExploreEvent::EnterPauseMenu);
+            }
+            InputKey::Back => {
+                events.push(crate::game::AppExploreEvent::EnterMenu);
+            }
             _ => {}
         }
-        intents
+
+        let is_peaceful = data
+            .find_map(&player.current_map_id)
+            .is_some_and(|map| map.peaceful);
+        if is_peaceful {
+            events.retain(|event| !matches!(event, crate::game::AppExploreEvent::UseAction(_)));
+        }
+
+        events
     }
 }
 
@@ -568,15 +731,10 @@ impl Default for MenuUiState {
 
 impl MenuUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        self.intent_for_key(key).map(UiEvent::MenuInput)
-    }
-
-    pub fn intent_for_key(&self, key: InputKey) -> Option<MenuIntent> {
-        match key {
-            InputKey::Up => Some(MenuIntent::MoveUp),
-            InputKey::Down => Some(MenuIntent::MoveDown),
-            InputKey::Ok => Some(MenuIntent::Select),
-            _ => None,
+        if matches!(key, InputKey::Up | InputKey::Down | InputKey::Ok) {
+            Some(UiEvent::MenuInput(key))
+        } else {
+            None
         }
     }
 
@@ -607,16 +765,13 @@ impl Default for PauseMenuUiState {
 
 impl PauseMenuUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        self.intent_for_key(key).map(UiEvent::PauseMenuInput)
-    }
-
-    pub fn intent_for_key(&self, key: InputKey) -> Option<PauseMenuIntent> {
-        match key {
-            InputKey::Up => Some(PauseMenuIntent::MoveUp),
-            InputKey::Down => Some(PauseMenuIntent::MoveDown),
-            InputKey::Ok => Some(PauseMenuIntent::Select),
-            InputKey::Back | InputKey::Key0 => Some(PauseMenuIntent::Back),
-            _ => None,
+        if matches!(
+            key,
+            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back | InputKey::Key0
+        ) {
+            Some(UiEvent::PauseMenuInput(key))
+        } else {
+            None
         }
     }
 
@@ -636,16 +791,13 @@ pub struct InventoryUiState {
 
 impl InventoryUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        self.intent_for_key(key).map(UiEvent::InventoryInput)
-    }
-
-    pub fn intent_for_key(&self, key: InputKey) -> Option<InventoryIntent> {
-        match key {
-            InputKey::Up => Some(InventoryIntent::MoveUp),
-            InputKey::Down => Some(InventoryIntent::MoveDown),
-            InputKey::Ok => Some(InventoryIntent::UseSelected),
-            InputKey::Back => Some(InventoryIntent::Back),
-            _ => None,
+        if matches!(
+            key,
+            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
+        ) {
+            Some(UiEvent::InventoryInput(key))
+        } else {
+            None
         }
     }
 
@@ -665,13 +817,6 @@ pub struct ShopUiState {
     pub selected: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ShopUiIntent {
-    BuySelected(usize),
-    SellSelected(usize),
-    Close,
-}
-
 impl Default for ShopUiState {
     fn default() -> Self {
         Self {
@@ -685,15 +830,6 @@ impl Default for ShopUiState {
 impl ShopUiState {
     pub fn event_for_key(&mut self, key: InputKey, inventory_len: usize) -> Option<UiEvent> {
         self.handle_key(key, inventory_len)
-            .map(|ui_intent| match ui_intent {
-                ShopUiIntent::BuySelected(selected) => {
-                    UiEvent::ShopInput(ShopIntent::BuySelected(selected))
-                }
-                ShopUiIntent::SellSelected(selected) => {
-                    UiEvent::ShopInput(ShopIntent::SellSelected(selected))
-                }
-                ShopUiIntent::Close => UiEvent::ShopInput(ShopIntent::Close),
-            })
     }
 
     pub fn open(&mut self, state: ShopState) {
@@ -710,7 +846,7 @@ impl ShopUiState {
         self.selected = selected;
     }
 
-    pub fn handle_key(&mut self, key: InputKey, inventory_len: usize) -> Option<ShopUiIntent> {
+    pub fn handle_key(&mut self, key: InputKey, inventory_len: usize) -> Option<UiEvent> {
         let shop_items_len = self
             .state
             .as_ref()
@@ -736,7 +872,7 @@ impl ShopUiState {
                     self.selected = 0;
                     None
                 }
-                InputKey::Back => Some(ShopUiIntent::Close),
+                InputKey::Back => Some(UiEvent::ShopClose),
                 _ => None,
             },
             ShopMode::Buy => match key {
@@ -748,7 +884,7 @@ impl ShopUiState {
                     self.selected = step_down(self.selected, shop_items_len);
                     None
                 }
-                InputKey::Ok => Some(ShopUiIntent::BuySelected(self.selected)),
+                InputKey::Ok => Some(UiEvent::ShopBuySelected(self.selected)),
                 InputKey::Back => {
                     self.mode = ShopMode::Select;
                     self.selected = 0;
@@ -765,7 +901,7 @@ impl ShopUiState {
                     self.selected = step_down(self.selected, inventory_len);
                     None
                 }
-                InputKey::Ok => Some(ShopUiIntent::SellSelected(self.selected)),
+                InputKey::Ok => Some(UiEvent::ShopSellSelected(self.selected)),
                 InputKey::Back => {
                     self.mode = ShopMode::Select;
                     self.selected = 0;
@@ -784,14 +920,10 @@ pub struct DialogUiState {
 
 impl DialogUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        self.intent_for_key(key).map(UiEvent::DialogInput)
-    }
-
-    pub fn intent_for_key(&self, key: InputKey) -> Option<DialogIntent> {
-        match key {
-            InputKey::Ok => Some(DialogIntent::Confirm),
-            InputKey::Back => Some(DialogIntent::Back),
-            _ => None,
+        if matches!(key, InputKey::Ok | InputKey::Back) {
+            Some(UiEvent::DialogInput(key))
+        } else {
+            None
         }
     }
 
@@ -899,19 +1031,14 @@ pub enum ShopMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::Direction;
 
     #[test]
     fn explore_ui_maps_ok_to_npc_interact_with_fallback_action() {
         let ui = ExploreUiState::default();
-        let intents = ui.intents_for_key(InputKey::Ok, Direction::Left);
-
+        let events = ui.events_for_key(InputKey::Ok);
         assert!(matches!(
-            intents.as_slice(),
-            [ExploreIntent::TryNpcInteract {
-                facing: Direction::Left,
-                fallback_action: Some(ExploreAction::BasicAttack)
-            }]
+            events.as_slice(),
+            [UiEvent::ExploreInput(InputKey::Ok)]
         ));
     }
 
@@ -920,16 +1047,16 @@ mod tests {
         let ui = MenuUiState::default();
 
         assert!(matches!(
-            ui.intent_for_key(InputKey::Up),
-            Some(MenuIntent::MoveUp)
+            ui.event_for_key(InputKey::Up),
+            Some(UiEvent::MenuInput(InputKey::Up))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Down),
-            Some(MenuIntent::MoveDown)
+            ui.event_for_key(InputKey::Down),
+            Some(UiEvent::MenuInput(InputKey::Down))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Ok),
-            Some(MenuIntent::Select)
+            ui.event_for_key(InputKey::Ok),
+            Some(UiEvent::MenuInput(InputKey::Ok))
         ));
     }
 
@@ -938,12 +1065,12 @@ mod tests {
         let ui = PauseMenuUiState::default();
 
         assert!(matches!(
-            ui.intent_for_key(InputKey::Back),
-            Some(PauseMenuIntent::Back)
+            ui.event_for_key(InputKey::Back),
+            Some(UiEvent::PauseMenuInput(InputKey::Back))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Key0),
-            Some(PauseMenuIntent::Back)
+            ui.event_for_key(InputKey::Key0),
+            Some(UiEvent::PauseMenuInput(InputKey::Key0))
         ));
     }
 
@@ -952,20 +1079,20 @@ mod tests {
         let ui = InventoryUiState::default();
 
         assert!(matches!(
-            ui.intent_for_key(InputKey::Up),
-            Some(InventoryIntent::MoveUp)
+            ui.event_for_key(InputKey::Up),
+            Some(UiEvent::InventoryInput(InputKey::Up))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Down),
-            Some(InventoryIntent::MoveDown)
+            ui.event_for_key(InputKey::Down),
+            Some(UiEvent::InventoryInput(InputKey::Down))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Ok),
-            Some(InventoryIntent::UseSelected)
+            ui.event_for_key(InputKey::Ok),
+            Some(UiEvent::InventoryInput(InputKey::Ok))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Back),
-            Some(InventoryIntent::Back)
+            ui.event_for_key(InputKey::Back),
+            Some(UiEvent::InventoryInput(InputKey::Back))
         ));
     }
 
@@ -974,12 +1101,12 @@ mod tests {
         let ui = DialogUiState::default();
 
         assert!(matches!(
-            ui.intent_for_key(InputKey::Ok),
-            Some(DialogIntent::Confirm)
+            ui.event_for_key(InputKey::Ok),
+            Some(UiEvent::DialogInput(InputKey::Ok))
         ));
         assert!(matches!(
-            ui.intent_for_key(InputKey::Back),
-            Some(DialogIntent::Back)
+            ui.event_for_key(InputKey::Back),
+            Some(UiEvent::DialogInput(InputKey::Back))
         ));
     }
 }

@@ -1,8 +1,5 @@
 use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
-use crate::game::{
-    DialogIntent, ExploreIntent, InventoryIntent, MenuIntent, PauseMenuIntent, ShopIntent,
-};
 use alloc::string::String;
 
 #[derive(Clone)]
@@ -57,12 +54,14 @@ pub enum UiEvent {
     GameOverConfirmRequested,
     ErrorConfirmRequested,
     MovementKeyReleased(Direction),
-    MenuInput(MenuIntent),
-    ExploreInput(ExploreIntent),
-    InventoryInput(InventoryIntent),
-    DialogInput(DialogIntent),
-    ShopInput(ShopIntent),
-    PauseMenuInput(PauseMenuIntent),
+    MenuInput(crate::game::InputKey),
+    ExploreInput(crate::game::InputKey),
+    InventoryInput(crate::game::InputKey),
+    DialogInput(crate::game::InputKey),
+    PauseMenuInput(crate::game::InputKey),
+    ShopBuySelected(usize),
+    ShopSellSelected(usize),
+    ShopClose,
 }
 
 pub type RuntimeEvent = GameEvent;

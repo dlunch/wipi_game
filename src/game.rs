@@ -28,9 +28,8 @@ pub use state::{
 };
 pub use systems::npc;
 pub use systems::{
-    ApplyContext, DialogEvent, DialogIntent, DialogTransition, ExploreIntent, InventoryEvent,
-    InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
-    PauseMenuIntent, ResolveContext, ShopEvent, ShopIntent, domain_resolvers,
+    ApplyContext, DialogEvent, DialogTransition, InventoryEvent, LoadingEvent, MenuEvent, NpcEvent,
+    PauseMenuEvent, ResolveContext, ShopEvent, domain_resolvers,
 };
 pub use ui::{
     DialogState, ExploreAction, GameInput, INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction,
