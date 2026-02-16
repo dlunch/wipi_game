@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{AppExploreEvent, GameEvent, GameState};
@@ -34,14 +34,13 @@ impl DomainEventResolver for ExploreInputResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::ExploreInput(key) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected ExploreInput"));
         };
-        if !matches!(ctx.state, GameState::Explore) {
-            return Ok(alloc::vec::Vec::new());
-        }
-        let Some(s) = ctx.session else {
-            return Ok(alloc::vec::Vec::new());
-        };
+        ensure!(
+            matches!(ctx.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         Ok(ctx
             .ui
@@ -64,7 +63,7 @@ impl DomainEventResolver for ExploreUseActionCascadeResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected Explore(UseAction)"));
         };
         Ok(alloc::vec![GameEvent::CombatPlayerAction(*action)])
     }

@@ -128,7 +128,7 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
             fallback_action,
         }) = event
         else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected Explore(TryNpcInteract)"));
         };
         ensure!(
             matches!(ctx.state, crate::game::GameState::Explore),
@@ -170,7 +170,7 @@ impl DomainEventResolver for ExploreNpcCascadeResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected Explore(Npc)"));
         };
         match npc_event {
             NpcEvent::OpenDialog(dialog_spec) => {

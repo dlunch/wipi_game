@@ -34,7 +34,7 @@ impl DomainEventResolver for ShopInputResolver {
         event: &GameEvent,
     ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::ShopInput(input) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected ShopInput"));
         };
         ensure!(
             matches!(ctx.state, GameState::Shop),
@@ -84,11 +84,11 @@ impl DomainEventResolver for OpenShopByIdResolver {
         event: &GameEvent,
     ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::OpenShopById(shop_id) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected OpenShopById"));
         };
 
         let Some(shop) = ctx.data().find_shop(shop_id).cloned() else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Shop not found: {shop_id}"));
         };
         let shop_items = ctx.data().get_shop_items(&shop);
         Ok(alloc::vec![GameEvent::OpenShopState(Box::new(

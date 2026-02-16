@@ -1,3 +1,5 @@
+use anyhow::{anyhow, ensure};
+
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{GameEvent, GameState, InputKey};
@@ -29,14 +31,13 @@ impl DomainEventResolver for InventoryInputResolver {
         event: &GameEvent,
     ) -> anyhow::Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::InventoryInput(key) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected InventoryInput"));
         };
-        if !matches!(ctx.state, GameState::Inventory) {
-            return Ok(alloc::vec::Vec::new());
-        }
-        let Some(s) = ctx.session else {
-            return Ok(alloc::vec::Vec::new());
-        };
+        ensure!(
+            matches!(ctx.state, GameState::Inventory),
+            "Invalid state: expected Inventory"
+        );
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         let selected = ctx.ui.inventory.selected;
         let event = match key {

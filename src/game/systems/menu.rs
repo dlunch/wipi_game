@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow, ensure};
 
 use crate::game::GameEvent;
 use crate::game::selection::{step_down, step_up};
@@ -50,11 +50,12 @@ impl DomainEventResolver for MenuInputResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::MenuInput(key) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected MenuInput"));
         };
-        if !matches!(ctx.state, GameState::Menu) {
-            return Ok(alloc::vec::Vec::new());
-        }
+        ensure!(
+            matches!(ctx.state, GameState::Menu),
+            "Invalid state: expected Menu"
+        );
 
         let selected = ctx.ui.menu.selected;
         let items = &ctx.ui.menu.state.items;
@@ -103,11 +104,12 @@ impl DomainEventResolver for PauseMenuInputResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::PauseMenuInput(key) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected PauseMenuInput"));
         };
-        if !matches!(ctx.state, GameState::PauseMenu) {
-            return Ok(alloc::vec::Vec::new());
-        }
+        ensure!(
+            matches!(ctx.state, GameState::PauseMenu),
+            "Invalid state: expected PauseMenu"
+        );
 
         let selected = ctx.ui.pause_menu.selected;
         let item_count = ctx.ui.pause_menu.state.items.len();
@@ -157,7 +159,7 @@ impl DomainEventResolver for MenuActionCascadeResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::Menu(MenuEvent::Action(action)) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected Menu(Action)"));
         };
         let event = match action {
             MenuAction::NewGame => GameEvent::StartNewGame,

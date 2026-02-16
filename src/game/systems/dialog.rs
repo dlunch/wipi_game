@@ -1,5 +1,5 @@
 use crate::data::DialogAction;
-use anyhow::Result;
+use anyhow::{Result, anyhow, ensure};
 
 use crate::game::GameEvent;
 use crate::game::GameState;
@@ -39,11 +39,12 @@ impl DomainEventResolver for DialogInputResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::DialogInput(key) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected DialogInput"));
         };
-        if !matches!(ctx.state, GameState::Dialog) {
-            return Ok(alloc::vec::Vec::new());
-        }
+        ensure!(
+            matches!(ctx.state, GameState::Dialog),
+            "Invalid state: expected Dialog"
+        );
 
         let event = match key {
             crate::game::InputKey::Back => {
@@ -96,7 +97,7 @@ impl DomainEventResolver for DialogCascadeResolver {
         event: &GameEvent,
     ) -> Result<alloc::vec::Vec<GameEvent>> {
         let GameEvent::Dialog(dialog_event) = event else {
-            return Ok(alloc::vec::Vec::new());
+            return Err(anyhow!("Invalid event: expected Dialog"));
         };
         match dialog_event {
             DialogEvent::None => Ok(alloc::vec::Vec::new()),
