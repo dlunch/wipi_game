@@ -262,32 +262,6 @@ mod tests {
         player
     }
 
-    fn reduce_tile_event(player: &PlayerState, data: &GameData) -> Option<TileEvent> {
-        let map = data.find_map(&player.current_map_id)?;
-        let tile = map.get_tile(player.x, player.y);
-
-        match tile {
-            Tile::Treasure => Some(TileEvent::Treasure),
-            Tile::Exit => {
-                for (ex, ey, target) in &map.exits {
-                    if *ex == player.x && *ey == player.y {
-                        return Some(TileEvent::MapExit(target.clone()));
-                    }
-                }
-                None
-            }
-            Tile::Dungeon => {
-                for (dx, dy, target) in &map.dungeons {
-                    if *dx == player.x && *dy == player.y {
-                        return Some(TileEvent::DungeonEntrance(target.clone()));
-                    }
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
     #[test]
     fn intent_for_key_direction_keys_map_to_move_direction() {
         let key_actions = [
@@ -403,16 +377,6 @@ mod tests {
     }
 
     #[test]
-    fn reduce_tile_event_treasure_returns_treasure_event() {
-        let data = make_game_data();
-        let player = make_player("field", 1, 1);
-
-        let event = reduce_tile_event(&player, &data);
-
-        assert!(matches!(event, Some(TileEvent::Treasure)));
-    }
-
-    #[test]
     fn apply_tile_event_treasure_adds_potion_and_records_opened() {
         let data = make_game_data();
         let mut player = make_player("field", 1, 1);
@@ -439,16 +403,6 @@ mod tests {
     }
 
     #[test]
-    fn reduce_tile_event_exit_tile_returns_map_exit_event() {
-        let data = make_game_data();
-        let player = make_player("field", 2, 1);
-
-        let event = reduce_tile_event(&player, &data);
-
-        assert!(matches!(event, Some(TileEvent::MapExit(target)) if target == "town"));
-    }
-
-    #[test]
     fn apply_tile_event_map_exit_changes_map_when_exit_matches_position() {
         let data = make_game_data();
         let mut player = make_player("field", 2, 1);
@@ -462,16 +416,6 @@ mod tests {
     }
 
     #[test]
-    fn reduce_tile_event_dungeon_tile_returns_dungeon_event() {
-        let data = make_game_data();
-        let player = make_player("field", 1, 2);
-
-        let event = reduce_tile_event(&player, &data);
-
-        assert!(matches!(event, Some(TileEvent::DungeonEntrance(target)) if target == "cave"));
-    }
-
-    #[test]
     fn apply_tile_event_dungeon_tile_changes_map_when_dungeon_matches_position() {
         let data = make_game_data();
         let mut player = make_player("field", 1, 2);
@@ -482,16 +426,6 @@ mod tests {
         assert_eq!(player.current_map_id, "cave");
         assert_eq!(player.x, 2);
         assert_eq!(player.y, 2);
-    }
-
-    #[test]
-    fn reduce_tile_event_floor_tile_returns_none() {
-        let data = make_game_data();
-        let player = make_player("field", 1, 0);
-
-        let event = reduce_tile_event(&player, &data);
-
-        assert!(event.is_none());
     }
 
     #[test]
