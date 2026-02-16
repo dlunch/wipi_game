@@ -65,8 +65,28 @@ impl SessionState {
     pub fn apply_event(&mut self, event: RuntimeEvent) -> bool {
         match event {
             RuntimeEvent::Combat(event) => match event {
-                crate::game::CombatRuntimeEvent::SetCombatState(next_state) => {
-                    self.combat = next_state;
+                crate::game::CombatRuntimeEvent::SetEnemies(enemies) => {
+                    self.combat.enemies = enemies;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetPlayerAttackCooldown(cooldown) => {
+                    self.combat.player_attack_cooldown = cooldown;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetPlayerHitFlash(hit_flash) => {
+                    self.combat.player_hit_flash = hit_flash;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetSkillEffects(skill_effects) => {
+                    self.combat.skill_effects = skill_effects;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetUpdateCounter(update_counter) => {
+                    self.combat.update_counter = update_counter;
+                    false
+                }
+                crate::game::CombatRuntimeEvent::SetRespawnTimer(respawn_timer) => {
+                    self.combat.respawn_timer = respawn_timer;
                     false
                 }
                 crate::game::CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {

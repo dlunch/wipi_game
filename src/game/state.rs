@@ -2,7 +2,7 @@ mod combat;
 mod movement;
 mod player;
 
-pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect};
+pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
 

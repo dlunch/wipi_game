@@ -89,9 +89,24 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
 
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
-    let mut events = Vec::with_capacity(5);
-    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetCombatState(
-        state.clone(),
+    let mut events = Vec::with_capacity(10);
+    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetEnemies(
+        state.enemies.clone(),
+    )));
+    events.push(RuntimeEvent::Combat(
+        CombatRuntimeEvent::SetPlayerAttackCooldown(state.player_attack_cooldown),
+    ));
+    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
+        state.player_hit_flash,
+    )));
+    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillEffects(
+        state.skill_effects.clone(),
+    )));
+    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetUpdateCounter(
+        state.update_counter,
+    )));
+    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetRespawnTimer(
+        state.respawn_timer,
     )));
     events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
         next_skill_cooldowns,

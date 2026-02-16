@@ -1,8 +1,13 @@
 use crate::data::Direction;
-use crate::game::state::CombatState;
+use crate::game::state::{FieldEnemy, SkillEffect};
 
 pub enum CombatRuntimeEvent {
-    SetCombatState(CombatState),
+    SetEnemies(alloc::vec::Vec<FieldEnemy>),
+    SetPlayerAttackCooldown(u32),
+    SetPlayerHitFlash(u32),
+    SetSkillEffects(alloc::vec::Vec<SkillEffect>),
+    SetUpdateCounter(u32),
+    SetRespawnTimer(u32),
     SetSkillCooldowns([u32; 3]),
     SetMpRegenTimer(u32),
     RecoverMp(i32),
