@@ -2,8 +2,9 @@ use crate::game::MenuAction;
 use crate::game::selection::{step_down, step_up};
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{GameState, MenuState, RuntimeEvent, has_save_data};
 
 #[derive(Debug, Clone, Copy)]
@@ -156,25 +157,23 @@ impl DomainEventResolver for MenuInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::MenuInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::Menu),
+            matches!(ctx.state, GameState::Menu),
             "Invalid state: expected Menu"
         );
 
-        Ok(resolve_many(
-            engine.ui().menu.selected,
-            &engine.ui().menu.state.items,
-            *intent,
+        Ok(
+            resolve_many(ctx.ui.menu.selected, &ctx.ui.menu.state.items, *intent)
+                .into_iter()
+                .map(RuntimeEvent::Menu)
+                .collect(),
         )
-        .into_iter()
-        .map(RuntimeEvent::Menu)
-        .collect())
     }
 }
 
@@ -185,23 +184,21 @@ impl DomainEventResolver for PauseMenuInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::PauseMenuInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::PauseMenu),
+            matches!(ctx.state, GameState::PauseMenu),
             "Invalid state: expected PauseMenu"
         );
-        engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
+        ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         Ok(resolve_pause_many(
-            engine.ui().pause_menu.selected,
-            engine.ui().pause_menu.state.items.len(),
+            ctx.ui.pause_menu.selected,
+            ctx.ui.pause_menu.state.items.len(),
             *intent,
         )
         .into_iter()
@@ -217,7 +214,7 @@ impl DomainEventResolver for MenuActionCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::Menu(MenuEvent::Action(action)) = event else {
@@ -237,7 +234,7 @@ impl DomainEventApplier for MenuApplier {
         matches!(event, RuntimeEvent::Menu(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Menu(event) = event else {
             return Ok(());
         };
@@ -255,7 +252,7 @@ impl DomainEventApplier for PauseMenuApplier {
         matches!(event, RuntimeEvent::PauseMenu(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::PauseMenu(event) = event else {
             return Ok(());
         };
@@ -291,7 +288,7 @@ impl DomainEventApplier for OpenPauseMenuApplier {
         matches!(event, RuntimeEvent::OpenPauseMenu)
     }
 
-    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
         engine.ui_mut().pause_menu.reset();
         engine.transition_to(GameState::PauseMenu);
         Ok(())
@@ -303,7 +300,7 @@ impl DomainEventApplier for OpenMenuFromExploreApplier {
         matches!(event, RuntimeEvent::OpenMenuFromExplore)
     }
 
-    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
         {
             let s = engine
                 .session()

@@ -1,9 +1,10 @@
 use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
 use crate::game::DialogState;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{DialogActionResult, GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
@@ -99,21 +100,19 @@ impl DomainEventResolver for DialogInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::DialogInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::Dialog),
+            matches!(ctx.state, GameState::Dialog),
             "Invalid state: expected Dialog"
         );
-        engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
+        ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(resolve_many(engine.ui().dialog.state.as_ref(), *intent)
+        Ok(resolve_many(ctx.ui.dialog.state.as_ref(), *intent)
             .into_iter()
             .map(RuntimeEvent::Dialog)
             .collect())
@@ -127,7 +126,7 @@ impl DomainEventResolver for DialogCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::Dialog(dialog_event) = event else {
@@ -153,7 +152,7 @@ impl DomainEventApplier for DialogEventApplier {
         matches!(event, RuntimeEvent::Dialog(_))
     }
 
-    fn apply(&self, _engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, _engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
         Ok(())
     }
 }
@@ -163,7 +162,7 @@ impl DomainEventApplier for ApplyDialogActionApplier {
         matches!(event, RuntimeEvent::ApplyDialogAction(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::ApplyDialogAction(action) = event else {
             return Ok(());
         };
@@ -190,7 +189,7 @@ impl DomainEventApplier for ApplyDialogTransitionApplier {
         matches!(event, RuntimeEvent::ApplyDialogTransition(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::ApplyDialogTransition(transition) = event else {
             return Ok(());
         };

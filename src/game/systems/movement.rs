@@ -3,9 +3,11 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Direction, Map, Tile};
-use crate::engine::GameEngine;
+
 use crate::game::state::FieldEnemy;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{
     AppMovementEvent, GameData, GameState, MovementState, MovementTickEvent, PlayerState,
     RuntimeEvent, TileEvent, TransitionEvent,
@@ -186,16 +188,18 @@ impl DomainEventResolver for UpdateMovementResolver {
         matches!(event, RuntimeEvent::UpdateMovement)
     }
 
-    fn resolve(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        _event: &RuntimeEvent,
+    ) -> Result<Vec<RuntimeEvent>> {
         ensure!(
-            matches!(engine.state(), GameState::Explore),
+            matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
         );
-        let s = engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        let movement = resolve_world_tick(&s.movement, &s.player, &s.combat.enemies, engine.data());
+        let movement = resolve_world_tick(&s.movement, &s.player, &s.combat.enemies, ctx.data());
 
         let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
         events.push(RuntimeEvent::Movement(AppMovementEvent::Tick(
@@ -214,13 +218,13 @@ impl DomainEventApplier for MovementApplier {
         matches!(event, RuntimeEvent::Movement(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event
         else {
             return Ok(());
         };
-        let data = engine.data_rc();
-        let s = engine
+        let data = alloc::rc::Rc::clone(ctx.data);
+        let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
         s.apply_movement_tick(&data, *movement_event, tile_event.clone());

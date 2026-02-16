@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    GameData, GameInput, GameState, InputKey, RenderState, RuntimeEvent, SessionEventApplier,
-    SessionState, UiInputEventResolver, UiState, build_render_state, domain_appliers,
-    domain_resolvers,
+    ApplyContext, GameData, GameInput, GameState, InputKey, RenderState, ResolveContext,
+    RuntimeEvent, SessionEventApplier, SessionState, UiInputEventResolver, UiState,
+    build_render_state, domain_appliers, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -44,105 +44,6 @@ impl GameEngine {
         self.dispatch(RuntimeEvent::from(GameInput::Tick));
     }
 
-    pub(crate) fn state(&self) -> &GameState {
-        &self.state
-    }
-
-    pub(crate) fn data(&self) -> &GameData {
-        &self.data
-    }
-
-    pub(crate) fn data_rc(&self) -> Rc<GameData> {
-        Rc::clone(&self.data)
-    }
-
-    pub(crate) fn replace_data(&mut self, data: Rc<GameData>) {
-        self.data = data;
-    }
-
-    pub(crate) fn session(&self) -> Option<&SessionState> {
-        self.session.as_ref()
-    }
-
-    pub(crate) fn session_mut(&mut self) -> Option<&mut SessionState> {
-        self.session.as_mut()
-    }
-
-    pub(crate) fn ui(&self) -> &UiState {
-        &self.ui
-    }
-
-    pub(crate) fn ui_mut(&mut self) -> &mut UiState {
-        &mut self.ui
-    }
-
-    pub(crate) fn set_error(&mut self, message: alloc::string::String) {
-        self.state = GameState::Error(message);
-    }
-
-    pub(crate) fn transition_to(&mut self, next: GameState) {
-        if next.requires_session() && self.session.is_none() {
-            self.state = GameState::Error(alloc::format!(
-                "Missing session for state transition: {:?}",
-                next
-            ));
-            return;
-        }
-
-        if self.state.can_transition_to(&next) {
-            self.state = next;
-            if !self.state.requires_session() {
-                self.session = None;
-            }
-            return;
-        }
-
-        self.state = GameState::Error(alloc::format!(
-            "Invalid state transition: {:?} -> {:?}",
-            self.state,
-            next
-        ));
-    }
-
-    fn dialog_state_from_intro(
-        &self,
-        intro: Option<crate::game::lifecycle::IntroDialogSpec>,
-    ) -> Option<crate::game::DialogState> {
-        let spec = intro?;
-        let dialog = self.data.find_dialog(&spec.dialog_id)?;
-        Some(crate::game::DialogState::from_dialog(spec.npc_name, dialog))
-    }
-
-    pub(crate) fn enter_session(
-        &mut self,
-        state: GameState,
-        session: SessionState,
-        intro: Option<crate::game::lifecycle::IntroDialogSpec>,
-    ) {
-        self.session = Some(session);
-        self.transition_to(state);
-        if let Err(e) = self.apply_with_handlers(RuntimeEvent::Transition(
-            crate::game::TransitionEvent::MapChanged,
-        )) {
-            self.state = GameState::Error(alloc::format!("{e}"));
-            return;
-        }
-        self.ui = UiState::default();
-        self.ui.dialog.set(self.dialog_state_from_intro(intro));
-    }
-
-    pub(crate) fn open_shop_by_id(&mut self, shop_id: &str) -> bool {
-        let Some(shop) = self.data.find_shop(shop_id).cloned() else {
-            return false;
-        };
-        let shop_items = self.data.get_shop_items(&shop);
-        self.ui
-            .shop
-            .open(crate::game::ShopState::new(shop, shop_items));
-        self.transition_to(GameState::Shop);
-        true
-    }
-
     fn resolve_ui_input_event(&mut self, event: &RuntimeEvent) -> Vec<RuntimeEvent> {
         self.ui
             .resolve_input_event(event, &self.state, self.session.as_ref())
@@ -153,23 +54,35 @@ impl GameEngine {
         derived.extend(self.resolve_ui_input_event(event));
         for resolver in domain_resolvers() {
             if resolver.handles(event) {
-                derived.extend(resolver.resolve(self, event)?);
+                let mut ctx = ResolveContext {
+                    state: &self.state,
+                    data: &mut self.data,
+                    session: self.session.as_ref(),
+                    ui: &self.ui,
+                };
+                derived.extend(resolver.resolve(&mut ctx, event)?);
             }
         }
         Ok(derived)
     }
 
     fn apply_with_handlers(&mut self, event: RuntimeEvent) -> Result<()> {
+        let mut ctx = ApplyContext {
+            state: &mut self.state,
+            data: &self.data,
+            session: &mut self.session,
+            ui: &mut self.ui,
+        };
         for applier in domain_appliers() {
             if applier.handles(&event) {
-                applier.apply(self, &event)?;
+                applier.apply(&mut ctx, &event)?;
             }
         }
-        if let Some(s) = self.session.as_mut()
+        if let Some(s) = ctx.session.as_mut()
             && s.handles_event(&event)
             && s.apply_runtime_event(&event)
         {
-            self.transition_to(GameState::GameOver);
+            ctx.transition_to(GameState::GameOver);
         }
         Ok(())
     }

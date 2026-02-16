@@ -1,9 +1,10 @@
 use crate::data::Direction;
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
 use crate::game::ExploreAction;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{AppExploreEvent, GameState, RuntimeEvent};
 #[cfg(test)]
 use crate::game::{GameData, PlayerState};
@@ -89,21 +90,19 @@ impl DomainEventResolver for ExploreInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::ExploreInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::Explore),
+            matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
         );
-        let s = engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        let is_peaceful = engine
+        let is_peaceful = ctx
             .data()
             .find_map(&s.player.current_map_id)
             .is_some_and(|map| map.peaceful);
@@ -123,7 +122,7 @@ impl DomainEventResolver for ExploreInputResolver {
                 } => {
                     if let Some(npc_event) = crate::game::npc::resolve(
                         &s.player,
-                        engine.data(),
+                        ctx.data(),
                         crate::game::npc::NpcIntent::Interact { facing },
                     ) {
                         events.push(RuntimeEvent::Explore(AppExploreEvent::Npc(npc_event)));
@@ -153,7 +152,7 @@ impl DomainEventResolver for ExploreUseActionCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
@@ -173,7 +172,7 @@ impl DomainEventResolver for ExplorePauseCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         _event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         Ok(alloc::vec![RuntimeEvent::OpenPauseMenu])
@@ -187,7 +186,7 @@ impl DomainEventResolver for ExploreMenuCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         _event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         Ok(alloc::vec![RuntimeEvent::OpenMenuFromExplore])
@@ -199,7 +198,7 @@ impl DomainEventApplier for ExploreApplier {
         matches!(event, RuntimeEvent::Explore(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Explore(event) = event else {
             return Ok(());
         };

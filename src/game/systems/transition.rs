@@ -1,7 +1,8 @@
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{GameState, MenuState, TransitionEvent, has_save_data};
 
 struct OverlayCloseResolver;
@@ -28,19 +29,16 @@ pub fn appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
     alloc::vec![&TRANSITION_APPLIER, &EXIT_APPLIER]
 }
 
-fn apply_transition(engine: &mut GameEngine, event: TransitionEvent) -> Result<()> {
+fn apply_transition(ctx: &mut ApplyContext<'_>, event: TransitionEvent) -> Result<()> {
     match event {
-        TransitionEvent::MapChanged => apply_map_changed(engine)?,
-        TransitionEvent::ToExplore => engine.transition_to(GameState::Explore),
+        TransitionEvent::MapChanged => apply_map_changed(ctx)?,
+        TransitionEvent::ToExplore => ctx.transition_to(GameState::Explore),
         TransitionEvent::ToMenuFromGameOver => {
-            engine.transition_to(GameState::Menu);
-            engine
-                .ui_mut()
-                .menu
-                .set_menu(MenuState::new(has_save_data()));
+            ctx.transition_to(GameState::Menu);
+            ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
         }
         TransitionEvent::ReleaseMovementDirection(direction) => {
-            apply_release_movement_direction(engine, direction)?
+            apply_release_movement_direction(ctx, direction)?
         }
     }
 
@@ -54,7 +52,7 @@ impl DomainEventResolver for OverlayCloseResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         _event: &crate::game::RuntimeEvent,
     ) -> Result<alloc::vec::Vec<crate::game::RuntimeEvent>> {
         Ok(alloc::vec![crate::game::RuntimeEvent::Transition(
@@ -70,7 +68,7 @@ impl DomainEventResolver for GameOverConfirmResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         _event: &crate::game::RuntimeEvent,
     ) -> Result<alloc::vec::Vec<crate::game::RuntimeEvent>> {
         Ok(alloc::vec![crate::game::RuntimeEvent::Transition(
@@ -86,7 +84,7 @@ impl DomainEventResolver for ErrorConfirmResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         _event: &crate::game::RuntimeEvent,
     ) -> Result<alloc::vec::Vec<crate::game::RuntimeEvent>> {
         Ok(alloc::vec![crate::game::RuntimeEvent::Exit(1)])
@@ -98,7 +96,11 @@ impl DomainEventApplier for TransitionApplier {
         matches!(event, crate::game::RuntimeEvent::Transition(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &crate::game::RuntimeEvent) -> Result<()> {
+    fn apply(
+        &self,
+        engine: &mut ApplyContext<'_>,
+        event: &crate::game::RuntimeEvent,
+    ) -> Result<()> {
         let crate::game::RuntimeEvent::Transition(transition) = event else {
             return Ok(());
         };
@@ -111,7 +113,11 @@ impl DomainEventApplier for ExitApplier {
         matches!(event, crate::game::RuntimeEvent::Exit(_))
     }
 
-    fn apply(&self, _engine: &mut GameEngine, event: &crate::game::RuntimeEvent) -> Result<()> {
+    fn apply(
+        &self,
+        _engine: &mut ApplyContext<'_>,
+        event: &crate::game::RuntimeEvent,
+    ) -> Result<()> {
         let crate::game::RuntimeEvent::Exit(code) = event else {
             return Ok(());
         };
@@ -120,9 +126,9 @@ impl DomainEventApplier for ExitApplier {
     }
 }
 
-fn apply_map_changed(engine: &mut GameEngine) -> Result<()> {
-    let data = engine.data_rc();
-    let s = engine
+fn apply_map_changed(ctx: &mut ApplyContext<'_>) -> Result<()> {
+    let data = ctx.data_rc();
+    let s = ctx
         .session_mut()
         .ok_or_else(|| anyhow!("No active session"))?;
     s.spawn_current_map_enemies(&data);
@@ -130,15 +136,15 @@ fn apply_map_changed(engine: &mut GameEngine) -> Result<()> {
 }
 
 fn apply_release_movement_direction(
-    engine: &mut GameEngine,
+    ctx: &mut ApplyContext<'_>,
     direction: crate::data::Direction,
 ) -> Result<()> {
     ensure!(
-        matches!(engine.state(), GameState::Explore),
+        matches!(ctx.state, GameState::Explore),
         "Invalid state: expected Explore"
     );
 
-    let s = engine
+    let s = ctx
         .session_mut()
         .ok_or_else(|| anyhow!("No active session"))?;
     s.on_direction_released(direction);

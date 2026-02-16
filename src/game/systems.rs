@@ -19,7 +19,7 @@ pub use inventory::{InventoryEvent, InventoryIntent};
 pub use lifecycle::LoadingEvent;
 pub use menu::{MenuEvent, MenuIntent, PauseMenuEvent, PauseMenuIntent};
 pub use npc::NpcEvent;
-pub use runtime::{DomainEventApplier, DomainEventResolver};
+pub use runtime::{ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext};
 pub use shop::{ShopEvent, ShopIntent};
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {

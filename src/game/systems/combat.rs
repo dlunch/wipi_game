@@ -3,9 +3,11 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Enemy, Map};
-use crate::engine::GameEngine;
+
 use crate::game::state::{CombatState, FieldEnemy};
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{CombatRuntimeEvent, GameState, RuntimeEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -284,15 +286,17 @@ impl DomainEventResolver for UpdateCombatResolver {
         matches!(event, RuntimeEvent::UpdateCombat)
     }
 
-    fn resolve(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        _event: &RuntimeEvent,
+    ) -> Result<Vec<RuntimeEvent>> {
         ensure!(
-            matches!(engine.state(), GameState::Explore),
+            matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
         );
-        let s = engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = engine.data().find_map(&s.player.current_map_id) else {
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+        let Some(map) = ctx.data().find_map(&s.player.current_map_id) else {
             return Ok(Vec::new());
         };
 
@@ -303,7 +307,7 @@ impl DomainEventResolver for UpdateCombatResolver {
             s.player.total_def(),
             (s.skill_cooldowns, s.mp_regen_timer),
             map,
-            &engine.data().enemies,
+            &ctx.data().enemies,
         ))
     }
 }
@@ -313,12 +317,12 @@ impl DomainEventApplier for CombatPlayerActionApplier {
         matches!(event, RuntimeEvent::CombatPlayerAction(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::CombatPlayerAction(action) = event else {
             return Ok(());
         };
-        let data = engine.data_rc();
-        let s = engine
+        let data = alloc::rc::Rc::clone(ctx.data);
+        let s = ctx
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
         s.apply_explore_action(&data, *action);

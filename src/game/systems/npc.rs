@@ -4,8 +4,10 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{GameData, GameState, PlayerState, RuntimeEvent};
 
 #[derive(Debug, Clone)]
@@ -129,7 +131,7 @@ impl DomainEventResolver for ExploreNpcCascadeResolver {
 
     fn resolve(
         &self,
-        _engine: &mut GameEngine,
+        _ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
@@ -162,7 +164,7 @@ impl DomainEventApplier for OpenDialogStateApplier {
         matches!(event, RuntimeEvent::OpenDialogState(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::OpenDialogState(dialog_state) = event else {
             return Ok(());
         };
@@ -177,7 +179,7 @@ impl DomainEventApplier for OpenShopByIdApplier {
         matches!(event, RuntimeEvent::OpenShopById(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::OpenShopById(shop_id) = event else {
             return Ok(());
         };
@@ -191,7 +193,7 @@ impl DomainEventApplier for RestoreSessionStatsApplier {
         matches!(event, RuntimeEvent::RestoreSessionStats)
     }
 
-    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
         let s = engine
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;

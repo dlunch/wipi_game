@@ -6,8 +6,10 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::Tile;
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{
     CombatState, GameData, GameState, MenuState, MovementState, PlayerState, RuntimeEvent,
     SessionState, has_save_data, load_game,
@@ -166,16 +168,18 @@ impl DomainEventResolver for UpdateLoadingResolver {
         matches!(event, RuntimeEvent::UpdateLoading)
     }
 
-    fn resolve(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<Vec<RuntimeEvent>> {
-        let step = if let GameState::Loading(step) = engine.state() {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        _event: &RuntimeEvent,
+    ) -> Result<Vec<RuntimeEvent>> {
+        let step = if let GameState::Loading(step) = ctx.state {
             *step
         } else {
             return Err(anyhow!("Invalid state: expected Loading"));
         };
 
-        let mut data = engine.data_rc();
-        let load_result = load_step(&mut data, step);
-        engine.replace_data(data);
+        let load_result = load_step(ctx.data, step);
 
         Ok(alloc::vec![RuntimeEvent::Loading(resolve_loading(
             step,
@@ -189,20 +193,17 @@ impl DomainEventApplier for LoadingApplier {
         matches!(event, RuntimeEvent::Loading(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Loading(event) = event else {
             return Ok(());
         };
         match event {
-            LoadingEvent::Advance(step) => engine.transition_to(GameState::Loading(*step)),
+            LoadingEvent::Advance(step) => ctx.transition_to(GameState::Loading(*step)),
             LoadingEvent::Loaded => {
-                engine.transition_to(GameState::Menu);
-                engine
-                    .ui_mut()
-                    .menu
-                    .set_menu(MenuState::new(has_save_data()));
+                ctx.transition_to(GameState::Menu);
+                ctx.ui.menu.set_menu(MenuState::new(has_save_data()));
             }
-            LoadingEvent::Error(msg) => engine.set_error(msg.clone()),
+            LoadingEvent::Error(msg) => ctx.set_error(msg.clone()),
         }
         Ok(())
     }
@@ -213,10 +214,9 @@ impl DomainEventApplier for StartNewGameApplier {
         matches!(event, RuntimeEvent::StartNewGame)
     }
 
-    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
-        let data = engine.data_rc();
-        let (state, session, intro) = start_new_game(&data);
-        engine.enter_session(state, session, intro);
+    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
+        let (state, session, intro) = start_new_game(ctx.data);
+        enter_session(ctx, state, session, intro);
         Ok(())
     }
 }
@@ -226,10 +226,35 @@ impl DomainEventApplier for ContinueGameApplier {
         matches!(event, RuntimeEvent::ContinueGame)
     }
 
-    fn apply(&self, engine: &mut GameEngine, _event: &RuntimeEvent) -> Result<()> {
-        let data = engine.data_rc();
-        let (state, session, intro) = continue_game(&data);
-        engine.enter_session(state, session, intro);
+    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &RuntimeEvent) -> Result<()> {
+        let (state, session, intro) = continue_game(ctx.data);
+        enter_session(ctx, state, session, intro);
         Ok(())
     }
+}
+
+fn dialog_state_from_intro(
+    data: &GameData,
+    intro: Option<IntroDialogSpec>,
+) -> Option<crate::game::DialogState> {
+    let spec = intro?;
+    let dialog = data.find_dialog(&spec.dialog_id)?;
+    Some(crate::game::DialogState::from_dialog(spec.npc_name, dialog))
+}
+
+fn enter_session(
+    ctx: &mut ApplyContext<'_>,
+    state: GameState,
+    session: SessionState,
+    intro: Option<IntroDialogSpec>,
+) {
+    *ctx.session = Some(session);
+    ctx.transition_to(state);
+
+    if let Some(s) = ctx.session.as_mut() {
+        s.spawn_current_map_enemies(ctx.data);
+    }
+
+    *ctx.ui = crate::game::UiState::default();
+    ctx.ui.dialog.set(dialog_state_from_intro(ctx.data, intro));
 }

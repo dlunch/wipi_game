@@ -1,8 +1,9 @@
 use crate::data::Item;
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy)]
@@ -67,21 +68,19 @@ impl DomainEventResolver for ShopInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::ShopInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::Shop),
+            matches!(ctx.state, GameState::Shop),
             "Invalid state: expected Shop"
         );
-        let s = engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
-        let shop_items = engine
-            .ui()
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+        let shop_items = ctx
+            .ui
             .shop
             .state
             .as_ref()
@@ -100,7 +99,7 @@ impl DomainEventApplier for ShopApplier {
         matches!(event, RuntimeEvent::Shop(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Shop(event) = event else {
             return Ok(());
         };
@@ -121,7 +120,7 @@ impl DomainEventApplier for ShopApplier {
                     (sold, s.player.inventory.len())
                 };
                 if sold {
-                    let current_selected = engine.ui().shop.selected;
+                    let current_selected = engine.ui.shop.selected;
                     if current_selected >= len_after && current_selected > 0 {
                         engine.ui_mut().shop.set_selected(current_selected - 1);
                     }

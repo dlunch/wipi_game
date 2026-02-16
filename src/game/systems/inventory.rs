@@ -1,8 +1,9 @@
 use crate::game::selection::{step_down, step_up};
 use anyhow::{Result, anyhow, ensure};
 
-use crate::engine::GameEngine;
-use crate::game::systems::runtime::{DomainEventApplier, DomainEventResolver};
+use crate::game::systems::runtime::{
+    ApplyContext, DomainEventApplier, DomainEventResolver, ResolveContext,
+};
 use crate::game::{GameState, RuntimeEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,28 +77,24 @@ impl DomainEventResolver for InventoryInputResolver {
 
     fn resolve(
         &self,
-        engine: &mut GameEngine,
+        ctx: &mut ResolveContext<'_>,
         event: &RuntimeEvent,
     ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
         let RuntimeEvent::InventoryInput(intent) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         ensure!(
-            matches!(engine.state(), GameState::Inventory),
+            matches!(ctx.state, GameState::Inventory),
             "Invalid state: expected Inventory"
         );
-        let s = engine
-            .session()
-            .ok_or_else(|| anyhow!("No active session"))?;
+        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        Ok(resolve_many(
-            engine.ui().inventory.selected,
-            s.player.inventory.len(),
-            *intent,
+        Ok(
+            resolve_many(ctx.ui.inventory.selected, s.player.inventory.len(), *intent)
+                .into_iter()
+                .map(RuntimeEvent::Inventory)
+                .collect(),
         )
-        .into_iter()
-        .map(RuntimeEvent::Inventory)
-        .collect())
     }
 }
 
@@ -106,7 +103,7 @@ impl DomainEventApplier for InventoryApplier {
         matches!(event, RuntimeEvent::Inventory(_))
     }
 
-    fn apply(&self, engine: &mut GameEngine, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, engine: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
         let RuntimeEvent::Inventory(event) = event else {
             return Ok(());
         };
