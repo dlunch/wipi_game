@@ -22,11 +22,9 @@ impl DomainEventApplier for UiGameEventApplier {
                 | GameEvent::OpenPauseMenu
                 | GameEvent::OpenMenuFromExplore
                 | GameEvent::Inventory(_)
-                | GameEvent::Dialog(_)
                 | GameEvent::ApplyDialogTransition(_)
                 | GameEvent::Shop(_)
                 | GameEvent::OpenDialogState(_)
-                | GameEvent::OpenShopById(_)
         )
     }
 
@@ -82,7 +80,6 @@ impl DomainEventApplier for UiGameEventApplier {
                     ctx.transition_to(GameState::Explore)
                 }
             },
-            GameEvent::Dialog(_) => {}
             GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
                     if let Some(dialog_state) = ctx.ui_mut().dialog.state.as_mut() {
@@ -114,9 +111,6 @@ impl DomainEventApplier for UiGameEventApplier {
             GameEvent::OpenDialogState(dialog_state) => {
                 ctx.ui_mut().dialog.open(dialog_state.clone());
                 ctx.transition_to(GameState::Dialog);
-            }
-            GameEvent::OpenShopById(shop_id) => {
-                let _ = ctx.open_shop_by_id(shop_id);
             }
             _ => {}
         }

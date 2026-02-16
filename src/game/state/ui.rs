@@ -95,20 +95,8 @@ impl UiEventApplier for UiState {
             UiEvent::MovementKeyReleased(direction) => alloc::vec![GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
             )],
-            UiEvent::MenuInput(key) => {
-                resolve_menu_events(self.menu.selected, &self.menu.state.items, key)
-                    .into_iter()
-                    .map(GameEvent::Menu)
-                    .collect()
-            }
-            UiEvent::PauseMenuInput(key) => resolve_pause_menu_events(
-                self.pause_menu.selected,
-                self.pause_menu.state.items.len(),
-                key,
-            )
-            .into_iter()
-            .map(GameEvent::PauseMenu)
-            .collect(),
+            UiEvent::MenuInput(key) => alloc::vec![GameEvent::MenuInput(key)],
+            UiEvent::PauseMenuInput(key) => alloc::vec![GameEvent::PauseMenuInput(key)],
             UiEvent::ExploreInput(key) => alloc::vec![GameEvent::ExploreInput(key)],
             UiEvent::InventoryInput(key) => alloc::vec![GameEvent::InventoryInput(key)],
             UiEvent::DialogInput(key) => alloc::vec![GameEvent::DialogInput(key)],
@@ -195,83 +183,6 @@ fn resolve_keyup(
         vec![UiEvent::MovementKeyReleased(direction)]
     } else {
         Vec::new()
-    }
-}
-
-fn resolve_menu_events(
-    selected: usize,
-    items: &[(&str, MenuAction)],
-    key: InputKey,
-) -> Vec<crate::game::MenuEvent> {
-    let event = match key {
-        InputKey::Up => {
-            let next = step_up(selected);
-            if next != selected {
-                crate::game::MenuEvent::SetSelected(next)
-            } else {
-                crate::game::MenuEvent::None
-            }
-        }
-        InputKey::Down => {
-            let next = step_down(selected, items.len());
-            if next != selected {
-                crate::game::MenuEvent::SetSelected(next)
-            } else {
-                crate::game::MenuEvent::None
-            }
-        }
-        InputKey::Ok => {
-            if let Some((_, action)) = items.get(selected).copied() {
-                crate::game::MenuEvent::Action(action)
-            } else {
-                crate::game::MenuEvent::None
-            }
-        }
-        _ => crate::game::MenuEvent::None,
-    };
-
-    match event {
-        crate::game::MenuEvent::None => Vec::new(),
-        event => vec![event],
-    }
-}
-
-fn resolve_pause_menu_events(
-    selected: usize,
-    item_count: usize,
-    key: InputKey,
-) -> Vec<crate::game::PauseMenuEvent> {
-    let event = match key {
-        InputKey::Up => {
-            let next = step_up(selected);
-            if next != selected {
-                crate::game::PauseMenuEvent::SetSelected(next)
-            } else {
-                crate::game::PauseMenuEvent::None
-            }
-        }
-        InputKey::Down => {
-            let next = step_down(selected, item_count);
-            if next != selected {
-                crate::game::PauseMenuEvent::SetSelected(next)
-            } else {
-                crate::game::PauseMenuEvent::None
-            }
-        }
-        InputKey::Ok => match selected {
-            0 => crate::game::PauseMenuEvent::OpenInventory,
-            1 => crate::game::PauseMenuEvent::OpenStats,
-            2 => crate::game::PauseMenuEvent::OpenQuestLog,
-            3 => crate::game::PauseMenuEvent::SaveAndReturnExplore,
-            _ => crate::game::PauseMenuEvent::None,
-        },
-        InputKey::Back | InputKey::Key0 => crate::game::PauseMenuEvent::BackToExplore,
-        _ => crate::game::PauseMenuEvent::None,
-    };
-
-    match event {
-        crate::game::PauseMenuEvent::None => Vec::new(),
-        event => vec![event],
     }
 }
 

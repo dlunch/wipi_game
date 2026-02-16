@@ -22,12 +22,18 @@ impl SessionState {
 
 struct SessionLifecycleApplier;
 struct SessionSaveApplier;
+struct SessionShopOpenApplier;
 
 static SESSION_LIFECYCLE_APPLIER: SessionLifecycleApplier = SessionLifecycleApplier;
 static SESSION_SAVE_APPLIER: SessionSaveApplier = SessionSaveApplier;
+static SESSION_SHOP_OPEN_APPLIER: SessionShopOpenApplier = SessionShopOpenApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&SESSION_LIFECYCLE_APPLIER, &SESSION_SAVE_APPLIER]
+    alloc::vec![
+        &SESSION_LIFECYCLE_APPLIER,
+        &SESSION_SAVE_APPLIER,
+        &SESSION_SHOP_OPEN_APPLIER,
+    ]
 }
 
 impl DomainEventApplier for SessionLifecycleApplier {
@@ -72,6 +78,20 @@ impl DomainEventApplier for SessionSaveApplier {
     fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &GameEvent) -> Result<()> {
         let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
         let _ = crate::game::save_game(&s.player);
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for SessionShopOpenApplier {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::OpenShopById(_))
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::OpenShopById(shop_id) = event else {
+            return Ok(());
+        };
+        let _ = ctx.open_shop_by_id(shop_id);
         Ok(())
     }
 }

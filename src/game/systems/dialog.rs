@@ -2,6 +2,7 @@ use crate::data::DialogAction;
 use anyhow::Result;
 
 use crate::game::GameEvent;
+use crate::game::GameState;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,9 @@ impl DomainEventResolver for DialogInputResolver {
         let GameEvent::DialogInput(key) = event else {
             return Ok(alloc::vec::Vec::new());
         };
+        if !matches!(ctx.state, GameState::Dialog) {
+            return Ok(alloc::vec::Vec::new());
+        }
 
         let event = match key {
             crate::game::InputKey::Back => {
