@@ -26,6 +26,8 @@ enum CombatActionResult {
 struct SkillActionResult {
     heal_amount: i32,
     kills: Vec<KillReward>,
+    skill_effects: Vec<SkillEffect>,
+    enemy_events: Vec<GameEvent>,
 }
 
 pub fn resolve_tick(
@@ -44,56 +46,64 @@ pub fn resolve_tick(
         update_counter,
     )));
 
-    let mut player_attack_cooldown = state.player_attack_cooldown;
-    let mut player_hit_flash = state.player_hit_flash;
-    let mut skill_effects = state.skill_effects.clone();
-    let mut enemies = state.enemies.clone();
-    let mut respawn_timer = state.respawn_timer;
-    let mut next_enemy_instance_id = state.next_enemy_instance_id;
-
-    if player_attack_cooldown > 0 {
-        player_attack_cooldown = player_attack_cooldown.saturating_sub(1);
+    let player_attack_cooldown = state.player_attack_cooldown.saturating_sub(1);
+    if player_attack_cooldown != state.player_attack_cooldown {
         events.push(GameEvent::Combat(CombatEvent::SetPlayerAttackCooldown(
             player_attack_cooldown,
         )));
     }
-    if player_hit_flash > 0 {
-        player_hit_flash = player_hit_flash.saturating_sub(1);
+
+    let mut player_hit_flash = state.player_hit_flash.saturating_sub(1);
+    if player_hit_flash != state.player_hit_flash {
         events.push(GameEvent::Combat(CombatEvent::SetPlayerHitFlash(
             player_hit_flash,
         )));
     }
 
-    if !skill_effects.is_empty() {
-        for effect in &mut skill_effects {
-            if effect.timer > 0 {
-                effect.timer -= 1;
+    let skill_effects: Vec<SkillEffect> = state
+        .skill_effects
+        .iter()
+        .filter_map(|effect| {
+            if effect.timer == 0 {
+                None
+            } else {
+                Some(SkillEffect {
+                    x: effect.x,
+                    y: effect.y,
+                    effect_type: effect.effect_type,
+                    timer: effect.timer - 1,
+                })
             }
-        }
-        skill_effects.retain(|e| e.timer > 0);
+        })
+        .collect();
+    if !state.skill_effects.is_empty() {
         events.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
-            skill_effects.clone(),
+            skill_effects,
         )));
     }
 
     let mut damage_taken = 0;
-
-    if update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
-        for enemy in &mut enemies {
-            if !enemy_is_dead(enemy) {
-                update_enemy(enemy, player_x, player_y, map);
-            }
-        }
-    }
-
-    let previous_enemies = state.enemies.clone();
-    for enemy in &mut enemies {
-        if enemy_is_dead(enemy) {
+    let mut occupied_after_tick: Vec<(usize, usize)> = Vec::new();
+    let do_move = update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL);
+    for enemy in &state.enemies {
+        if enemy.hp <= 0 {
+            events.push(GameEvent::Combat(CombatEvent::EnemyDespawn(
+                enemy.instance_id,
+            )));
             continue;
         }
 
-        if enemy_distance_to(enemy, player_x, player_y) <= 1 && enemy_can_attack(enemy) {
-            let raw_damage = enemy_do_attack(enemy);
+        let mut next_x = enemy.x;
+        let mut next_y = enemy.y;
+        let next_hit_flash = enemy.hit_flash.saturating_sub(1);
+        let mut next_attack_cooldown = enemy.attack_cooldown.saturating_sub(1);
+
+        if do_move && enemy_distance_to(enemy, player_x, player_y) > 1 {
+            (next_x, next_y) = next_enemy_position(enemy, player_x, player_y, map);
+        }
+        if enemy_distance(next_x, next_y, player_x, player_y) <= 1 && next_attack_cooldown == 0 {
+            let raw_damage = enemy.data.atk;
+            next_attack_cooldown = ENEMY_ATTACK_COOLDOWN;
             let actual_damage = (raw_damage - player_def / 2).max(1);
             damage_taken += actual_damage;
             if player_hit_flash != 10 {
@@ -103,25 +113,45 @@ pub fn resolve_tick(
                 )));
             }
         }
+
+        if next_x != enemy.x || next_y != enemy.y {
+            events.push(GameEvent::Combat(CombatEvent::EnemyMove {
+                enemy_id: enemy.instance_id,
+                x: next_x,
+                y: next_y,
+            }));
+        }
+        if next_hit_flash != enemy.hit_flash {
+            events.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
+                enemy_id: enemy.instance_id,
+                hit_flash: next_hit_flash,
+            }));
+        }
+        if next_attack_cooldown != enemy.attack_cooldown {
+            events.push(GameEvent::Combat(CombatEvent::EnemyAttackCooldownSet {
+                enemy_id: enemy.instance_id,
+                cooldown: next_attack_cooldown,
+            }));
+        }
+        occupied_after_tick.push((next_x, next_y));
     }
 
-    enemies.retain(|enemy| !enemy_is_dead(enemy));
-
-    try_respawn(
-        &mut enemies,
-        &mut respawn_timer,
-        &mut next_enemy_instance_id,
-        &state.respawn_positions,
+    let (respawn_timer, spawned_enemy, next_enemy_instance_id) = resolve_respawn(
+        state.respawn_timer,
+        state.next_enemy_instance_id,
+        state.respawn_positions.as_slice(),
+        occupied_after_tick.as_slice(),
         (player_x, player_y),
         map,
         enemy_data,
     );
-
-    push_enemy_events(&previous_enemies, &enemies, &mut events);
     if respawn_timer != state.respawn_timer {
         events.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(
             respawn_timer,
         )));
+    }
+    if let Some(enemy) = spawned_enemy {
+        events.push(GameEvent::Combat(CombatEvent::EnemySpawn(enemy)));
     }
     if next_enemy_instance_id != state.next_enemy_instance_id {
         events.push(GameEvent::Combat(CombatEvent::SetNextEnemyInstanceId(
@@ -135,63 +165,6 @@ pub fn resolve_tick(
     }
 
     events
-}
-
-fn try_respawn(
-    enemies: &mut Vec<FieldEnemy>,
-    respawn_timer: &mut u32,
-    next_enemy_instance_id: &mut u32,
-    respawn_positions: &[(usize, usize, usize)],
-    player_pos: (usize, usize),
-    map: &Map,
-    enemy_data: &[Enemy],
-) {
-    const RESPAWN_DELAY: u32 = 300;
-    const RESPAWN_DISTANCE: usize = 8;
-
-    if respawn_positions.is_empty() {
-        return;
-    }
-
-    let max_enemies = respawn_positions.len();
-    if enemies.len() >= max_enemies {
-        *respawn_timer = 0;
-        return;
-    }
-
-    *respawn_timer += 1;
-    if *respawn_timer < RESPAWN_DELAY {
-        return;
-    }
-
-    let available_enemies: Vec<&Enemy> = map
-        .encounters
-        .iter()
-        .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
-        .collect();
-
-    if available_enemies.is_empty() {
-        return;
-    }
-
-    for (x, y, enemy_idx) in respawn_positions {
-        let distance = x.abs_diff(player_pos.0) + y.abs_diff(player_pos.1);
-        if distance < RESPAWN_DISTANCE {
-            continue;
-        }
-
-        let already_exists = enemies.iter().any(|e| e.x == *x && e.y == *y);
-        if already_exists {
-            continue;
-        }
-
-        if let Some(enemy) = available_enemies.get(*enemy_idx) {
-            let instance_id = allocate_enemy_instance_id(next_enemy_instance_id);
-            enemies.push(FieldEnemy::new((*enemy).clone(), *x, *y, instance_id));
-            *respawn_timer = 0;
-            return;
-        }
-    }
 }
 
 fn tick_resource_state(
@@ -224,55 +197,6 @@ fn tick_resource_state(
     }
     if recover_mp {
         events.push(GameEvent::Combat(CombatEvent::RecoverMp(1)));
-    }
-}
-
-fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut Vec<GameEvent>) {
-    for enemy in previous {
-        if !next
-            .iter()
-            .any(|next_enemy| next_enemy.instance_id == enemy.instance_id)
-        {
-            events.push(GameEvent::Combat(CombatEvent::EnemyDespawn(
-                enemy.instance_id,
-            )));
-        }
-    }
-
-    for enemy in next {
-        let Some(previous_enemy) = previous
-            .iter()
-            .find(|previous_enemy| previous_enemy.instance_id == enemy.instance_id)
-        else {
-            events.push(GameEvent::Combat(CombatEvent::EnemySpawn(enemy.clone())));
-            continue;
-        };
-
-        if previous_enemy.x != enemy.x || previous_enemy.y != enemy.y {
-            events.push(GameEvent::Combat(CombatEvent::EnemyMove {
-                enemy_id: enemy.instance_id,
-                x: enemy.x,
-                y: enemy.y,
-            }));
-        }
-        if previous_enemy.hp != enemy.hp {
-            events.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
-                enemy_id: enemy.instance_id,
-                hp: enemy.hp,
-            }));
-        }
-        if previous_enemy.attack_cooldown != enemy.attack_cooldown {
-            events.push(GameEvent::Combat(CombatEvent::EnemyAttackCooldownSet {
-                enemy_id: enemy.instance_id,
-                cooldown: enemy.attack_cooldown,
-            }));
-        }
-        if previous_enemy.hit_flash != enemy.hit_flash {
-            events.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
-                enemy_id: enemy.instance_id,
-                hit_flash: enemy.hit_flash,
-            }));
-        }
     }
 }
 
@@ -333,8 +257,6 @@ impl DomainEventResolver for CombatPlayerActionResolver {
             return Ok(Vec::new());
         };
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        let mut next_combat = s.combat.clone();
         let mut events = Vec::new();
 
         if let Some((slot, skill)) = action.skill() {
@@ -345,8 +267,8 @@ impl DomainEventResolver for CombatPlayerActionResolver {
                 return Ok(Vec::new());
             }
 
-            let combat_event = apply_skill_action(
-                &mut next_combat,
+            let combat_event = resolve_skill_action(
+                &s.combat,
                 skill,
                 s.leader.x,
                 s.leader.y,
@@ -375,27 +297,37 @@ impl DomainEventResolver for CombatPlayerActionResolver {
                     gold: reward.gold,
                 }));
             }
-        } else if let CombatActionResult::Attack(Some(reward)) = apply_player_attack_action(
-            &mut next_combat,
-            s.leader.x,
-            s.leader.y,
-            s.leader.total_atk(),
-            s.leader.facing,
-        ) {
-            events.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                enemy_id: reward.enemy_id,
-                exp: reward.exp,
-                gold: reward.gold,
-            }));
+            events.push(GameEvent::Combat(CombatEvent::SetPlayerAttackCooldown(
+                s.combat.player_attack_cooldown,
+            )));
+            events.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
+                result.skill_effects,
+            )));
+            events.extend(result.enemy_events);
+        } else {
+            let (attack_result, next_cooldown, skill_effects, enemy_events) =
+                resolve_player_attack_action(
+                    &s.combat,
+                    s.leader.x,
+                    s.leader.y,
+                    s.leader.total_atk(),
+                    s.leader.facing,
+                );
+            if let CombatActionResult::Attack(Some(reward)) = attack_result {
+                events.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+                    enemy_id: reward.enemy_id,
+                    exp: reward.exp,
+                    gold: reward.gold,
+                }));
+            }
+            events.push(GameEvent::Combat(CombatEvent::SetPlayerAttackCooldown(
+                next_cooldown,
+            )));
+            events.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
+                skill_effects,
+            )));
+            events.extend(enemy_events);
         }
-
-        events.push(GameEvent::Combat(CombatEvent::SetPlayerAttackCooldown(
-            next_combat.player_attack_cooldown,
-        )));
-        events.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
-            next_combat.skill_effects.clone(),
-        )));
-        push_enemy_events(&s.combat.enemies, &next_combat.enemies, &mut events);
 
         Ok(events)
     }
@@ -426,42 +358,29 @@ impl DomainEventResolver for CombatMapSyncResolver {
     }
 }
 
-fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
-    let id = (*next_enemy_instance_id).max(1);
-    *next_enemy_instance_id = next_enemy_instance_id.wrapping_add(1);
-    if *next_enemy_instance_id == 0 {
-        *next_enemy_instance_id = 1;
+fn allocate_enemy_instance_id(next_enemy_instance_id: u32) -> (u32, u32) {
+    let id = next_enemy_instance_id.max(1);
+    let mut next = next_enemy_instance_id.wrapping_add(1);
+    if next == 0 {
+        next = 1;
     }
-    id
-}
-
-fn enemy_is_dead(enemy: &FieldEnemy) -> bool {
-    enemy.hp <= 0
-}
-
-fn enemy_take_damage(enemy: &mut FieldEnemy, damage: i32) {
-    enemy.hp = (enemy.hp - damage).max(0);
-    enemy.hit_flash = HIT_FLASH_DURATION;
+    (id, next)
 }
 
 fn enemy_distance_to(enemy: &FieldEnemy, px: usize, py: usize) -> usize {
-    enemy.x.abs_diff(px) + enemy.y.abs_diff(py)
+    enemy_distance(enemy.x, enemy.y, px, py)
 }
 
-fn update_enemy(enemy: &mut FieldEnemy, player_x: usize, player_y: usize, map: &Map) {
-    if enemy.hit_flash > 0 {
-        enemy.hit_flash -= 1;
-    }
-    if enemy.attack_cooldown > 0 {
-        enemy.attack_cooldown -= 1;
-    }
-
-    if enemy_distance_to(enemy, player_x, player_y) > 1 {
-        move_enemy_towards(enemy, player_x, player_y, map);
-    }
+fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {
+    x.abs_diff(px) + y.abs_diff(py)
 }
 
-fn move_enemy_towards(enemy: &mut FieldEnemy, target_x: usize, target_y: usize, map: &Map) {
+fn next_enemy_position(
+    enemy: &FieldEnemy,
+    target_x: usize,
+    target_y: usize,
+    map: &Map,
+) -> (usize, usize) {
     let dx: i32 = match target_x.cmp(&enemy.x) {
         core::cmp::Ordering::Greater => 1,
         core::cmp::Ordering::Less => -1,
@@ -474,30 +393,78 @@ fn move_enemy_towards(enemy: &mut FieldEnemy, target_x: usize, target_y: usize, 
     };
 
     let new_x = enemy.x.checked_add_signed(dx as isize);
-    let new_y = enemy.y.checked_add_signed(dy as isize);
-
     if let Some(nx) = new_x
         && dx != 0
         && map.get_tile(nx, enemy.y).is_passable()
     {
-        enemy.x = nx;
-        return;
+        return (nx, enemy.y);
     }
+    let new_y = enemy.y.checked_add_signed(dy as isize);
     if let Some(ny) = new_y
         && dy != 0
         && map.get_tile(enemy.x, ny).is_passable()
     {
-        enemy.y = ny;
+        return (enemy.x, ny);
     }
+    (enemy.x, enemy.y)
 }
 
-fn enemy_can_attack(enemy: &FieldEnemy) -> bool {
-    enemy.attack_cooldown == 0
-}
+fn resolve_respawn(
+    current_timer: u32,
+    current_next_enemy_instance_id: u32,
+    respawn_positions: &[(usize, usize, usize)],
+    occupied_positions: &[(usize, usize)],
+    player_pos: (usize, usize),
+    map: &Map,
+    enemy_data: &[Enemy],
+) -> (u32, Option<FieldEnemy>, u32) {
+    const RESPAWN_DELAY: u32 = 300;
+    const RESPAWN_DISTANCE: usize = 8;
 
-fn enemy_do_attack(enemy: &mut FieldEnemy) -> i32 {
-    enemy.attack_cooldown = ENEMY_ATTACK_COOLDOWN;
-    enemy.data.atk
+    if respawn_positions.is_empty() {
+        return (current_timer, None, current_next_enemy_instance_id);
+    }
+
+    if occupied_positions.len() >= respawn_positions.len() {
+        return (0, None, current_next_enemy_instance_id);
+    }
+
+    let next_timer = current_timer.wrapping_add(1);
+    if next_timer < RESPAWN_DELAY {
+        return (next_timer, None, current_next_enemy_instance_id);
+    }
+
+    let available_enemies: Vec<&Enemy> = map
+        .encounters
+        .iter()
+        .filter_map(|(id, _)| enemy_data.iter().find(|enemy| &enemy.id == id))
+        .collect();
+    if available_enemies.is_empty() {
+        return (next_timer, None, current_next_enemy_instance_id);
+    }
+
+    for (x, y, enemy_idx) in respawn_positions {
+        let distance = x.abs_diff(player_pos.0) + y.abs_diff(player_pos.1);
+        if distance < RESPAWN_DISTANCE {
+            continue;
+        }
+        if occupied_positions
+            .iter()
+            .any(|(occupied_x, occupied_y)| occupied_x == x && occupied_y == y)
+        {
+            continue;
+        }
+        if let Some(enemy) = available_enemies.get(*enemy_idx) {
+            let (instance_id, next_id) = allocate_enemy_instance_id(current_next_enemy_instance_id);
+            return (
+                0,
+                Some(FieldEnemy::new((*enemy).clone(), *x, *y, instance_id)),
+                next_id,
+            );
+        }
+    }
+
+    (next_timer, None, current_next_enemy_instance_id)
 }
 
 fn build_map_enemies(
@@ -533,7 +500,8 @@ fn build_map_enemies(
     for (i, (x, y)) in enemy_tiles.iter().enumerate() {
         let enemy_idx = i % available_enemies.len();
         let enemy = available_enemies[enemy_idx];
-        let instance_id = allocate_enemy_instance_id(&mut next_enemy_instance_id);
+        let (instance_id, next_id) = allocate_enemy_instance_id(next_enemy_instance_id);
+        next_enemy_instance_id = next_id;
         enemies.push(FieldEnemy::new(enemy.clone(), *x, *y, instance_id));
         respawn_positions.push((*x, *y, enemy_idx));
     }
@@ -541,19 +509,25 @@ fn build_map_enemies(
     (enemies, respawn_positions, next_enemy_instance_id.max(1))
 }
 
-fn apply_player_attack_action(
-    state: &mut CombatState,
+fn resolve_player_attack_action(
+    state: &CombatState,
     player_x: usize,
     player_y: usize,
     player_atk: i32,
     facing: Direction,
-) -> CombatActionResult {
+) -> (CombatActionResult, u32, Vec<SkillEffect>, Vec<GameEvent>) {
     if state.player_attack_cooldown > 0 {
-        return CombatActionResult::Attack(None);
+        return (
+            CombatActionResult::Attack(None),
+            state.player_attack_cooldown,
+            state.skill_effects.clone(),
+            Vec::new(),
+        );
     }
 
     let (tx, ty) = facing.apply(player_x, player_y);
-    state.skill_effects.push(SkillEffect {
+    let mut skill_effects = state.skill_effects.clone();
+    skill_effects.push(SkillEffect {
         x: tx,
         y: ty,
         effect_type: SkillType::Attack,
@@ -561,11 +535,23 @@ fn apply_player_attack_action(
     });
 
     let mut kill = None;
-    for enemy in &mut state.enemies {
-        if enemy.x == tx && enemy.y == ty && !enemy_is_dead(enemy) {
+    let mut enemy_events = Vec::new();
+    for enemy in &state.enemies {
+        if enemy.x == tx && enemy.y == ty && enemy.hp > 0 {
             let damage = (player_atk - enemy.data.def / 2).max(1);
-            enemy_take_damage(enemy, damage);
-            if enemy_is_dead(enemy) {
+            let hp = (enemy.hp - damage).max(0);
+            enemy_events.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
+                enemy_id: enemy.instance_id,
+                hp,
+            }));
+            enemy_events.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
+                enemy_id: enemy.instance_id,
+                hit_flash: HIT_FLASH_DURATION,
+            }));
+            if hp <= 0 {
+                enemy_events.push(GameEvent::Combat(CombatEvent::EnemyDespawn(
+                    enemy.instance_id,
+                )));
                 kill = Some(KillReward {
                     enemy_id: enemy.data.id.clone(),
                     exp: enemy.data.exp,
@@ -575,12 +561,17 @@ fn apply_player_attack_action(
             break;
         }
     }
-    state.player_attack_cooldown = PLAYER_ATTACK_COOLDOWN;
-    CombatActionResult::Attack(kill)
+
+    (
+        CombatActionResult::Attack(kill),
+        PLAYER_ATTACK_COOLDOWN,
+        skill_effects,
+        enemy_events,
+    )
 }
 
-fn apply_skill_action(
-    state: &mut CombatState,
+fn resolve_skill_action(
+    state: &CombatState,
     skill: &Skill,
     player_x: usize,
     player_y: usize,
@@ -588,6 +579,9 @@ fn apply_skill_action(
     facing: Direction,
 ) -> CombatActionResult {
     let mut kills = Vec::new();
+    let mut enemy_events = Vec::new();
+    let mut hp_updates: Vec<(u32, i32)> = Vec::new();
+    let mut skill_effects = state.skill_effects.clone();
     let damage = skill.power + player_atk / 2;
 
     match skill.skill_type {
@@ -595,13 +589,15 @@ fn apply_skill_action(
         SkillType::Ranged => {
             for dist in 1..=skill.range {
                 let (tx, ty) = facing.apply_distance(player_x, player_y, dist);
-                state.skill_effects.push(SkillEffect {
+                skill_effects.push(SkillEffect {
                     x: tx,
                     y: ty,
                     effect_type: SkillType::Ranged,
                     timer: SKILL_EFFECT_DURATION,
                 });
-                if let Some(kill) = damage_enemy_at(state, tx, ty, damage) {
+                if let Some(kill) =
+                    damage_enemy_at(state, tx, ty, damage, &mut hp_updates, &mut enemy_events)
+                {
                     kills.push(kill);
                     break;
                 }
@@ -615,13 +611,15 @@ fn apply_skill_action(
                 Direction::Right,
             ] {
                 let (tx, ty) = dir.apply(player_x, player_y);
-                state.skill_effects.push(SkillEffect {
+                skill_effects.push(SkillEffect {
                     x: tx,
                     y: ty,
                     effect_type: SkillType::Area,
                     timer: SKILL_EFFECT_DURATION,
                 });
-                if let Some(kill) = damage_enemy_at(state, tx, ty, damage) {
+                if let Some(kill) =
+                    damage_enemy_at(state, tx, ty, damage, &mut hp_updates, &mut enemy_events)
+                {
                     kills.push(kill);
                 }
             }
@@ -630,7 +628,7 @@ fn apply_skill_action(
     }
 
     let heal_amount = if skill.heal_power > 0 {
-        state.skill_effects.push(SkillEffect {
+        skill_effects.push(SkillEffect {
             x: player_x,
             y: player_y,
             effect_type: SkillType::Heal,
@@ -641,15 +639,47 @@ fn apply_skill_action(
         0
     };
 
-    CombatActionResult::Skill(SkillActionResult { heal_amount, kills })
+    CombatActionResult::Skill(SkillActionResult {
+        heal_amount,
+        kills,
+        skill_effects,
+        enemy_events,
+    })
 }
 
-fn damage_enemy_at(state: &mut CombatState, x: usize, y: usize, damage: i32) -> Option<KillReward> {
-    for enemy in &mut state.enemies {
-        if enemy.x == x && enemy.y == y && !enemy_is_dead(enemy) {
+fn damage_enemy_at(
+    state: &CombatState,
+    x: usize,
+    y: usize,
+    damage: i32,
+    hp_updates: &mut Vec<(u32, i32)>,
+    enemy_events: &mut Vec<GameEvent>,
+) -> Option<KillReward> {
+    for enemy in &state.enemies {
+        if enemy.x == x && enemy.y == y {
+            let current_hp = hp_updates
+                .iter()
+                .find_map(|(id, hp)| (*id == enemy.instance_id).then_some(*hp))
+                .unwrap_or(enemy.hp);
+            if current_hp <= 0 {
+                return None;
+            }
             let actual_damage = (damage - enemy.data.def / 2).max(1);
-            enemy_take_damage(enemy, actual_damage);
-            if enemy_is_dead(enemy) {
+            let hp = (current_hp - actual_damage).max(0);
+            hp_updates.retain(|(id, _)| *id != enemy.instance_id);
+            hp_updates.push((enemy.instance_id, hp));
+            enemy_events.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
+                enemy_id: enemy.instance_id,
+                hp,
+            }));
+            enemy_events.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
+                enemy_id: enemy.instance_id,
+                hit_flash: HIT_FLASH_DURATION,
+            }));
+            if hp <= 0 {
+                enemy_events.push(GameEvent::Combat(CombatEvent::EnemyDespawn(
+                    enemy.instance_id,
+                )));
                 return Some(KillReward {
                     enemy_id: enemy.data.id.clone(),
                     exp: enemy.data.exp,
