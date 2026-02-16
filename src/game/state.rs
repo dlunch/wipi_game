@@ -12,7 +12,7 @@ pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEve
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
+use crate::game::{GameData, GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -134,11 +134,20 @@ impl GameState {
 impl GameState {
     pub fn apply_event(
         &mut self,
+        data: &GameData,
         ui: &mut crate::game::UiState,
         session: &mut Option<crate::game::SessionState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
+            GameEvent::StartNewGame => {
+                let (next_state, next_session) = crate::game::start_new_game(data);
+                crate::game::enter_session(self, session, next_state, next_session, data);
+            }
+            GameEvent::ContinueGame => {
+                let (next_state, next_session) = crate::game::continue_game(data);
+                crate::game::enter_session(self, session, next_state, next_session, data);
+            }
             GameEvent::Loading(event) => match event {
                 LoadingEvent::Advance(step) => {
                     self.transition_to(session, GameState::Loading(*step))

@@ -6,8 +6,7 @@ use anyhow::Result;
 
 use crate::game::{
     GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext, SessionState,
-    UiEventApplier, UiInputEventResolver, UiState, apply_lifecycle_event, build_render_state,
-    domain_resolvers,
+    UiEventApplier, UiInputEventResolver, UiState, build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -88,8 +87,7 @@ impl GameEngine {
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
         self.state
-            .apply_event(&mut self.ui, &mut self.session, &event)?;
-        let _ = apply_lifecycle_event(&event, &mut self.state, &mut self.session, &self.data);
+            .apply_event(&self.data, &mut self.ui, &mut self.session, &event)?;
 
         if let Some(session) = self.session.as_mut() {
             session.apply_event(&self.data, &mut self.state, &mut self.ui, &event)?;
