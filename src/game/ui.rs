@@ -418,7 +418,7 @@ impl PauseMenuState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DialogState {
     pub npc_name: String,
     pub lines: Vec<DialogLine>,

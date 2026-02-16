@@ -4,14 +4,14 @@ use alloc::vec::Vec;
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 use crate::game::{GameData, PlayerState};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DialogSpec {
     pub npc_name: String,
     pub lines: Vec<DialogLine>,
     pub restore: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NpcEvent {
     OpenDialog(DialogSpec),
     OpenShop(String),

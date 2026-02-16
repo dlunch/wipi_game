@@ -6,6 +6,7 @@ use crate::game::{
 };
 use alloc::string::String;
 
+#[derive(Clone)]
 pub enum CombatRuntimeEvent {
     EnemySpawn(FieldEnemy),
     EnemyDespawn(u32),
@@ -74,6 +75,7 @@ impl From<GameInput> for RuntimeEvent {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum TransitionEvent {
     MapChanged,
     ToExplore,
@@ -81,6 +83,7 @@ pub enum TransitionEvent {
     ReleaseMovementDirection(Direction),
 }
 
+#[derive(Clone)]
 pub enum AppExploreEvent {
     MoveDirection(Direction),
     Npc(crate::game::NpcEvent),
@@ -89,6 +92,7 @@ pub enum AppExploreEvent {
     EnterMenu,
 }
 
+#[derive(Clone)]
 pub enum AppMovementEvent {
     Tick(
         crate::game::MovementTickEvent,

@@ -7,6 +7,7 @@ pub enum ShopIntent {
     Close,
 }
 
+#[derive(Clone)]
 pub enum ShopEvent {
     None,
     BuyItem(Item),

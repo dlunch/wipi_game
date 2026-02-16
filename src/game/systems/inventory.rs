@@ -8,6 +8,7 @@ pub enum InventoryIntent {
     Back,
 }
 
+#[derive(Clone)]
 pub enum InventoryEvent {
     None,
     SetSelected(usize),

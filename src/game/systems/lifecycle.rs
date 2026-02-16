@@ -12,6 +12,7 @@ pub struct IntroDialogSpec {
     pub npc_name: String,
 }
 
+#[derive(Clone)]
 pub enum LoadingEvent {
     Advance(usize),
     Loaded,

@@ -15,6 +15,7 @@ pub enum MenuEvent {
     Action(MenuAction),
 }
 
+#[derive(Clone, Copy)]
 pub enum PauseMenuEvent {
     None,
     SetSelected(usize),
