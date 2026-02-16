@@ -47,33 +47,33 @@ Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 
 ```
 src/
-├── main.rs              # Entry point + GameInner orchestration (collect effects, reduce/apply, timer tick)
+├── main.rs              # Entry point + WIPI App glue (timer/input/render wiring)
+├── runtime.rs           # GameRuntime orchestration (collect intents, resolve, apply)
 ├── data.rs              # Re-exports from data module
 ├── data/
 │   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
 │   └── parser.rs        # Text file parsers for .dat resources
 ├── game.rs              # Re-exports from game module (state, systems, rendering, ui)
 └── game/
-    ├── intent.rs        # AppAction, AppEffect enums
+    ├── intent.rs        # GameInput, GameIntent enums
     ├── state.rs         # GameState enum + state module re-exports
     ├── state/
-    │   └── player.rs    # PlayerState (persistent world data)
+    │   ├── player.rs    # PlayerState + tile events + player mutations
+    │   ├── combat.rs    # CombatState + combat actions/events + combat mutations
+    │   └── movement.rs  # MovementState + movement tick event + movement mutations
     ├── ui.rs            # UiState + UI-only states (menu/dialog/shop/inventory/pause/explore bindings)
-    ├── session.rs       # SessionState (player + runtime system state)
+    ├── session.rs       # SessionState (player/combat/movement + runtime update appliers)
     ├── systems.rs       # Re-exports from systems sub-modules
     ├── systems/
-    │   ├── combat.rs    # Combat state machine + reduce_tick/apply_tick + combat actions
-    │   ├── movement.rs  # Movement reduce_tick/apply_tick + input state
-    │   ├── explore.rs   # Explore intent reduction + map/tile helpers
-    │   ├── dialog.rs    # Dialog reduction + dialog action application
-    │   ├── shop.rs      # Shop intent reduction
-    │   ├── menu.rs      # Menu/pause intent reduction
-    │   ├── inventory.rs # Inventory intent reduction
-    │   ├── player.rs    # Player mutation applier (apply)
-    │   ├── quest.rs     # Quest mutation applier (apply)
-    │   ├── npc.rs       # NPC interaction applier (apply)
-    │   ├── reward.rs    # Combat reward applier helpers
-    │   └── lifecycle.rs # Loading/new-game/continue-game lifecycle reducers/helpers
+    │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
+    │   ├── movement.rs  # Movement resolve_tick + resolve_world_tick
+    │   ├── explore.rs   # Explore intent resolution
+    │   ├── dialog.rs    # Dialog intent resolution
+    │   ├── shop.rs      # Shop intent resolution
+    │   ├── menu.rs      # Menu/pause intent resolution
+    │   ├── inventory.rs # Inventory intent resolution
+    │   ├── npc.rs       # NPC interaction resolution
+    │   └── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
     ├── rendering.rs     # Re-exports from rendering sub-modules
     ├── rendering/
     │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
@@ -93,20 +93,21 @@ resources/
 
 ## Architecture
 
-The codebase follows a **state + stateless systems + rendering** pattern:
+The codebase follows a **state + resolve systems + runtime orchestration + rendering** pattern:
 
-- **State** (`state/`): Pure persistent world data (`PlayerState`).
+- **State** (`state/`): Core state types and domain mutations (`PlayerState`, `CombatState`, `MovementState`).
 - **UI State** (`ui.rs`): UI-only interaction state (`MenuUiState`, `DialogUiState`, `ShopUiState`, etc.).
-- **Session State** (`session.rs`): Active gameplay container (`player`, `combat`, `movement`, cooldown timers).
-- **Systems** (`systems/`): Reducers and appliers. Prefer `reduce_*` for decision events and `apply_*` for mutation.
+- **Session State** (`session.rs`): Active gameplay container + single-domain update appliers.
+- **Systems** (`systems/`): Stateless intent/tick resolution only. Prefer `resolve_*` naming.
+- **Runtime** (`runtime.rs`): Cross-system orchestration (`collect_intents -> resolve_intent -> apply_event`).
 - **Rendering** (`rendering/`): Pure draw functions. No game logic — only reads state and draws to framebuffer.
-- **App** (`main.rs` / `GameInner`): Orchestration layer. Input → intent/effect collection → system reduce/apply coordination → render state build.
+- **App** (`main.rs`): Entry glue only (WIPI `App` trait hooks, timer, repaint).
 
-Input flow: `key → intent_for_key(ui) → AppEffect → system reduce(...) -> Event → app-layer apply(...) → build_render_state(...) → render(...)`
+Input flow: `key → intent_for_key(ui) → GameIntent → system resolve(...) -> GameEvent → runtime apply(...) → build_render_state(...) → render(...)`
 
-Update flow (timer tick): `Tick → UpdateLoading/UpdateMovement/UpdateCombat effects → reduce_tick + apply_tick → build_render_state`.
+Update flow (timer tick): `Tick → UpdateLoading/UpdateMovement/UpdateCombat intents → resolve_tick/resolve_world_tick + session apply_* → build_render_state`.
 
-Architecture rule: reducers inside `systems/` should not orchestrate other systems. Cross-system orchestration belongs in `GameInner` apply handlers.
+Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `runtime.rs` event handlers.
 
 ## Code Style Guidelines
 
@@ -178,13 +179,14 @@ if matches!(self.state, GameState::Explore) { ... }
 ### Module Organization
 - Each system has its own file under `game/systems/`
 - Persistent world state lives under `game/state/`, UI state lives in `game/ui.rs`, rendering under `game/rendering/`
-- Module file (`game.rs`, `data.rs`, `state.rs`, etc.) only contains `mod` and `pub use`
-- Prefer functions over methods when logic doesn't need `self`
+- `main.rs` should stay thin; orchestration belongs in `runtime.rs`
+- Module files (`game.rs`, `data.rs`, `state.rs`, etc.) should primarily contain `mod` and `pub use`
+- Prefer methods for state/session mutation and functions for stateless system resolution
 
 ### Functions
 - Keep functions small and focused
 - Use descriptive names over comments
-- Prefer `reduce`/`reduce_*` returning events and separate `apply`/`apply_*` mutation functions
+- Prefer `resolve`/`resolve_*` returning events and separate state/session apply methods for mutation
 
 ## Key Constraints
 
