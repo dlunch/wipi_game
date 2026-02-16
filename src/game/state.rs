@@ -2,8 +2,6 @@ mod character;
 mod combat;
 mod movement;
 pub(crate) mod session;
-pub(crate) mod ui;
-mod ui_game_event;
 
 pub use character::{CharacterState, PlayerAction, PlayerEvent, TileEvent};
 pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffect, SkillEffect};
