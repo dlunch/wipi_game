@@ -13,9 +13,7 @@ use alloc::format;
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{
-    GameData, GameEvent, LoadingEvent, MenuState, SessionEvent, TransitionEvent, has_save_data,
-};
+use crate::game::{GameEvent, LoadingEvent, TransitionEvent};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -135,78 +133,48 @@ impl GameState {
 }
 
 impl GameState {
-    pub fn apply_event(
-        &mut self,
-        _data: &GameData,
-        ui: &mut crate::game::UiState,
-        session: &mut Option<crate::game::SessionState>,
-        event: &GameEvent,
-    ) -> Result<()> {
+    pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::Session(SessionEvent::Create) => {
-                *session = Some(crate::game::SessionState::empty());
-            }
             GameEvent::Loading(event) => match event {
-                LoadingEvent::Advance(step) => {
-                    self.transition_to(session, GameState::Loading(*step))
-                }
-                LoadingEvent::Loaded => {
-                    self.transition_to(session, GameState::Menu);
-                    ui.menu.set_menu(MenuState::new(has_save_data()));
-                }
+                LoadingEvent::Advance(step) => self.transition_to(GameState::Loading(*step)),
+                LoadingEvent::Loaded => self.transition_to(GameState::Menu),
                 LoadingEvent::Error(msg) => self.set_error(msg.clone()),
             },
             GameEvent::Transition(TransitionEvent::ToExplore) => {
-                self.transition_to(session, GameState::Explore)
+                self.transition_to(GameState::Explore)
             }
             GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
-                self.transition_to(session, GameState::Menu);
-                ui.menu.set_menu(MenuState::new(has_save_data()));
+                self.transition_to(GameState::Menu);
             }
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenInventory) => {
-                self.transition_to(session, GameState::Inventory)
+                self.transition_to(GameState::Inventory)
             }
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenStats) => {
-                self.transition_to(session, GameState::Stats)
+                self.transition_to(GameState::Stats)
             }
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenQuestLog) => {
-                self.transition_to(session, GameState::QuestLog)
+                self.transition_to(GameState::QuestLog)
             }
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
             | GameEvent::PauseMenu(crate::game::PauseMenuEvent::BackToExplore)
             | GameEvent::Inventory(crate::game::InventoryEvent::CloseToExplore)
             | GameEvent::Shop(crate::game::ShopEvent::CloseToExplore)
             | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
-                self.transition_to(session, GameState::Explore)
+                self.transition_to(GameState::Explore)
             }
-            GameEvent::OpenPauseMenu => self.transition_to(session, GameState::PauseMenu),
-            GameEvent::OpenMenuFromExplore => self.transition_to(session, GameState::Menu),
+            GameEvent::OpenPauseMenu => self.transition_to(GameState::PauseMenu),
+            GameEvent::OpenMenuFromExplore => self.transition_to(GameState::Menu),
             GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
-            | GameEvent::OpenDialogState(_) => self.transition_to(session, GameState::Dialog),
-            GameEvent::OpenShopState(_) => self.transition_to(session, GameState::Shop),
-            GameEvent::Exit(code) => {
-                wipi::kernel::exit(*code);
-            }
+            | GameEvent::OpenDialogState(_) => self.transition_to(GameState::Dialog),
+            GameEvent::OpenShopState(_) => self.transition_to(GameState::Shop),
             _ => {}
         }
         Ok(())
     }
 
-    pub(crate) fn transition_to(
-        &mut self,
-        session: &mut Option<crate::game::SessionState>,
-        next: GameState,
-    ) {
-        if next.requires_session() && session.is_none() {
-            *self = GameState::Error(format!("Missing session for state transition: {:?}", next));
-            return;
-        }
-
+    pub(crate) fn transition_to(&mut self, next: GameState) {
         if self.can_transition_to(&next) {
             *self = next;
-            if !self.requires_session() {
-                *session = None;
-            }
             return;
         }
 

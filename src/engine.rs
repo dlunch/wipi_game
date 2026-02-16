@@ -88,14 +88,48 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        self.state
-            .apply_event(&self.data, &mut self.ui, &mut self.session, &event)?;
+        if matches!(event, GameEvent::Session(crate::game::SessionEvent::Create)) {
+            self.session = Some(SessionState::empty());
+        }
+
+        if let GameEvent::Exit(code) = &event {
+            wipi::kernel::exit(*code);
+        }
+
+        self.state.apply_event(&event)?;
+
+        if self.state.requires_session() && self.session.is_none() {
+            self.state = GameState::Error(format!(
+                "Missing session for state transition: {:?}",
+                self.state
+            ));
+            return Ok(());
+        }
+
+        if !self.state.requires_session() {
+            self.session = None;
+        }
 
         if let Some(session) = self.session.as_mut() {
             session.apply_event(&self.data, &mut self.state, &event)?;
+            session.player.apply_event(&self.data, &event)?;
+            session
+                .movement
+                .apply_event(&self.data, &self.state, &mut session.player, &event)?;
+            session.combat.apply_event(&event)?;
+
+            if matches!(
+                event,
+                GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
+                    | GameEvent::OpenMenuFromExplore
+            ) {
+                let _ = crate::game::save_game(&session.player);
+            }
         }
 
-        self.ui.apply_game_event(self.session.as_ref(), &event)?;
+        if !matches!(self.state, GameState::Error(_)) {
+            self.ui.apply_game_event(self.session.as_ref(), &event)?;
+        }
         Ok(())
     }
 

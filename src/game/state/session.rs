@@ -66,10 +66,6 @@ impl SessionState {
                 _ => {}
             },
             GameEvent::RestoreSessionStats => self.player.restore_stats(),
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
-            | GameEvent::OpenMenuFromExplore => {
-                let _ = crate::game::save_game(&self.player);
-            }
             GameEvent::Combat(combat_event) => match combat_event {
                 CombatRuntimeEvent::SetSkillCooldowns(next_skill_cooldowns) => {
                     self.skill_cooldowns = *next_skill_cooldowns;
@@ -124,11 +120,6 @@ impl SessionState {
             },
             _ => {}
         }
-
-        self.player.apply_event(data, event)?;
-        self.movement
-            .apply_event(data, state, &mut self.player, event)?;
-        self.combat.apply_event(event)?;
         Ok(())
     }
 }

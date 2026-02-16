@@ -38,6 +38,10 @@ impl UiState {
             GameEvent::OpenMenuFromExplore => {
                 self.menu.set_menu(MenuState::new(has_save_data()));
             }
+            GameEvent::Loading(crate::game::LoadingEvent::Loaded)
+            | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver) => {
+                self.menu.set_menu(MenuState::new(has_save_data()));
+            }
             GameEvent::Inventory(event) => match event {
                 crate::game::InventoryEvent::None => {}
                 crate::game::InventoryEvent::SetSelected(selected) => {
