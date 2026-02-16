@@ -1,11 +1,11 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::data::DialogAction;
 use anyhow::{Result, anyhow, ensure};
 
-use crate::game::GameEvent;
-use crate::game::GameState;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::{GameEvent, GameState, InputKey};
 
 #[derive(Debug, Clone)]
 pub enum DialogEvent {
@@ -27,7 +27,7 @@ static DIALOG_CASCADE_RESOLVER: DialogCascadeResolver = DialogCascadeResolver;
 static DIALOG_INPUT_RESOLVER: DialogInputResolver = DialogInputResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
+    vec![&DIALOG_INPUT_RESOLVER, &DIALOG_CASCADE_RESOLVER]
 }
 
 impl DomainEventResolver for DialogInputResolver {
@@ -45,10 +45,8 @@ impl DomainEventResolver for DialogInputResolver {
         );
 
         let event = match key {
-            crate::game::InputKey::Back => {
-                DialogEvent::Transition(DialogTransition::CloseToExplore)
-            }
-            crate::game::InputKey::Ok => {
+            InputKey::Back => DialogEvent::Transition(DialogTransition::CloseToExplore),
+            InputKey::Ok => {
                 if let Some(dialog_state_ref) = ctx.ui.dialog.state.as_ref() {
                     if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
                         DialogEvent::Transition(DialogTransition::CloseToExplore)
@@ -78,8 +76,8 @@ impl DomainEventResolver for DialogInputResolver {
         };
 
         match event {
-            DialogEvent::None => Ok(alloc::vec::Vec::new()),
-            event => Ok(alloc::vec![GameEvent::Dialog(event)]),
+            DialogEvent::None => Ok(Vec::new()),
+            event => Ok(vec![GameEvent::Dialog(event)]),
         }
     }
 }
@@ -94,12 +92,12 @@ impl DomainEventResolver for DialogCascadeResolver {
             return Err(anyhow!("Invalid event: expected Dialog"));
         };
         match dialog_event {
-            DialogEvent::None => Ok(alloc::vec::Vec::new()),
+            DialogEvent::None => Ok(Vec::new()),
             DialogEvent::Transition(transition) => {
-                Ok(alloc::vec![GameEvent::ApplyDialogTransition(*transition)])
+                Ok(vec![GameEvent::ApplyDialogTransition(*transition)])
             }
             DialogEvent::Action(action, transition) => {
-                let mut events = alloc::vec![GameEvent::ApplyDialogTransition(*transition)];
+                let mut events = vec![GameEvent::ApplyDialogTransition(*transition)];
                 match action {
                     DialogAction::OpenShop(shop_id) => {
                         events.push(GameEvent::OpenShopById(shop_id.clone()));

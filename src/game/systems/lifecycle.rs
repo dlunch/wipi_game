@@ -1,6 +1,7 @@
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
@@ -9,6 +10,7 @@ use crate::data::Tile;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
     DialogState, GameData, GameEvent, GameState, PlayerState, SessionEvent, TransitionEvent,
+    load_game,
 };
 
 #[derive(Clone)]
@@ -48,7 +50,7 @@ static UPDATE_LOADING_RESOLVER: UpdateLoadingResolver = UpdateLoadingResolver;
 static START_CONTINUE_RESOLVER: StartContinueResolver = StartContinueResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&UPDATE_LOADING_RESOLVER, &START_CONTINUE_RESOLVER]
+    vec![&UPDATE_LOADING_RESOLVER, &START_CONTINUE_RESOLVER]
 }
 
 impl DomainEventResolver for UpdateLoadingResolver {
@@ -65,10 +67,7 @@ impl DomainEventResolver for UpdateLoadingResolver {
 
         let load_result = load_step(ctx.data, step);
 
-        Ok(alloc::vec![GameEvent::Loading(resolve_loading(
-            step,
-            load_result,
-        ))])
+        Ok(vec![GameEvent::Loading(resolve_loading(step, load_result))])
     }
 }
 
@@ -139,7 +138,7 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
         player.y = y;
     }
 
-    let mut out = alloc::vec![
+    let mut out = vec![
         GameEvent::Session(SessionEvent::Create),
         GameEvent::Session(SessionEvent::SetPlayerName(player.name.clone())),
         GameEvent::Session(SessionEvent::SetPlayerStats(player.stats.clone())),
@@ -192,7 +191,7 @@ fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
 
-    match crate::game::load_game(&mut player) {
+    match load_game(&mut player) {
         Ok(true) => {
             if data.find_map(&player.current_map_id).is_none() {
                 let (x, y) = (player.x, player.y);
@@ -210,7 +209,7 @@ fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
                 player.y = y;
             }
 
-            let mut out = alloc::vec![
+            let mut out = vec![
                 GameEvent::Session(SessionEvent::Create),
                 GameEvent::Session(SessionEvent::SetPlayerName(player.name.clone())),
                 GameEvent::Session(SessionEvent::SetPlayerStats(player.stats.clone())),

@@ -4,8 +4,10 @@ use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
-use crate::game::{GameEvent, UiEvent};
-use crate::game::{GameState, SessionState, TransitionEvent};
+use crate::game::{
+    AppExploreEvent, GameData, GameEvent, GameState, PlayerState, SessionState, ShopInputEvent,
+    TransitionEvent, UiEvent,
+};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -31,12 +33,12 @@ pub enum InputKey {
 }
 
 impl InputKey {
-    pub fn direction(self) -> Option<crate::data::Direction> {
+    pub fn direction(self) -> Option<Direction> {
         match self {
-            InputKey::Up => Some(crate::data::Direction::Up),
-            InputKey::Down => Some(crate::data::Direction::Down),
-            InputKey::Left => Some(crate::data::Direction::Left),
-            InputKey::Right => Some(crate::data::Direction::Right),
+            InputKey::Up => Some(Direction::Up),
+            InputKey::Down => Some(Direction::Down),
+            InputKey::Left => Some(Direction::Left),
+            InputKey::Right => Some(Direction::Right),
             _ => None,
         }
     }
@@ -86,29 +88,27 @@ impl UiEventApplier for UiState {
     fn apply_ui_event(&mut self, event: UiEvent) -> Vec<GameEvent> {
         match event {
             UiEvent::OverlayCloseRequested => {
-                alloc::vec![GameEvent::Transition(TransitionEvent::ToExplore)]
+                vec![GameEvent::Transition(TransitionEvent::ToExplore)]
             }
             UiEvent::GameOverConfirmRequested => {
-                alloc::vec![GameEvent::Transition(TransitionEvent::ToMenuFromGameOver)]
+                vec![GameEvent::Transition(TransitionEvent::ToMenuFromGameOver)]
             }
-            UiEvent::ErrorConfirmRequested => alloc::vec![GameEvent::Exit(1)],
-            UiEvent::MovementKeyReleased(direction) => alloc::vec![GameEvent::Transition(
+            UiEvent::ErrorConfirmRequested => vec![GameEvent::Exit(1)],
+            UiEvent::MovementKeyReleased(direction) => vec![GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
             )],
-            UiEvent::MenuInput(key) => alloc::vec![GameEvent::MenuInput(key)],
-            UiEvent::PauseMenuInput(key) => alloc::vec![GameEvent::PauseMenuInput(key)],
-            UiEvent::ExploreInput(key) => alloc::vec![GameEvent::ExploreInput(key)],
-            UiEvent::InventoryInput(key) => alloc::vec![GameEvent::InventoryInput(key)],
-            UiEvent::DialogInput(key) => alloc::vec![GameEvent::DialogInput(key)],
-            UiEvent::ShopBuySelected(selected) => alloc::vec![GameEvent::ShopInput(
-                crate::game::ShopInputEvent::BuySelected(selected),
-            )],
-            UiEvent::ShopSellSelected(selected) => alloc::vec![GameEvent::ShopInput(
-                crate::game::ShopInputEvent::SellSelected(selected),
-            )],
-            UiEvent::ShopClose => {
-                alloc::vec![GameEvent::ShopInput(crate::game::ShopInputEvent::Close,)]
+            UiEvent::MenuInput(key) => vec![GameEvent::MenuInput(key)],
+            UiEvent::PauseMenuInput(key) => vec![GameEvent::PauseMenuInput(key)],
+            UiEvent::ExploreInput(key) => vec![GameEvent::ExploreInput(key)],
+            UiEvent::InventoryInput(key) => vec![GameEvent::InventoryInput(key)],
+            UiEvent::DialogInput(key) => vec![GameEvent::DialogInput(key)],
+            UiEvent::ShopBuySelected(selected) => {
+                vec![GameEvent::ShopInput(ShopInputEvent::BuySelected(selected))]
             }
+            UiEvent::ShopSellSelected(selected) => {
+                vec![GameEvent::ShopInput(ShopInputEvent::SellSelected(selected))]
+            }
+            UiEvent::ShopClose => vec![GameEvent::ShopInput(ShopInputEvent::Close)],
         }
     }
 }
@@ -257,31 +257,29 @@ impl ExploreUiState {
     pub fn resolve_events_for_key(
         &self,
         key: InputKey,
-        player: &crate::game::PlayerState,
-        data: &crate::game::GameData,
-    ) -> Vec<crate::game::AppExploreEvent> {
+        player: &PlayerState,
+        data: &GameData,
+    ) -> Vec<AppExploreEvent> {
         let mut events = Vec::new();
 
         match key {
             InputKey::Up => {
-                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Up));
+                events.push(AppExploreEvent::MoveDirection(Direction::Up));
             }
             InputKey::Down => {
-                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Down));
+                events.push(AppExploreEvent::MoveDirection(Direction::Down));
             }
             InputKey::Left => {
-                events.push(crate::game::AppExploreEvent::MoveDirection(Direction::Left));
+                events.push(AppExploreEvent::MoveDirection(Direction::Left));
             }
             InputKey::Right => {
-                events.push(crate::game::AppExploreEvent::MoveDirection(
-                    Direction::Right,
-                ));
+                events.push(AppExploreEvent::MoveDirection(Direction::Right));
             }
             InputKey::Ok => {
                 let is_peaceful = data
                     .find_map(&player.current_map_id)
                     .is_some_and(|map| map.peaceful);
-                events.push(crate::game::AppExploreEvent::TryNpcInteract {
+                events.push(AppExploreEvent::TryNpcInteract {
                     facing: player.facing,
                     fallback_action: if is_peaceful {
                         None
@@ -292,24 +290,24 @@ impl ExploreUiState {
             }
             InputKey::Key1 => {
                 if let Some(action) = self.key_actions[0] {
-                    events.push(crate::game::AppExploreEvent::UseAction(action));
+                    events.push(AppExploreEvent::UseAction(action));
                 }
             }
             InputKey::Key2 => {
                 if let Some(action) = self.key_actions[1] {
-                    events.push(crate::game::AppExploreEvent::UseAction(action));
+                    events.push(AppExploreEvent::UseAction(action));
                 }
             }
             InputKey::Key3 => {
                 if let Some(action) = self.key_actions[2] {
-                    events.push(crate::game::AppExploreEvent::UseAction(action));
+                    events.push(AppExploreEvent::UseAction(action));
                 }
             }
             InputKey::Key0 => {
-                events.push(crate::game::AppExploreEvent::EnterPauseMenu);
+                events.push(AppExploreEvent::EnterPauseMenu);
             }
             InputKey::Back => {
-                events.push(crate::game::AppExploreEvent::EnterMenu);
+                events.push(AppExploreEvent::EnterMenu);
             }
             _ => {}
         }

@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -17,7 +18,7 @@ static EXPLORE_PAUSE_CASCADE_RESOLVER: ExplorePauseCascadeResolver = ExplorePaus
 static EXPLORE_MENU_CASCADE_RESOLVER: ExploreMenuCascadeResolver = ExploreMenuCascadeResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![
+    vec![
         &EXPLORE_INPUT_RESOLVER,
         &EXPLORE_USE_ACTION_CASCADE_RESOLVER,
         &EXPLORE_PAUSE_CASCADE_RESOLVER,
@@ -59,7 +60,7 @@ impl DomainEventResolver for ExploreUseActionCascadeResolver {
         let GameEvent::Explore(AppExploreEvent::UseAction(action)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(UseAction)"));
         };
-        Ok(alloc::vec![GameEvent::CombatPlayerAction(*action)])
+        Ok(vec![GameEvent::CombatPlayerAction(*action)])
     }
 }
 
@@ -69,7 +70,7 @@ impl DomainEventResolver for ExplorePauseCascadeResolver {
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(alloc::vec![GameEvent::OpenPauseMenu])
+        Ok(vec![GameEvent::OpenPauseMenu])
     }
 }
 
@@ -79,6 +80,6 @@ impl DomainEventResolver for ExploreMenuCascadeResolver {
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(alloc::vec![GameEvent::OpenMenuFromExplore])
+        Ok(vec![GameEvent::OpenMenuFromExplore])
     }
 }

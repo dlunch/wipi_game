@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -21,7 +22,7 @@ static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&SHOP_INPUT_RESOLVER, &OPEN_SHOP_BY_ID_RESOLVER]
+    vec![&SHOP_INPUT_RESOLVER, &OPEN_SHOP_BY_ID_RESOLVER]
 }
 
 impl DomainEventResolver for ShopInputResolver {
@@ -63,9 +64,9 @@ impl DomainEventResolver for ShopInputResolver {
         };
 
         if let Some(event) = event {
-            Ok(alloc::vec![GameEvent::Shop(event)])
+            Ok(vec![GameEvent::Shop(event)])
         } else {
-            Ok(alloc::vec::Vec::new())
+            Ok(Vec::new())
         }
     }
 }
@@ -84,8 +85,8 @@ impl DomainEventResolver for OpenShopByIdResolver {
             return Err(anyhow!("Shop not found: {shop_id}"));
         };
         let shop_items = ctx.data().get_shop_items(&shop);
-        Ok(alloc::vec![GameEvent::OpenShopState(Box::new(
-            ShopState::new(shop, shop_items),
-        ))])
+        Ok(vec![GameEvent::OpenShopState(Box::new(ShopState::new(
+            shop, shop_items,
+        )))])
     }
 }

@@ -1,4 +1,5 @@
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -6,7 +7,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameData, GameEvent, PlayerState};
+use crate::game::{AppExploreEvent, DialogState, GameData, GameEvent, GameState, PlayerState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -104,9 +105,9 @@ static EXPLORE_NPC_CASCADE_RESOLVER: ExploreNpcCascadeResolver = ExploreNpcCasca
 static EXPLORE_NPC_INTERACT_RESOLVER: ExploreNpcInteractResolver = ExploreNpcInteractResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![
+    vec![
         &EXPLORE_NPC_INTERACT_RESOLVER,
-        &EXPLORE_NPC_CASCADE_RESOLVER
+        &EXPLORE_NPC_CASCADE_RESOLVER,
     ]
 }
 
@@ -114,12 +115,12 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
     fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            GameEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract { .. })
+            GameEvent::Explore(AppExploreEvent::TryNpcInteract { .. })
         )
     }
 
     fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract {
+        let GameEvent::Explore(AppExploreEvent::TryNpcInteract {
             facing,
             fallback_action,
         }) = event
@@ -127,7 +128,7 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
             return Err(anyhow!("Invalid event: expected Explore(TryNpcInteract)"));
         };
         ensure!(
-            matches!(ctx.state, crate::game::GameState::Explore),
+            matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
@@ -137,49 +138,42 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
             ctx.data(),
             NpcIntent::Interact { facing: *facing },
         ) {
-            return Ok(alloc::vec![GameEvent::Explore(
-                crate::game::AppExploreEvent::Npc(npc_event),
-            )]);
+            return Ok(vec![GameEvent::Explore(AppExploreEvent::Npc(npc_event))]);
         }
 
         if let Some(action) = fallback_action {
-            return Ok(alloc::vec![GameEvent::Explore(
-                crate::game::AppExploreEvent::UseAction(*action),
-            )]);
+            return Ok(vec![GameEvent::Explore(AppExploreEvent::UseAction(
+                *action,
+            ))]);
         }
 
-        Ok(alloc::vec::Vec::new())
+        Ok(Vec::new())
     }
 }
 
 impl DomainEventResolver for ExploreNpcCascadeResolver {
     fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Explore(crate::game::AppExploreEvent::Npc(_))
-        )
+        matches!(event, GameEvent::Explore(AppExploreEvent::Npc(_)))
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
+        let GameEvent::Explore(AppExploreEvent::Npc(npc_event)) = event else {
             return Err(anyhow!("Invalid event: expected Explore(Npc)"));
         };
         match npc_event {
             NpcEvent::OpenDialog(dialog_spec) => {
-                let mut events = alloc::vec::Vec::with_capacity(2);
+                let mut events = Vec::with_capacity(2);
                 if dialog_spec.restore {
                     events.push(GameEvent::RestoreSessionStats);
                 }
-                events.push(GameEvent::OpenDialogState(crate::game::DialogState::new(
+                events.push(GameEvent::OpenDialogState(DialogState::new(
                     dialog_spec.npc_name.clone(),
                     dialog_spec.lines.clone(),
                 )));
                 Ok(events)
             }
-            NpcEvent::OpenShop(shop_id) => {
-                Ok(alloc::vec![GameEvent::OpenShopById(shop_id.clone(),)])
-            }
-            NpcEvent::RestoreStats => Ok(alloc::vec![GameEvent::RestoreSessionStats]),
+            NpcEvent::OpenShop(shop_id) => Ok(vec![GameEvent::OpenShopById(shop_id.clone())]),
+            NpcEvent::RestoreStats => Ok(vec![GameEvent::RestoreSessionStats]),
         }
     }
 }

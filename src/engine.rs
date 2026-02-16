@@ -1,12 +1,14 @@
 use alloc::collections::VecDeque;
+use alloc::format;
 use alloc::rc::Rc;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::Result;
 
 use crate::game::{
     GameData, GameEvent, GameInput, GameState, InputKey, RenderState, ResolveContext, SessionState,
-    UiEventApplier, UiInputEventResolver, UiState, build_render_state, domain_resolvers,
+    UiEvent, UiEventApplier, UiInputEventResolver, UiState, build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -48,20 +50,20 @@ impl GameEngine {
         self.dispatch_game_events(initial);
     }
 
-    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<crate::game::UiEvent> {
+    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
         self.ui
             .resolve_input(input, &self.state, self.session.as_ref())
     }
 
     fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
         match self.state {
-            GameState::Loading(_) => alloc::vec![GameEvent::UpdateLoading],
-            GameState::Explore => alloc::vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
+            GameState::Loading(_) => vec![GameEvent::UpdateLoading],
+            GameState::Explore => vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
             _ => Vec::new(),
         }
     }
 
-    fn apply_ui_events(&mut self, ui_events: Vec<crate::game::UiEvent>) -> Vec<GameEvent> {
+    fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>) -> Vec<GameEvent> {
         let mut out = Vec::new();
         for event in ui_events {
             out.extend(self.ui.apply_ui_event(event));
@@ -108,7 +110,7 @@ impl GameEngine {
         while let Some(event) = queue.pop_front() {
             processed += 1;
             if processed > 256 {
-                self.state = GameState::Error(alloc::format!(
+                self.state = GameState::Error(format!(
                     "Event queue overflow: processed {} events in one dispatch",
                     processed
                 ));
@@ -118,13 +120,13 @@ impl GameEngine {
             let derived = match self.resolve_with_handlers(&event) {
                 Ok(events) => events,
                 Err(e) => {
-                    self.state = GameState::Error(alloc::format!("{e}"));
+                    self.state = GameState::Error(format!("{e}"));
                     return;
                 }
             };
 
             if let Err(e) = self.apply_with_handlers(event) {
-                self.state = GameState::Error(alloc::format!("{e}"));
+                self.state = GameState::Error(format!("{e}"));
                 return;
             }
 

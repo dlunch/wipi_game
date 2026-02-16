@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -19,7 +20,7 @@ struct InventoryInputResolver;
 static INVENTORY_INPUT_RESOLVER: InventoryInputResolver = InventoryInputResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&INVENTORY_INPUT_RESOLVER]
+    vec![&INVENTORY_INPUT_RESOLVER]
 }
 
 impl DomainEventResolver for InventoryInputResolver {
@@ -61,8 +62,8 @@ impl DomainEventResolver for InventoryInputResolver {
         };
 
         match event {
-            InventoryEvent::None => Ok(alloc::vec::Vec::new()),
-            event => Ok(alloc::vec![GameEvent::Inventory(event)]),
+            InventoryEvent::None => Ok(Vec::new()),
+            event => Ok(vec![GameEvent::Inventory(event)]),
         }
     }
 }

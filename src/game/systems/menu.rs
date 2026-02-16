@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -34,7 +35,7 @@ static MENU_INPUT_RESOLVER: MenuInputResolver = MenuInputResolver;
 static PAUSE_MENU_INPUT_RESOLVER: PauseMenuInputResolver = PauseMenuInputResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![
+    vec![
         &MENU_INPUT_RESOLVER,
         &PAUSE_MENU_INPUT_RESOLVER,
         &MENU_ACTION_CASCADE_RESOLVER,
@@ -85,8 +86,8 @@ impl DomainEventResolver for MenuInputResolver {
         };
 
         match event {
-            MenuEvent::None => Ok(alloc::vec::Vec::new()),
-            event => Ok(alloc::vec![GameEvent::Menu(event)]),
+            MenuEvent::None => Ok(Vec::new()),
+            event => Ok(vec![GameEvent::Menu(event)]),
         }
     }
 }
@@ -136,8 +137,8 @@ impl DomainEventResolver for PauseMenuInputResolver {
         };
 
         match event {
-            PauseMenuEvent::None => Ok(alloc::vec::Vec::new()),
-            event => Ok(alloc::vec![GameEvent::PauseMenu(event)]),
+            PauseMenuEvent::None => Ok(Vec::new()),
+            event => Ok(vec![GameEvent::PauseMenu(event)]),
         }
     }
 }
@@ -156,6 +157,6 @@ impl DomainEventResolver for MenuActionCascadeResolver {
             MenuAction::Continue => GameEvent::ContinueGame,
             MenuAction::Exit => GameEvent::Exit(0),
         };
-        Ok(alloc::vec![event])
+        Ok(vec![event])
     }
 }

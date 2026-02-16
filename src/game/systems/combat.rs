@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
@@ -272,7 +273,7 @@ static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
 static COMBAT_PLAYER_ACTION_RESOLVER: CombatPlayerActionResolver = CombatPlayerActionResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&UPDATE_COMBAT_RESOLVER, &COMBAT_PLAYER_ACTION_RESOLVER]
+    vec![&UPDATE_COMBAT_RESOLVER, &COMBAT_PLAYER_ACTION_RESOLVER]
 }
 
 impl DomainEventResolver for UpdateCombatResolver {
