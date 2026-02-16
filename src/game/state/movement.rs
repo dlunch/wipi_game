@@ -67,13 +67,20 @@ fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
 
 struct MovementApplier;
 struct ReleaseMovementDirectionApplier;
+struct PressMovementDirectionApplier;
 
 static MOVEMENT_APPLIER: MovementApplier = MovementApplier;
 static RELEASE_MOVEMENT_DIRECTION_APPLIER: ReleaseMovementDirectionApplier =
     ReleaseMovementDirectionApplier;
+static PRESS_MOVEMENT_DIRECTION_APPLIER: PressMovementDirectionApplier =
+    PressMovementDirectionApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&MOVEMENT_APPLIER, &RELEASE_MOVEMENT_DIRECTION_APPLIER]
+    alloc::vec![
+        &MOVEMENT_APPLIER,
+        &RELEASE_MOVEMENT_DIRECTION_APPLIER,
+        &PRESS_MOVEMENT_DIRECTION_APPLIER,
+    ]
 }
 
 impl DomainEventApplier for MovementApplier {
@@ -118,6 +125,31 @@ impl DomainEventApplier for ReleaseMovementDirectionApplier {
             .session_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
         s.movement.on_direction_released(*direction);
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for PressMovementDirectionApplier {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(
+            event,
+            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(_))
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) = event
+        else {
+            return Ok(());
+        };
+        ensure!(
+            matches!(ctx.state, GameState::Explore),
+            "Invalid state: expected Explore"
+        );
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+        s.movement.on_direction_pressed(*direction);
         Ok(())
     }
 }

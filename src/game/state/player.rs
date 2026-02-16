@@ -297,11 +297,13 @@ impl PlayerState {
 }
 
 struct DialogActionApplier;
+struct InventoryAndShopApplier;
 
 static DIALOG_ACTION_APPLIER: DialogActionApplier = DialogActionApplier;
+static INVENTORY_AND_SHOP_APPLIER: InventoryAndShopApplier = InventoryAndShopApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&DIALOG_ACTION_APPLIER]
+    alloc::vec![&DIALOG_ACTION_APPLIER, &INVENTORY_AND_SHOP_APPLIER]
 }
 
 impl DomainEventApplier for DialogActionApplier {
@@ -372,6 +374,43 @@ impl DomainEventApplier for DialogActionApplier {
                 s.player.stats.current_mp = s.player.stats.max_mp;
             }
         }
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for InventoryAndShopApplier {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(
+            event,
+            GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(_))
+                | GameEvent::Shop(crate::game::ShopEvent::BuyItem(_))
+                | GameEvent::Shop(crate::game::ShopEvent::SellSelected(_))
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let s = ctx
+            .session_mut()
+            .ok_or_else(|| anyhow!("No active session"))?;
+
+        match event {
+            GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(index)) => {
+                let _ = s.player.apply(PlayerAction::UseItem { index: *index });
+            }
+            GameEvent::Shop(crate::game::ShopEvent::BuyItem(item)) => {
+                let _ = s.player.apply(PlayerAction::AddGold(-item.price));
+                let _ = s.player.apply(PlayerAction::AddItem(item.clone()));
+            }
+            GameEvent::Shop(crate::game::ShopEvent::SellSelected(index)) => {
+                if let PlayerEvent::ItemRemoved(Some(item)) =
+                    s.player.apply(PlayerAction::RemoveItemAt(*index))
+                {
+                    let _ = s.player.apply(PlayerAction::AddGold(item.price / 2));
+                }
+            }
+            _ => {}
+        }
+
         Ok(())
     }
 }

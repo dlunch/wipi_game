@@ -1,9 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{
-    DialogState, GameEvent, GameState, MenuState, PlayerAction, PlayerEvent, has_save_data,
-};
+use crate::game::{DialogState, GameEvent, GameState, MenuState, has_save_data};
 
 struct UiGameEventApplier;
 
@@ -23,7 +21,6 @@ impl DomainEventApplier for UiGameEventApplier {
                 | GameEvent::ContinueGame
                 | GameEvent::OpenPauseMenu
                 | GameEvent::OpenMenuFromExplore
-                | GameEvent::Explore(_)
                 | GameEvent::Inventory(_)
                 | GameEvent::Dialog(_)
                 | GameEvent::ApplyDialogTransition(_)
@@ -62,10 +59,6 @@ impl DomainEventApplier for UiGameEventApplier {
                 crate::game::PauseMenuEvent::OpenStats => ctx.transition_to(GameState::Stats),
                 crate::game::PauseMenuEvent::OpenQuestLog => ctx.transition_to(GameState::QuestLog),
                 crate::game::PauseMenuEvent::SaveAndReturnExplore => {
-                    {
-                        let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
-                        let _ = crate::game::save_game(&s.player);
-                    }
                     ctx.ui_mut().shop.reset();
                     ctx.transition_to(GameState::Explore);
                 }
@@ -76,31 +69,15 @@ impl DomainEventApplier for UiGameEventApplier {
                 ctx.transition_to(GameState::PauseMenu);
             }
             GameEvent::OpenMenuFromExplore => {
-                {
-                    let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
-                    let _ = crate::game::save_game(&s.player);
-                }
                 ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
                 ctx.transition_to(GameState::Menu);
             }
-            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
-                let s = ctx
-                    .session_mut()
-                    .ok_or_else(|| anyhow!("No active session"))?;
-                s.movement.on_direction_pressed(*direction);
-            }
-            GameEvent::Explore(_) => {}
             GameEvent::Inventory(event) => match event {
                 crate::game::InventoryEvent::None => {}
                 crate::game::InventoryEvent::SetSelected(selected) => {
                     ctx.ui_mut().inventory.set_selected(*selected)
                 }
-                crate::game::InventoryEvent::UseSelected(index) => {
-                    let s = ctx
-                        .session_mut()
-                        .ok_or_else(|| anyhow!("No active session"))?;
-                    let _ = s.player.apply(PlayerAction::UseItem { index: *index });
-                }
+                crate::game::InventoryEvent::UseSelected(_) => {}
                 crate::game::InventoryEvent::CloseToExplore => {
                     ctx.transition_to(GameState::Explore)
                 }
@@ -119,31 +96,15 @@ impl DomainEventApplier for UiGameEventApplier {
                 }
             },
             GameEvent::Shop(event) => match event {
-                crate::game::ShopEvent::BuyItem(item) => {
-                    let s = ctx
-                        .session_mut()
-                        .ok_or_else(|| anyhow!("No active session"))?;
-                    let _ = s.player.apply(PlayerAction::AddGold(-item.price));
-                    let _ = s.player.apply(PlayerAction::AddItem(item.clone()));
-                }
+                crate::game::ShopEvent::BuyItem(_) => {}
                 crate::game::ShopEvent::SellSelected(index) => {
-                    let (sold, len_after) = {
-                        let s = ctx
-                            .session_mut()
-                            .ok_or_else(|| anyhow!("No active session"))?;
-                        let sold = if let PlayerEvent::ItemRemoved(Some(item)) =
-                            s.player.apply(PlayerAction::RemoveItemAt(*index))
-                        {
-                            let _ = s.player.apply(PlayerAction::AddGold(item.price / 2));
-                            true
-                        } else {
-                            false
-                        };
-                        (sold, s.player.inventory.len())
-                    };
-                    if sold {
+                    if let Some(s) = ctx.session() {
+                        let len_after = s.player.inventory.len();
                         let current_selected = ctx.ui.shop.selected;
-                        if current_selected >= len_after && current_selected > 0 {
+                        if *index >= len_after
+                            && current_selected >= len_after
+                            && current_selected > 0
+                        {
                             ctx.ui_mut().shop.set_selected(current_selected - 1);
                         }
                     }

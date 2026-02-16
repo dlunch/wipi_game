@@ -21,11 +21,13 @@ impl SessionState {
 }
 
 struct SessionLifecycleApplier;
+struct SessionSaveApplier;
 
 static SESSION_LIFECYCLE_APPLIER: SessionLifecycleApplier = SessionLifecycleApplier;
+static SESSION_SAVE_APPLIER: SessionSaveApplier = SessionSaveApplier;
 
 pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
-    alloc::vec![&SESSION_LIFECYCLE_APPLIER]
+    alloc::vec![&SESSION_LIFECYCLE_APPLIER, &SESSION_SAVE_APPLIER]
 }
 
 impl DomainEventApplier for SessionLifecycleApplier {
@@ -54,6 +56,22 @@ impl DomainEventApplier for SessionLifecycleApplier {
             }
             _ => {}
         }
+        Ok(())
+    }
+}
+
+impl DomainEventApplier for SessionSaveApplier {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(
+            event,
+            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
+                | GameEvent::OpenMenuFromExplore
+        )
+    }
+
+    fn apply(&self, ctx: &mut ApplyContext<'_>, _event: &GameEvent) -> Result<()> {
+        let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
+        let _ = crate::game::save_game(&s.player);
         Ok(())
     }
 }
