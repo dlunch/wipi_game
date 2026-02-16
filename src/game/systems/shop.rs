@@ -50,7 +50,7 @@ impl DomainEventResolver for ShopInputResolver {
                     .map(|state| state.items.as_slice())
                     .unwrap_or(&[]);
                 if let Some(item) = shop_items.get(*selected).cloned() {
-                    if s.player.stats.gold >= item.price {
+                    if s.leader.stats.gold >= item.price {
                         Some(ShopEvent::BuyItem(item))
                     } else {
                         None

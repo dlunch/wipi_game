@@ -64,7 +64,7 @@ impl UiState {
                 crate::game::ShopEvent::BuyItem(_) => {}
                 crate::game::ShopEvent::SellSelected(index) => {
                     if let Some(s) = session.as_ref() {
-                        let len_after = s.player.inventory.len();
+                        let len_after = s.leader.inventory.len();
                         let current_selected = self.shop.selected;
                         if *index >= len_after
                             && current_selected >= len_after

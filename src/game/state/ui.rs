@@ -146,7 +146,7 @@ fn resolve_keydown(
         GameState::Dialog => ui.dialog.event_for_key(key).into_iter().collect(),
         GameState::Shop => {
             let inventory_len = session
-                .map(|session_state| session_state.player.inventory.len())
+                .map(|session_state| session_state.leader.inventory.len())
                 .unwrap_or(0);
             ui.shop
                 .event_for_key(key, inventory_len)

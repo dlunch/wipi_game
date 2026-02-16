@@ -44,7 +44,7 @@ impl DomainEventResolver for ExploreInputResolver {
         Ok(ctx
             .ui
             .explore
-            .resolve_events_for_key(*key, &s.player, ctx.data())
+            .resolve_events_for_key(*key, &s.leader, ctx.data())
             .into_iter()
             .map(GameEvent::Explore)
             .collect())

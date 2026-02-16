@@ -188,7 +188,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        let movement = resolve_world_tick(&s.movement, &s.player, &s.combat.enemies, ctx.data());
+        let movement = resolve_world_tick(&s.movement, &s.leader, &s.combat.enemies, ctx.data());
 
         let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
         events.push(GameEvent::Movement(AppMovementEvent::Tick(

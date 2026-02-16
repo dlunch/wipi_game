@@ -287,15 +287,15 @@ impl DomainEventResolver for UpdateCombatResolver {
             "Invalid state: expected Explore"
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = ctx.data().find_map(&s.player.current_map_id) else {
+        let Some(map) = ctx.data().find_map(&s.leader.current_map_id) else {
             return Ok(Vec::new());
         };
 
         Ok(resolve_tick(
             &s.combat,
-            s.player.x,
-            s.player.y,
-            s.player.total_def(),
+            s.leader.x,
+            s.leader.y,
+            s.leader.total_def(),
             (s.skill_cooldowns, s.mp_regen_timer),
             map,
             &ctx.data().enemies,
@@ -323,7 +323,7 @@ impl DomainEventResolver for CombatPlayerActionResolver {
 
         if let Some((slot, skill)) = action.skill() {
             if !s
-                .player
+                .leader
                 .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
             {
                 return Ok(Vec::new());
@@ -331,10 +331,10 @@ impl DomainEventResolver for CombatPlayerActionResolver {
 
             let combat_event = next_combat.apply(CombatAction::UseSkill {
                 skill,
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_atk: s.player.total_atk(),
-                facing: s.player.facing,
+                player_x: s.leader.x,
+                player_y: s.leader.y,
+                player_atk: s.leader.total_atk(),
+                facing: s.leader.facing,
             });
             let CombatEvent::Skill(result) = combat_event else {
                 return Ok(Vec::new());
@@ -366,10 +366,10 @@ impl DomainEventResolver for CombatPlayerActionResolver {
             }
         } else if let CombatEvent::Attack(Some(reward)) =
             next_combat.apply(CombatAction::PlayerAttack {
-                player_x: s.player.x,
-                player_y: s.player.y,
-                player_atk: s.player.total_atk(),
-                facing: s.player.facing,
+                player_x: s.leader.x,
+                player_y: s.leader.y,
+                player_atk: s.leader.total_atk(),
+                facing: s.leader.facing,
             })
         {
             events.push(GameEvent::Combat(CombatRuntimeEvent::GrantKillReward {

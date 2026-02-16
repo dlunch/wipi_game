@@ -49,7 +49,7 @@ impl DomainEventResolver for InventoryInputResolver {
                 }
             }
             InputKey::Down => {
-                let next = step_down(selected, s.player.inventory.len());
+                let next = step_down(selected, s.leader.inventory.len());
                 if next != selected {
                     InventoryEvent::SetSelected(next)
                 } else {

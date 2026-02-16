@@ -150,7 +150,9 @@ fn build_explore_render(
     ui: &UiState,
     data: &Rc<GameData>,
 ) -> Option<ExploreRender> {
-    let map = data.find_map(&session.player.current_map_id)?;
+    let _party_size = 1 + session.companions.len();
+
+    let map = data.find_map(&session.leader.current_map_id)?;
 
     let first_live_enemy_name = session
         .combat
@@ -186,23 +188,23 @@ fn build_explore_render(
 
     Some(ExploreRender {
         data: Rc::clone(data),
-        map_id: session.player.current_map_id.clone(),
-        player_x: session.player.x,
-        player_y: session.player.y,
-        player_facing: session.player.facing,
-        hp: as_u32(session.player.stats.current_hp),
-        max_hp: as_u32(session.player.stats.max_hp),
-        mp: as_u32(session.player.stats.current_mp),
-        max_mp: as_u32(session.player.stats.max_mp),
-        level: as_u32(session.player.stats.level),
+        map_id: session.leader.current_map_id.clone(),
+        player_x: session.leader.x,
+        player_y: session.leader.y,
+        player_facing: session.leader.facing,
+        hp: as_u32(session.leader.stats.current_hp),
+        max_hp: as_u32(session.leader.stats.max_hp),
+        mp: as_u32(session.leader.stats.current_mp),
+        max_mp: as_u32(session.leader.stats.max_mp),
+        level: as_u32(session.leader.stats.level),
         active_quest_count: session
-            .player
+            .leader
             .quests
             .iter()
             .filter(|quest| !quest.rewarded && !quest.completed)
             .count(),
         first_live_enemy_name,
-        opened_treasures: session.player.opened_treasures.clone(),
+        opened_treasures: session.leader.opened_treasures.clone(),
         enemies,
         player_hit_flash: session.combat.player_hit_flash,
         skill_effects,
@@ -240,7 +242,7 @@ pub fn build_render_state(
             };
             RenderState::Inventory(InventoryRender {
                 items: s
-                    .player
+                    .leader
                     .inventory
                     .iter()
                     .map(|item| InventoryItemRender {
@@ -248,13 +250,13 @@ pub fn build_render_state(
                         kind: item.kind,
                     })
                     .collect(),
-                equipped_weapon: s.player.equipped_weapon,
-                equipped_armor: s.player.equipped_armor,
-                equipped_accessory: s.player.equipped_accessory,
+                equipped_weapon: s.leader.equipped_weapon,
+                equipped_armor: s.leader.equipped_armor,
+                equipped_accessory: s.leader.equipped_accessory,
                 selected: ui.inventory.selected,
                 scroll: scroll_for_selection(
                     ui.inventory.selected,
-                    s.player.inventory.len(),
+                    s.leader.inventory.len(),
                     INVENTORY_VISIBLE_ITEMS,
                 ),
             })
@@ -264,15 +266,15 @@ pub fn build_render_state(
                 return RenderState::NoSession;
             };
             RenderState::Stats(StatsRender {
-                hp: as_u32(s.player.stats.current_hp),
-                max_hp: as_u32(s.player.stats.max_hp),
-                mp: as_u32(s.player.stats.current_mp),
-                max_mp: as_u32(s.player.stats.max_mp),
-                level: as_u32(s.player.stats.level),
-                atk: as_u32(s.player.total_atk()),
-                def: as_u32(s.player.total_def()),
-                exp: as_u32(s.player.stats.exp),
-                gold: as_u32(s.player.stats.gold),
+                hp: as_u32(s.leader.stats.current_hp),
+                max_hp: as_u32(s.leader.stats.max_hp),
+                mp: as_u32(s.leader.stats.current_mp),
+                max_mp: as_u32(s.leader.stats.max_mp),
+                level: as_u32(s.leader.stats.level),
+                atk: as_u32(s.leader.total_atk()),
+                def: as_u32(s.leader.total_def()),
+                exp: as_u32(s.leader.stats.exp),
+                gold: as_u32(s.leader.stats.gold),
             })
         }
         GameState::Dialog => {
@@ -309,7 +311,7 @@ pub fn build_render_state(
                     match ui.shop.mode {
                         ShopMode::Select => 2,
                         ShopMode::Buy => shop_state.items.len(),
-                        ShopMode::Sell => s.player.inventory.len(),
+                        ShopMode::Sell => s.leader.inventory.len(),
                     },
                     SHOP_VISIBLE_ITEMS,
                 ),
@@ -321,9 +323,9 @@ pub fn build_render_state(
                         price: item.price,
                     })
                     .collect(),
-                player_gold: s.player.stats.gold,
+                player_gold: s.leader.stats.gold,
                 player_inventory: s
-                    .player
+                    .leader
                     .inventory
                     .iter()
                     .map(|item| ShopItemRender {
@@ -338,7 +340,7 @@ pub fn build_render_state(
                 return RenderState::NoSession;
             };
             let quests = s
-                .player
+                .leader
                 .quests
                 .iter()
                 .filter(|quest| !quest.rewarded)

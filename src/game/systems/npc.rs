@@ -134,7 +134,7 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
         if let Some(npc_event) = resolve(
-            &s.player,
+            &s.leader,
             ctx.data(),
             NpcIntent::Interact { facing: *facing },
         ) {
