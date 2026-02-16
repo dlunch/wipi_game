@@ -2,8 +2,10 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::data::{Dialog, DialogLine, Item, Shop, Skill};
-use crate::game::InputKey;
+use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
+use crate::game::{
+    DialogIntent, ExploreIntent, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
+};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -65,6 +67,43 @@ impl Default for ExploreUiState {
     }
 }
 
+impl ExploreUiState {
+    pub fn intents_for_key(&self, key: InputKey, facing: Direction) -> Vec<ExploreIntent> {
+        let mut intents = Vec::new();
+        match key {
+            InputKey::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
+            InputKey::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
+            InputKey::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
+            InputKey::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
+            InputKey::Ok => {
+                intents.push(ExploreIntent::TryNpcInteract {
+                    facing,
+                    fallback_action: Some(self.ok_action),
+                });
+            }
+            InputKey::Key1 => {
+                if let Some(action) = self.key_actions[0] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
+            }
+            InputKey::Key2 => {
+                if let Some(action) = self.key_actions[1] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
+            }
+            InputKey::Key3 => {
+                if let Some(action) = self.key_actions[2] {
+                    intents.push(ExploreIntent::UseAction(action));
+                }
+            }
+            InputKey::Key0 => intents.push(ExploreIntent::Pause),
+            InputKey::Back => intents.push(ExploreIntent::BackToMenu),
+            _ => {}
+        }
+        intents
+    }
+}
+
 #[derive(Debug)]
 pub struct MenuUiState {
     pub state: MenuState,
@@ -81,6 +120,15 @@ impl Default for MenuUiState {
 }
 
 impl MenuUiState {
+    pub fn intent_for_key(&self, key: InputKey) -> Option<MenuIntent> {
+        match key {
+            InputKey::Up => Some(MenuIntent::MoveUp),
+            InputKey::Down => Some(MenuIntent::MoveDown),
+            InputKey::Ok => Some(MenuIntent::Select),
+            _ => None,
+        }
+    }
+
     pub fn set_menu(&mut self, state: MenuState) {
         self.state = state;
         self.selected = 0;
@@ -107,6 +155,16 @@ impl Default for PauseMenuUiState {
 }
 
 impl PauseMenuUiState {
+    pub fn intent_for_key(&self, key: InputKey) -> Option<PauseMenuIntent> {
+        match key {
+            InputKey::Up => Some(PauseMenuIntent::MoveUp),
+            InputKey::Down => Some(PauseMenuIntent::MoveDown),
+            InputKey::Ok => Some(PauseMenuIntent::Select),
+            InputKey::Back | InputKey::Key0 => Some(PauseMenuIntent::Back),
+            _ => None,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.selected = 0;
     }
@@ -122,6 +180,16 @@ pub struct InventoryUiState {
 }
 
 impl InventoryUiState {
+    pub fn intent_for_key(&self, key: InputKey) -> Option<InventoryIntent> {
+        match key {
+            InputKey::Up => Some(InventoryIntent::MoveUp),
+            InputKey::Down => Some(InventoryIntent::MoveDown),
+            InputKey::Ok => Some(InventoryIntent::UseSelected),
+            InputKey::Back => Some(InventoryIntent::Back),
+            _ => None,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.selected = 0;
     }
@@ -255,6 +323,14 @@ pub struct DialogUiState {
 }
 
 impl DialogUiState {
+    pub fn intent_for_key(&self, key: InputKey) -> Option<DialogIntent> {
+        match key {
+            InputKey::Ok => Some(DialogIntent::Confirm),
+            InputKey::Back => Some(DialogIntent::Back),
+            _ => None,
+        }
+    }
+
     pub fn open(&mut self, state: DialogState) {
         self.state = Some(state);
     }

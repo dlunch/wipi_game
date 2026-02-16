@@ -1,5 +1,3 @@
-use crate::game::InputKey;
-
 use crate::game::MenuAction;
 
 #[derive(Debug, Clone, Copy)]
@@ -7,17 +5,6 @@ pub enum MenuIntent {
     MoveUp,
     MoveDown,
     Select,
-}
-
-impl MenuIntent {
-    pub fn intent_for_key(key: InputKey) -> Option<MenuIntent> {
-        match key {
-            InputKey::Up => Some(MenuIntent::MoveUp),
-            InputKey::Down => Some(MenuIntent::MoveDown),
-            InputKey::Ok => Some(MenuIntent::Select),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,18 +30,6 @@ pub enum PauseMenuIntent {
     MoveDown,
     Select,
     Back,
-}
-
-impl PauseMenuIntent {
-    pub fn intent_for_key(key: InputKey) -> Option<PauseMenuIntent> {
-        match key {
-            InputKey::Up => Some(PauseMenuIntent::MoveUp),
-            InputKey::Down => Some(PauseMenuIntent::MoveDown),
-            InputKey::Ok => Some(PauseMenuIntent::Select),
-            InputKey::Back | InputKey::Key0 => Some(PauseMenuIntent::Back),
-            _ => None,
-        }
-    }
 }
 
 pub fn resolve(selected: usize, items: &[(&str, MenuAction)], intent: MenuIntent) -> MenuEvent {

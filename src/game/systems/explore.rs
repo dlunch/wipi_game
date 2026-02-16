@@ -1,7 +1,5 @@
-use alloc::vec::Vec;
-
 use crate::data::Direction;
-use crate::game::{ExploreAction, InputKey};
+use crate::game::ExploreAction;
 #[cfg(test)]
 use crate::game::{GameData, PlayerState};
 
@@ -29,49 +27,6 @@ pub enum ExploreEvent {
     EnterMenu,
 }
 
-impl ExploreIntent {
-    pub fn intent_for_key(
-        key: InputKey,
-        facing: Direction,
-        ok_action: ExploreAction,
-        key_actions: [Option<ExploreAction>; 3],
-    ) -> Vec<ExploreIntent> {
-        let mut intents = Vec::new();
-        match key {
-            InputKey::Up => intents.push(ExploreIntent::MoveDirection(Direction::Up)),
-            InputKey::Down => intents.push(ExploreIntent::MoveDirection(Direction::Down)),
-            InputKey::Left => intents.push(ExploreIntent::MoveDirection(Direction::Left)),
-            InputKey::Right => intents.push(ExploreIntent::MoveDirection(Direction::Right)),
-            InputKey::Ok => {
-                intents.push(ExploreIntent::TryNpcInteract {
-                    facing,
-                    fallback_action: Some(ok_action),
-                });
-            }
-            InputKey::Key1 => {
-                if let Some(action) = key_actions[0] {
-                    intents.push(ExploreIntent::UseAction(action));
-                }
-            }
-            InputKey::Key2 => {
-                if let Some(action) = key_actions[1] {
-                    intents.push(ExploreIntent::UseAction(action));
-                }
-            }
-            InputKey::Key3 => {
-                if let Some(action) = key_actions[2] {
-                    intents.push(ExploreIntent::UseAction(action));
-                }
-            }
-            InputKey::Key0 => intents.push(ExploreIntent::Pause),
-            InputKey::Back => intents.push(ExploreIntent::BackToMenu),
-            _ => {}
-        }
-
-        intents
-    }
-}
-
 pub fn resolve(is_peaceful: bool, intent: ExploreIntent) -> ExploreEvent {
     match intent {
         ExploreIntent::MoveDirection(direction) => ExploreEvent::MoveDirection(direction),
@@ -96,9 +51,9 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
-    use crate::data::{Direction, Item, ItemKind, Map, Tile};
+    use crate::data::{Item, ItemKind, Map, Tile};
+    use crate::game::TileEvent;
     use crate::game::state::TileApplyEvent;
-    use crate::game::{InputKey, TileEvent};
 
     fn make_test_map(
         id: &str,
@@ -219,125 +174,6 @@ mod tests {
         player.x = x;
         player.y = y;
         player
-    }
-
-    #[test]
-    fn intent_for_key_direction_keys_map_to_move_direction() {
-        let key_actions = [
-            Some(ExploreAction::Fireball),
-            Some(ExploreAction::Heal),
-            Some(ExploreAction::SpinAttack),
-        ];
-        for key in [
-            InputKey::Up,
-            InputKey::Down,
-            InputKey::Left,
-            InputKey::Right,
-        ] {
-            let intents = ExploreIntent::intent_for_key(
-                key,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions,
-            );
-            assert_eq!(intents.len(), 1);
-            assert!(matches!(
-                intents.as_slice(),
-                [ExploreIntent::MoveDirection(Direction::Up)]
-                    | [ExploreIntent::MoveDirection(Direction::Down)]
-                    | [ExploreIntent::MoveDirection(Direction::Left)]
-                    | [ExploreIntent::MoveDirection(Direction::Right)]
-            ));
-        }
-    }
-
-    #[test]
-    fn intent_for_key_ok_returns_interact_with_fallback_action() {
-        let intents = ExploreIntent::intent_for_key(
-            InputKey::Ok,
-            Direction::Up,
-            ExploreAction::BasicAttack,
-            [
-                Some(ExploreAction::Fireball),
-                Some(ExploreAction::Heal),
-                Some(ExploreAction::SpinAttack),
-            ],
-        );
-        assert!(matches!(
-            intents.as_slice(),
-            [ExploreIntent::TryNpcInteract {
-                facing: Direction::Up,
-                fallback_action: Some(ExploreAction::BasicAttack)
-            }]
-        ));
-    }
-
-    #[test]
-    fn intent_for_key_skill_keys_map_to_skills() {
-        let key_actions = [
-            Some(ExploreAction::Fireball),
-            Some(ExploreAction::Heal),
-            Some(ExploreAction::SpinAttack),
-        ];
-        assert!(matches!(
-            ExploreIntent::intent_for_key(
-                InputKey::Key1,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions
-            )
-            .as_slice(),
-            [ExploreIntent::UseAction(ExploreAction::Fireball)]
-        ));
-        assert!(matches!(
-            ExploreIntent::intent_for_key(
-                InputKey::Key2,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions
-            )
-            .as_slice(),
-            [ExploreIntent::UseAction(ExploreAction::Heal)]
-        ));
-        assert!(matches!(
-            ExploreIntent::intent_for_key(
-                InputKey::Key3,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions
-            )
-            .as_slice(),
-            [ExploreIntent::UseAction(ExploreAction::SpinAttack)]
-        ));
-    }
-
-    #[test]
-    fn intent_for_key_pause_and_back_keys_map_to_menu_intents() {
-        let key_actions = [
-            Some(ExploreAction::Fireball),
-            Some(ExploreAction::Heal),
-            Some(ExploreAction::SpinAttack),
-        ];
-        assert!(matches!(
-            ExploreIntent::intent_for_key(
-                InputKey::Key0,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions
-            )
-            .as_slice(),
-            [ExploreIntent::Pause]
-        ));
-        assert!(matches!(
-            ExploreIntent::intent_for_key(
-                InputKey::Back,
-                Direction::Down,
-                ExploreAction::BasicAttack,
-                key_actions
-            )
-            .as_slice(),
-            [ExploreIntent::BackToMenu]
-        ));
     }
 
     #[test]

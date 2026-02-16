@@ -5,9 +5,8 @@ use alloc::vec::Vec;
 
 use crate::data::Direction;
 use crate::game::{
-    DialogIntent, ExploreIntent, GameData, GameInput, GameIntent, GameState, InputKey,
-    InventoryIntent, MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState,
-    SessionState, ShopIntent, UiState, build_render_state, has_save_data,
+    GameData, GameInput, GameIntent, GameState, InputKey, MenuAction, MenuEvent, MenuState,
+    RenderState, SessionState, ShopIntent, UiState, build_render_state, has_save_data,
 };
 
 enum GameEvent {
@@ -104,7 +103,7 @@ impl GameRuntime {
             GameInput::KeyDown(key) => match self.state {
                 GameState::Loading(_) => {}
                 GameState::Menu => {
-                    if let Some(intent) = MenuIntent::intent_for_key(key) {
+                    if let Some(intent) = self.ui.menu.intent_for_key(key) {
                         intents.push(GameIntent::Menu(intent));
                     }
                 }
@@ -114,17 +113,12 @@ impl GameRuntime {
                         .as_ref()
                         .map(|s| s.player.facing)
                         .unwrap_or(Direction::Down);
-                    for intent in ExploreIntent::intent_for_key(
-                        key,
-                        facing,
-                        self.ui.explore.ok_action,
-                        self.ui.explore.key_actions,
-                    ) {
+                    for intent in self.ui.explore.intents_for_key(key, facing) {
                         intents.push(GameIntent::Explore(intent));
                     }
                 }
                 GameState::Inventory => {
-                    if let Some(intent) = InventoryIntent::intent_for_key(key) {
+                    if let Some(intent) = self.ui.inventory.intent_for_key(key) {
                         intents.push(GameIntent::Inventory(intent));
                     }
                 }
@@ -134,7 +128,7 @@ impl GameRuntime {
                     }
                 }
                 GameState::Dialog => {
-                    if let Some(intent) = DialogIntent::intent_for_key(key) {
+                    if let Some(intent) = self.ui.dialog.intent_for_key(key) {
                         intents.push(GameIntent::Dialog(intent));
                     }
                 }
@@ -159,7 +153,7 @@ impl GameRuntime {
                     }
                 }
                 GameState::PauseMenu => {
-                    if let Some(intent) = PauseMenuIntent::intent_for_key(key) {
+                    if let Some(intent) = self.ui.pause_menu.intent_for_key(key) {
                         intents.push(GameIntent::PauseMenu(intent));
                     }
                 }

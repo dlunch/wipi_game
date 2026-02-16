@@ -1,20 +1,10 @@
 use crate::data::DialogAction;
-use crate::game::{DialogState, InputKey};
+use crate::game::DialogState;
 
 #[derive(Debug, Clone, Copy)]
 pub enum DialogIntent {
     Confirm,
     Back,
-}
-
-impl DialogIntent {
-    pub fn intent_for_key(key: InputKey) -> Option<DialogIntent> {
-        match key {
-            InputKey::Ok => Some(DialogIntent::Confirm),
-            InputKey::Back => Some(DialogIntent::Back),
-            _ => None,
-        }
-    }
 }
 
 pub enum DialogEvent {
@@ -67,7 +57,7 @@ mod tests {
 
     use super::{DialogEvent, DialogIntent, DialogTransition, resolve};
     use crate::data::{Dialog, DialogAction, parse_dialogs};
-    use crate::game::{DialogState, InputKey};
+    use crate::game::DialogState;
 
     fn make_dialog(id: &str, lines_count: usize) -> Dialog {
         let mut raw = alloc::format!("@DIALOG:{id}\n");
@@ -187,18 +177,5 @@ mod tests {
             event,
             DialogEvent::Action(DialogAction::GiveQuest(_), DialogTransition::CloseToExplore)
         ));
-    }
-
-    #[test]
-    fn intent_for_key_maps_expected_keys() {
-        assert!(matches!(
-            DialogIntent::intent_for_key(InputKey::Ok),
-            Some(DialogIntent::Confirm)
-        ));
-        assert!(matches!(
-            DialogIntent::intent_for_key(InputKey::Back),
-            Some(DialogIntent::Back)
-        ));
-        assert!(matches!(DialogIntent::intent_for_key(InputKey::Up), None));
     }
 }
