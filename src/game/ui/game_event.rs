@@ -12,39 +12,17 @@ impl UiState {
             GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
                 *self = UiState::default();
             }
-            GameEvent::PauseMenu(event) => match event {
-                crate::game::PauseMenuEvent::None => {}
-                crate::game::PauseMenuEvent::SetSelected(selected) => {
-                    self.pause_menu.set_selected(*selected)
-                }
-                crate::game::PauseMenuEvent::OpenInventory => {
-                    self.inventory.reset();
-                }
-                crate::game::PauseMenuEvent::OpenStats => {}
-                crate::game::PauseMenuEvent::OpenQuestLog => {}
-                crate::game::PauseMenuEvent::SaveAndReturnExplore => {
-                    self.shop.reset();
-                }
-                crate::game::PauseMenuEvent::BackToExplore => {}
-            },
-            GameEvent::OpenPauseMenu => {
-                self.pause_menu.reset();
-            }
-            GameEvent::OpenMenuFromExplore => {
-                self.menu.set_menu(MenuState::new(has_save_data()));
-            }
             GameEvent::Loading(crate::game::LoadingEvent::Loaded)
+            | GameEvent::Transition(crate::game::TransitionEvent::ToMenu)
             | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver) => {
                 self.menu.set_menu(MenuState::new(has_save_data()));
             }
-            GameEvent::Inventory(event) => match event {
-                crate::game::InventoryEvent::None => {}
-                crate::game::InventoryEvent::SetSelected(selected) => {
-                    self.inventory.set_selected(*selected)
-                }
-                crate::game::InventoryEvent::UseSelected(_) => {}
-                crate::game::InventoryEvent::CloseToExplore => {}
-            },
+            GameEvent::Transition(crate::game::TransitionEvent::ToPauseMenu) => {
+                self.pause_menu.reset();
+            }
+            GameEvent::Transition(crate::game::TransitionEvent::ToInventory) => {
+                self.inventory.reset();
+            }
             GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
                     if let Some(dialog_state) = self.dialog.state.as_mut() {

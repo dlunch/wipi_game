@@ -97,7 +97,9 @@ impl DomainEventResolver for ExplorePauseCascadeResolver {
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(vec![GameEvent::OpenPauseMenu])
+        Ok(vec![GameEvent::Transition(
+            crate::game::TransitionEvent::ToPauseMenu,
+        )])
     }
 }
 
@@ -107,6 +109,9 @@ impl DomainEventResolver for ExploreMenuCascadeResolver {
     }
 
     fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(vec![GameEvent::OpenMenuFromExplore])
+        Ok(vec![
+            GameEvent::SaveSession,
+            GameEvent::Transition(crate::game::TransitionEvent::ToMenu),
+        ])
     }
 }

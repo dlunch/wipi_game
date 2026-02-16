@@ -2,65 +2,16 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameState, ShopCommand, ShopState, TransitionEvent};
-
-struct ShopInputResolver;
+use crate::game::{GameEvent, ShopState};
 struct OpenShopByIdResolver;
 
-static SHOP_INPUT_RESOLVER: ShopInputResolver = ShopInputResolver;
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![&SHOP_INPUT_RESOLVER, &OPEN_SHOP_BY_ID_RESOLVER]
-}
-
-impl DomainEventResolver for ShopInputResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::ShopCommand(_))
-    }
-
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let GameEvent::ShopCommand(input) = event else {
-            return Err(anyhow!("Invalid event: expected ShopCommand"));
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Shop),
-            "Invalid state: expected Shop"
-        );
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        let event = match input {
-            ShopCommand::BuySelected(selected) => {
-                let shop_items = ctx
-                    .ui
-                    .shop
-                    .state
-                    .as_ref()
-                    .map(|state| state.items.as_slice())
-                    .unwrap_or(&[]);
-                if let Some(item) = shop_items.get(*selected).cloned() {
-                    if s.leader.stats.gold >= item.price {
-                        Some(GameEvent::ShopBuyItem(item))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            }
-            ShopCommand::SellSelected(selected) => Some(GameEvent::ShopSellSelected(*selected)),
-            ShopCommand::Close => Some(GameEvent::Transition(TransitionEvent::ToExplore)),
-        };
-
-        if let Some(event) = event {
-            Ok(vec![event])
-        } else {
-            Ok(Vec::new())
-        }
-    }
+    vec![&OPEN_SHOP_BY_ID_RESOLVER]
 }
 
 impl DomainEventResolver for OpenShopByIdResolver {

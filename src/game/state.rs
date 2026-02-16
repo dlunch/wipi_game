@@ -141,26 +141,27 @@ impl GameState {
             GameEvent::Transition(TransitionEvent::ToExplore) => {
                 self.transition_to(GameState::Explore)
             }
+            GameEvent::Transition(TransitionEvent::ToMenu) => {
+                self.transition_to(GameState::Menu);
+            }
+            GameEvent::Transition(TransitionEvent::ToPauseMenu) => {
+                self.transition_to(GameState::PauseMenu);
+            }
+            GameEvent::Transition(TransitionEvent::ToInventory) => {
+                self.transition_to(GameState::Inventory);
+            }
+            GameEvent::Transition(TransitionEvent::ToStats) => {
+                self.transition_to(GameState::Stats);
+            }
+            GameEvent::Transition(TransitionEvent::ToQuestLog) => {
+                self.transition_to(GameState::QuestLog);
+            }
             GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
                 self.transition_to(GameState::Menu);
             }
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenInventory) => {
-                self.transition_to(GameState::Inventory)
-            }
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenStats) => {
-                self.transition_to(GameState::Stats)
-            }
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::OpenQuestLog) => {
-                self.transition_to(GameState::QuestLog)
-            }
-            GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
-            | GameEvent::PauseMenu(crate::game::PauseMenuEvent::BackToExplore)
-            | GameEvent::Inventory(crate::game::InventoryEvent::CloseToExplore)
-            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
+            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
                 self.transition_to(GameState::Explore)
             }
-            GameEvent::OpenPauseMenu => self.transition_to(GameState::PauseMenu),
-            GameEvent::OpenMenuFromExplore => self.transition_to(GameState::Menu),
             GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => self.transition_to(GameState::Dialog),
             GameEvent::OpenShopState(_) => self.transition_to(GameState::Shop),

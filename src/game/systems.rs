@@ -1,5 +1,4 @@
 pub mod combat;
-pub mod dialog;
 pub mod explore;
 pub mod lifecycle;
 pub mod movement;
@@ -20,7 +19,6 @@ pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     handlers.extend(movement::resolvers());
     handlers.extend(combat::resolvers());
     handlers.extend(explore::resolvers());
-    handlers.extend(dialog::resolvers());
     handlers.extend(shop::resolvers());
     handlers.extend(npc::resolvers());
     handlers

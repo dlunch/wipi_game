@@ -118,11 +118,7 @@ impl GameEngine {
                 .apply_event(&self.state, &mut session.leader, &event)?;
             session.combat.apply_event(&event)?;
 
-            if matches!(
-                event,
-                GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
-                    | GameEvent::OpenMenuFromExplore
-            ) {
+            if matches!(event, GameEvent::SaveSession) {
                 let _ = crate::game::save_game(session);
             }
         }

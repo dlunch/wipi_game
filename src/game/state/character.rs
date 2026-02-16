@@ -266,7 +266,7 @@ impl CharacterState {
                     self.stats.current_mp = self.stats.max_mp;
                 }
             },
-            GameEvent::Inventory(crate::game::InventoryEvent::UseSelected(index)) => {
+            GameEvent::UseInventorySelected(index) => {
                 let _ = self.apply(PlayerAction::UseItem { index: *index });
             }
             GameEvent::ShopBuyItem(item) => {

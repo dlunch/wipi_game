@@ -2,7 +2,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
+use crate::data::{Dialog, DialogAction, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{ExploreCommand, GameEvent, GameState, SessionState, TransitionEvent};
 
@@ -104,9 +104,8 @@ pub enum MenuEvent {
 }
 
 #[derive(Clone, Copy)]
-pub enum PauseMenuEvent {
+enum PauseMenuAction {
     None,
-    SetSelected(usize),
     OpenInventory,
     OpenStats,
     OpenQuestLog,
@@ -114,31 +113,10 @@ pub enum PauseMenuEvent {
     BackToExplore,
 }
 
-#[derive(Clone)]
-pub enum InventoryEvent {
-    None,
-    SetSelected(usize),
-    UseSelected(usize),
-    CloseToExplore,
-}
-
-#[derive(Clone, Copy)]
-pub enum DialogCommand {
-    Confirm,
-    Back,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum DialogTransition {
     SetLine(usize),
     CloseToExplore,
-}
-
-#[derive(Clone, Copy)]
-pub enum ShopCommand {
-    BuySelected(usize),
-    SellSelected(usize),
-    Close,
 }
 
 impl UiEventApplier for UiState {
@@ -159,13 +137,9 @@ impl UiEventApplier for UiState {
             UiEvent::ExploreInput(key) => self.resolve_explore_input(key),
             UiEvent::InventoryInput(key) => self.resolve_inventory_input(session, key),
             UiEvent::DialogInput(key) => self.resolve_dialog_input(key),
-            UiEvent::ShopBuySelected(selected) => {
-                vec![GameEvent::ShopCommand(ShopCommand::BuySelected(selected))]
-            }
-            UiEvent::ShopSellSelected(selected) => {
-                vec![GameEvent::ShopCommand(ShopCommand::SellSelected(selected))]
-            }
-            UiEvent::ShopClose => vec![GameEvent::ShopCommand(ShopCommand::Close)],
+            UiEvent::ShopBuySelected(selected) => self.resolve_shop_buy_selected(session, selected),
+            UiEvent::ShopSellSelected(selected) => self.resolve_shop_sell_selected(selected),
+            UiEvent::ShopClose => vec![GameEvent::Transition(TransitionEvent::ToExplore)],
         }
     }
 }
@@ -190,7 +164,7 @@ impl UiState {
     }
 
     fn resolve_inventory_input(
-        &self,
+        &mut self,
         session: Option<&SessionState>,
         key: InputKey,
     ) -> Vec<GameEvent> {
@@ -199,42 +173,98 @@ impl UiState {
         };
 
         let selected = self.inventory.selected;
-        let event = match key {
+        match key {
             InputKey::Up => {
                 let next = step_up(selected);
                 if next != selected {
-                    InventoryEvent::SetSelected(next)
-                } else {
-                    InventoryEvent::None
+                    self.inventory.set_selected(next);
                 }
             }
             InputKey::Down => {
                 let next = step_down(selected, s.leader.inventory.len());
                 if next != selected {
-                    InventoryEvent::SetSelected(next)
-                } else {
-                    InventoryEvent::None
+                    self.inventory.set_selected(next);
                 }
             }
-            InputKey::Ok => InventoryEvent::UseSelected(selected),
-            InputKey::Back => InventoryEvent::CloseToExplore,
-            _ => InventoryEvent::None,
-        };
-
-        match event {
-            InventoryEvent::None => Vec::new(),
-            event => vec![GameEvent::Inventory(event)],
+            InputKey::Ok => {
+                return vec![GameEvent::UseInventorySelected(selected)];
+            }
+            InputKey::Back => {
+                return vec![GameEvent::Transition(TransitionEvent::ToExplore)];
+            }
+            _ => {}
         }
+        Vec::new()
     }
 
     fn resolve_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
-        let event = match key {
-            InputKey::Ok => Some(DialogCommand::Confirm),
-            InputKey::Back => Some(DialogCommand::Back),
-            _ => None,
-        };
+        match key {
+            InputKey::Back => vec![GameEvent::ApplyDialogTransition(
+                DialogTransition::CloseToExplore,
+            )],
+            InputKey::Ok => {
+                if let Some(dialog_state_ref) = self.dialog.state.as_ref() {
+                    if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
+                        return vec![GameEvent::ApplyDialogTransition(
+                            DialogTransition::CloseToExplore,
+                        )];
+                    }
 
-        event.map(GameEvent::DialogCommand).into_iter().collect()
+                    let transition =
+                        if dialog_state_ref.current_line + 1 < dialog_state_ref.lines.len() {
+                            DialogTransition::SetLine(dialog_state_ref.current_line + 1)
+                        } else {
+                            DialogTransition::CloseToExplore
+                        };
+
+                    let mut events = vec![GameEvent::ApplyDialogTransition(transition)];
+                    if let Some(action) = dialog_state_ref
+                        .lines
+                        .get(dialog_state_ref.current_line)
+                        .and_then(|line| line.action.as_ref())
+                        .cloned()
+                    {
+                        match action {
+                            DialogAction::OpenShop(shop_id) => {
+                                events.push(GameEvent::OpenShopById(shop_id))
+                            }
+                            _ => events.push(GameEvent::ApplyDialogAction(action)),
+                        }
+                    }
+                    events
+                } else {
+                    Vec::new()
+                }
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    fn resolve_shop_buy_selected(
+        &self,
+        session: Option<&SessionState>,
+        selected: usize,
+    ) -> Vec<GameEvent> {
+        let Some(s) = session else {
+            return Vec::new();
+        };
+        let shop_items = self
+            .shop
+            .state
+            .as_ref()
+            .map(|state| state.items.as_slice())
+            .unwrap_or(&[]);
+        if let Some(item) = shop_items.get(selected).cloned()
+            && s.leader.stats.gold >= item.price
+        {
+            vec![GameEvent::ShopBuyItem(item)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn resolve_shop_sell_selected(&self, selected: usize) -> Vec<GameEvent> {
+        vec![GameEvent::ShopSellSelected(selected)]
     }
 
     fn resolve_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
@@ -282,41 +312,56 @@ impl UiState {
         }
     }
 
-    fn resolve_pause_menu_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn resolve_pause_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
         let selected = self.pause_menu.selected;
         let item_count = self.pause_menu.state.items.len();
 
-        let event = match key {
+        let action = match key {
             InputKey::Up => {
                 let next = step_up(selected);
                 if next != selected {
-                    PauseMenuEvent::SetSelected(next)
-                } else {
-                    PauseMenuEvent::None
+                    self.pause_menu.set_selected(next);
                 }
+                PauseMenuAction::None
             }
             InputKey::Down => {
                 let next = step_down(selected, item_count);
                 if next != selected {
-                    PauseMenuEvent::SetSelected(next)
-                } else {
-                    PauseMenuEvent::None
+                    self.pause_menu.set_selected(next);
                 }
+                PauseMenuAction::None
             }
             InputKey::Ok => match selected {
-                0 => PauseMenuEvent::OpenInventory,
-                1 => PauseMenuEvent::OpenStats,
-                2 => PauseMenuEvent::OpenQuestLog,
-                3 => PauseMenuEvent::SaveAndReturnExplore,
-                _ => PauseMenuEvent::None,
+                0 => PauseMenuAction::OpenInventory,
+                1 => PauseMenuAction::OpenStats,
+                2 => PauseMenuAction::OpenQuestLog,
+                3 => PauseMenuAction::SaveAndReturnExplore,
+                _ => PauseMenuAction::None,
             },
-            InputKey::Back | InputKey::Key0 => PauseMenuEvent::BackToExplore,
-            _ => PauseMenuEvent::None,
+            InputKey::Back | InputKey::Key0 => PauseMenuAction::BackToExplore,
+            _ => PauseMenuAction::None,
         };
 
-        match event {
-            PauseMenuEvent::None => Vec::new(),
-            event => vec![GameEvent::PauseMenu(event)],
+        match action {
+            PauseMenuAction::None => Vec::new(),
+            PauseMenuAction::OpenInventory => {
+                self.inventory.reset();
+                vec![GameEvent::Transition(TransitionEvent::ToInventory)]
+            }
+            PauseMenuAction::OpenStats => vec![GameEvent::Transition(TransitionEvent::ToStats)],
+            PauseMenuAction::OpenQuestLog => {
+                vec![GameEvent::Transition(TransitionEvent::ToQuestLog)]
+            }
+            PauseMenuAction::SaveAndReturnExplore => {
+                self.shop.reset();
+                vec![
+                    GameEvent::SaveSession,
+                    GameEvent::Transition(TransitionEvent::ToExplore),
+                ]
+            }
+            PauseMenuAction::BackToExplore => {
+                vec![GameEvent::Transition(TransitionEvent::ToExplore)]
+            }
         }
     }
 }
