@@ -3,7 +3,7 @@ use alloc::{rc::Rc, string::String};
 
 use anyhow::Result;
 
-use crate::game::{GameData, GameState, RuntimeEvent, SessionState, ShopState, UiState};
+use crate::game::{GameData, GameEvent, GameState, SessionState, ShopState, UiState};
 
 pub struct ResolveContext<'a> {
     pub state: &'a GameState,
@@ -81,15 +81,11 @@ impl<'a> ApplyContext<'a> {
 }
 
 pub trait DomainEventResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool;
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<Vec<RuntimeEvent>>;
+    fn handles(&self, event: &GameEvent) -> bool;
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>>;
 }
 
 pub trait DomainEventApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool;
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()>;
+    fn handles(&self, event: &GameEvent) -> bool;
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()>;
 }

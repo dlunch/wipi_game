@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::Tile;
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{CombatState, GameData, MovementState, PlayerState, RuntimeEvent};
+use crate::game::{CombatState, GameData, GameEvent, MovementState, PlayerState};
 
 pub struct SessionState {
     pub player: PlayerState,
@@ -29,26 +29,24 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for SessionLifecycleApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::StartNewGame
-                | RuntimeEvent::ContinueGame
-                | RuntimeEvent::RestoreSessionStats
+            GameEvent::StartNewGame | GameEvent::ContinueGame | GameEvent::RestoreSessionStats
         )
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
         match event {
-            RuntimeEvent::StartNewGame => {
+            GameEvent::StartNewGame => {
                 let (state, session) = start_new_game(ctx.data);
                 enter_session(ctx, state, session);
             }
-            RuntimeEvent::ContinueGame => {
+            GameEvent::ContinueGame => {
                 let (state, session) = continue_game(ctx.data);
                 enter_session(ctx, state, session);
             }
-            RuntimeEvent::RestoreSessionStats => {
+            GameEvent::RestoreSessionStats => {
                 let s = ctx
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;

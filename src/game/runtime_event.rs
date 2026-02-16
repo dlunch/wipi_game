@@ -64,8 +64,6 @@ pub enum UiEvent {
     ShopClose,
 }
 
-pub type RuntimeEvent = GameEvent;
-
 #[derive(Clone, Copy)]
 pub enum TransitionEvent {
     MapChanged,

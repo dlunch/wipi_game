@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameData, PlayerState, RuntimeEvent};
+use crate::game::{GameData, GameEvent, PlayerState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -111,19 +111,19 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for ExploreNpcInteractResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract { .. })
+            GameEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract { .. })
         )
     }
 
     fn resolve(
         &self,
         ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract {
+        event: &GameEvent,
+    ) -> Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::Explore(crate::game::AppExploreEvent::TryNpcInteract {
             facing,
             fallback_action,
         }) = event
@@ -141,13 +141,13 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
             ctx.data(),
             NpcIntent::Interact { facing: *facing },
         ) {
-            return Ok(alloc::vec![RuntimeEvent::Explore(
+            return Ok(alloc::vec![GameEvent::Explore(
                 crate::game::AppExploreEvent::Npc(npc_event),
             )]);
         }
 
         if let Some(action) = fallback_action {
-            return Ok(alloc::vec![RuntimeEvent::Explore(
+            return Ok(alloc::vec![GameEvent::Explore(
                 crate::game::AppExploreEvent::UseAction(*action),
             )]);
         }
@@ -157,39 +157,37 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
 }
 
 impl DomainEventResolver for ExploreNpcCascadeResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Explore(crate::game::AppExploreEvent::Npc(_))
+            GameEvent::Explore(crate::game::AppExploreEvent::Npc(_))
         )
     }
 
     fn resolve(
         &self,
         _ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
+        event: &GameEvent,
+    ) -> Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::Explore(crate::game::AppExploreEvent::Npc(npc_event)) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         match npc_event {
             NpcEvent::OpenDialog(dialog_spec) => {
                 let mut events = alloc::vec::Vec::with_capacity(2);
                 if dialog_spec.restore {
-                    events.push(RuntimeEvent::RestoreSessionStats);
+                    events.push(GameEvent::RestoreSessionStats);
                 }
-                events.push(RuntimeEvent::OpenDialogState(
-                    crate::game::DialogState::new(
-                        dialog_spec.npc_name.clone(),
-                        dialog_spec.lines.clone(),
-                    ),
-                ));
+                events.push(GameEvent::OpenDialogState(crate::game::DialogState::new(
+                    dialog_spec.npc_name.clone(),
+                    dialog_spec.lines.clone(),
+                )));
                 Ok(events)
             }
             NpcEvent::OpenShop(shop_id) => {
-                Ok(alloc::vec![RuntimeEvent::OpenShopById(shop_id.clone(),)])
+                Ok(alloc::vec![GameEvent::OpenShopById(shop_id.clone(),)])
             }
-            NpcEvent::RestoreStats => Ok(alloc::vec![RuntimeEvent::RestoreSessionStats]),
+            NpcEvent::RestoreStats => Ok(alloc::vec![GameEvent::RestoreSessionStats]),
         }
     }
 }

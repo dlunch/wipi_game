@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameData, GameState, RuntimeEvent};
+use crate::game::{GameData, GameEvent, GameState};
 
 #[derive(Clone)]
 pub enum LoadingEvent {
@@ -42,15 +42,11 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for UpdateLoadingResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::UpdateLoading)
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::UpdateLoading)
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        _event: &RuntimeEvent,
-    ) -> Result<Vec<RuntimeEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
         let step = if let GameState::Loading(step) = ctx.state {
             *step
         } else {
@@ -59,7 +55,7 @@ impl DomainEventResolver for UpdateLoadingResolver {
 
         let load_result = load_step(ctx.data, step);
 
-        Ok(alloc::vec![RuntimeEvent::Loading(resolve_loading(
+        Ok(alloc::vec![GameEvent::Loading(resolve_loading(
             step,
             load_result,
         ))])

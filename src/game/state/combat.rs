@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{GameState, PlayerAction, PlayerEvent, RuntimeEvent, SessionState};
+use crate::game::{GameEvent, GameState, PlayerAction, PlayerEvent, SessionState};
 
 const HIT_FLASH_DURATION: u32 = 10;
 const ENEMY_ATTACK_COOLDOWN: u32 = 30;
@@ -376,12 +376,12 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for CombatPlayerActionApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::CombatPlayerAction(_))
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::CombatPlayerAction(_))
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::CombatPlayerAction(action) = event else {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::CombatPlayerAction(action) = event else {
             return Ok(());
         };
         let data = alloc::rc::Rc::clone(ctx.data);
@@ -394,18 +394,17 @@ impl DomainEventApplier for CombatPlayerActionApplier {
 }
 
 impl DomainEventApplier for CombatRuntimeEventApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Combat(_)
-                | RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
+            GameEvent::Combat(_) | GameEvent::Transition(crate::game::TransitionEvent::MapChanged)
         )
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
         if matches!(
             event,
-            RuntimeEvent::Transition(crate::game::TransitionEvent::MapChanged)
+            GameEvent::Transition(crate::game::TransitionEvent::MapChanged)
         ) {
             let data = ctx.data_rc();
             let s = ctx
@@ -415,7 +414,7 @@ impl DomainEventApplier for CombatRuntimeEventApplier {
             return Ok(());
         }
 
-        let RuntimeEvent::Combat(event) = event else {
+        let GameEvent::Combat(event) = event else {
             return Ok(());
         };
         let s = ctx

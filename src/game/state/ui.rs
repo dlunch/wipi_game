@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{GameEvent, RuntimeEvent, UiEvent};
+use crate::game::{GameEvent, UiEvent};
 use crate::game::{
     GameState, PlayerAction, PlayerEvent, SessionState, TransitionEvent, has_save_data,
 };
@@ -420,28 +420,28 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for UiDomainApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Menu(_)
-                | RuntimeEvent::PauseMenu(_)
-                | RuntimeEvent::StartNewGame
-                | RuntimeEvent::ContinueGame
-                | RuntimeEvent::OpenPauseMenu
-                | RuntimeEvent::OpenMenuFromExplore
-                | RuntimeEvent::Explore(_)
-                | RuntimeEvent::Inventory(_)
-                | RuntimeEvent::Dialog(_)
-                | RuntimeEvent::ApplyDialogTransition(_)
-                | RuntimeEvent::Shop(_)
-                | RuntimeEvent::OpenDialogState(_)
-                | RuntimeEvent::OpenShopById(_)
+            GameEvent::Menu(_)
+                | GameEvent::PauseMenu(_)
+                | GameEvent::StartNewGame
+                | GameEvent::ContinueGame
+                | GameEvent::OpenPauseMenu
+                | GameEvent::OpenMenuFromExplore
+                | GameEvent::Explore(_)
+                | GameEvent::Inventory(_)
+                | GameEvent::Dialog(_)
+                | GameEvent::ApplyDialogTransition(_)
+                | GameEvent::Shop(_)
+                | GameEvent::OpenDialogState(_)
+                | GameEvent::OpenShopById(_)
         )
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
         match event {
-            RuntimeEvent::StartNewGame | RuntimeEvent::ContinueGame => {
+            GameEvent::StartNewGame | GameEvent::ContinueGame => {
                 *ctx.ui = UiState::default();
                 if matches!(ctx.state, GameState::Dialog)
                     && let Some(dialog_state) = intro_dialog_state(ctx.data)
@@ -449,14 +449,14 @@ impl DomainEventApplier for UiDomainApplier {
                     ctx.ui.dialog.set(Some(dialog_state));
                 }
             }
-            RuntimeEvent::Menu(event) => match event {
+            GameEvent::Menu(event) => match event {
                 crate::game::MenuEvent::None => {}
                 crate::game::MenuEvent::SetSelected(selected) => {
                     ctx.ui_mut().menu.set_selected(*selected)
                 }
                 crate::game::MenuEvent::Action(_) => {}
             },
-            RuntimeEvent::PauseMenu(event) => match event {
+            GameEvent::PauseMenu(event) => match event {
                 crate::game::PauseMenuEvent::None => {}
                 crate::game::PauseMenuEvent::SetSelected(selected) => {
                     ctx.ui_mut().pause_menu.set_selected(*selected)
@@ -477,11 +477,11 @@ impl DomainEventApplier for UiDomainApplier {
                 }
                 crate::game::PauseMenuEvent::BackToExplore => ctx.transition_to(GameState::Explore),
             },
-            RuntimeEvent::OpenPauseMenu => {
+            GameEvent::OpenPauseMenu => {
                 ctx.ui_mut().pause_menu.reset();
                 ctx.transition_to(GameState::PauseMenu);
             }
-            RuntimeEvent::OpenMenuFromExplore => {
+            GameEvent::OpenMenuFromExplore => {
                 {
                     let s = ctx.session().ok_or_else(|| anyhow!("No active session"))?;
                     let _ = crate::game::save_game(&s.player);
@@ -489,14 +489,14 @@ impl DomainEventApplier for UiDomainApplier {
                 ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
                 ctx.transition_to(GameState::Menu);
             }
-            RuntimeEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
+            GameEvent::Explore(crate::game::AppExploreEvent::MoveDirection(direction)) => {
                 let s = ctx
                     .session_mut()
                     .ok_or_else(|| anyhow!("No active session"))?;
                 s.movement.on_direction_pressed(*direction);
             }
-            RuntimeEvent::Explore(_) => {}
-            RuntimeEvent::Inventory(event) => match event {
+            GameEvent::Explore(_) => {}
+            GameEvent::Inventory(event) => match event {
                 crate::game::InventoryEvent::None => {}
                 crate::game::InventoryEvent::SetSelected(selected) => {
                     ctx.ui_mut().inventory.set_selected(*selected)
@@ -511,8 +511,8 @@ impl DomainEventApplier for UiDomainApplier {
                     ctx.transition_to(GameState::Explore)
                 }
             },
-            RuntimeEvent::Dialog(_) => {}
-            RuntimeEvent::ApplyDialogTransition(transition) => match transition {
+            GameEvent::Dialog(_) => {}
+            GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
                     if let Some(dialog_state) = ctx.ui_mut().dialog.state.as_mut() {
                         dialog_state.current_line = *line;
@@ -524,7 +524,7 @@ impl DomainEventApplier for UiDomainApplier {
                     ctx.transition_to(GameState::Explore);
                 }
             },
-            RuntimeEvent::Shop(event) => match event {
+            GameEvent::Shop(event) => match event {
                 crate::game::ShopEvent::BuyItem(item) => {
                     let s = ctx
                         .session_mut()
@@ -556,11 +556,11 @@ impl DomainEventApplier for UiDomainApplier {
                 }
                 crate::game::ShopEvent::CloseToExplore => ctx.transition_to(GameState::Explore),
             },
-            RuntimeEvent::OpenDialogState(dialog_state) => {
+            GameEvent::OpenDialogState(dialog_state) => {
                 ctx.ui_mut().dialog.open(dialog_state.clone());
                 ctx.transition_to(GameState::Dialog);
             }
-            RuntimeEvent::OpenShopById(shop_id) => {
+            GameEvent::OpenShopById(shop_id) => {
                 let _ = ctx.open_shop_by_id(shop_id);
             }
             _ => {}

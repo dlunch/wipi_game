@@ -14,7 +14,7 @@ use alloc::string::String;
 use anyhow::Result;
 
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{LoadingEvent, MenuState, RuntimeEvent, TransitionEvent, has_save_data};
+use crate::game::{GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -142,16 +142,16 @@ pub fn state_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for GameStateApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Loading(_) | RuntimeEvent::Transition(_) | RuntimeEvent::Exit(_)
+            GameEvent::Loading(_) | GameEvent::Transition(_) | GameEvent::Exit(_)
         )
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
         match event {
-            RuntimeEvent::Loading(event) => match event {
+            GameEvent::Loading(event) => match event {
                 LoadingEvent::Advance(step) => ctx.transition_to(GameState::Loading(*step)),
                 LoadingEvent::Loaded => {
                     ctx.transition_to(GameState::Menu);
@@ -159,14 +159,14 @@ impl DomainEventApplier for GameStateApplier {
                 }
                 LoadingEvent::Error(msg) => ctx.set_error(msg.clone()),
             },
-            RuntimeEvent::Transition(TransitionEvent::ToExplore) => {
+            GameEvent::Transition(TransitionEvent::ToExplore) => {
                 ctx.transition_to(GameState::Explore)
             }
-            RuntimeEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
+            GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
                 ctx.transition_to(GameState::Menu);
                 ctx.ui_mut().menu.set_menu(MenuState::new(has_save_data()));
             }
-            RuntimeEvent::Exit(code) => {
+            GameEvent::Exit(code) => {
                 wipi::kernel::exit(*code);
             }
             _ => {}

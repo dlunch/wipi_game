@@ -1,7 +1,7 @@
 use anyhow::Result;
 
+use crate::game::GameEvent;
 use crate::game::MenuAction;
-use crate::game::RuntimeEvent;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 
 #[derive(Debug, Clone, Copy)]
@@ -31,22 +31,22 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for MenuActionCascadeResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Menu(MenuEvent::Action(_)))
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::Menu(MenuEvent::Action(_)))
     }
 
     fn resolve(
         &self,
         _ctx: &mut ResolveContext<'_>,
-        event: &RuntimeEvent,
-    ) -> Result<alloc::vec::Vec<RuntimeEvent>> {
-        let RuntimeEvent::Menu(MenuEvent::Action(action)) = event else {
+        event: &GameEvent,
+    ) -> Result<alloc::vec::Vec<GameEvent>> {
+        let GameEvent::Menu(MenuEvent::Action(action)) = event else {
             return Ok(alloc::vec::Vec::new());
         };
         let event = match action {
-            MenuAction::NewGame => RuntimeEvent::StartNewGame,
-            MenuAction::Continue => RuntimeEvent::ContinueGame,
-            MenuAction::Exit => RuntimeEvent::Exit(0),
+            MenuAction::NewGame => GameEvent::StartNewGame,
+            MenuAction::Continue => GameEvent::ContinueGame,
+            MenuAction::Exit => GameEvent::Exit(0),
         };
         Ok(alloc::vec![event])
     }

@@ -7,8 +7,8 @@ use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    AppMovementEvent, GameData, GameState, MovementState, MovementTickEvent, PlayerState,
-    RuntimeEvent, TileEvent, TransitionEvent,
+    AppMovementEvent, GameData, GameEvent, GameState, MovementState, MovementTickEvent,
+    PlayerState, TileEvent, TransitionEvent,
 };
 
 const MOVE_COOLDOWN: u32 = 5;
@@ -176,15 +176,11 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for UpdateMovementResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::UpdateMovement)
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::UpdateMovement)
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        _event: &RuntimeEvent,
-    ) -> Result<Vec<RuntimeEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
         ensure!(
             matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
@@ -194,12 +190,12 @@ impl DomainEventResolver for UpdateMovementResolver {
         let movement = resolve_world_tick(&s.movement, &s.player, &s.combat.enemies, ctx.data());
 
         let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
-        events.push(RuntimeEvent::Movement(AppMovementEvent::Tick(
+        events.push(GameEvent::Movement(AppMovementEvent::Tick(
             movement.movement_event,
             movement.tile_event,
         )));
         if movement.map_changed {
-            events.push(RuntimeEvent::Transition(TransitionEvent::MapChanged));
+            events.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
         Ok(events)
     }

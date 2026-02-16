@@ -6,7 +6,7 @@ use crate::data::{Enemy, Map};
 
 use crate::game::state::{CombatState, FieldEnemy};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{CombatRuntimeEvent, GameState, RuntimeEvent};
+use crate::game::{CombatRuntimeEvent, GameEvent, GameState};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -19,11 +19,11 @@ pub fn resolve_tick(
     resources: ([u32; 3], u32),
     map: &Map,
     enemy_data: &[Enemy],
-) -> Vec<RuntimeEvent> {
+) -> Vec<GameEvent> {
     let (skill_cooldowns, mp_regen_timer) = resources;
     let mut events = Vec::with_capacity(12);
     let update_counter = state.update_counter.wrapping_add(1);
-    events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetUpdateCounter(
+    events.push(GameEvent::Combat(CombatRuntimeEvent::SetUpdateCounter(
         update_counter,
     )));
 
@@ -36,13 +36,13 @@ pub fn resolve_tick(
 
     if player_attack_cooldown > 0 {
         player_attack_cooldown = player_attack_cooldown.saturating_sub(1);
-        events.push(RuntimeEvent::Combat(
+        events.push(GameEvent::Combat(
             CombatRuntimeEvent::SetPlayerAttackCooldown(player_attack_cooldown),
         ));
     }
     if player_hit_flash > 0 {
         player_hit_flash = player_hit_flash.saturating_sub(1);
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
             player_hit_flash,
         )));
     }
@@ -54,7 +54,7 @@ pub fn resolve_tick(
             }
         }
         skill_effects.retain(|e| e.timer > 0);
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillEffects(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetSkillEffects(
             skill_effects.clone(),
         )));
     }
@@ -81,7 +81,7 @@ pub fn resolve_tick(
             damage_taken += actual_damage;
             if player_hit_flash != 10 {
                 player_hit_flash = 10;
-                events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
+                events.push(GameEvent::Combat(CombatRuntimeEvent::SetPlayerHitFlash(
                     player_hit_flash,
                 )));
             }
@@ -102,19 +102,19 @@ pub fn resolve_tick(
 
     push_enemy_events(&previous_enemies, &enemies, &mut events);
     if respawn_timer != state.respawn_timer {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetRespawnTimer(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetRespawnTimer(
             respawn_timer,
         )));
     }
     if next_enemy_instance_id != state.next_enemy_instance_id {
-        events.push(RuntimeEvent::Combat(
+        events.push(GameEvent::Combat(
             CombatRuntimeEvent::SetNextEnemyInstanceId(next_enemy_instance_id),
         ));
     }
 
     tick_resource_state(skill_cooldowns, mp_regen_timer, &mut events);
     if damage_taken > 0 {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::TakeDamage(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::TakeDamage(
             damage_taken,
         )));
     }
@@ -182,7 +182,7 @@ fn try_respawn(
 fn tick_resource_state(
     skill_cooldowns: [u32; 3],
     mp_regen_timer: u32,
-    events: &mut Vec<RuntimeEvent>,
+    events: &mut Vec<GameEvent>,
 ) {
     let mut next_skill_cooldowns = skill_cooldowns;
     for cooldown in &mut next_skill_cooldowns {
@@ -191,7 +191,7 @@ fn tick_resource_state(
         }
     }
     if next_skill_cooldowns != skill_cooldowns {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetSkillCooldowns(
             next_skill_cooldowns,
         )));
     }
@@ -203,22 +203,22 @@ fn tick_resource_state(
         recover_mp = true;
     }
     if next_mp_regen_timer != mp_regen_timer {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::SetMpRegenTimer(
+        events.push(GameEvent::Combat(CombatRuntimeEvent::SetMpRegenTimer(
             next_mp_regen_timer,
         )));
     }
     if recover_mp {
-        events.push(RuntimeEvent::Combat(CombatRuntimeEvent::RecoverMp(1)));
+        events.push(GameEvent::Combat(CombatRuntimeEvent::RecoverMp(1)));
     }
 }
 
-fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut Vec<RuntimeEvent>) {
+fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut Vec<GameEvent>) {
     for enemy in previous {
         if !next
             .iter()
             .any(|next_enemy| next_enemy.instance_id == enemy.instance_id)
         {
-            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyDespawn(
+            events.push(GameEvent::Combat(CombatRuntimeEvent::EnemyDespawn(
                 enemy.instance_id,
             )));
         }
@@ -229,27 +229,27 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
             .iter()
             .find(|previous_enemy| previous_enemy.instance_id == enemy.instance_id)
         else {
-            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemySpawn(
+            events.push(GameEvent::Combat(CombatRuntimeEvent::EnemySpawn(
                 enemy.clone(),
             )));
             continue;
         };
 
         if previous_enemy.x != enemy.x || previous_enemy.y != enemy.y {
-            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyMove {
+            events.push(GameEvent::Combat(CombatRuntimeEvent::EnemyMove {
                 enemy_id: enemy.instance_id,
                 x: enemy.x,
                 y: enemy.y,
             }));
         }
         if previous_enemy.hp != enemy.hp {
-            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyHpSet {
+            events.push(GameEvent::Combat(CombatRuntimeEvent::EnemyHpSet {
                 enemy_id: enemy.instance_id,
                 hp: enemy.hp,
             }));
         }
         if previous_enemy.attack_cooldown != enemy.attack_cooldown {
-            events.push(RuntimeEvent::Combat(
+            events.push(GameEvent::Combat(
                 CombatRuntimeEvent::EnemyAttackCooldownSet {
                     enemy_id: enemy.instance_id,
                     cooldown: enemy.attack_cooldown,
@@ -257,7 +257,7 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
             ));
         }
         if previous_enemy.hit_flash != enemy.hit_flash {
-            events.push(RuntimeEvent::Combat(CombatRuntimeEvent::EnemyHitFlashSet {
+            events.push(GameEvent::Combat(CombatRuntimeEvent::EnemyHitFlashSet {
                 enemy_id: enemy.instance_id,
                 hit_flash: enemy.hit_flash,
             }));
@@ -274,15 +274,11 @@ pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for UpdateCombatResolver {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::UpdateCombat)
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::UpdateCombat)
     }
 
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        _event: &RuntimeEvent,
-    ) -> Result<Vec<RuntimeEvent>> {
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
         ensure!(
             matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"

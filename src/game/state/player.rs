@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
 use crate::game::state::combat::KillReward;
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{GameData, RuntimeEvent};
+use crate::game::{GameData, GameEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TileEvent {
@@ -305,12 +305,12 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for DialogActionApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::ApplyDialogAction(_))
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::ApplyDialogAction(_))
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::ApplyDialogAction(action) = event else {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::ApplyDialogAction(action) = event else {
             return Ok(());
         };
         let data = alloc::rc::Rc::clone(ctx.data);

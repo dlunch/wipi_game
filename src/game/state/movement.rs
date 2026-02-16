@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use super::PlayerState;
 use crate::game::systems::runtime::{ApplyContext, DomainEventApplier};
-use crate::game::{AppMovementEvent, GameState, RuntimeEvent, TileApplyEvent, TransitionEvent};
+use crate::game::{AppMovementEvent, GameEvent, GameState, TileApplyEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -77,13 +77,12 @@ pub fn domain_appliers() -> alloc::vec::Vec<&'static dyn DomainEventApplier> {
 }
 
 impl DomainEventApplier for MovementApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
-        matches!(event, RuntimeEvent::Movement(_))
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::Movement(_))
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event
-        else {
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::Movement(AppMovementEvent::Tick(movement_event, tile_event)) = event else {
             return Ok(());
         };
         let data = alloc::rc::Rc::clone(ctx.data);
@@ -99,15 +98,15 @@ impl DomainEventApplier for MovementApplier {
 }
 
 impl DomainEventApplier for ReleaseMovementDirectionApplier {
-    fn handles(&self, event: &RuntimeEvent) -> bool {
+    fn handles(&self, event: &GameEvent) -> bool {
         matches!(
             event,
-            RuntimeEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
+            GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
         )
     }
 
-    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &RuntimeEvent) -> Result<()> {
-        let RuntimeEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) = event
+    fn apply(&self, ctx: &mut ApplyContext<'_>, event: &GameEvent) -> Result<()> {
+        let GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) = event
         else {
             return Ok(());
         };
