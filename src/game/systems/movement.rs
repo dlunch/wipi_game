@@ -27,19 +27,15 @@ pub fn resolve_world_tick(
     data: &GameData,
 ) -> MovementUpdateResult {
     let map = data.find_map(&player.current_map_id);
-    let enemy_positions: Vec<(usize, usize)> = enemies
-        .iter()
-        .filter(|enemy| enemy.hp > 0)
-        .map(|enemy| (enemy.x, enemy.y))
-        .collect();
-    let npc_positions: Vec<(usize, usize)> = data
-        .npcs
-        .iter()
-        .filter(|npc| npc.map_id == player.current_map_id)
-        .map(|npc| (npc.x, npc.y))
-        .collect();
-
-    let movement_event = resolve_tick(state, player, map, &enemy_positions, &npc_positions);
+    let movement_event = resolve_tick_with_occupancy(state, player, map, |x, y| {
+        enemies
+            .iter()
+            .any(|enemy| enemy.hp > 0 && enemy.x == x && enemy.y == y)
+            || data
+                .npcs
+                .iter()
+                .any(|npc| npc.map_id == player.current_map_id && npc.x == x && npc.y == y)
+    });
     let tile_event = if let Some((dx, dy)) = movement_event.step {
         if let Some(next_x) = player.x.checked_add_signed(dx as isize) {
             if let Some(next_y) = player.y.checked_add_signed(dy as isize) {
@@ -68,12 +64,24 @@ pub fn resolve_world_tick(
     }
 }
 
+#[cfg(test)]
 pub fn resolve_tick(
     state: &MovementState,
     player: &CharacterState,
     map: Option<&Map>,
     enemy_positions: &[(usize, usize)],
     npc_positions: &[(usize, usize)],
+) -> MovementTickEvent {
+    resolve_tick_with_occupancy(state, player, map, |x, y| {
+        position_occupied(enemy_positions, x, y) || position_occupied(npc_positions, x, y)
+    })
+}
+
+fn resolve_tick_with_occupancy(
+    state: &MovementState,
+    player: &CharacterState,
+    map: Option<&Map>,
+    mut is_occupied: impl FnMut(usize, usize) -> bool,
 ) -> MovementTickEvent {
     let mut next_state = *state;
 
@@ -115,8 +123,7 @@ pub fn resolve_tick(
     if can_move(player, map, dx, dy)
         && let Some(new_x) = player.x.checked_add_signed(dx as isize)
         && let Some(new_y) = player.y.checked_add_signed(dy as isize)
-        && !position_occupied(enemy_positions, new_x, new_y)
-        && !position_occupied(npc_positions, new_x, new_y)
+        && !is_occupied(new_x, new_y)
     {
         step = Some((dx, dy));
     }
@@ -138,6 +145,7 @@ fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
     map.get_tile(new_x, new_y).is_passable()
 }
 
+#[cfg(test)]
 fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
     positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
 }
