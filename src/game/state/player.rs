@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::data::{Direction, Item, ItemKind, PlayerStats, QuestProgress, QuestType};
 use crate::game::state::combat::KillReward;
-use crate::game::{GameData, GameEvent};
+use crate::game::{GameData, GameEvent, SessionEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TileEvent {
@@ -292,6 +292,50 @@ impl PlayerState {
 impl PlayerState {
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
+            GameEvent::Session(session_event) => match session_event {
+                SessionEvent::Create => {}
+                SessionEvent::SetPlayerName(name) => {
+                    self.name = name.clone();
+                }
+                SessionEvent::SetPlayerStats(stats) => {
+                    self.stats = stats.clone();
+                }
+                SessionEvent::SetPlayerMap(map_id) => {
+                    self.current_map_id = map_id.clone();
+                }
+                SessionEvent::SetPlayerPosition { x, y } => {
+                    self.x = *x;
+                    self.y = *y;
+                }
+                SessionEvent::SetPlayerFacing(facing) => {
+                    self.facing = *facing;
+                }
+                SessionEvent::AddPlayerItem(item) => {
+                    self.inventory.push(item.clone());
+                }
+                SessionEvent::SetEquippedWeapon(index) => {
+                    self.equipped_weapon = *index;
+                }
+                SessionEvent::SetEquippedArmor(index) => {
+                    self.equipped_armor = *index;
+                }
+                SessionEvent::SetEquippedAccessory(index) => {
+                    self.equipped_accessory = *index;
+                }
+                SessionEvent::AddQuestProgress(progress) => {
+                    self.quests.push(progress.clone());
+                }
+                SessionEvent::AddOpenedTreasure { map_id, x, y } => {
+                    if !self.is_treasure_opened(map_id, *x, *y) {
+                        self.opened_treasures.push((map_id.clone(), *x, *y));
+                    }
+                }
+                SessionEvent::SetSkillCooldowns(_)
+                | SessionEvent::SetMpRegenTimer(_)
+                | SessionEvent::ResetMovement
+                | SessionEvent::ResetCombat
+                | SessionEvent::SpawnCurrentMapEnemies => {}
+            },
             GameEvent::ApplyDialogAction(action) => match action {
                 crate::data::DialogAction::GiveQuest(id) => {
                     if !self.quests.iter().any(|q| q.quest_id == *id) {

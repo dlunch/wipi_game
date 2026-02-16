@@ -12,7 +12,9 @@ pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEve
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{GameData, GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
+use crate::game::{
+    GameData, GameEvent, LoadingEvent, MenuState, SessionEvent, TransitionEvent, has_save_data,
+};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -140,8 +142,8 @@ impl GameState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::SetSession(next_session) => {
-                *session = Some((**next_session).clone());
+            GameEvent::Session(SessionEvent::Create) => {
+                *session = Some(crate::game::SessionState::empty());
             }
             GameEvent::Loading(event) => match event {
                 LoadingEvent::Advance(step) => {

@@ -1,7 +1,9 @@
+use alloc::string::String;
+
 use anyhow::Result;
 
 use crate::game::{
-    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, UiState,
+    CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionEvent, UiState,
 };
 
 #[derive(Clone)]
@@ -14,6 +16,16 @@ pub struct SessionState {
 }
 
 impl SessionState {
+    pub fn empty() -> Self {
+        Self {
+            player: PlayerState::new(String::new(), ""),
+            combat: CombatState::default(),
+            movement: MovementState::default(),
+            skill_cooldowns: [0; 3],
+            mp_regen_timer: 0,
+        }
+    }
+
     pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
         if let Some(map) = data.find_map(&self.player.current_map_id) {
             self.combat.spawn_for_map(map, &data.enemies);
@@ -28,6 +40,25 @@ impl SessionState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
+            GameEvent::Session(session_event) => match session_event {
+                SessionEvent::Create => {}
+                SessionEvent::SetSkillCooldowns(cooldowns) => {
+                    self.skill_cooldowns = *cooldowns;
+                }
+                SessionEvent::SetMpRegenTimer(timer) => {
+                    self.mp_regen_timer = *timer;
+                }
+                SessionEvent::ResetMovement => {
+                    self.movement = MovementState::default();
+                }
+                SessionEvent::ResetCombat => {
+                    self.combat = CombatState::default();
+                }
+                SessionEvent::SpawnCurrentMapEnemies => {
+                    self.spawn_current_map_enemies(data);
+                }
+                _ => {}
+            },
             GameEvent::RestoreSessionStats => self.player.restore_stats(),
             GameEvent::PauseMenu(crate::game::PauseMenuEvent::SaveAndReturnExplore)
             | GameEvent::OpenMenuFromExplore => {

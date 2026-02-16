@@ -1,6 +1,5 @@
 use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
-use alloc::boxed::Box;
 use alloc::string::String;
 
 #[derive(Clone)]
@@ -54,7 +53,7 @@ pub enum GameEvent {
     ShopInput(ShopInputEvent),
     StartNewGame,
     ContinueGame,
-    SetSession(Box<crate::game::SessionState>),
+    Session(SessionEvent),
     OpenPauseMenu,
     OpenMenuFromExplore,
     OpenDialogState(crate::game::DialogState),
@@ -75,6 +74,27 @@ pub enum GameEvent {
     Lifecycle(crate::game::LifecycleEvent),
     Transition(TransitionEvent),
     Exit(i32),
+}
+
+#[derive(Clone)]
+pub enum SessionEvent {
+    Create,
+    SetPlayerName(String),
+    SetPlayerStats(crate::data::PlayerStats),
+    SetPlayerMap(String),
+    SetPlayerPosition { x: usize, y: usize },
+    SetPlayerFacing(Direction),
+    AddPlayerItem(crate::data::Item),
+    SetEquippedWeapon(Option<usize>),
+    SetEquippedArmor(Option<usize>),
+    SetEquippedAccessory(Option<usize>),
+    AddQuestProgress(crate::data::QuestProgress),
+    AddOpenedTreasure { map_id: String, x: usize, y: usize },
+    SetSkillCooldowns([u32; 3]),
+    SetMpRegenTimer(u32),
+    ResetMovement,
+    ResetCombat,
+    SpawnCurrentMapEnemies,
 }
 
 #[derive(Clone, Copy)]

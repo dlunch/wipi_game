@@ -1,4 +1,3 @@
-use alloc::boxed::Box;
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
@@ -9,8 +8,7 @@ use anyhow::{Result, anyhow};
 use crate::data::Tile;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CombatState, DialogState, GameData, GameEvent, GameState, MovementState, PlayerState,
-    SessionState, TransitionEvent,
+    DialogState, GameData, GameEvent, GameState, PlayerState, SessionEvent, TransitionEvent,
 };
 
 #[derive(Clone)]
@@ -85,18 +83,16 @@ impl DomainEventResolver for StartContinueResolver {
 
         match event {
             GameEvent::StartNewGame => {
-                let mut session = setup_new_game_session(ctx.data());
-                session.spawn_current_map_enemies(ctx.data());
-                out.push(GameEvent::SetSession(Box::new(session)));
+                let player = setup_new_game_player(ctx.data());
+                out.extend(session_setup_events_from_player(&player));
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
                 if let Some(dialog_state) = intro_dialog_state(ctx.data()) {
                     out.push(GameEvent::OpenDialogState(dialog_state));
                 }
             }
             GameEvent::ContinueGame => {
-                let mut session = setup_continue_session(ctx.data());
-                session.spawn_current_map_enemies(ctx.data());
-                out.push(GameEvent::SetSession(Box::new(session)));
+                let player = setup_continue_player(ctx.data());
+                out.extend(session_setup_events_from_player(&player));
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
@@ -112,10 +108,9 @@ fn intro_dialog_state(data: &GameData) -> Option<DialogState> {
     Some(DialogState::from_dialog(npc_name.clone(), dialog))
 }
 
-fn setup_new_game_session(data: &GameData) -> SessionState {
+fn setup_new_game_player(data: &GameData) -> PlayerState {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
 
     if let Some(ref weapon_id) = config.equip_weapon
         && let Some(weapon) = data.find_item(weapon_id).cloned()
@@ -146,19 +141,12 @@ fn setup_new_game_session(data: &GameData) -> SessionState {
         player.y = y;
     }
 
-    SessionState {
-        player,
-        combat,
-        movement: MovementState::default(),
-        skill_cooldowns: [0; 3],
-        mp_regen_timer: 0,
-    }
+    player
 }
 
-fn setup_continue_session(data: &GameData) -> SessionState {
+fn setup_continue_player(data: &GameData) -> PlayerState {
     let config = &data.newgame;
     let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
-    let combat = CombatState::default();
 
     match crate::game::load_game(&mut player) {
         Ok(true) => {
@@ -178,14 +166,58 @@ fn setup_continue_session(data: &GameData) -> SessionState {
                 player.y = y;
             }
 
-            SessionState {
-                player,
-                combat,
-                movement: MovementState::default(),
-                skill_cooldowns: [0; 3],
-                mp_regen_timer: 0,
-            }
+            player
         }
-        Ok(false) | Err(_) => setup_new_game_session(data),
+        Ok(false) | Err(_) => setup_new_game_player(data),
     }
+}
+
+fn session_setup_events_from_player(player: &PlayerState) -> Vec<GameEvent> {
+    let mut out = alloc::vec![
+        GameEvent::Session(SessionEvent::Create),
+        GameEvent::Session(SessionEvent::SetPlayerName(player.name.clone())),
+        GameEvent::Session(SessionEvent::SetPlayerStats(player.stats.clone())),
+        GameEvent::Session(SessionEvent::SetPlayerMap(player.current_map_id.clone())),
+        GameEvent::Session(SessionEvent::SetPlayerPosition {
+            x: player.x,
+            y: player.y,
+        }),
+        GameEvent::Session(SessionEvent::SetPlayerFacing(player.facing)),
+    ];
+
+    for item in &player.inventory {
+        out.push(GameEvent::Session(SessionEvent::AddPlayerItem(
+            item.clone(),
+        )));
+    }
+
+    out.push(GameEvent::Session(SessionEvent::SetEquippedWeapon(
+        player.equipped_weapon,
+    )));
+    out.push(GameEvent::Session(SessionEvent::SetEquippedArmor(
+        player.equipped_armor,
+    )));
+    out.push(GameEvent::Session(SessionEvent::SetEquippedAccessory(
+        player.equipped_accessory,
+    )));
+
+    for quest in &player.quests {
+        out.push(GameEvent::Session(SessionEvent::AddQuestProgress(
+            quest.clone(),
+        )));
+    }
+    for (map_id, x, y) in &player.opened_treasures {
+        out.push(GameEvent::Session(SessionEvent::AddOpenedTreasure {
+            map_id: map_id.clone(),
+            x: *x,
+            y: *y,
+        }));
+    }
+
+    out.push(GameEvent::Session(SessionEvent::SetSkillCooldowns([0; 3])));
+    out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
+    out.push(GameEvent::Session(SessionEvent::ResetMovement));
+    out.push(GameEvent::Session(SessionEvent::ResetCombat));
+    out.push(GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies));
+    out
 }
