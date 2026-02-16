@@ -6,6 +6,11 @@ use alloc::vec::Vec;
 
 #[derive(Clone)]
 pub enum CombatEvent {
+    SetMapEnemies {
+        enemies: Vec<FieldEnemy>,
+        respawn_positions: Vec<(usize, usize, usize)>,
+        next_enemy_instance_id: u32,
+    },
     EnemySpawn(FieldEnemy),
     EnemyDespawn(u32),
     EnemyMove {

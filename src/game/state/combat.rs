@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::data::{Enemy, Map, SkillType, Tile};
+use crate::data::{Enemy, Map, SkillType};
 use crate::game::{CombatEvent, GameEvent};
 
 const HIT_FLASH_DURATION: u32 = 10;
@@ -128,65 +128,25 @@ pub struct CombatState {
 }
 
 impl CombatState {
-    pub fn spawn_for_map(&mut self, map: &Map, enemy_data: &[Enemy]) {
-        self.enemies.clear();
-        self.respawn_positions.clear();
-        self.respawn_timer = 0;
-        self.player_attack_cooldown = 0;
-        self.player_hit_flash = 0;
-        self.skill_effects.clear();
-        self.update_counter = 0;
-        self.next_enemy_instance_id = 1;
-
-        let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
-        for y in 0..map.height {
-            for x in 0..map.width {
-                if map.get_tile(x, y) == Tile::Enemy {
-                    enemy_tiles.push((x, y));
-                }
-            }
-        }
-
-        if enemy_tiles.is_empty() || map.encounters.is_empty() {
-            return;
-        }
-
-        let available_enemies: Vec<&Enemy> = map
-            .encounters
-            .iter()
-            .filter_map(|(id, _)| enemy_data.iter().find(|e| &e.id == id))
-            .collect();
-
-        if available_enemies.is_empty() {
-            return;
-        }
-
-        for (i, (x, y)) in enemy_tiles.iter().enumerate() {
-            let enemy_idx = i % available_enemies.len();
-            let enemy = available_enemies[enemy_idx];
-            let instance_id = self.allocate_enemy_instance_id();
-            self.enemies
-                .push(FieldEnemy::new(enemy.clone(), *x, *y, instance_id));
-            self.respawn_positions.push((*x, *y, enemy_idx));
-        }
-    }
-
-    fn allocate_enemy_instance_id(&mut self) -> u32 {
-        let id = self.next_enemy_instance_id;
-        self.next_enemy_instance_id = self.next_enemy_instance_id.wrapping_add(1);
-        if self.next_enemy_instance_id == 0 {
-            self.next_enemy_instance_id = 1;
-        }
-        id.max(1)
-    }
-}
-
-impl CombatState {
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         let GameEvent::Combat(event) = event else {
             return Ok(());
         };
         match event {
+            CombatEvent::SetMapEnemies {
+                enemies,
+                respawn_positions,
+                next_enemy_instance_id,
+            } => {
+                self.enemies = enemies.clone();
+                self.respawn_positions = respawn_positions.clone();
+                self.respawn_timer = 0;
+                self.player_attack_cooldown = 0;
+                self.player_hit_flash = 0;
+                self.skill_effects.clear();
+                self.update_counter = 0;
+                self.next_enemy_instance_id = (*next_enemy_instance_id).max(1);
+            }
             CombatEvent::EnemySpawn(enemy) => {
                 self.enemies.push(enemy.clone());
             }

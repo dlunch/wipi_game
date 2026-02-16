@@ -7,7 +7,7 @@ use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{CombatEvent, GameEvent, GameState};
+use crate::game::{CombatEvent, GameEvent, GameState, SessionEvent, TransitionEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -276,12 +276,18 @@ fn push_enemy_events(previous: &[FieldEnemy], next: &[FieldEnemy], events: &mut 
 
 struct UpdateCombatResolver;
 struct CombatPlayerActionResolver;
+struct CombatMapSyncResolver;
 
 static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
 static COMBAT_PLAYER_ACTION_RESOLVER: CombatPlayerActionResolver = CombatPlayerActionResolver;
+static COMBAT_MAP_SYNC_RESOLVER: CombatMapSyncResolver = CombatMapSyncResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![&UPDATE_COMBAT_RESOLVER, &COMBAT_PLAYER_ACTION_RESOLVER]
+    vec![
+        &UPDATE_COMBAT_RESOLVER,
+        &COMBAT_PLAYER_ACTION_RESOLVER,
+        &COMBAT_MAP_SYNC_RESOLVER,
+    ]
 }
 
 impl DomainEventResolver for UpdateCombatResolver {
@@ -393,6 +399,31 @@ impl DomainEventResolver for CombatPlayerActionResolver {
     }
 }
 
+impl DomainEventResolver for CombatMapSyncResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(
+            event,
+            GameEvent::Transition(TransitionEvent::MapChanged)
+                | GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies)
+        )
+    }
+
+    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
+        let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+        let Some(map) = ctx.data().find_map(&session.leader.current_map_id) else {
+            return Ok(Vec::new());
+        };
+
+        let (enemies, respawn_positions, next_enemy_instance_id) =
+            build_map_enemies(map, &ctx.data().enemies);
+        Ok(vec![GameEvent::Combat(CombatEvent::SetMapEnemies {
+            enemies,
+            respawn_positions,
+            next_enemy_instance_id,
+        })])
+    }
+}
+
 fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
     let id = (*next_enemy_instance_id).max(1);
     *next_enemy_instance_id = next_enemy_instance_id.wrapping_add(1);
@@ -400,6 +431,47 @@ fn allocate_enemy_instance_id(next_enemy_instance_id: &mut u32) -> u32 {
         *next_enemy_instance_id = 1;
     }
     id
+}
+
+fn build_map_enemies(
+    map: &Map,
+    enemy_data: &[Enemy],
+) -> (Vec<FieldEnemy>, Vec<(usize, usize, usize)>, u32) {
+    let mut enemies = Vec::new();
+    let mut respawn_positions = Vec::new();
+    let mut enemy_tiles: Vec<(usize, usize)> = Vec::new();
+    let mut next_enemy_instance_id = 1u32;
+
+    for y in 0..map.height {
+        for x in 0..map.width {
+            if map.get_tile(x, y) == crate::data::Tile::Enemy {
+                enemy_tiles.push((x, y));
+            }
+        }
+    }
+
+    if enemy_tiles.is_empty() || map.encounters.is_empty() {
+        return (enemies, respawn_positions, next_enemy_instance_id);
+    }
+
+    let available_enemies: Vec<&Enemy> = map
+        .encounters
+        .iter()
+        .filter_map(|(id, _)| enemy_data.iter().find(|enemy| &enemy.id == id))
+        .collect();
+    if available_enemies.is_empty() {
+        return (enemies, respawn_positions, next_enemy_instance_id);
+    }
+
+    for (i, (x, y)) in enemy_tiles.iter().enumerate() {
+        let enemy_idx = i % available_enemies.len();
+        let enemy = available_enemies[enemy_idx];
+        let instance_id = allocate_enemy_instance_id(&mut next_enemy_instance_id);
+        enemies.push(FieldEnemy::new(enemy.clone(), *x, *y, instance_id));
+        respawn_positions.push((*x, *y, enemy_idx));
+    }
+
+    (enemies, respawn_positions, next_enemy_instance_id.max(1))
 }
 
 fn apply_player_attack_action(

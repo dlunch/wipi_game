@@ -10,7 +10,7 @@ use super::combat::KillReward;
 
 use crate::game::{
     CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameState, MovementState,
-    PlayerAction, PlayerEvent, SessionEvent, TransitionEvent,
+    PlayerAction, PlayerEvent, SessionEvent,
 };
 
 #[derive(Clone)]
@@ -117,12 +117,6 @@ impl SessionState {
         }
     }
 
-    pub fn spawn_current_map_enemies(&mut self, data: &GameData) {
-        if let Some(map) = data.find_map(&self.leader.current_map_id) {
-            self.combat.spawn_for_map(map, &data.enemies);
-        }
-    }
-
     pub fn apply_event(
         &mut self,
         data: &GameData,
@@ -130,9 +124,6 @@ impl SessionState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::Transition(TransitionEvent::MapChanged) => {
-                self.spawn_current_map_enemies(data);
-            }
             GameEvent::Session(session_event) => match session_event {
                 SessionEvent::Create => {}
                 SessionEvent::SetSkillCooldowns(cooldowns) => {
@@ -147,9 +138,7 @@ impl SessionState {
                 SessionEvent::ResetCombat => {
                     self.combat = CombatState::default();
                 }
-                SessionEvent::SpawnCurrentMapEnemies => {
-                    self.spawn_current_map_enemies(data);
-                }
+                SessionEvent::SpawnCurrentMapEnemies => {}
                 SessionEvent::AddQuestProgress(progress) => {
                     if !self.quests.iter().any(|q| q.quest_id == progress.quest_id) {
                         self.quests.push(progress.clone());
