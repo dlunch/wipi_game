@@ -3,7 +3,7 @@ mod combat;
 mod movement;
 pub(crate) mod session;
 
-pub use character::{CharacterState, PlayerAction, PlayerEvent, TileEvent};
+pub use character::{CharacterState, TileEvent};
 pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 

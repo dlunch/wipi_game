@@ -81,6 +81,7 @@ pub enum SessionEvent {
     Create,
     SetPlayerName(String),
     SetPlayerStats(crate::data::PlayerStats),
+    SetPlayerInventory(Vec<crate::data::Item>),
     SetPlayerMap(String),
     SetPlayerPosition { x: usize, y: usize },
     SetPlayerFacing(Direction),

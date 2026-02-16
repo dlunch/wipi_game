@@ -6,11 +6,9 @@ use anyhow::Result;
 
 use crate::data::{QuestProgress, QuestType};
 
-use super::combat::KillReward;
-
 use crate::game::{
     CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameState, MovementState,
-    PlayerAction, PlayerEvent, SessionEvent,
+    SessionEvent,
 };
 
 #[derive(Clone)]
@@ -68,7 +66,7 @@ impl SessionState {
                 if let Some(item_id) = data.newgame.treasure_item.as_deref()
                     && let Some(item) = data.find_item(item_id).cloned()
                 {
-                    let _ = self.leader.apply(PlayerAction::AddItem(item));
+                    self.leader.inventory.push(item);
                 }
                 self.opened_treasures
                     .push((map_id, self.leader.x, self.leader.y));
@@ -170,12 +168,13 @@ impl SessionState {
                         .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
                     if can_reward && let Some(quest) = data.find_quest(id) {
                         self.leader.stats.add_exp(quest.reward_exp);
-                        let _ = self.leader.apply(PlayerAction::AddGold(quest.reward_gold));
+                        self.leader.stats.gold =
+                            (self.leader.stats.gold + quest.reward_gold).max(0);
 
                         if let Some(item_id) = &quest.reward_item
                             && let Some(item) = data.find_item(item_id).cloned()
                         {
-                            let _ = self.leader.apply(PlayerAction::AddItem(item));
+                            self.leader.inventory.push(item);
                         }
 
                         if let Some(progress) = self.quests.iter_mut().find(|q| q.quest_id == *id) {
@@ -202,7 +201,7 @@ impl SessionState {
                 }
                 CombatEvent::Heal(heal) => {
                     if *heal > 0 {
-                        let _ = self.leader.apply(PlayerAction::Heal(*heal));
+                        self.leader.stats.heal(*heal);
                     }
                 }
                 CombatEvent::GrantKillReward {
@@ -210,20 +209,15 @@ impl SessionState {
                     exp,
                     gold,
                 } => {
-                    self.leader.apply_kill_reward(&KillReward {
-                        enemy_id: enemy_id.clone(),
-                        exp: *exp,
-                        gold: *gold,
-                    });
+                    self.leader.stats.add_exp(*exp);
+                    self.leader.stats.gold = (self.leader.stats.gold + *gold).max(0);
                     self.apply_quest_kill(data, enemy_id);
                 }
                 CombatEvent::TakeDamage(damage_taken) => {
-                    if *damage_taken > 0
-                        && matches!(
-                            self.leader.apply(PlayerAction::TakeDamage(*damage_taken)),
-                            PlayerEvent::Died
-                        )
-                    {
+                    if *damage_taken > 0 {
+                        self.leader.stats.take_damage(*damage_taken);
+                    }
+                    if *damage_taken > 0 && self.leader.stats.is_dead() {
                         if state.can_transition_to(&GameState::GameOver) {
                             *state = GameState::GameOver;
                         } else {
