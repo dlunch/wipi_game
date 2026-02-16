@@ -9,6 +9,7 @@ pub use combat::{CombatAction, CombatEvent, CombatState, FieldEnemy, PlayerEffec
 pub use movement::{MovementState, MovementTickEvent};
 pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEvent};
 
+use alloc::format;
 use alloc::string::String;
 use anyhow::Result;
 
@@ -197,10 +198,7 @@ impl GameState {
         next: GameState,
     ) {
         if next.requires_session() && session.is_none() {
-            *self = GameState::Error(alloc::format!(
-                "Missing session for state transition: {:?}",
-                next
-            ));
+            *self = GameState::Error(format!("Missing session for state transition: {:?}", next));
             return;
         }
 
@@ -212,10 +210,9 @@ impl GameState {
             return;
         }
 
-        *self = GameState::Error(alloc::format!(
+        *self = GameState::Error(format!(
             "Invalid state transition: {:?} -> {:?}",
-            self,
-            next
+            self, next
         ));
     }
 

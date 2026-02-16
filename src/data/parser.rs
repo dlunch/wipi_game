@@ -2,7 +2,7 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 
 use super::types::{
     Dialog, DialogAction, DialogCondition, DialogLine, Enemy, Item, ItemKind, Map, NewGameConfig,
@@ -11,12 +11,12 @@ use super::types::{
 
 fn parse_int(s: &str, field: &str, line: &str) -> Result<i32> {
     s.parse::<i32>()
-        .map_err(|_| anyhow::anyhow!("invalid {} '{}' in: {}", field, s, line))
+        .map_err(|_| anyhow!("invalid {} '{}' in: {}", field, s, line))
 }
 
 fn parse_usize(s: &str, field: &str, line: &str) -> Result<usize> {
     s.parse::<usize>()
-        .map_err(|_| anyhow::anyhow!("invalid {} '{}' in: {}", field, s, line))
+        .map_err(|_| anyhow!("invalid {} '{}' in: {}", field, s, line))
 }
 
 pub fn parse_items(data: &str) -> Result<Vec<Item>> {

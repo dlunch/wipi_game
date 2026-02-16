@@ -1,3 +1,4 @@
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -493,7 +494,7 @@ impl CombatState {
                     if state.can_transition_to(&GameState::GameOver) {
                         *state = GameState::GameOver;
                     } else {
-                        state.set_error(alloc::format!(
+                        state.set_error(format!(
                             "Invalid state transition: {:?} -> {:?}",
                             state,
                             GameState::GameOver

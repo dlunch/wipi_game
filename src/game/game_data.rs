@@ -1,7 +1,8 @@
+use alloc::format;
 use alloc::vec::Vec;
 use core::str;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use wipi::resource::Resource;
 
 use crate::data::{
@@ -47,10 +48,10 @@ impl GameData {
 
     fn load_resource<T>(path: &str, parser: fn(&str) -> Result<T>) -> Result<T> {
         let resource = Resource::new(path)
-            .map_err(|e| anyhow::anyhow!("failed to open resource '{}': {:?}", path, e))?;
+            .map_err(|e| anyhow!("failed to open resource '{}': {:?}", path, e))?;
         let text = str::from_utf8(resource.read())
-            .with_context(|| alloc::format!("invalid UTF-8 in '{}'", path))?;
-        parser(text).with_context(|| alloc::format!("failed to parse '{}'", path))
+            .with_context(|| format!("invalid UTF-8 in '{}'", path))?;
+        parser(text).with_context(|| format!("failed to parse '{}'", path))
     }
 
     pub fn find_map(&self, id: &str) -> Option<&Map> {
@@ -109,7 +110,7 @@ impl GameData {
                 );
 
                 let Some(def) = npc_defs.iter().find(|npc| npc.id == *npc_id) else {
-                    anyhow::bail!("map '{}' references unknown npc id '{}'", map.id, npc_id);
+                    bail!("map '{}' references unknown npc id '{}'", map.id, npc_id);
                 };
 
                 let mut npc = def.clone();
