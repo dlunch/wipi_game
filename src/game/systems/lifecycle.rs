@@ -10,6 +10,12 @@ use crate::game::{
     CombatState, GameData, GameEvent, GameState, MovementState, PlayerState, SessionState,
 };
 
+#[derive(Clone, Copy)]
+pub enum LifecycleEvent {
+    StartNewGame,
+    ContinueGame,
+}
+
 #[derive(Clone)]
 pub enum LoadingEvent {
     Advance(usize),
@@ -36,11 +42,13 @@ pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
 }
 
 struct UpdateLoadingResolver;
+struct StartContinueResolver;
 
 static UPDATE_LOADING_RESOLVER: UpdateLoadingResolver = UpdateLoadingResolver;
+static START_CONTINUE_RESOLVER: StartContinueResolver = StartContinueResolver;
 
 pub fn resolvers() -> alloc::vec::Vec<&'static dyn DomainEventResolver> {
-    alloc::vec![&UPDATE_LOADING_RESOLVER]
+    alloc::vec![&UPDATE_LOADING_RESOLVER, &START_CONTINUE_RESOLVER]
 }
 
 impl DomainEventResolver for UpdateLoadingResolver {
@@ -61,6 +69,22 @@ impl DomainEventResolver for UpdateLoadingResolver {
             step,
             load_result,
         ))])
+    }
+}
+
+impl DomainEventResolver for StartContinueResolver {
+    fn handles(&self, event: &GameEvent) -> bool {
+        matches!(event, GameEvent::StartNewGame | GameEvent::ContinueGame)
+    }
+
+    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+        let lifecycle_event = match event {
+            GameEvent::StartNewGame => LifecycleEvent::StartNewGame,
+            GameEvent::ContinueGame => LifecycleEvent::ContinueGame,
+            _ => return Ok(Vec::new()),
+        };
+
+        Ok(alloc::vec![GameEvent::Lifecycle(lifecycle_event)])
     }
 }
 

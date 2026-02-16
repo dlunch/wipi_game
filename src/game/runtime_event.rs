@@ -70,6 +70,7 @@ pub enum GameEvent {
     Dialog(crate::game::DialogEvent),
     Shop(crate::game::ShopEvent),
     PauseMenu(crate::game::PauseMenuEvent),
+    Lifecycle(crate::game::LifecycleEvent),
     Transition(TransitionEvent),
     Exit(i32),
 }

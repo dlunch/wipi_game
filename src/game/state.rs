@@ -12,7 +12,9 @@ pub use player::{PlayerAction, PlayerEvent, PlayerState, TileApplyEvent, TileEve
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{GameData, GameEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data};
+use crate::game::{
+    GameData, GameEvent, LifecycleEvent, LoadingEvent, MenuState, TransitionEvent, has_save_data,
+};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -140,11 +142,11 @@ impl GameState {
         event: &GameEvent,
     ) -> Result<()> {
         match event {
-            GameEvent::StartNewGame => {
+            GameEvent::Lifecycle(LifecycleEvent::StartNewGame) => {
                 let (next_state, next_session) = crate::game::start_new_game(data);
                 crate::game::enter_session(self, session, next_state, next_session, data);
             }
-            GameEvent::ContinueGame => {
+            GameEvent::Lifecycle(LifecycleEvent::ContinueGame) => {
                 let (next_state, next_session) = crate::game::continue_game(data);
                 crate::game::enter_session(self, session, next_state, next_session, data);
             }
