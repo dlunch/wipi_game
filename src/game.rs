@@ -36,7 +36,6 @@ pub use systems::menu;
 pub use systems::movement;
 pub use systems::npc;
 pub use systems::shop;
-pub use systems::ui_input::UiInputEventResolver;
 pub use systems::{
     DialogEvent, DialogIntent, DialogTransition, ExploreEvent, ExploreIntent, InventoryEvent,
     InventoryIntent, LoadingEvent, MenuEvent, MenuIntent, NpcEvent, PauseMenuEvent,
@@ -44,5 +43,5 @@ pub use systems::{
 };
 pub use ui::{
     DialogState, ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, MenuState, SHOP_VISIBLE_ITEMS,
-    ShopMode, ShopState, UiState,
+    ShopMode, ShopState, UiInputEventResolver, UiState,
 };
