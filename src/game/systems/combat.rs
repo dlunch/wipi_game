@@ -1,8 +1,9 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::data::{Enemy, Map};
-use crate::game::RuntimeEvent;
 use crate::game::state::{CombatState, FieldEnemy};
+use crate::game::{CombatRuntimeEvent, RuntimeEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -89,18 +90,13 @@ fn update(state: &mut CombatState, ctx: TickContext<'_>) -> Vec<RuntimeEvent> {
 
     let (next_skill_cooldowns, next_mp_regen_timer, recover_mp) =
         tick_resource_state(ctx.skill_cooldowns, ctx.mp_regen_timer);
-    let mut events = Vec::with_capacity(5);
-    events.push(RuntimeEvent::SetCombatState(state.clone()));
-    events.push(RuntimeEvent::SetSkillCooldowns(next_skill_cooldowns));
-    events.push(RuntimeEvent::SetMpRegenTimer(next_mp_regen_timer));
-    if recover_mp > 0 {
-        events.push(RuntimeEvent::RecoverMp(recover_mp));
-    }
-    if damage_taken > 0 {
-        events.push(RuntimeEvent::TakeDamage(damage_taken));
-    }
-
-    events
+    vec![RuntimeEvent::Combat(CombatRuntimeEvent::Tick {
+        next_state: state.clone(),
+        next_skill_cooldowns,
+        next_mp_regen_timer,
+        recover_mp,
+        damage_taken,
+    })]
 }
 
 fn try_respawn(

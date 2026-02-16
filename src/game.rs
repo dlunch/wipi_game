@@ -18,7 +18,9 @@ pub use rendering::{
     clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
     draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect, render,
 };
-pub use runtime_event::{AppExploreEvent, AppMovementEvent, RuntimeEvent, TransitionEvent};
+pub use runtime_event::{
+    AppExploreEvent, AppMovementEvent, CombatRuntimeEvent, RuntimeEvent, TransitionEvent,
+};
 pub use save::{has_save_data, load_game, save_game};
 pub use session::{DialogActionResult, SessionState};
 pub use state::{

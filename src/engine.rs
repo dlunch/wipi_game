@@ -244,13 +244,13 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_session_event(&mut self, event: RuntimeEvent) -> Result<()> {
+    fn apply_combat_event(&mut self, event: crate::game::CombatRuntimeEvent) -> Result<()> {
         let s = self
             .session
             .as_mut()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        if s.apply_event(event) {
+        if s.apply_event(RuntimeEvent::Combat(event)) {
             self.transition_to(GameState::GameOver);
         }
         Ok(())
@@ -401,11 +401,7 @@ impl GameEngine {
             RuntimeEvent::Dialog(event) => self.apply_dialog_event(event)?,
             RuntimeEvent::Shop(event) => self.apply_shop_event(event)?,
             RuntimeEvent::PauseMenu(event) => self.apply_pause_menu_event(event)?,
-            event @ (RuntimeEvent::SetCombatState(_)
-            | RuntimeEvent::SetSkillCooldowns(_)
-            | RuntimeEvent::SetMpRegenTimer(_)
-            | RuntimeEvent::RecoverMp(_)
-            | RuntimeEvent::TakeDamage(_)) => self.apply_session_event(event)?,
+            RuntimeEvent::Combat(event) => self.apply_combat_event(event)?,
             RuntimeEvent::Transition(event) => self.apply_transition_event(event)?,
             RuntimeEvent::Exit(code) => wipi::kernel::exit(code),
         }
