@@ -8,8 +8,8 @@ use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    AppMovementEvent, GameData, GameEvent, GameState, MovementState, MovementTickEvent,
-    PlayerState, TileEvent, TransitionEvent,
+    AppMovementEvent, CharacterState, GameData, GameEvent, GameState, MovementState,
+    MovementTickEvent, TileEvent, TransitionEvent,
 };
 
 const MOVE_COOLDOWN: u32 = 5;
@@ -22,7 +22,7 @@ pub struct MovementUpdateResult {
 
 pub fn resolve_world_tick(
     state: &MovementState,
-    player: &PlayerState,
+    player: &CharacterState,
     enemies: &[FieldEnemy],
     data: &GameData,
 ) -> MovementUpdateResult {
@@ -70,7 +70,7 @@ pub fn resolve_world_tick(
 
 pub fn resolve_tick(
     state: &MovementState,
-    player: &PlayerState,
+    player: &CharacterState,
     map: Option<&Map>,
     enemy_positions: &[(usize, usize)],
     npc_positions: &[(usize, usize)],
@@ -128,7 +128,7 @@ pub fn resolve_tick(
     }
 }
 
-fn can_move(player: &PlayerState, map: &Map, dx: i32, dy: i32) -> bool {
+fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
     let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
         return false;
     };
@@ -210,7 +210,7 @@ mod tests {
 
     use super::*;
     use crate::data::{Direction, Map, Tile};
-    use crate::game::{GameData, PlayerState};
+    use crate::game::{CharacterState, GameData};
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {
@@ -227,8 +227,8 @@ mod tests {
         }
     }
 
-    fn make_player_at(x: usize, y: usize, map_id: &str) -> PlayerState {
-        let mut player = PlayerState::new(String::from("Tester"), map_id);
+    fn make_player_at(x: usize, y: usize, map_id: &str) -> CharacterState {
+        let mut player = CharacterState::new(String::from("Tester"), map_id);
         player.x = x;
         player.y = y;
         player

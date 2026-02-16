@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{AppExploreEvent, DialogState, GameData, GameEvent, GameState, PlayerState};
+use crate::game::{AppExploreEvent, CharacterState, DialogState, GameData, GameEvent, GameState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -28,13 +28,13 @@ pub enum NpcIntent {
     Interact { facing: Direction },
 }
 
-pub fn resolve(player: &PlayerState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
+pub fn resolve(player: &CharacterState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
     match intent {
         NpcIntent::Interact { facing } => try_interact(player, data, facing),
     }
 }
 
-fn try_interact(player: &PlayerState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
+fn try_interact(player: &CharacterState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(player.x, player.y);
 
     let npc = data.find_npc_at(&player.current_map_id, target_x, target_y)?;
@@ -83,7 +83,7 @@ fn try_interact(player: &PlayerState, data: &GameData, facing: Direction) -> Opt
     None
 }
 
-fn filter_lines(player: &PlayerState, dialog: &Dialog) -> Vec<DialogLine> {
+fn filter_lines(player: &CharacterState, dialog: &Dialog) -> Vec<DialogLine> {
     dialog
         .lines
         .iter()
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn try_interact_returns_none_when_no_npc_at_facing_position() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let data = GameData::default();
 
         let next_state = try_interact(&player, &data, Direction::Right);
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn try_interact_with_villager_returns_dialog_state() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let npc = make_npc(NpcType::Villager);
         let dialog = make_dialog(vec!["Hello"]);
         let data = make_game_data_with_npc(npc, dialog);
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn try_interact_with_healer_requests_restore_and_returns_dialog_state() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let before_hp = player.stats.current_hp;
         let before_mp = player.stats.current_mp;
 
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn try_interact_with_healer_without_dialog_still_requests_restore() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
 
         player.stats.current_hp = 7;
         player.stats.current_mp = 3;
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn try_interact_with_shopkeeper_returns_shop_state() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let npc = make_npc(NpcType::ShopKeeper);
         let dialog = make_dialog(vec!["Welcome"]);
         let mut data = make_game_data_with_npc(npc, dialog);
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn filter_lines_without_conditions_keeps_all_lines() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let dialog = make_dialog(vec!["A", "B", "C"]);
 
         let filtered = filter_lines(&player, &dialog);
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn filter_lines_has_quest_keeps_only_matching_lines() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 0,
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn filter_lines_quest_complete_condition_filters_correctly() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 1,
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn filter_lines_has_gold_condition_filters_correctly() {
-        let player = PlayerState::new(String::from("H"), "v");
+        let player = CharacterState::new(String::from("H"), "v");
         let dialog = make_dialog(vec![
             "HAS_GOLD=10:talk:cheap",
             "HAS_GOLD=100:talk:expensive",

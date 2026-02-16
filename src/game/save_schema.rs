@@ -2,12 +2,12 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use super::PlayerState;
+use super::CharacterState;
 use crate::data::{Item, ItemKind, QuestProgress};
 
 const SAVE_VERSION: u32 = 1;
 
-pub fn serialize(player: &PlayerState) -> String {
+pub fn serialize(player: &CharacterState) -> String {
     let mut lines = vec![
         format_args_to_string(&["VERSION", &SAVE_VERSION.to_string()]),
         format_args_to_string(&[
@@ -92,7 +92,7 @@ pub fn serialize(player: &PlayerState) -> String {
     result
 }
 
-pub fn deserialize(data: &str, player: &mut PlayerState) -> bool {
+pub fn deserialize(data: &str, player: &mut CharacterState) -> bool {
     let Some(normalized) = migrate_to_current_save_version(data) else {
         return false;
     };
@@ -318,8 +318,8 @@ fn migrate_v0_to_v1(data: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn make_player() -> PlayerState {
-        PlayerState::new(String::from("Hero"), "village")
+    fn make_player() -> CharacterState {
+        CharacterState::new(String::from("Hero"), "village")
     }
 
     #[test]

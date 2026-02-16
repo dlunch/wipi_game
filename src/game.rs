@@ -24,7 +24,7 @@ pub use save::{has_save_data, load_game, save_game};
 pub use session::SessionState;
 pub use state::{
     CharacterState, CombatState, GameState, MovementState, MovementTickEvent, PlayerAction,
-    PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
+    PlayerEvent, TileApplyEvent, TileEvent,
 };
 pub use systems::{
     DialogEvent, DialogTransition, InventoryEvent, LifecycleEvent, LoadingEvent, MenuEvent,

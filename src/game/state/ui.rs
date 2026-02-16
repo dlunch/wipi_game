@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{
-    AppExploreEvent, GameData, GameEvent, GameState, PlayerState, SessionState, ShopInputEvent,
+    AppExploreEvent, CharacterState, GameData, GameEvent, GameState, SessionState, ShopInputEvent,
     TransitionEvent, UiEvent,
 };
 
@@ -257,7 +257,7 @@ impl ExploreUiState {
     pub fn resolve_events_for_key(
         &self,
         key: InputKey,
-        player: &PlayerState,
+        player: &CharacterState,
         data: &GameData,
     ) -> Vec<AppExploreEvent> {
         let mut events = Vec::new();

@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 use crate::data::Tile;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    DialogState, GameData, GameEvent, GameState, PlayerState, SessionEvent, TransitionEvent,
+    CharacterState, DialogState, GameData, GameEvent, GameState, SessionEvent, TransitionEvent,
     load_game,
 };
 
@@ -107,7 +107,7 @@ fn intro_dialog_state(data: &GameData) -> Option<DialogState> {
 
 fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
     let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
+    let mut player = CharacterState::new(config.player_name.clone(), &config.start_map);
 
     if let Some(ref weapon_id) = config.equip_weapon
         && let Some(weapon) = data.find_item(weapon_id).cloned()
@@ -189,7 +189,7 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
 
 fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
     let config = &data.newgame;
-    let mut player = PlayerState::new(config.player_name.clone(), &config.start_map);
+    let mut player = CharacterState::new(config.player_name.clone(), &config.start_map);
 
     match load_game(&mut player) {
         Ok(true) => {

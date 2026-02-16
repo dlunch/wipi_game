@@ -3,12 +3,12 @@ use core::str;
 use anyhow::{Result, anyhow};
 use wipi::database::{Database, OpenMode};
 
-use super::PlayerState;
+use super::CharacterState;
 use crate::game::save_schema;
 
 const SAVE_DB_NAME: &str = "save";
 
-pub fn save_game(player: &PlayerState) -> Result<()> {
+pub fn save_game(player: &CharacterState) -> Result<()> {
     let data = save_schema::serialize(player);
 
     let mut db = Database::open(SAVE_DB_NAME, OpenMode::ReadWrite)
@@ -18,7 +18,7 @@ pub fn save_game(player: &PlayerState) -> Result<()> {
     Ok(())
 }
 
-pub fn load_game(player: &mut PlayerState) -> Result<bool> {
+pub fn load_game(player: &mut CharacterState) -> Result<bool> {
     let db = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
         .map_err(|e| anyhow!("failed to open save db: {:?}", e))?;
     let mut buf = [0u8; 4096];

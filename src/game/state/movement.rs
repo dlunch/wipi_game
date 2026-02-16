@@ -1,7 +1,7 @@
 use crate::data::Direction;
 use anyhow::{Result, ensure};
 
-use super::PlayerState;
+use super::CharacterState;
 use crate::game::{AppMovementEvent, GameEvent, GameState, TileApplyEvent, TransitionEvent};
 
 #[derive(Default, Clone, Copy)]
@@ -18,7 +18,7 @@ pub struct MovementTickEvent {
 }
 
 impl MovementState {
-    pub fn apply_tick(&mut self, player: &mut PlayerState, event: MovementTickEvent) -> bool {
+    pub fn apply_tick(&mut self, player: &mut CharacterState, event: MovementTickEvent) -> bool {
         *self = event.next_state;
 
         if let Some((dx, dy)) = event.facing {
@@ -48,7 +48,7 @@ impl MovementState {
         &mut self,
         data: &crate::game::GameData,
         state: &GameState,
-        player: &mut PlayerState,
+        player: &mut CharacterState,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
@@ -78,7 +78,7 @@ impl MovementState {
     }
 }
 
-fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
+fn set_facing(player: &mut CharacterState, dx: i32, dy: i32) {
     player.facing = match (dx, dy) {
         (0, -1) => Direction::Up,
         (0, 1) => Direction::Down,
@@ -88,7 +88,7 @@ fn set_facing(player: &mut PlayerState, dx: i32, dy: i32) {
     };
 }
 
-fn move_by(player: &mut PlayerState, dx: i32, dy: i32) {
+fn move_by(player: &mut CharacterState, dx: i32, dy: i32) {
     if let Some(new_x) = player.x.checked_add_signed(dx as isize) {
         player.x = new_x;
     }

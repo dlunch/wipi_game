@@ -39,7 +39,7 @@ pub enum PlayerEvent {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlayerState {
+pub struct CharacterState {
     pub name: String,
     pub stats: PlayerStats,
     pub inventory: Vec<Item>,
@@ -54,7 +54,7 @@ pub struct PlayerState {
     pub opened_treasures: Vec<(String, usize, usize)>,
 }
 
-impl PlayerState {
+impl CharacterState {
     pub fn new(name: String, start_map: &str) -> Self {
         Self {
             name,
@@ -289,7 +289,7 @@ impl PlayerState {
     }
 }
 
-impl PlayerState {
+impl CharacterState {
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Session(session_event) => match session_event {
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn new_player_starts_empty() {
-        let player = PlayerState::new(String::from("Test"), "village");
+        let player = CharacterState::new(String::from("Test"), "village");
         assert_eq!(player.name, "Test");
         assert_eq!(player.current_map_id, "village");
         assert!(player.inventory.is_empty());
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn quest_lifecycle() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         assert!(!player.has_quest("q1"));
 
         player.quests.push(QuestProgress {
@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn has_quest_ignores_rewarded_quest() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 0,
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn treasure_tracking() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         assert!(!player.is_treasure_opened("map1", 3, 4));
 
         player.opened_treasures.push((String::from("map1"), 3, 4));
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn total_atk_def_with_equipment() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let base_atk = player.stats.base_atk;
         let base_def = player.stats.base_def;
         assert_eq!(player.total_atk(), base_atk);
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn has_item_query() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.inventory.push(make_potion());
         assert!(player.has_item("potion"));
         assert!(!player.has_item("ether"));
@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     fn equip_weapon_via_use_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let _ = player.apply(PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)));
         assert!(player.use_item(0));
         assert_eq!(player.equipped_weapon, Some(0));
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn equip_armor_via_use_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let _ = player.apply(PlayerAction::AddItem(make_item("armor", ItemKind::Armor)));
         assert!(player.use_item(0));
         assert_eq!(player.equipped_armor, Some(0));
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn use_consumable_heals_and_removes() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.stats.current_hp = 20;
         let _ = player.apply(PlayerAction::AddItem(make_potion()));
         assert!(player.use_item(0));
@@ -545,7 +545,7 @@ mod tests {
 
     #[test]
     fn fix_equipped_indices_on_remove() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let _ = player.apply(PlayerAction::AddItem(make_potion()));
         let _ = player.apply(PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)));
         let _ = player.apply(PlayerAction::AddItem(make_item("armor", ItemKind::Armor)));
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn fix_equipped_clears_on_exact_removal() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let _ = player.apply(PlayerAction::AddItem(make_item("sword", ItemKind::Weapon)));
         player.equipped_weapon = Some(0);
 
@@ -570,14 +570,14 @@ mod tests {
 
     #[test]
     fn use_item_out_of_bounds() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         assert!(!player.use_item(0));
         assert!(!player.use_item(99));
     }
 
     #[test]
     fn remove_item_at_returns_item() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let _ = player.apply(PlayerAction::AddItem(make_potion()));
         let event = player.apply(PlayerAction::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn remove_item_at_out_of_bounds() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let event = player.apply(PlayerAction::RemoveItemAt(0));
         let PlayerEvent::ItemRemoved(removed) = event else {
             panic!("expected ItemRemoved event");
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn add_quest_no_duplicates() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         if !player.has_quest("q1") {
             player.quests.push(QuestProgress {
                 quest_id: String::from("q1"),
@@ -624,7 +624,7 @@ mod tests {
 
     #[test]
     fn treasure_tracking_no_duplicates() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         if !player.is_treasure_opened("map1", 3, 4) {
             player.opened_treasures.push((String::from("map1"), 3, 4));
         }
@@ -638,7 +638,7 @@ mod tests {
 
     #[test]
     fn mark_quest_rewarded_intent_marks_rewarded() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.quests.push(QuestProgress {
             quest_id: String::from("q1"),
             current_count: 0,
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn skill_cooldowns() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         let cooldowns = [0; 3];
         assert!(player.can_use_skill(&cooldowns, 0, 10));
 
@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn skill_insufficient_mp() {
-        let mut player = PlayerState::new(String::from("H"), "v");
+        let mut player = CharacterState::new(String::from("H"), "v");
         player.stats.current_mp = 5;
         assert!(!player.can_use_skill(&[0; 3], 0, 10));
     }
