@@ -3,7 +3,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-mod scene;
+mod runtime_flow;
 
 use crate::data::Direction;
 use crate::game::{
@@ -24,7 +24,7 @@ enum DomainEvent {
     Loading(crate::game::LoadingEvent),
     Movement(AppMovementEvent),
     Combat(crate::game::combat::CombatTickEvent),
-    Menu(MenuEvent),
+    Menu(crate::game::MenuEvent),
     Explore(AppExploreEvent),
     Inventory(crate::game::InventoryEvent),
     Dialog(crate::game::DialogEvent),
@@ -417,7 +417,9 @@ impl GameRuntime {
                 }
                 SystemIntent::Exit(code) => vec![RuntimeEvent::Exit(code)],
             },
-            GameIntent::Scene(scene_intent) => scene::resolve_scene_intent(self, scene_intent),
+            GameIntent::Scene(scene_intent) => {
+                runtime_flow::resolve_scene_intent(self, scene_intent)
+            }
         }
     }
 
@@ -491,14 +493,14 @@ impl GameRuntime {
                 DomainEvent::Loading(event) => self.apply_update_loading(event),
                 DomainEvent::Movement(event) => self.apply_update_movement(event),
                 DomainEvent::Combat(event) => self.apply_update_combat(event),
-                DomainEvent::Menu(event) => scene::apply_menu_event(self, event),
-                DomainEvent::Explore(event) => scene::apply_explore_event(self, event),
-                DomainEvent::Inventory(event) => scene::apply_inventory_event(self, event),
-                DomainEvent::Dialog(event) => scene::apply_dialog_event(self, event),
-                DomainEvent::Shop(event) => scene::apply_shop_event(self, event),
-                DomainEvent::PauseMenu(event) => scene::apply_pause_menu_event(self, event),
+                DomainEvent::Menu(event) => runtime_flow::apply_menu_event(self, event),
+                DomainEvent::Explore(event) => runtime_flow::apply_explore_event(self, event),
+                DomainEvent::Inventory(event) => runtime_flow::apply_inventory_event(self, event),
+                DomainEvent::Dialog(event) => runtime_flow::apply_dialog_event(self, event),
+                DomainEvent::Shop(event) => runtime_flow::apply_shop_event(self, event),
+                DomainEvent::PauseMenu(event) => runtime_flow::apply_pause_menu_event(self, event),
             },
-            RuntimeEvent::Transition(event) => scene::apply_transition_event(self, event),
+            RuntimeEvent::Transition(event) => runtime_flow::apply_transition_event(self, event),
             RuntimeEvent::Exit(code) => wipi::kernel::exit(code),
             RuntimeEvent::Error(message) => self.state = GameState::Error(message),
         }
