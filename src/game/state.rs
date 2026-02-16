@@ -141,19 +141,19 @@ impl GameState {
         match event {
             GameEvent::Loading(event) => match event {
                 LoadingEvent::Advance(step) => {
-                    transition_to(self, session, GameState::Loading(*step))
+                    self.transition_to(session, GameState::Loading(*step))
                 }
                 LoadingEvent::Loaded => {
-                    transition_to(self, session, GameState::Menu);
+                    self.transition_to(session, GameState::Menu);
                     ui.menu.set_menu(MenuState::new(has_save_data()));
                 }
-                LoadingEvent::Error(msg) => set_error(self, msg.clone()),
+                LoadingEvent::Error(msg) => self.set_error(msg.clone()),
             },
             GameEvent::Transition(TransitionEvent::ToExplore) => {
-                transition_to(self, session, GameState::Explore)
+                self.transition_to(session, GameState::Explore)
             }
             GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
-                transition_to(self, session, GameState::Menu);
+                self.transition_to(session, GameState::Menu);
                 ui.menu.set_menu(MenuState::new(has_save_data()));
             }
             GameEvent::Exit(code) => {
@@ -163,38 +163,38 @@ impl GameState {
         }
         Ok(())
     }
-}
 
-pub(crate) fn transition_to(
-    state: &mut GameState,
-    session: &mut Option<crate::game::SessionState>,
-    next: GameState,
-) {
-    if next.requires_session() && session.is_none() {
-        *state = GameState::Error(alloc::format!(
-            "Missing session for state transition: {:?}",
+    pub(crate) fn transition_to(
+        &mut self,
+        session: &mut Option<crate::game::SessionState>,
+        next: GameState,
+    ) {
+        if next.requires_session() && session.is_none() {
+            *self = GameState::Error(alloc::format!(
+                "Missing session for state transition: {:?}",
+                next
+            ));
+            return;
+        }
+
+        if self.can_transition_to(&next) {
+            *self = next;
+            if !self.requires_session() {
+                *session = None;
+            }
+            return;
+        }
+
+        *self = GameState::Error(alloc::format!(
+            "Invalid state transition: {:?} -> {:?}",
+            self,
             next
         ));
-        return;
     }
 
-    if state.can_transition_to(&next) {
-        *state = next;
-        if !state.requires_session() {
-            *session = None;
-        }
-        return;
+    pub(crate) fn set_error(&mut self, message: String) {
+        *self = GameState::Error(message);
     }
-
-    *state = GameState::Error(alloc::format!(
-        "Invalid state transition: {:?} -> {:?}",
-        state,
-        next
-    ));
-}
-
-pub(crate) fn set_error(state: &mut GameState, message: String) {
-    *state = GameState::Error(message);
 }
 
 #[cfg(test)]

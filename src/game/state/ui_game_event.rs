@@ -33,29 +33,29 @@ impl UiState {
                 }
                 crate::game::PauseMenuEvent::OpenInventory => {
                     self.inventory.reset();
-                    crate::game::state::transition_to(state, session, GameState::Inventory);
+                    state.transition_to(session, GameState::Inventory);
                 }
                 crate::game::PauseMenuEvent::OpenStats => {
-                    crate::game::state::transition_to(state, session, GameState::Stats)
+                    state.transition_to(session, GameState::Stats)
                 }
                 crate::game::PauseMenuEvent::OpenQuestLog => {
-                    crate::game::state::transition_to(state, session, GameState::QuestLog)
+                    state.transition_to(session, GameState::QuestLog)
                 }
                 crate::game::PauseMenuEvent::SaveAndReturnExplore => {
                     self.shop.reset();
-                    crate::game::state::transition_to(state, session, GameState::Explore);
+                    state.transition_to(session, GameState::Explore);
                 }
                 crate::game::PauseMenuEvent::BackToExplore => {
-                    crate::game::state::transition_to(state, session, GameState::Explore)
+                    state.transition_to(session, GameState::Explore)
                 }
             },
             GameEvent::OpenPauseMenu => {
                 self.pause_menu.reset();
-                crate::game::state::transition_to(state, session, GameState::PauseMenu);
+                state.transition_to(session, GameState::PauseMenu);
             }
             GameEvent::OpenMenuFromExplore => {
                 self.menu.set_menu(MenuState::new(has_save_data()));
-                crate::game::state::transition_to(state, session, GameState::Menu);
+                state.transition_to(session, GameState::Menu);
             }
             GameEvent::Inventory(event) => match event {
                 crate::game::InventoryEvent::None => {}
@@ -64,7 +64,7 @@ impl UiState {
                 }
                 crate::game::InventoryEvent::UseSelected(_) => {}
                 crate::game::InventoryEvent::CloseToExplore => {
-                    crate::game::state::transition_to(state, session, GameState::Explore)
+                    state.transition_to(session, GameState::Explore)
                 }
             },
             GameEvent::ApplyDialogTransition(transition) => match transition {
@@ -72,11 +72,11 @@ impl UiState {
                     if let Some(dialog_state) = self.dialog.state.as_mut() {
                         dialog_state.current_line = *line;
                     }
-                    crate::game::state::transition_to(state, session, GameState::Dialog);
+                    state.transition_to(session, GameState::Dialog);
                 }
                 crate::game::DialogTransition::CloseToExplore => {
                     self.dialog.close();
-                    crate::game::state::transition_to(state, session, GameState::Explore);
+                    state.transition_to(session, GameState::Explore);
                 }
             },
             GameEvent::Shop(event) => match event {
@@ -94,12 +94,12 @@ impl UiState {
                     }
                 }
                 crate::game::ShopEvent::CloseToExplore => {
-                    crate::game::state::transition_to(state, session, GameState::Explore)
+                    state.transition_to(session, GameState::Explore)
                 }
             },
             GameEvent::OpenDialogState(dialog_state) => {
                 self.dialog.open(dialog_state.clone());
-                crate::game::state::transition_to(state, session, GameState::Dialog);
+                state.transition_to(session, GameState::Dialog);
             }
             _ => {}
         }

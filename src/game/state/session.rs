@@ -155,7 +155,7 @@ pub fn enter_session(
     data: &GameData,
 ) {
     *session_slot = Some(session);
-    crate::game::state::transition_to(state, session_slot, next_state);
+    state.transition_to(session_slot, next_state);
     if let Some(s) = session_slot.as_mut() {
         s.spawn_current_map_enemies(data);
     }
@@ -175,14 +175,11 @@ fn open_shop_by_id(
     if state.can_transition_to(&GameState::Shop) {
         *state = GameState::Shop;
     } else {
-        crate::game::state::set_error(
+        state.set_error(alloc::format!(
+            "Invalid state transition: {:?} -> {:?}",
             state,
-            alloc::format!(
-                "Invalid state transition: {:?} -> {:?}",
-                state,
-                GameState::Shop
-            ),
-        );
+            GameState::Shop
+        ));
     }
     true
 }

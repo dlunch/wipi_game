@@ -492,14 +492,11 @@ impl CombatState {
                     if state.can_transition_to(&GameState::GameOver) {
                         *state = GameState::GameOver;
                     } else {
-                        crate::game::state::set_error(
+                        state.set_error(alloc::format!(
+                            "Invalid state transition: {:?} -> {:?}",
                             state,
-                            alloc::format!(
-                                "Invalid state transition: {:?} -> {:?}",
-                                state,
-                                GameState::GameOver
-                            ),
-                        );
+                            GameState::GameOver
+                        ));
                     }
                 }
             }
