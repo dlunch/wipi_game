@@ -22,6 +22,18 @@ pub enum InputKey {
     Key9,
 }
 
+impl InputKey {
+    pub fn direction(self) -> Option<crate::data::Direction> {
+        match self {
+            InputKey::Up => Some(crate::data::Direction::Up),
+            InputKey::Down => Some(crate::data::Direction::Down),
+            InputKey::Left => Some(crate::data::Direction::Left),
+            InputKey::Right => Some(crate::data::Direction::Right),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum GameInput {
     Tick,

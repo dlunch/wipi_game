@@ -55,6 +55,20 @@ impl GameState {
         }
     }
 
+    pub fn requires_session(&self) -> bool {
+        matches!(
+            self,
+            GameState::Explore
+                | GameState::Inventory
+                | GameState::Stats
+                | GameState::Dialog
+                | GameState::Shop
+                | GameState::QuestLog
+                | GameState::PauseMenu
+                | GameState::GameOver
+        )
+    }
+
     pub fn can_transition_to(&self, next: &GameState) -> bool {
         let current = self.kind();
         let target = next.kind();

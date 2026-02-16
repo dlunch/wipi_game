@@ -89,34 +89,6 @@ pub struct GameEngine {
     ui: UiState,
 }
 
-fn direction_for_key(key: InputKey) -> Option<Direction> {
-    match key {
-        InputKey::Up => Some(Direction::Up),
-        InputKey::Down => Some(Direction::Down),
-        InputKey::Left => Some(Direction::Left),
-        InputKey::Right => Some(Direction::Right),
-        _ => None,
-    }
-}
-
-fn state_requires_session(state: &GameState) -> bool {
-    matches!(
-        state,
-        GameState::Explore
-            | GameState::Inventory
-            | GameState::Stats
-            | GameState::Dialog
-            | GameState::Shop
-            | GameState::QuestLog
-            | GameState::PauseMenu
-            | GameState::GameOver
-    )
-}
-
-fn state_keeps_session(state: &GameState) -> bool {
-    state_requires_session(state)
-}
-
 impl GameEngine {
     pub fn new() -> Self {
         Self {
@@ -181,7 +153,7 @@ impl GameEngine {
     fn collect_keyup_intents(&self, key: InputKey) -> Vec<GameIntent> {
         if matches!(self.state, GameState::Explore)
             && self.session.is_active()
-            && let Some(direction) = direction_for_key(key)
+            && let Some(direction) = key.direction()
         {
             vec![GameIntent::System(SystemIntent::ReleaseMovementDirection(
                 direction,
@@ -296,7 +268,7 @@ impl GameEngine {
     }
 
     fn transition_to(&mut self, next: GameState) {
-        if state_requires_session(&next) && !self.session.is_active() {
+        if next.requires_session() && !self.session.is_active() {
             self.state = GameState::Error(alloc::format!(
                 "Missing session for state transition: {:?}",
                 next
@@ -306,7 +278,7 @@ impl GameEngine {
 
         if self.state.can_transition_to(&next) {
             self.state = next;
-            if !state_keeps_session(&self.state) {
+            if !self.state.requires_session() {
                 self.session.deactivate();
             }
             return;
