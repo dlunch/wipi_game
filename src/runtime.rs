@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use wipi::event::KeyCode;
 
-use crate::data::{DialogAction, Direction};
+use crate::data::Direction;
 use crate::game::{
     DialogIntent, ExploreIntent, GameData, GameInput, GameIntent, GameState, InventoryIntent,
     MenuAction, MenuEvent, MenuIntent, MenuState, PauseMenuIntent, RenderState, SessionState,
@@ -252,83 +252,6 @@ impl GameRuntime {
         true
     }
 
-    fn apply_dialog_action(
-        s: &mut SessionState,
-        data: &GameData,
-        ui: &mut UiState,
-        state: &mut GameState,
-        action: &DialogAction,
-    ) -> bool {
-        match action {
-            DialogAction::GiveQuest(id) => {
-                if !s.player.quests.iter().any(|q| q.quest_id == *id) {
-                    s.player.quests.push(crate::data::QuestProgress {
-                        quest_id: id.clone(),
-                        current_count: 0,
-                        completed: false,
-                        rewarded: false,
-                    });
-                }
-            }
-            DialogAction::CompleteQuest(id) => {
-                let can_reward = s
-                    .player
-                    .quests
-                    .iter()
-                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
-                if can_reward && let Some(quest) = data.find_quest(id) {
-                    s.player.stats.add_exp(quest.reward_exp);
-                    let _ = s
-                        .player
-                        .apply(crate::game::PlayerAction::AddGold(quest.reward_gold));
-
-                    if let Some(item_id) = &quest.reward_item
-                        && let Some(item) = data.find_item(item_id).cloned()
-                    {
-                        let _ = s.player.apply(crate::game::PlayerAction::AddItem(item));
-                    }
-
-                    if let Some(progress) = s.player.quests.iter_mut().find(|q| q.quest_id == *id) {
-                        progress.rewarded = true;
-                    }
-                }
-            }
-            DialogAction::GiveItem(id) => {
-                if let Some(item) = data.find_item(id).cloned() {
-                    let _ = s.player.apply(crate::game::PlayerAction::AddItem(item));
-                }
-            }
-            DialogAction::TakeItem(id) => {
-                if let Some(index) = s.player.inventory.iter().position(|item| item.id == *id) {
-                    let _ = s
-                        .player
-                        .apply(crate::game::PlayerAction::RemoveItemAt(index));
-                }
-            }
-            DialogAction::GiveGold(amount) => {
-                let _ = s.player.apply(crate::game::PlayerAction::AddGold(*amount));
-            }
-            DialogAction::TakeGold(amount) => {
-                let _ = s.player.apply(crate::game::PlayerAction::AddGold(-*amount));
-            }
-            DialogAction::OpenShop(shop_id) => {
-                let Some(shop) = data.find_shop(shop_id).cloned() else {
-                    return false;
-                };
-                let shop_items = data.get_shop_items(&shop);
-                ui.shop.open(crate::game::ShopState::new(shop, shop_items));
-                *state = GameState::Shop;
-                return true;
-            }
-            DialogAction::Heal => {
-                s.player.stats.current_hp = s.player.stats.max_hp;
-                s.player.stats.current_mp = s.player.stats.max_mp;
-            }
-        }
-
-        false
-    }
-
     fn apply_menu_event(&mut self, event: MenuEvent) {
         match event {
             MenuEvent::None => {}
@@ -432,9 +355,13 @@ impl GameRuntime {
                 }
             },
             crate::game::DialogEvent::Action(action, transition) => {
-                if Self::apply_dialog_action(s, &self.data, &mut self.ui, &mut self.state, &action)
-                {
-                    return;
+                match s.apply_dialog_action(&self.data, &action) {
+                    crate::game::DialogActionResult::None => {}
+                    crate::game::DialogActionResult::OpenShop(shop_id) => {
+                        if self.open_shop_by_id(&shop_id) {
+                            return;
+                        }
+                    }
                 }
 
                 match transition {

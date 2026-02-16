@@ -3,6 +3,11 @@ use crate::game::{
     PlayerAction, PlayerEffect, PlayerEvent, PlayerState, TileApplyEvent, TileEvent,
 };
 
+pub enum DialogActionResult {
+    None,
+    OpenShop(alloc::string::String),
+}
+
 pub struct SessionState {
     pub player: PlayerState,
     pub combat: CombatState,
@@ -105,5 +110,72 @@ impl SessionState {
             self.player.apply_kill_reward(&reward);
             self.player.apply_quest_kill(data, &reward.enemy_id);
         }
+    }
+
+    pub fn apply_dialog_action(
+        &mut self,
+        data: &GameData,
+        action: &crate::data::DialogAction,
+    ) -> DialogActionResult {
+        match action {
+            crate::data::DialogAction::GiveQuest(id) => {
+                if !self.player.quests.iter().any(|q| q.quest_id == *id) {
+                    self.player.quests.push(crate::data::QuestProgress {
+                        quest_id: id.clone(),
+                        current_count: 0,
+                        completed: false,
+                        rewarded: false,
+                    });
+                }
+            }
+            crate::data::DialogAction::CompleteQuest(id) => {
+                let can_reward = self
+                    .player
+                    .quests
+                    .iter()
+                    .any(|q| q.quest_id == *id && q.completed && !q.rewarded);
+                if can_reward && let Some(quest) = data.find_quest(id) {
+                    self.player.stats.add_exp(quest.reward_exp);
+                    let _ = self.player.apply(PlayerAction::AddGold(quest.reward_gold));
+
+                    if let Some(item_id) = &quest.reward_item
+                        && let Some(item) = data.find_item(item_id).cloned()
+                    {
+                        let _ = self.player.apply(PlayerAction::AddItem(item));
+                    }
+
+                    if let Some(progress) =
+                        self.player.quests.iter_mut().find(|q| q.quest_id == *id)
+                    {
+                        progress.rewarded = true;
+                    }
+                }
+            }
+            crate::data::DialogAction::GiveItem(id) => {
+                if let Some(item) = data.find_item(id).cloned() {
+                    let _ = self.player.apply(PlayerAction::AddItem(item));
+                }
+            }
+            crate::data::DialogAction::TakeItem(id) => {
+                if let Some(index) = self.player.inventory.iter().position(|item| item.id == *id) {
+                    let _ = self.player.apply(PlayerAction::RemoveItemAt(index));
+                }
+            }
+            crate::data::DialogAction::GiveGold(amount) => {
+                let _ = self.player.apply(PlayerAction::AddGold(*amount));
+            }
+            crate::data::DialogAction::TakeGold(amount) => {
+                let _ = self.player.apply(PlayerAction::AddGold(-*amount));
+            }
+            crate::data::DialogAction::OpenShop(shop_id) => {
+                return DialogActionResult::OpenShop(shop_id.clone());
+            }
+            crate::data::DialogAction::Heal => {
+                self.player.stats.current_hp = self.player.stats.max_hp;
+                self.player.stats.current_mp = self.player.stats.max_mp;
+            }
+        }
+
+        DialogActionResult::None
     }
 }
