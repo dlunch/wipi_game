@@ -1,7 +1,3 @@
-use crate::game::{
-    DialogIntent, ExploreIntent, InventoryIntent, MenuIntent, PauseMenuIntent, ShopIntent,
-};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputKey {
     Ok,
@@ -39,31 +35,4 @@ pub enum GameInput {
     Tick,
     KeyDown(InputKey),
     KeyUp(InputKey),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum GameIntent {
-    System(SystemIntent),
-    Scene(SceneIntent),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum SystemIntent {
-    UpdateLoading,
-    UpdateMovement,
-    UpdateCombat,
-    ReturnToExplore,
-    ReturnToMenuFromGameOver,
-    ReleaseMovementDirection(crate::data::Direction),
-    Exit(i32),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum SceneIntent {
-    Menu(MenuIntent),
-    Explore(ExploreIntent),
-    Inventory(InventoryIntent),
-    Dialog(DialogIntent),
-    Shop(ShopIntent),
-    PauseMenu(PauseMenuIntent),
 }

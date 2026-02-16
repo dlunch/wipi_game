@@ -48,30 +48,31 @@ Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 ```
 src/
 ├── main.rs              # Entry point + WIPI App glue (timer/input/render wiring)
-├── runtime.rs           # GameRuntime orchestration (collect intents, resolve, apply)
+├── engine.rs            # GameEngine orchestration (event queue resolve/apply loop)
 ├── data.rs              # Re-exports from data module
 ├── data/
 │   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
 │   └── parser.rs        # Text file parsers for .dat resources
 ├── game.rs              # Re-exports from game module (state, systems, rendering, ui)
 └── game/
-    ├── intent.rs        # GameInput, GameIntent enums
+    ├── intent.rs        # InputKey, GameInput enums
     ├── state.rs         # GameState enum + state module re-exports
     ├── state/
     │   ├── player.rs    # PlayerState + tile events + player mutations
     │   ├── combat.rs    # CombatState + combat actions/events + combat mutations
     │   └── movement.rs  # MovementState + movement tick event + movement mutations
     ├── ui.rs            # UiState + UI-only states (menu/dialog/shop/inventory/pause/explore bindings)
-    ├── session.rs       # SessionState (player/combat/movement + runtime update appliers)
+    ├── session.rs       # SessionState domain appliers for runtime events
+    ├── runtime_event.rs # RuntimeEvent and domain sub-events
     ├── systems.rs       # Re-exports from systems sub-modules
     ├── systems/
     │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
     │   ├── movement.rs  # Movement resolve_tick + resolve_world_tick
-    │   ├── explore.rs   # Explore intent resolution
-    │   ├── dialog.rs    # Dialog intent resolution
-    │   ├── shop.rs      # Shop intent resolution
-    │   ├── menu.rs      # Menu/pause intent resolution
-    │   ├── inventory.rs # Inventory intent resolution
+    │   ├── explore.rs   # Explore input resolution
+    │   ├── dialog.rs    # Dialog input resolution
+    │   ├── shop.rs      # Shop input resolution
+    │   ├── menu.rs      # Menu/pause input resolution
+    │   ├── inventory.rs # Inventory input resolution
     │   ├── npc.rs       # NPC interaction resolution
     │   └── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
     ├── rendering.rs     # Re-exports from rendering sub-modules
@@ -93,21 +94,21 @@ resources/
 
 ## Architecture
 
-The codebase follows a **state + resolve systems + runtime orchestration + rendering** pattern:
+The codebase follows an **event queue + resolve systems + apply + rendering** pattern:
 
 - **State** (`state/`): Core state types and domain mutations (`PlayerState`, `CombatState`, `MovementState`).
 - **UI State** (`ui.rs`): UI-only interaction state (`MenuUiState`, `DialogUiState`, `ShopUiState`, etc.).
 - **Session State** (`session.rs`): Active gameplay container + single-domain update appliers.
-- **Systems** (`systems/`): Stateless intent/tick resolution only. Prefer `resolve_*` naming.
-- **Runtime** (`runtime.rs`): Cross-system orchestration (`collect_intents -> resolve_intent -> apply_event`).
+- **Systems** (`systems/`): Stateless event/input resolution only. Prefer `resolve_*` naming.
+- **Runtime Engine** (`engine.rs`): Cross-system orchestration (`RuntimeEvent queue -> resolve_event -> apply_event` until queue drains).
 - **Rendering** (`rendering/`): Pure draw functions. No game logic — only reads state and draws to framebuffer.
 - **App** (`main.rs`): Entry glue only (WIPI `App` trait hooks, timer, repaint).
 
-Input flow: `key → intent_for_key(ui) → GameIntent → system resolve(...) -> GameEvent → runtime apply(...) → build_render_state(...) → render(...)`
+Input flow: `key → UI maps to RuntimeEvent input events → resolve_event(...) emits derived events → apply_event(...) mutates state → queue continues until empty → build_render_state(...) → render(...)`
 
-Update flow (timer tick): `Tick → UpdateLoading/UpdateMovement/UpdateCombat intents → resolve_tick/resolve_world_tick + session apply_* → build_render_state`.
+Update flow (timer tick): `Tick event → UpdateLoading/UpdateMovement/UpdateCombat events → resolve_tick/resolve_world_tick + session apply_* → build_render_state`.
 
-Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `runtime.rs` event handlers.
+Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `engine.rs` event queue handlers.
 
 ## Code Style Guidelines
 
@@ -179,7 +180,7 @@ if matches!(self.state, GameState::Explore) { ... }
 ### Module Organization
 - Each system has its own file under `game/systems/`
 - Persistent world state lives under `game/state/`, UI state lives in `game/ui.rs`, rendering under `game/rendering/`
-- `main.rs` should stay thin; orchestration belongs in `runtime.rs`
+- `main.rs` should stay thin; orchestration belongs in `engine.rs`
 - Module files (`game.rs`, `data.rs`, `state.rs`, etc.) should primarily contain `mod` and `pub use`
 - Prefer methods for state/session mutation and functions for stateless system resolution
 

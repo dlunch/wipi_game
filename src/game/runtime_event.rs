@@ -1,5 +1,9 @@
 use crate::data::Direction;
 use crate::game::state::{FieldEnemy, SkillEffect};
+use crate::game::{
+    DialogIntent, ExploreIntent, GameInput, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
+    ShopIntent,
+};
 
 pub enum CombatRuntimeEvent {
     EnemySpawn(FieldEnemy),
@@ -21,6 +25,22 @@ pub enum CombatRuntimeEvent {
 }
 
 pub enum RuntimeEvent {
+    Tick,
+    KeyDown(InputKey),
+    KeyUp(InputKey),
+    OverlayCloseRequested,
+    GameOverConfirmRequested,
+    ErrorConfirmRequested,
+    UpdateLoading,
+    UpdateMovement,
+    UpdateCombat,
+    MenuInput(MenuIntent),
+    ExploreInput(ExploreIntent),
+    InventoryInput(InventoryIntent),
+    DialogInput(DialogIntent),
+    ShopInput(ShopIntent),
+    PauseMenuInput(PauseMenuIntent),
+    CombatPlayerAction(crate::game::ExploreAction),
     Loading(crate::game::LoadingEvent),
     Movement(AppMovementEvent),
     Combat(CombatRuntimeEvent),
@@ -32,6 +52,16 @@ pub enum RuntimeEvent {
     PauseMenu(crate::game::PauseMenuEvent),
     Transition(TransitionEvent),
     Exit(i32),
+}
+
+impl From<GameInput> for RuntimeEvent {
+    fn from(input: GameInput) -> Self {
+        match input {
+            GameInput::Tick => RuntimeEvent::Tick,
+            GameInput::KeyDown(key) => RuntimeEvent::KeyDown(key),
+            GameInput::KeyUp(key) => RuntimeEvent::KeyUp(key),
+        }
+    }
 }
 
 pub enum TransitionEvent {

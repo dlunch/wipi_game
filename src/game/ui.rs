@@ -6,6 +6,7 @@ use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
 use crate::game::{
     DialogIntent, ExploreIntent, InputKey, InventoryIntent, MenuIntent, PauseMenuIntent,
+    RuntimeEvent, ShopIntent,
 };
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
@@ -69,6 +70,13 @@ impl Default for ExploreUiState {
 }
 
 impl ExploreUiState {
+    pub fn events_for_key(&self, key: InputKey, facing: Direction) -> Vec<RuntimeEvent> {
+        self.intents_for_key(key, facing)
+            .into_iter()
+            .map(RuntimeEvent::ExploreInput)
+            .collect()
+    }
+
     pub fn intents_for_key(&self, key: InputKey, facing: Direction) -> Vec<ExploreIntent> {
         let mut intents = Vec::new();
         match key {
@@ -121,6 +129,10 @@ impl Default for MenuUiState {
 }
 
 impl MenuUiState {
+    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
+        self.intent_for_key(key).map(RuntimeEvent::MenuInput)
+    }
+
     pub fn intent_for_key(&self, key: InputKey) -> Option<MenuIntent> {
         match key {
             InputKey::Up => Some(MenuIntent::MoveUp),
@@ -156,6 +168,10 @@ impl Default for PauseMenuUiState {
 }
 
 impl PauseMenuUiState {
+    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
+        self.intent_for_key(key).map(RuntimeEvent::PauseMenuInput)
+    }
+
     pub fn intent_for_key(&self, key: InputKey) -> Option<PauseMenuIntent> {
         match key {
             InputKey::Up => Some(PauseMenuIntent::MoveUp),
@@ -181,6 +197,10 @@ pub struct InventoryUiState {
 }
 
 impl InventoryUiState {
+    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
+        self.intent_for_key(key).map(RuntimeEvent::InventoryInput)
+    }
+
     pub fn intent_for_key(&self, key: InputKey) -> Option<InventoryIntent> {
         match key {
             InputKey::Up => Some(InventoryIntent::MoveUp),
@@ -225,6 +245,19 @@ impl Default for ShopUiState {
 }
 
 impl ShopUiState {
+    pub fn event_for_key(&mut self, key: InputKey, inventory_len: usize) -> Option<RuntimeEvent> {
+        self.handle_key(key, inventory_len)
+            .map(|ui_intent| match ui_intent {
+                ShopUiIntent::BuySelected(selected) => {
+                    RuntimeEvent::ShopInput(ShopIntent::BuySelected(selected))
+                }
+                ShopUiIntent::SellSelected(selected) => {
+                    RuntimeEvent::ShopInput(ShopIntent::SellSelected(selected))
+                }
+                ShopUiIntent::Close => RuntimeEvent::ShopInput(ShopIntent::Close),
+            })
+    }
+
     pub fn open(&mut self, state: ShopState) {
         self.state = Some(state);
         self.mode = ShopMode::Select;
@@ -312,6 +345,10 @@ pub struct DialogUiState {
 }
 
 impl DialogUiState {
+    pub fn event_for_key(&self, key: InputKey) -> Option<RuntimeEvent> {
+        self.intent_for_key(key).map(RuntimeEvent::DialogInput)
+    }
+
     pub fn intent_for_key(&self, key: InputKey) -> Option<DialogIntent> {
         match key {
             InputKey::Ok => Some(DialogIntent::Confirm),
