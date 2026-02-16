@@ -36,9 +36,6 @@ impl SessionState {
             GameEvent::OpenShopById(shop_id) => {
                 let _ = open_shop_by_id(data, state, ui, shop_id);
             }
-            GameEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
-                self.spawn_current_map_enemies(data);
-            }
             _ => {}
         }
 

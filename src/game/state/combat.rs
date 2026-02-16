@@ -374,6 +374,16 @@ impl CombatState {
         mp_regen_timer: &mut u32,
         event: &GameEvent,
     ) -> Result<()> {
+        if matches!(
+            event,
+            GameEvent::Transition(crate::game::TransitionEvent::MapChanged)
+        ) {
+            if let Some(map) = data.find_map(&player.current_map_id) {
+                self.spawn_for_map(map, &data.enemies);
+            }
+            return Ok(());
+        }
+
         let GameEvent::Combat(event) = event else {
             return Ok(());
         };
