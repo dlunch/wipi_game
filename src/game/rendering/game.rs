@@ -618,13 +618,12 @@ fn render_state_from_game_state(
 }
 
 impl RenderState {
-    pub fn apply_event(
+    pub fn rebuild(
         &mut self,
         state: &GameState,
         world: Option<&WorldState>,
         ui: &UiState,
         data: &Rc<GameData>,
-        _event: &GameEvent,
         render_fx: &RenderFxState,
     ) {
         *self = render_state_from_game_state(state, world, ui, data, render_fx);

@@ -146,14 +146,6 @@ impl GameEngine {
         if self.render_fx.apply_event(&self.state, &event) {
             self.render_state.apply_tick(&self.render_fx);
         }
-        self.render_state.apply_event(
-            &self.state,
-            self.world.as_ref(),
-            &self.ui,
-            &self.data,
-            &event,
-            &self.render_fx,
-        );
         Ok(())
     }
 
@@ -161,6 +153,7 @@ impl GameEngine {
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
         let mut derived = Vec::with_capacity(8);
+        let mut render_dirty = false;
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
@@ -177,9 +170,19 @@ impl GameEngine {
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
             self.apply_with_handlers(event)?;
+            render_dirty = true;
 
             queue.extend(derived.drain(..));
             queue.extend(effect_events);
+        }
+        if render_dirty {
+            self.render_state.rebuild(
+                &self.state,
+                self.world.as_ref(),
+                &self.ui,
+                &self.data,
+                &self.render_fx,
+            );
         }
         Ok(())
     }
