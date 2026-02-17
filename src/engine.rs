@@ -164,10 +164,6 @@ impl GameEngine {
 
         if let Some(world) = self.world.as_mut() {
             world.apply_domain_event(&self.data, &self.state, &event)?;
-
-            if matches!(event, GameEvent::SaveWorld) {
-                let _ = crate::game::save_game(world);
-            }
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
