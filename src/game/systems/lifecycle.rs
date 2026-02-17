@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::Tile;
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, TransitionEvent,
     WorldEvent, load_game,

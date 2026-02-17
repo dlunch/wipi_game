@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Direction, Map, Tile};
 
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
     MovementTickEvent, TileEvent, WorldState,

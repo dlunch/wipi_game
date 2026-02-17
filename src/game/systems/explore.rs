@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{ExploreCommand, ExploreEvent, GameEvent, GameEventKind, GameState};
 
 struct ExploreResolver;

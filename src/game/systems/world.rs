@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, QuestProgress, QuestType};
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CombatEvent, GameEvent, GameEventKind, MovementEvent, TransitionEvent, WorldEvent,
 };

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{GameEvent, GameEventKind, ShopState};
 struct OpenShopByIdResolver;
 

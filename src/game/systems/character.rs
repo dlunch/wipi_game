@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, Item, ItemKind, PlayerStats};
 use crate::game::state::CharacterState;
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{GameEvent, GameEventKind, WorldEvent};
 
 struct CharacterMutationResolver;

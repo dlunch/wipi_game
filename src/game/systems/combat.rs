@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{CombatEvent, GameEvent, GameEventKind, GameState, TransitionEvent, WorldEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;

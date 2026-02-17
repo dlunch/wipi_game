@@ -4,7 +4,7 @@ pub mod explore;
 pub mod lifecycle;
 pub mod movement;
 pub mod npc;
-pub mod runtime;
+pub mod resolver;
 pub mod shop;
 pub mod world;
 
@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use npc::NpcEvent;
-pub use runtime::{DomainEventResolver, ResolveContext};
+pub use resolver::{DomainEventResolver, ResolveContext};
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];

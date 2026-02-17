@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
-use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
     DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, GameState, WorldState,
 };
