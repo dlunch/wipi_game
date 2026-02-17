@@ -165,10 +165,7 @@ impl GameEngine {
         if initial_events.is_empty() {
             return Ok(());
         }
-        let mut queue = VecDeque::with_capacity(128);
-        for event in initial_events {
-            queue.push_back(event);
-        }
+        let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
 
         while let Some(event) = queue.pop_front() {
