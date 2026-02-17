@@ -731,7 +731,7 @@ impl RenderState {
                 let total = match ui.shop.mode {
                     ShopMode::Select => 2,
                     ShopMode::Buy | ShopMode::ConfirmBuy => shop_state.items.len(),
-                    ShopMode::Sell => s.leader.inventory.len(),
+                    ShopMode::Sell | ShopMode::ConfirmSell => s.leader.inventory.len(),
                 };
                 shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
             }
@@ -907,7 +907,7 @@ fn render_state_from_game_state(
                     match ui.shop.mode {
                         ShopMode::Select => 2,
                         ShopMode::Buy | ShopMode::ConfirmBuy => shop_state.items.len(),
-                        ShopMode::Sell => s.leader.inventory.len(),
+                        ShopMode::Sell | ShopMode::ConfirmSell => s.leader.inventory.len(),
                     },
                     SHOP_VISIBLE_ITEMS,
                 ),

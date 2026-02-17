@@ -30,6 +30,10 @@ pub fn draw_shop(fb: &mut Framebuffer, state: &ShopRender) {
             draw_buy_confirm(fb, state);
         }
         ShopMode::Sell => draw_sell_list(fb, state),
+        ShopMode::ConfirmSell => {
+            draw_sell_list(fb, state);
+            draw_sell_confirm(fb, state);
+        }
     }
 
     if state.purchase_notice_timer > 0 {
@@ -200,4 +204,24 @@ fn draw_purchase_notice(fb: &mut Framebuffer) {
     fill_rect(fb, x, y, box_w, box_h, COLOR_DARK_GRAY);
     draw_rect(fb, x, y, box_w, box_h, COLOR_WHITE);
     draw_text(fb, x + 10, y + 5, "Purchased!", COLOR_GREEN);
+}
+
+fn draw_sell_confirm(fb: &mut Framebuffer, state: &ShopRender) {
+    let Some(item) = state.player_inventory.get(state.selected) else {
+        return;
+    };
+
+    let screen_w = fb.width() as i32;
+    let screen_h = fb.height() as i32;
+    let box_w = 150;
+    let box_h = 34;
+    let x = (screen_w - box_w) / 2;
+    let y = screen_h - box_h - 24;
+
+    fill_rect(fb, x, y, box_w, box_h, COLOR_DARK_GRAY);
+    draw_rect(fb, x, y, box_w, box_h, COLOR_WHITE);
+
+    draw_text(fb, x + 8, y + 8, &item.name, COLOR_WHITE);
+    draw_text(fb, x + 8, y + 18, "Sell this item?", COLOR_YELLOW);
+    draw_text(fb, x + box_w - 58, y + 18, "OK/Back", COLOR_GRAY);
 }

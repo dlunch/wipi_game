@@ -272,10 +272,24 @@ fn apply_shop_input(
             InputKey::Down => {
                 ui.shop.selected = step_down(ui.shop.selected, inventory_len);
             }
-            InputKey::Ok => out.push(GameEvent::ShopSellSelected(ui.shop.selected)),
+            InputKey::Ok => {
+                if inventory_len > 0 {
+                    ui.shop.mode = ShopMode::ConfirmSell;
+                }
+            }
             InputKey::Back => {
                 ui.shop.mode = ShopMode::Select;
                 ui.shop.selected = 0;
+            }
+            _ => {}
+        },
+        ShopMode::ConfirmSell => match key {
+            InputKey::Ok => {
+                out.push(GameEvent::ShopSellSelected(ui.shop.selected));
+                ui.shop.mode = ShopMode::Sell;
+            }
+            InputKey::Back => {
+                ui.shop.mode = ShopMode::Sell;
             }
             _ => {}
         },

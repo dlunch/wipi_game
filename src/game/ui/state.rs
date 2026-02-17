@@ -264,5 +264,6 @@ pub enum ShopMode {
     Buy,
     Sell,
     ConfirmBuy,
+    ConfirmSell,
     Select,
 }
