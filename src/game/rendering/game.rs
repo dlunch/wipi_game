@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use wipi::framebuffer::Framebuffer;
 
-use crate::data::{Direction, Item, ItemKind, SkillType};
+use crate::data::{Direction, Item, ItemKind, NpcType, SkillType, Tile};
 use crate::game::ui::{
     ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
 };
@@ -69,6 +69,7 @@ pub struct ExploreRender {
     pub level: u32,
     pub active_quest_count: usize,
     pub tracked_quest: Option<TrackedQuestRender>,
+    pub interaction_hint: Option<String>,
     pub first_live_enemy_name: Option<String>,
     pub opened_treasures: Vec<(String, usize, usize)>,
     pub enemies: Vec<EnemyRender>,
@@ -88,6 +89,7 @@ pub struct EnemyRender {
     pub y: usize,
     pub hp: i32,
     pub max_hp: i32,
+    pub attack_cooldown: u32,
     pub hit_flash: u32,
     pub dead: bool,
 }
@@ -324,6 +326,7 @@ fn build_explore_render(
             y: enemy.y,
             hp: enemy.hp,
             max_hp: enemy.data.hp,
+            attack_cooldown: enemy.attack_cooldown,
             hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
             dead: enemy.hp <= 0,
         });
@@ -361,6 +364,7 @@ fn build_explore_render(
             data,
             ui.quest_log.tracked_quest_id.as_deref(),
         ),
+        interaction_hint: build_interaction_hint(session, data),
         first_live_enemy_name,
         opened_treasures: session.opened_treasures.clone(),
         enemies,
@@ -395,6 +399,55 @@ fn build_tracked_quest_render(
     })
 }
 
+fn build_interaction_hint(session: &WorldState, data: &Rc<GameData>) -> Option<String> {
+    let map = data.find_map(&session.leader.current_map_id)?;
+    let (tx, ty) = session
+        .leader
+        .facing
+        .apply(session.leader.x, session.leader.y);
+
+    if let Some(npc) = data.find_npc_at(&session.leader.current_map_id, tx, ty) {
+        let text = match npc.npc_type {
+            NpcType::ShopKeeper => "OK: Shop",
+            NpcType::Healer => "OK: Heal",
+            NpcType::QuestGiver | NpcType::Villager => "OK: Talk",
+        };
+        return Some(String::from(text));
+    }
+
+    let text = match map.get_tile(tx, ty) {
+        Tile::Treasure => "OK: Open chest",
+        Tile::Exit => "Move: Exit",
+        Tile::Dungeon => "Move: Enter dungeon",
+        _ => return None,
+    };
+    Some(String::from(text))
+}
+
+fn build_interaction_hint_from_render(explore: &ExploreRender) -> Option<String> {
+    let map = explore.data.find_map(&explore.map_id)?;
+    let (tx, ty) = explore
+        .player_facing
+        .apply(explore.player_x, explore.player_y);
+
+    if let Some(npc) = explore.data.find_npc_at(&explore.map_id, tx, ty) {
+        let text = match npc.npc_type {
+            NpcType::ShopKeeper => "OK: Shop",
+            NpcType::Healer => "OK: Heal",
+            NpcType::QuestGiver | NpcType::Villager => "OK: Talk",
+        };
+        return Some(String::from(text));
+    }
+
+    let text = match map.get_tile(tx, ty) {
+        Tile::Treasure => "OK: Open chest",
+        Tile::Exit => "Move: Exit",
+        Tile::Dungeon => "Move: Enter dungeon",
+        _ => return None,
+    };
+    Some(String::from(text))
+}
+
 impl ExploreRender {
     fn refresh_first_live_enemy_name(&mut self) {
         self.first_live_enemy_name = self
@@ -421,16 +474,20 @@ impl ExploreRender {
                         _ => self.player_facing,
                     };
                 }
+                self.interaction_hint = build_interaction_hint_from_render(self);
             }
             GameEvent::World(WorldEvent::SetPlayerMap(map_id)) => {
                 self.map_id = map_id.clone();
+                self.interaction_hint = build_interaction_hint_from_render(self);
             }
             GameEvent::World(WorldEvent::SetPlayerPosition { x, y }) => {
                 self.player_x = *x;
                 self.player_y = *y;
+                self.interaction_hint = build_interaction_hint_from_render(self);
             }
             GameEvent::World(WorldEvent::SetPlayerFacing(facing)) => {
                 self.player_facing = *facing;
+                self.interaction_hint = build_interaction_hint_from_render(self);
             }
             GameEvent::World(WorldEvent::SetPlayerStats(stats)) => {
                 self.hp = as_u32(stats.current_hp);
@@ -474,6 +531,7 @@ impl ExploreRender {
                         y: enemy.y,
                         hp: enemy.hp,
                         max_hp: enemy.data.hp,
+                        attack_cooldown: enemy.attack_cooldown,
                         hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
                         dead: enemy.hp <= 0,
                     });
@@ -488,6 +546,7 @@ impl ExploreRender {
                     y: enemy.y,
                     hp: enemy.hp,
                     max_hp: enemy.data.hp,
+                    attack_cooldown: enemy.attack_cooldown,
                     hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
                     dead: enemy.hp <= 0,
                 });
@@ -508,6 +567,11 @@ impl ExploreRender {
                     enemy.hp = *hp;
                     enemy.dead = *hp <= 0;
                     self.refresh_first_live_enemy_name();
+                }
+            }
+            GameEvent::Combat(CombatEvent::EnemyAttackCooldownSet { enemy_id, cooldown }) => {
+                if let Some(enemy) = self.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
+                    enemy.attack_cooldown = *cooldown;
                 }
             }
             GameEvent::Combat(CombatEvent::EnemyHitFlashSet { enemy_id, .. }) => {
@@ -758,6 +822,7 @@ impl RenderState {
                     &explore.data,
                     ui.quest_log.tracked_quest_id.as_deref(),
                 );
+                explore.interaction_hint = build_interaction_hint_from_render(explore);
             }
             RenderState::Menu {
                 title,

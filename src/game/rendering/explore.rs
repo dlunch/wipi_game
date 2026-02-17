@@ -13,6 +13,10 @@ use crate::data::{Direction, Map, SkillType, Tile};
 use crate::game::ExploreAction;
 use crate::game::ExploreRender;
 
+const HUD_HEIGHT: i32 = 40;
+const MINIMAP_RADIUS: i32 = 6;
+const MINIMAP_CELL: i32 = 3;
+
 pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender, sprites: &SpriteAtlas) {
     let Some(map) = state.data.find_map(&state.map_id) else {
         clear_screen(fb);
@@ -23,6 +27,7 @@ pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender, sprites: &Sprit
     clear_screen(fb);
     let screen_h = fb.height() as i32;
     draw_map_with_entities(fb, map, state, sprites, screen_h);
+    draw_minimap(fb, map, state);
     draw_hud(fb, map.name.as_str(), state, screen_h);
     draw_quest_notice(fb, state.quest_notice_timer);
 }
@@ -52,7 +57,7 @@ fn draw_map_with_entities(
 ) {
     let screen_w = fb.width() as i32;
     let view_tiles_x = (screen_w / TILE_SIZE) as usize;
-    let view_tiles_y = ((screen_h - 30) / TILE_SIZE) as usize;
+    let view_tiles_y = ((screen_h - HUD_HEIGHT) / TILE_SIZE) as usize;
 
     let half_x = view_tiles_x / 2;
     let half_y = view_tiles_y / 2;
@@ -161,6 +166,12 @@ fn draw_map_with_entities(
             };
             fill_rect(fb, px + 1, py - 2, TILE_SIZE - 2, 2, COLOR_DARK_GRAY);
             fill_rect(fb, px + 1, py - 2, bar_width, 2, COLOR_GREEN);
+
+            let near_player =
+                enemy.x.abs_diff(state.player_x) + enemy.y.abs_diff(state.player_y) <= 1;
+            if enemy.attack_cooldown == 0 && near_player {
+                draw_text(fb, px + (TILE_SIZE / 2) - 2, py - 10, "!", COLOR_RED);
+            }
         }
     }
 
@@ -259,10 +270,10 @@ fn draw_facing_indicator(fb: &mut Framebuffer, screen_x: i32, screen_y: i32, fac
 
 fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_h: i32) {
     let screen_w = fb.width() as i32;
-    let hud_y = screen_h - 30;
+    let hud_y = screen_h - HUD_HEIGHT;
 
-    fill_rect(fb, 0, hud_y, screen_w, 30, COLOR_BLACK);
-    draw_rect(fb, 0, hud_y, screen_w, 30, COLOR_WHITE);
+    fill_rect(fb, 0, hud_y, screen_w, HUD_HEIGHT, COLOR_BLACK);
+    draw_rect(fb, 0, hud_y, screen_w, HUD_HEIGHT, COLOR_WHITE);
 
     draw_text(fb, 4, hud_y + 2, map_name, COLOR_CYAN);
 
@@ -283,23 +294,112 @@ fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_
             "{} {}/{}",
             quest.name, quest.current_count, quest.target_count
         );
+        let progress = truncate_by_chars(&progress, 24);
         let color = if quest.completed {
             COLOR_GREEN
         } else {
             COLOR_YELLOW
         };
-        draw_text(fb, 4, hud_y + 12, &progress, color);
+        draw_text(fb, 4, hud_y + 12, progress, color);
+    }
+
+    if let Some(hint) = &state.interaction_hint {
+        let hint = truncate_by_chars(hint, 24);
+        draw_text(fb, 4, hud_y + 20, hint, COLOR_CYAN);
     }
 
     if !state.peaceful {
         draw_skill_bar(
             fb,
-            hud_y + 20,
+            hud_y + 28,
             screen_w,
             state.mp,
             &state.skill_cooldowns,
             &state.key_actions,
         );
+    }
+}
+
+fn draw_minimap(fb: &mut Framebuffer, map: &Map, state: &ExploreRender) {
+    let diam = MINIMAP_RADIUS * 2 + 1;
+    let box_w = diam * MINIMAP_CELL + 4;
+    let box_h = diam * MINIMAP_CELL + 4;
+    let base_x = fb.width() as i32 - box_w - 4;
+    let base_y = 4;
+
+    fill_rect(fb, base_x, base_y, box_w, box_h, COLOR_BLACK);
+    draw_rect(fb, base_x, base_y, box_w, box_h, COLOR_WHITE);
+
+    for dy in -MINIMAP_RADIUS..=MINIMAP_RADIUS {
+        for dx in -MINIMAP_RADIUS..=MINIMAP_RADIUS {
+            let mx = state.player_x as i32 + dx;
+            let my = state.player_y as i32 + dy;
+            let px = base_x + 2 + (dx + MINIMAP_RADIUS) * MINIMAP_CELL;
+            let py = base_y + 2 + (dy + MINIMAP_RADIUS) * MINIMAP_CELL;
+            let color = if mx < 0 || my < 0 || mx >= map.width as i32 || my >= map.height as i32 {
+                COLOR_BLACK
+            } else {
+                match map.get_tile(mx as usize, my as usize) {
+                    Tile::Wall => COLOR_DARK_GRAY,
+                    Tile::Water => COLOR_BLUE,
+                    Tile::Tree => COLOR_FOREST,
+                    Tile::Dungeon => COLOR_DUNGEON,
+                    Tile::Treasure => COLOR_YELLOW,
+                    Tile::Exit => COLOR_GREEN,
+                    _ => COLOR_GRAY,
+                }
+            };
+            fill_rect(fb, px, py, MINIMAP_CELL, MINIMAP_CELL, color);
+        }
+    }
+
+    for npc in &state.data.npcs {
+        if npc.map_id != state.map_id {
+            continue;
+        }
+        let dx = npc.x as i32 - state.player_x as i32;
+        let dy = npc.y as i32 - state.player_y as i32;
+        if dx.abs() > MINIMAP_RADIUS || dy.abs() > MINIMAP_RADIUS {
+            continue;
+        }
+        let px = base_x + 2 + (dx + MINIMAP_RADIUS) * MINIMAP_CELL;
+        let py = base_y + 2 + (dy + MINIMAP_RADIUS) * MINIMAP_CELL;
+        fill_rect(fb, px, py, MINIMAP_CELL, MINIMAP_CELL, COLOR_CYAN);
+    }
+
+    for enemy in &state.enemies {
+        if enemy.dead {
+            continue;
+        }
+        let dx = enemy.x as i32 - state.player_x as i32;
+        let dy = enemy.y as i32 - state.player_y as i32;
+        if dx.abs() > MINIMAP_RADIUS || dy.abs() > MINIMAP_RADIUS {
+            continue;
+        }
+        let px = base_x + 2 + (dx + MINIMAP_RADIUS) * MINIMAP_CELL;
+        let py = base_y + 2 + (dy + MINIMAP_RADIUS) * MINIMAP_CELL;
+        fill_rect(fb, px, py, MINIMAP_CELL, MINIMAP_CELL, COLOR_RED);
+    }
+
+    let center_x = base_x + 2 + MINIMAP_RADIUS * MINIMAP_CELL;
+    let center_y = base_y + 2 + MINIMAP_RADIUS * MINIMAP_CELL;
+    fill_rect(
+        fb,
+        center_x,
+        center_y,
+        MINIMAP_CELL,
+        MINIMAP_CELL,
+        COLOR_WHITE,
+    );
+}
+
+fn truncate_by_chars(s: &str, max_chars: usize) -> &str {
+    if max_chars == 0 {
+        return "";
+    }
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
     }
 }
 
