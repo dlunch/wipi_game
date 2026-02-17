@@ -70,8 +70,7 @@ impl GameEngine {
             let ui_events = self
                 .ui
                 .resolve_input(input, &self.state, self.world.as_ref());
-            let initial = self.apply_ui_events(ui_events);
-            initial_events.extend(initial);
+            initial_events.extend(self.apply_ui_events(ui_events));
         }
         self.render_state
             .apply_ui_patch(&self.ui, self.world.as_ref());
@@ -101,7 +100,7 @@ impl GameEngine {
         out
     }
 
-    fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve_with_handlers(&self, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let mut out = Vec::with_capacity(8);
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
@@ -110,7 +109,7 @@ impl GameEngine {
                 data: &self.data,
                 world: self.world.as_ref(),
             };
-            (*resolver).resolve(&ctx, event, &mut out)?;
+            resolver.resolve(&ctx, event, &mut out)?;
         }
         Ok(out)
     }
@@ -180,12 +179,8 @@ impl GameEngine {
 
             self.apply_with_handlers(event)?;
 
-            for derived_event in derived {
-                queue.push_back(derived_event);
-            }
-            for effect_event in effect_events {
-                queue.push_back(effect_event);
-            }
+            queue.extend(derived);
+            queue.extend(effect_events);
         }
         Ok(())
     }
