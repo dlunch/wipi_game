@@ -11,8 +11,7 @@ use core::mem;
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldState, apply_render_event, apply_render_tick,
-    apply_state_event, apply_ui_render_patch, domain_resolvers,
+    UiInputEventResolver, UiState, WorldState, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -72,7 +71,7 @@ impl GameEngine {
     fn update(&mut self) {
         self.process_pending_inputs();
         if self.render_fx.tick() {
-            apply_render_tick(&mut self.render_state, &self.render_fx);
+            self.render_state.apply_tick(&self.render_fx);
         }
         let initial = self.resolve_tick_game_events();
         self.dispatch_game_events(initial);
@@ -107,7 +106,8 @@ impl GameEngine {
             self.ui.apply_ui_event(self.world.as_ref(), event, &mut out);
         }
         if out.is_empty() {
-            apply_ui_render_patch(&mut self.render_state, &self.ui, self.world.as_ref());
+            self.render_state
+                .apply_ui_patch(&self.ui, self.world.as_ref());
         }
         out
     }
@@ -133,7 +133,7 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        let event = apply_state_event(&mut self.state, &mut self.data, event)?;
+        let event = self.state.apply_with_data(&mut self.data, event)?;
 
         let is_session_event = matches!(event, GameEvent::World(_));
 
@@ -175,10 +175,9 @@ impl GameEngine {
         }
 
         if self.render_fx.apply_event(&event) {
-            apply_render_tick(&mut self.render_state, &self.render_fx);
+            self.render_state.apply_tick(&self.render_fx);
         }
-        apply_render_event(
-            &mut self.render_state,
+        self.render_state.apply_event(
             &self.state,
             self.world.as_ref(),
             &self.ui,

@@ -11,7 +11,7 @@ pub use dialog::draw_dialog;
 pub use explore::draw_explore;
 pub use game::{
     ExploreRender, InventoryRender, QuestLogRender, RenderFxState, RenderState, ShopRender,
-    StatsRender, apply_render_event, apply_render_tick, apply_ui_render_patch, render,
+    StatsRender, render,
 };
 pub use inventory::{draw_inventory, draw_stats};
 pub use menu::{draw_menu, draw_pause_menu};
