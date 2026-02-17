@@ -25,17 +25,6 @@ pub enum NpcEvent {
     RestoreStats,
 }
 
-#[derive(Debug)]
-pub enum NpcIntent {
-    Interact { facing: Direction },
-}
-
-pub fn resolve(session: &SessionState, data: &GameData, intent: NpcIntent) -> Option<NpcEvent> {
-    match intent {
-        NpcIntent::Interact { facing } => try_interact(session, data, facing),
-    }
-}
-
 fn try_interact(session: &SessionState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(session.leader.x, session.leader.y);
 
@@ -130,9 +119,7 @@ impl DomainEventResolver for NpcResolver {
                 );
                 let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-                if let Some(npc_event) =
-                    resolve(s, ctx.data(), NpcIntent::Interact { facing: *facing })
-                {
+                if let Some(npc_event) = try_interact(s, ctx.data(), *facing) {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
                     return Ok(());
                 }
