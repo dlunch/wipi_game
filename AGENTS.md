@@ -58,30 +58,36 @@ src/
     ├── game_event.rs    # GameEvent and domain sub-events
     ├── state.rs         # GameState enum + state module re-exports
     ├── state/
+    │   ├── game_state.rs# GameState transitions/subscriber logic
     │   ├── character.rs # CharacterState + tile events + character mutations
     │   ├── combat.rs    # CombatState + combat actions/events + combat mutations
     │   ├── movement.rs  # MovementState + movement tick event + movement mutations
-    │   └── session.rs   # SessionState domain appliers and occupancy caches
-    ├── session.rs       # Re-export for state/session.rs
+    │   ├── world.rs     # WorldState domain state + occupancy caches
+    │   └── world_slot.rs# Optional active world holder
+    ├── world.rs         # Re-export for state/world.rs
     ├── ui.rs            # UI module re-exports
     ├── ui/
-    │   ├── state.rs     # UiState + UiEvent + input/ui-event mapping
+    │   ├── state.rs     # UiState + UiEvent data types
+    │   ├── resolve.rs   # Input -> UiEvent mapping
+    │   ├── apply.rs     # UiEvent -> GameEvent mapping
     │   └── game_event.rs# UiState apply_game_event bridge for GameEvent
     ├── systems.rs       # Re-exports from systems sub-modules
     ├── systems/
-    │   ├── runtime.rs   # ResolveContext + DomainEventResolver trait
+    │   ├── resolver.rs  # ResolveContext + DomainEventResolver trait
+    │   ├── loading.rs   # Loading tick resolution/helpers
     │   ├── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
     │   ├── movement.rs  # Movement resolve_tick + resolve_world_tick
     │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
     │   ├── explore.rs   # Explore command resolution
     │   ├── shop.rs      # Shop command resolution
-    │   ├── session.rs   # Session-related command resolution
+    │   ├── world.rs     # World-related command resolution
     │   ├── character.rs # Character-related command resolution
     │   └── npc.rs       # NPC interaction resolution
     ├── rendering.rs     # Re-exports from rendering sub-modules
     ├── rendering/
     │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
     │   ├── game.rs      # Main render dispatch + RenderState/RenderFxState
+    │   ├── sprites.rs   # Atlas metadata parsing + animated sprite frame selection
     │   ├── dialog.rs    # Dialog box rendering
     │   ├── explore.rs   # Map/entity/HUD rendering
     │   ├── inventory.rs # Inventory & stats UI
@@ -99,16 +105,16 @@ resources/
 
 The codebase follows an **event queue + resolve systems + apply + rendering** pattern:
 
-- **State** (`state/`): Core state types and domain mutations (`CharacterState`, `CombatState`, `MovementState`, `SessionState`).
+- **State** (`state/`): Core state types and domain mutations (`GameState`, `CharacterState`, `CombatState`, `MovementState`, `WorldState`).
 - **UI State** (`ui/state.rs`): UI-only interaction state + `UiEvent` mapping/apply.
 - **Systems** (`systems/`): Stateless `GameEvent` resolution only. Prefer `resolve_*` naming.
 - **Runtime Engine** (`engine.rs`): Cross-system orchestration (`GameEvent queue -> resolve -> apply -> enqueue`) with overflow guard.
-- **Rendering** (`rendering/`): RenderState-based drawing + incremental patch helpers (`apply_render_event`, `apply_render_tick`, `apply_ui_render_patch`).
+- **Rendering** (`rendering/`): RenderState-based drawing + incremental patch helpers (`apply_render_event`, `apply_tick`, `apply_ui_patch`) + sprite atlas frame selection.
 - **App** (`main.rs`): Entry glue only (WIPI `App` trait hooks, timer, repaint).
 
 Input flow: `keydown/keyup -> pending input queue -> UiEvent resolve/apply -> GameEvent dispatch -> resolve/apply loop -> render patch or rebuild`
 
-Update flow (timer tick): `process pending inputs -> render fx tick -> UpdateLoading/UpdateMovement/UpdateCombat events -> resolve/apply -> render patch or rebuild`.
+Update flow (timer tick): `process pending inputs -> render fx tick (includes animation tick) -> UpdateLoading/UpdateMovement/UpdateCombat events -> resolve/apply -> render patch or rebuild`.
 
 Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `engine.rs` event queue handlers.
 
@@ -185,6 +191,7 @@ if matches!(self.state, GameState::Explore) { ... }
 - `main.rs` should stay thin; orchestration belongs in `engine.rs`
 - Module files (`game.rs`, `data.rs`, `state.rs`, etc.) should primarily contain `mod` and `pub use`
 - Prefer methods for state/session mutation and functions for stateless system resolution
+- Sprite assets should be atlas-based (`images/atlas.png` + `images/atlas.meta`), with rectangle fallback when atlas/meta is missing.
 
 ### Functions
 - Keep functions small and focused
