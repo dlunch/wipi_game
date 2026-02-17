@@ -103,8 +103,8 @@ impl GameEngine {
         out
     }
 
-    fn resolve_with_handlers(&mut self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
-        out.clear();
+    fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
+        let mut out = Vec::with_capacity(8);
         if matches!(event, GameEvent::UpdateCombat)
             && let Some(world) = self.world.as_ref()
         {
@@ -117,9 +117,9 @@ impl GameEngine {
                 data: &self.data,
                 world: self.world.as_ref(),
             };
-            (*resolver).resolve(&ctx, event, out)?;
+            (*resolver).resolve(&ctx, event, &mut out)?;
         }
-        Ok(())
+        Ok(out)
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
@@ -176,7 +176,6 @@ impl GameEngine {
         for event in initial_events {
             queue.push_back(event);
         }
-        let mut derived = Vec::with_capacity(32);
         let mut effect_events = Vec::with_capacity(4);
         let mut processed = 0usize;
 
@@ -189,7 +188,7 @@ impl GameEngine {
                 ));
             }
 
-            self.resolve_with_handlers(&event, &mut derived)?;
+            let derived = self.resolve_with_handlers(&event)?;
             effect_events.clear();
             apply_effects(
                 &self.state,
@@ -201,7 +200,7 @@ impl GameEngine {
 
             self.apply_with_handlers(event)?;
 
-            for derived_event in derived.drain(..) {
+            for derived_event in derived {
                 queue.push_back(derived_event);
             }
             for effect_event in effect_events.drain(..) {
