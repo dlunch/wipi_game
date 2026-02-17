@@ -343,12 +343,22 @@ mod tests {
         super::resolve_tick_with_occupancy(state, player, &session, Some(map_ref))
     }
 
+    fn make_movement_state(
+        pressed_direction: Option<Direction>,
+        move_cooldown: u32,
+    ) -> MovementState {
+        let mut state = MovementState::default();
+        if let Some(direction) = pressed_direction {
+            state.on_direction_pressed(direction);
+        }
+        state.move_cooldown = move_cooldown;
+        state
+    }
+
     #[test]
     fn on_direction_pressed_sets_direction_and_resets_cooldown() {
-        let mut state = MovementState {
-            pressed_direction: None,
-            move_cooldown: 3,
-        };
+        let mut state = MovementState::default();
+        state.move_cooldown = 3;
 
         state.on_direction_pressed(Direction::Left);
 
@@ -358,10 +368,8 @@ mod tests {
 
     #[test]
     fn on_key_released_clears_when_matching_key() {
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let mut state = MovementState::default();
+        state.on_direction_pressed(Direction::Right);
 
         state.on_direction_released(Direction::Right);
 
@@ -370,12 +378,21 @@ mod tests {
 
     #[test]
     fn on_key_released_keeps_direction_when_different_key() {
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Up),
-            move_cooldown: 0,
-        };
+        let mut state = MovementState::default();
+        state.on_direction_pressed(Direction::Up);
 
         state.on_direction_released(Direction::Down);
+
+        assert!(state.pressed_direction == Some(Direction::Up));
+    }
+
+    #[test]
+    fn releasing_latest_direction_restores_previous_direction() {
+        let mut state = MovementState::default();
+        state.on_direction_pressed(Direction::Up);
+        state.on_direction_pressed(Direction::Right);
+
+        state.on_direction_released(Direction::Right);
 
         assert!(state.pressed_direction == Some(Direction::Up));
     }
@@ -466,10 +483,7 @@ mod tests {
         let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 2,
-        };
+        let mut state = make_movement_state(Some(Direction::Right), 2);
 
         let event = resolve_tick(
             &state,
@@ -541,10 +555,7 @@ mod tests {
         let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 1,
-        };
+        let mut state = make_movement_state(Some(Direction::Right), 1);
 
         let event = resolve_tick(
             &state,
@@ -590,10 +601,7 @@ mod tests {
         let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let mut state = make_movement_state(Some(Direction::Right), 0);
 
         let event = resolve_tick(
             &state,
@@ -629,10 +637,7 @@ mod tests {
         let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = vec![(2, 1)];
         let npc_positions: Vec<(usize, usize)> = Vec::new();
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let mut state = make_movement_state(Some(Direction::Right), 0);
 
         let event = resolve_tick(
             &state,
@@ -668,10 +673,7 @@ mod tests {
         let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = vec![(2, 1)];
-        let mut state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let mut state = make_movement_state(Some(Direction::Right), 0);
 
         let event = resolve_tick(
             &state,
@@ -691,10 +693,7 @@ mod tests {
     fn resolve_world_tick_sets_treasure_tile_event_without_map_change() {
         let data = make_world_data();
         let session = make_session_with_map(&data, "field");
-        let state = MovementState {
-            pressed_direction: Some(Direction::Down),
-            move_cooldown: 0,
-        };
+        let state = make_movement_state(Some(Direction::Down), 0);
         let player = make_player_at(1, 0, "field");
 
         let result = resolve_world_tick(&state, &player, &session, &data);
@@ -706,10 +705,7 @@ mod tests {
     fn resolve_world_tick_sets_exit_tile_event_with_map_change() {
         let data = make_world_data();
         let session = make_session_with_map(&data, "field");
-        let state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let state = make_movement_state(Some(Direction::Right), 0);
         let player = make_player_at(1, 1, "field");
 
         let result = resolve_world_tick(&state, &player, &session, &data);
@@ -721,10 +717,7 @@ mod tests {
     fn resolve_world_tick_sets_dungeon_tile_event_with_map_change() {
         let data = make_world_data();
         let session = make_session_with_map(&data, "field");
-        let state = MovementState {
-            pressed_direction: Some(Direction::Down),
-            move_cooldown: 0,
-        };
+        let state = make_movement_state(Some(Direction::Down), 0);
         let player = make_player_at(1, 1, "field");
 
         let result = resolve_world_tick(&state, &player, &session, &data);
@@ -738,10 +731,7 @@ mod tests {
     fn resolve_world_tick_sets_no_tile_event_on_floor() {
         let data = make_world_data();
         let session = make_session_with_map(&data, "field");
-        let state = MovementState {
-            pressed_direction: Some(Direction::Right),
-            move_cooldown: 0,
-        };
+        let state = make_movement_state(Some(Direction::Right), 0);
         let player = make_player_at(0, 0, "field");
 
         let result = resolve_world_tick(&state, &player, &session, &data);
