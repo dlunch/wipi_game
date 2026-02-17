@@ -1,11 +1,10 @@
 use alloc::collections::VecDeque;
 use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
@@ -77,7 +76,9 @@ impl GameEngine {
             self.render_state.apply_tick(&self.render_fx);
         }
         initial_events.extend(self.resolve_tick_game_events());
-        self.dispatch_game_events(initial_events);
+        if let Err(e) = self.dispatch_game_events(initial_events) {
+            self.state = GameState::Error(format!("{e}"));
+        }
     }
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
@@ -177,9 +178,9 @@ impl GameEngine {
         Ok(())
     }
 
-    fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) {
+    fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<()> {
         if initial_events.is_empty() {
-            return;
+            return Ok(());
         }
         let mut queue = VecDeque::with_capacity(128);
         for event in initial_events {
@@ -187,35 +188,24 @@ impl GameEngine {
         }
         let mut derived = Vec::with_capacity(32);
         let mut processed = 0usize;
-        let mut error_message: Option<String> = None;
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
             if processed > 256 {
-                error_message = Some(format!(
+                return Err(anyhow!(
                     "Event queue overflow: processed {} events in one dispatch",
                     processed
                 ));
-                break;
             }
 
-            if let Err(e) = self.resolve_with_handlers(&event, &mut derived) {
-                error_message = Some(format!("{e}"));
-                break;
-            }
+            self.resolve_with_handlers(&event, &mut derived)?;
 
-            if let Err(e) = self.apply_with_handlers(event) {
-                error_message = Some(format!("{e}"));
-                break;
-            }
+            self.apply_with_handlers(event)?;
 
             for derived_event in derived.drain(..) {
                 queue.push_back(derived_event);
             }
         }
-
-        if let Some(message) = error_message {
-            self.state = GameState::Error(message);
-        }
+        Ok(())
     }
 }
