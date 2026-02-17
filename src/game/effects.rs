@@ -5,7 +5,8 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::game::{GameData, GameEvent, GameState, LoadingEvent, WorldState, save_game};
+use super::save::save_game;
+use crate::game::{GameData, GameEvent, GameState, LoadingEvent, WorldState};
 
 pub fn apply_effects(
     state: &GameState,

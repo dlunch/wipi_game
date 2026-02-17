@@ -5,13 +5,23 @@ use alloc::vec::Vec;
 use wipi::framebuffer::Framebuffer;
 
 use crate::data::{Direction, Item, ItemKind, SkillType};
-use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatEvent, ExploreAction,
-    GameData, GameEvent, GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, MovementEvent,
-    SHOP_VISIBLE_ITEMS, ShopMode, UiState, WorldEvent, WorldState, clear_screen, draw_dialog,
-    draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
-    draw_stats, draw_text, fill_rect,
+use crate::game::ui::{
+    ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
 };
+use crate::game::{
+    CombatEvent, GameData, GameEvent, GameState, MovementEvent, WorldEvent, WorldState,
+};
+
+use super::dialog::draw_dialog;
+use super::explore::draw_explore;
+use super::inventory::{draw_inventory, draw_stats};
+use super::menu::{draw_menu, draw_pause_menu};
+use super::quest::draw_quest_log;
+use super::renderer::{
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect,
+    draw_text, fill_rect,
+};
+use super::shop::draw_shop;
 
 pub enum RenderState {
     Loading {

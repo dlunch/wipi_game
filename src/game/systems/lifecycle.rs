@@ -5,10 +5,10 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::Tile;
+use crate::game::save::load_game;
 use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CharacterState, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
-    load_game,
 };
 
 #[derive(Clone)]

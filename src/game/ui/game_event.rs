@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use crate::game::{
-    GameEvent, GameEventKind, GameEventSubscriber, MenuState, UiState, WorldState, has_save_data,
-};
+use super::state::MenuState;
+use crate::game::save::has_save_data;
+use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, UiState, WorldState};
 
 impl UiState {
     pub fn apply_game_event(
