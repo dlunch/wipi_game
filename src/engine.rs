@@ -71,8 +71,9 @@ impl GameEngine {
 
     fn update(&mut self) {
         self.process_pending_inputs();
-        let _ =
-            self.render_fx.tick() && !apply_render_tick(&mut self.render_state, &self.render_fx);
+        if self.render_fx.tick() {
+            apply_render_tick(&mut self.render_state, &self.render_fx);
+        }
         let initial = self.resolve_tick_game_events();
         self.dispatch_game_events(initial);
     }
@@ -107,7 +108,7 @@ impl GameEngine {
                 .apply_ui_event(self.session.as_ref(), event, &mut out);
         }
         if out.is_empty() {
-            let _ = apply_ui_render_patch(&mut self.render_state, &self.ui, self.session.as_ref());
+            apply_ui_render_patch(&mut self.render_state, &self.ui, self.session.as_ref());
         }
         out
     }
@@ -176,9 +177,10 @@ impl GameEngine {
             self.ui.apply_game_event(self.session.as_ref(), &event)?;
         }
 
-        let _ = self.render_fx.apply_event(&event)
-            && !apply_render_tick(&mut self.render_state, &self.render_fx);
-        let _ = apply_render_event(
+        if self.render_fx.apply_event(&event) {
+            apply_render_tick(&mut self.render_state, &self.render_fx);
+        }
+        apply_render_event(
             &mut self.render_state,
             &self.state,
             self.session.as_ref(),

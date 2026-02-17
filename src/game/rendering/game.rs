@@ -341,7 +341,7 @@ fn apply_explore_render_event(
     explore: &mut ExploreRender,
     event: &GameEvent,
     render_fx: &RenderFxState,
-) -> bool {
+) {
     match event {
         GameEvent::Movement(MovementEvent::Tick(movement, _)) => {
             if let Some((dx, dy)) = movement.step {
@@ -357,20 +357,16 @@ fn apply_explore_render_event(
                     _ => explore.player_facing,
                 };
             }
-            true
         }
         GameEvent::Session(SessionEvent::SetPlayerMap(map_id)) => {
             explore.map_id = map_id.clone();
-            true
         }
         GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }) => {
             explore.player_x = *x;
             explore.player_y = *y;
-            true
         }
         GameEvent::Session(SessionEvent::SetPlayerFacing(facing)) => {
             explore.player_facing = *facing;
-            true
         }
         GameEvent::Session(SessionEvent::SetPlayerStats(stats)) => {
             explore.hp = as_u32(stats.current_hp);
@@ -378,11 +374,9 @@ fn apply_explore_render_event(
             explore.mp = as_u32(stats.current_mp);
             explore.max_mp = as_u32(stats.max_mp);
             explore.level = as_u32(stats.level);
-            true
         }
         GameEvent::Session(SessionEvent::SetSkillCooldowns(cooldowns)) => {
             explore.skill_cooldowns = *cooldowns;
-            true
         }
         GameEvent::Session(SessionEvent::AddOpenedTreasure { map_id, x, y }) => {
             if !explore
@@ -392,7 +386,6 @@ fn apply_explore_render_event(
             {
                 explore.opened_treasures.push((map_id.clone(), *x, *y));
             }
-            true
         }
         GameEvent::Combat(CombatEvent::SetMapEnemies { enemies, .. }) => {
             explore.enemies.clear();
@@ -410,7 +403,6 @@ fn apply_explore_render_event(
                 });
             }
             refresh_first_live_enemy_name(explore);
-            true
         }
         GameEvent::Combat(CombatEvent::EnemySpawn(enemy)) => {
             explore.enemies.push(EnemyRender {
@@ -424,40 +416,31 @@ fn apply_explore_render_event(
                 dead: enemy.hp <= 0,
             });
             refresh_first_live_enemy_name(explore);
-            true
         }
         GameEvent::Combat(CombatEvent::EnemyDespawn(enemy_id)) => {
             explore.enemies.retain(|enemy| enemy.enemy_id != *enemy_id);
             refresh_first_live_enemy_name(explore);
-            true
         }
         GameEvent::Combat(CombatEvent::EnemyMove { enemy_id, x, y }) => {
             if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
                 enemy.x = *x;
                 enemy.y = *y;
-                return true;
             }
-            false
         }
         GameEvent::Combat(CombatEvent::EnemyHpSet { enemy_id, hp }) => {
             if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
                 enemy.hp = *hp;
                 enemy.dead = *hp <= 0;
                 refresh_first_live_enemy_name(explore);
-                return true;
             }
-            false
         }
         GameEvent::Combat(CombatEvent::EnemyHitFlashSet { enemy_id, .. }) => {
             if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
                 enemy.hit_flash = render_fx.enemy_hit_flash(*enemy_id);
-                return true;
             }
-            false
         }
         GameEvent::Combat(CombatEvent::SetPlayerHitFlash(_)) => {
             explore.player_hit_flash = render_fx.player_hit_flash;
-            true
         }
         GameEvent::Combat(CombatEvent::SetSkillEffects(effects)) => {
             explore.skill_effects.clear();
@@ -470,7 +453,6 @@ fn apply_explore_render_event(
                     timer: effect.timer,
                 });
             }
-            true
         }
         GameEvent::Combat(CombatEvent::TickSkillEffects) => {
             for effect in &mut explore.skill_effects {
@@ -479,9 +461,8 @@ fn apply_explore_render_event(
                 }
             }
             explore.skill_effects.retain(|e| e.timer > 0);
-            true
         }
-        _ => false,
+        _ => {}
     }
 }
 
@@ -493,7 +474,7 @@ pub fn apply_render_event(
     data: &Rc<GameData>,
     event: &GameEvent,
     render_fx: &RenderFxState,
-) -> bool {
+) {
     if matches!(
         event,
         GameEvent::Lifecycle(_)
@@ -504,17 +485,16 @@ pub fn apply_render_event(
             | GameEvent::ApplyDialogTransition(_)
     ) {
         *render_state = render_state_from_game_state(state, session, ui, data, render_fx);
-        return true;
+        return;
     }
 
     if let GameEvent::Loading(crate::game::LoadingEvent::Advance(step)) = event
         && let RenderState::Loading { step: render_step } = render_state
     {
-        if *render_step == *step {
-            return true;
+        if *render_step != *step {
+            *render_step = *step;
         }
-        *render_step = *step;
-        return true;
+        return;
     }
 
     if let GameEvent::Session(session_event) = event {
@@ -534,7 +514,7 @@ pub fn apply_render_event(
                         inventory.items.len(),
                         INVENTORY_VISIBLE_ITEMS,
                     );
-                    return true;
+                    return;
                 }
                 if let RenderState::Shop(shop) = render_state {
                     shop.player_inventory.clear();
@@ -542,7 +522,7 @@ pub fn apply_render_event(
                     for item in player_inventory {
                         shop.player_inventory.push(item_to_shop_render(item));
                     }
-                    return true;
+                    return;
                 }
             }
             SessionEvent::AddPlayerItem(item) => {
@@ -553,35 +533,35 @@ pub fn apply_render_event(
                         inventory.items.len(),
                         INVENTORY_VISIBLE_ITEMS,
                     );
-                    return true;
+                    return;
                 }
                 if let RenderState::Shop(shop) = render_state {
                     shop.player_inventory.push(item_to_shop_render(item));
-                    return true;
+                    return;
                 }
             }
             SessionEvent::SetEquippedWeapon(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_weapon = *index;
-                    return true;
+                    return;
                 }
             }
             SessionEvent::SetEquippedArmor(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_armor = *index;
-                    return true;
+                    return;
                 }
             }
             SessionEvent::SetEquippedAccessory(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_accessory = *index;
-                    return true;
+                    return;
                 }
             }
             SessionEvent::SetPlayerStats(stats) => {
                 if let RenderState::Shop(shop) = render_state {
                     shop.player_gold = stats.gold;
-                    return true;
+                    return;
                 }
                 if let RenderState::Stats(stats_render) = render_state {
                     stats_render.hp = as_u32(stats.current_hp);
@@ -591,17 +571,16 @@ pub fn apply_render_event(
                     stats_render.level = as_u32(stats.level);
                     stats_render.exp = as_u32(stats.exp);
                     stats_render.gold = as_u32(stats.gold);
-                    return true;
+                    return;
                 }
             }
             SessionEvent::AddQuestProgress(progress) => {
                 if let RenderState::QuestLog(quest_log) = render_state {
                     if progress.rewarded {
-                        let before = quest_log.quests.len();
                         quest_log
                             .quests
                             .retain(|entry| entry.quest_id != progress.quest_id);
-                        return before != quest_log.quests.len();
+                        return;
                     }
 
                     if let Some(entry) = quest_log
@@ -611,7 +590,7 @@ pub fn apply_render_event(
                     {
                         entry.current_count = as_u32(progress.current_count);
                         entry.completed = progress.completed;
-                        return true;
+                        return;
                     }
                 }
             }
@@ -638,7 +617,7 @@ pub fn apply_render_event(
         *current_line = dialog_state.current_line;
         *current_text = dialog_text_at(lines, *current_line);
         *has_next = *current_line + 1 < lines.len();
-        return true;
+        return;
     }
 
     if let GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(line)) = event
@@ -653,7 +632,7 @@ pub fn apply_render_event(
         *current_line = *line;
         *current_text = dialog_text_at(lines, *current_line);
         *has_next = *current_line + 1 < lines.len();
-        return true;
+        return;
     }
 
     match render_state {
@@ -666,7 +645,7 @@ pub fn apply_render_event(
             explore: Some(explore),
             ..
         } => apply_explore_render_event(explore, event, render_fx),
-        _ => false,
+        _ => {}
     }
 }
 
@@ -674,7 +653,7 @@ pub fn apply_ui_render_patch(
     render_state: &mut RenderState,
     ui: &UiState,
     session: Option<&SessionState>,
-) -> bool {
+) {
     match render_state {
         RenderState::Menu {
             title,
@@ -684,18 +663,16 @@ pub fn apply_ui_render_patch(
             *title = ui.menu.state.title;
             *items = ui.menu.state.items.clone();
             *selected = ui.menu.selected;
-            true
         }
         RenderState::PauseMenu {
             items, selected, ..
         } => {
             *items = ui.pause_menu.state.items.clone();
             *selected = ui.pause_menu.selected;
-            true
         }
         RenderState::Inventory(inventory) => {
             let Some(s) = session else {
-                return false;
+                return;
             };
             inventory.selected = ui.inventory.selected;
             inventory.scroll = scroll_for_selection(
@@ -703,14 +680,13 @@ pub fn apply_ui_render_patch(
                 s.leader.inventory.len(),
                 INVENTORY_VISIBLE_ITEMS,
             );
-            true
         }
         RenderState::Shop(shop) => {
             let Some(s) = session else {
-                return false;
+                return;
             };
             let Some(shop_state) = ui.shop.state.as_ref() else {
-                return false;
+                return;
             };
             shop.mode = ui.shop.mode;
             shop.selected = ui.shop.selected;
@@ -720,7 +696,6 @@ pub fn apply_ui_render_patch(
                 ShopMode::Sell => s.leader.inventory.len(),
             };
             shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
-            true
         }
         RenderState::Dialog {
             npc_name,
@@ -731,7 +706,7 @@ pub fn apply_ui_render_patch(
             ..
         } => {
             let Some(dialog_state) = ui.dialog.state.as_ref() else {
-                return false;
+                return;
             };
             *npc_name = dialog_state.npc_name.clone();
             *lines = dialog_state
@@ -742,28 +717,23 @@ pub fn apply_ui_render_patch(
             *current_line = dialog_state.current_line;
             *current_text = dialog_text_at(lines, *current_line);
             *has_next = *current_line + 1 < lines.len();
-            true
         }
-        _ => false,
+        _ => {}
     }
 }
 
-pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxState) -> bool {
+pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxState) {
     match render_state {
         RenderState::Explore(explore) => {
-            let mut changed = false;
             if explore.player_hit_flash != render_fx.player_hit_flash {
                 explore.player_hit_flash = render_fx.player_hit_flash;
-                changed = true;
             }
             for enemy in &mut explore.enemies {
                 let next = render_fx.enemy_hit_flash(enemy.enemy_id);
                 if enemy.hit_flash != next {
                     enemy.hit_flash = next;
-                    changed = true;
                 }
             }
-            changed
         }
         RenderState::Dialog {
             explore: Some(explore),
@@ -773,21 +743,17 @@ pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxSta
             explore: Some(explore),
             ..
         } => {
-            let mut changed = false;
             if explore.player_hit_flash != render_fx.player_hit_flash {
                 explore.player_hit_flash = render_fx.player_hit_flash;
-                changed = true;
             }
             for enemy in &mut explore.enemies {
                 let next = render_fx.enemy_hit_flash(enemy.enemy_id);
                 if enemy.hit_flash != next {
                     enemy.hit_flash = next;
-                    changed = true;
                 }
             }
-            changed
         }
-        _ => false,
+        _ => {}
     }
 }
 
