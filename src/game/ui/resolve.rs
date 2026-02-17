@@ -108,6 +108,13 @@ fn resolve_keydown(
         GameState::Loading(_) => Vec::new(),
         GameState::Menu => ui.menu.event_for_key(key).into_iter().collect(),
         GameState::Explore => ui.explore.events_for_key(key),
+        GameState::Dead => {
+            if matches!(key, InputKey::Ok) {
+                vec![UiEvent::ReviveRequested]
+            } else {
+                Vec::new()
+            }
+        }
         GameState::Inventory => ui.inventory.event_for_key(key).into_iter().collect(),
         GameState::Stats | GameState::QuestLog => {
             if matches!(key, InputKey::Back | InputKey::Ok) {

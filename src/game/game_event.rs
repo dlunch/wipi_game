@@ -65,6 +65,7 @@ pub enum GameEvent {
     ApplyDialogTransition(crate::game::DialogTransition),
     ShopBuyItem(crate::data::Item),
     ShopSellSelected(usize),
+    RevivePlayer,
     CombatPlayerAction(crate::game::ExploreAction),
     Loading(crate::game::LoadingEvent),
     Movement(MovementEvent),
@@ -93,6 +94,7 @@ pub enum GameEventKind {
     ApplyDialogTransition,
     ShopBuyItem,
     ShopSellSelected,
+    RevivePlayer,
     CombatPlayerAction,
     Loading,
     Movement,
@@ -108,7 +110,7 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 24;
+    pub const COUNT: usize = 25;
 
     pub const fn as_usize(self) -> usize {
         match self {
@@ -128,14 +130,15 @@ impl GameEventKind {
             Self::ApplyDialogTransition => 13,
             Self::ShopBuyItem => 14,
             Self::ShopSellSelected => 15,
-            Self::CombatPlayerAction => 16,
-            Self::Loading => 17,
-            Self::Movement => 18,
-            Self::Combat => 19,
-            Self::Explore => 20,
-            Self::Lifecycle => 21,
-            Self::Transition => 22,
-            Self::Exit => 23,
+            Self::RevivePlayer => 16,
+            Self::CombatPlayerAction => 17,
+            Self::Loading => 18,
+            Self::Movement => 19,
+            Self::Combat => 20,
+            Self::Explore => 21,
+            Self::Lifecycle => 22,
+            Self::Transition => 23,
+            Self::Exit => 24,
         }
     }
 }
@@ -159,6 +162,7 @@ impl GameEvent {
             Self::ApplyDialogTransition(_) => GameEventKind::ApplyDialogTransition,
             Self::ShopBuyItem(_) => GameEventKind::ShopBuyItem,
             Self::ShopSellSelected(_) => GameEventKind::ShopSellSelected,
+            Self::RevivePlayer => GameEventKind::RevivePlayer,
             Self::CombatPlayerAction(_) => GameEventKind::CombatPlayerAction,
             Self::Loading(_) => GameEventKind::Loading,
             Self::Movement(_) => GameEventKind::Movement,
@@ -196,6 +200,7 @@ pub enum WorldEvent {
 pub enum TransitionEvent {
     MapChanged,
     ToExplore,
+    ToDead,
     ToMenu,
     ToPauseMenu,
     ToInventory,

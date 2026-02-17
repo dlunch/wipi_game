@@ -50,6 +50,7 @@ pub enum RenderState {
         items: Vec<&'static str>,
         selected: usize,
     },
+    Dead,
     Error(String),
     NoSession,
 }
@@ -943,6 +944,7 @@ fn render_state_from_game_state(
             items: ui.pause_menu.state.items.clone(),
             selected: ui.pause_menu.selected,
         },
+        GameState::Dead => RenderState::Dead,
         GameState::Error(msg) => RenderState::Error(msg.clone()),
     }
 }
@@ -982,6 +984,15 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
                 draw_explore(fb, explore_state);
             }
             draw_pause_menu(fb, items, *selected);
+        }
+        RenderState::Dead => {
+            clear_screen(fb);
+            let w = fb.width() as i32;
+            let h = fb.height() as i32;
+            fill_rect(fb, w / 2 - 52, h / 2 - 24, 104, 48, COLOR_DARK_GRAY);
+            draw_rect(fb, w / 2 - 52, h / 2 - 24, 104, 48, COLOR_RED);
+            draw_text(fb, w / 2 - 35, h / 2 - 10, "YOU DIED", COLOR_RED);
+            draw_text(fb, w / 2 - 43, h / 2 + 8, "OK: Revive", COLOR_WHITE);
         }
         RenderState::Error(msg) => {
             clear_screen(fb);

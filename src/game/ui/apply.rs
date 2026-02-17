@@ -42,6 +42,7 @@ impl UiEventApplier for UiState {
             UiEvent::OverlayCloseRequested => {
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore))
             }
+            UiEvent::ReviveRequested => out.push(GameEvent::RevivePlayer),
             UiEvent::ErrorConfirmRequested => out.push(GameEvent::Exit(1)),
             UiEvent::MovementKeyReleased(direction) => out.push(GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
