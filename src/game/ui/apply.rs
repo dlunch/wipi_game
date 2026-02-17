@@ -78,9 +78,11 @@ fn apply_explore_input(
             crate::data::Direction::Right,
         ))),
         InputKey::Ok => {
-            if let Some(s) = session {
+            if let Some(s) = session
+                && let Some(leader) = s.leader_entity()
+            {
                 out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
-                    facing: s.leader.facing,
+                    facing: leader.facing,
                     fallback_action: Some(ui.explore.ok_action),
                 }));
             }
@@ -128,7 +130,11 @@ fn apply_inventory_input(
             }
         }
         InputKey::Down => {
-            let next = step_down(selected, s.leader.inventory.len());
+            let inventory_len = s
+                .leader_entity()
+                .map(|leader| leader.inventory.len())
+                .unwrap_or(0);
+            let next = step_down(selected, inventory_len);
             if next != selected {
                 ui.inventory.selected = next;
             }
@@ -234,6 +240,9 @@ fn apply_shop_buy_selected(
     let Some(s) = session else {
         return;
     };
+    let Some(leader_id) = s.leader_id() else {
+        return;
+    };
     let shop_items = ui
         .shop
         .state
@@ -241,9 +250,9 @@ fn apply_shop_buy_selected(
         .map(|state| state.items.as_slice())
         .unwrap_or(&[]);
     if let Some(item) = shop_items.get(selected).cloned()
-        && s.leader.stats.gold >= item.price
+        && s.gold_amount(leader_id) >= item.price
     {
-        out.push(GameEvent::ShopBuyItem(item));
+        out.push(GameEvent::ShopBuyItem(item.id));
     }
 }
 
@@ -259,7 +268,9 @@ fn apply_shop_input(
         .as_ref()
         .map(|state| state.items.len())
         .unwrap_or(0);
-    let inventory_len = session.map(|s| s.leader.inventory.len()).unwrap_or(0);
+    let inventory_len = session
+        .and_then(|s| s.leader_entity().map(|leader| leader.inventory.len()))
+        .unwrap_or(0);
 
     match ui.shop.mode {
         ShopMode::Select => match key {

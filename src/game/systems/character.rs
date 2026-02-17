@@ -4,10 +4,9 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{DialogAction, Item, ItemKind, PlayerStats};
-use crate::game::state::CharacterState;
+use crate::data::{DialogAction, ItemKind};
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{GameData, GameEvent, GameEventKind, WorldEvent, WorldState};
+use crate::game::{CombatEvent, GameData, GameEvent, GameEventKind, WorldEvent, WorldState};
 
 struct CharacterMutationResolver;
 
@@ -35,15 +34,27 @@ impl DomainEventResolver for CharacterMutationResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let leader = &world.ok_or_else(|| anyhow!("No active world"))?.leader;
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
+        let leader_id = world
+            .leader_id()
+            .ok_or_else(|| anyhow!("No leader entity"))?;
+        let leader = world
+            .entity(leader_id)
+            .ok_or_else(|| anyhow!("Leader entity not found"))?;
 
         match event {
-            GameEvent::UseInventorySelected(index) => resolve_use_item(leader, *index, out),
-            GameEvent::ShopBuyItem(item) => resolve_shop_buy(leader, item, out),
-            GameEvent::ShopSellSelected(index) => resolve_shop_sell(leader, *index, out),
-            GameEvent::RestoreHpMp => resolve_restore_hp_mp(leader, out),
+            GameEvent::UseInventorySelected(index) => {
+                resolve_use_item(data, world, leader_id, leader, *index, out)
+            }
+            GameEvent::ShopBuyItem(item_id) => {
+                resolve_shop_buy(data, world, leader_id, item_id, out)
+            }
+            GameEvent::ShopSellSelected(index) => {
+                resolve_shop_sell(data, world, leader_id, leader, *index, out)
+            }
+            GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out),
             GameEvent::ApplyDialogAction(action) => {
-                resolve_dialog_action(data, leader, action, out)?
+                resolve_dialog_action(data, world, leader_id, action, out)?
             }
             _ => {}
         }
@@ -51,184 +62,215 @@ impl DomainEventResolver for CharacterMutationResolver {
     }
 }
 
-fn resolve_use_item(character: &CharacterState, index: usize, out: &mut Vec<GameEvent>) {
-    if index >= character.inventory.len() {
+fn resolve_use_item(
+    data: &GameData,
+    world: &WorldState,
+    leader_id: u32,
+    leader: &crate::game::EntityState,
+    index: usize,
+    out: &mut Vec<GameEvent>,
+) {
+    let Some(stack) = leader.inventory.get(index) else {
+        return;
+    };
+    if stack.amount <= 0 {
         return;
     }
 
-    let mut stats = character.stats.clone();
-    let mut inventory = character.inventory.clone();
-    let mut equipped_weapon = character.equipped_weapon;
-    let mut equipped_armor = character.equipped_armor;
-    let mut equipped_accessory = character.equipped_accessory;
-
-    let item = &inventory[index];
+    let Some(item) = data.find_item(&stack.item_id) else {
+        return;
+    };
+    let mut loadout = leader.loadout;
     match item.kind {
         ItemKind::Consumable => {
-            stats.heal(item.hp_restore());
-            inventory.remove(index);
-            fix_equipped_after_remove(&mut equipped_weapon, index);
-            fix_equipped_after_remove(&mut equipped_armor, index);
-            fix_equipped_after_remove(&mut equipped_accessory, index);
+            out.push(GameEvent::Combat(CombatEvent::Heal {
+                entity_id: leader_id,
+                amount: item.hp_restore(),
+            }));
+            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+                entity_id: leader_id,
+                item_id: stack.item_id.clone(),
+                amount: 1,
+            }));
         }
         ItemKind::Weapon => {
-            equipped_weapon = Some(index);
+            loadout.weapon = Some(index);
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+                entity_id: leader_id,
+                loadout,
+            }));
         }
         ItemKind::Armor => {
-            equipped_armor = Some(index);
+            loadout.armor = Some(index);
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+                entity_id: leader_id,
+                loadout,
+            }));
         }
         ItemKind::Accessory => {
-            equipped_accessory = Some(index);
+            loadout.accessory = Some(index);
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+                entity_id: leader_id,
+                loadout,
+            }));
         }
     }
-
-    emit_character_events(
-        stats,
-        inventory,
-        equipped_weapon,
-        equipped_armor,
-        equipped_accessory,
-        out,
-    );
+    sync_leader_combat_stats(data, world, leader_id, out);
 }
 
-fn resolve_shop_buy(character: &CharacterState, item: &Item, out: &mut Vec<GameEvent>) {
-    if character.stats.gold < item.price {
+fn resolve_shop_buy(
+    data: &GameData,
+    world: &WorldState,
+    leader_id: u32,
+    item_id: &str,
+    out: &mut Vec<GameEvent>,
+) {
+    let Some(item) = data.find_item(item_id) else {
+        return;
+    };
+    if world.gold_amount(leader_id) < item.price {
         return;
     }
 
-    let mut stats = character.stats.clone();
-    stats.gold -= item.price;
-
-    let mut inventory = character.inventory.clone();
-    inventory.push(item.clone());
-
-    emit_character_events(
-        stats,
-        inventory,
-        character.equipped_weapon,
-        character.equipped_armor,
-        character.equipped_accessory,
-        out,
-    );
+    out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+        entity_id: leader_id,
+        item_id: crate::game::GOLD_ITEM_ID.into(),
+        amount: item.price.max(0),
+    }));
+    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+        entity_id: leader_id,
+        item_id: item_id.into(),
+        amount: 1,
+    }));
 }
 
-fn resolve_shop_sell(character: &CharacterState, index: usize, out: &mut Vec<GameEvent>) {
-    if index >= character.inventory.len() {
+fn resolve_shop_sell(
+    data: &GameData,
+    world: &WorldState,
+    leader_id: u32,
+    leader: &crate::game::EntityState,
+    index: usize,
+    out: &mut Vec<GameEvent>,
+) {
+    let Some(stack) = leader.inventory.get(index) else {
+        return;
+    };
+    if stack.amount <= 0 || stack.item_id == crate::game::GOLD_ITEM_ID {
         return;
     }
+    let Some(item) = data.find_item(&stack.item_id) else {
+        return;
+    };
 
-    let mut stats = character.stats.clone();
-    let mut inventory = character.inventory.clone();
-    let sold = inventory.remove(index);
-    stats.gold += sold.price / 2;
-
-    let mut equipped_weapon = character.equipped_weapon;
-    let mut equipped_armor = character.equipped_armor;
-    let mut equipped_accessory = character.equipped_accessory;
-    fix_equipped_after_remove(&mut equipped_weapon, index);
-    fix_equipped_after_remove(&mut equipped_armor, index);
-    fix_equipped_after_remove(&mut equipped_accessory, index);
-
-    emit_character_events(
-        stats,
-        inventory,
-        equipped_weapon,
-        equipped_armor,
-        equipped_accessory,
-        out,
-    );
+    out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+        entity_id: leader_id,
+        item_id: stack.item_id.clone(),
+        amount: 1,
+    }));
+    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+        entity_id: leader_id,
+        item_id: crate::game::GOLD_ITEM_ID.into(),
+        amount: (item.price / 2).max(0),
+    }));
+    sync_leader_combat_stats(data, world, leader_id, out);
 }
 
-fn resolve_restore_hp_mp(character: &CharacterState, out: &mut Vec<GameEvent>) {
-    let mut stats = character.stats.clone();
+fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameEvent>) {
+    let Some(combatant) = world.combat.combatant(entity_id) else {
+        return;
+    };
+    let mut stats = combatant.stats;
     stats.current_hp = stats.max_hp;
     stats.current_mp = stats.max_mp;
-    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+        entity_id,
+        stats,
+    }));
 }
 
 fn resolve_dialog_action(
     data: &GameData,
-    character: &CharacterState,
+    world: &WorldState,
+    entity_id: u32,
     action: &DialogAction,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let mut stats = character.stats.clone();
-    let mut inventory = character.inventory.clone();
-    let mut changed = false;
-
     match action {
         DialogAction::GiveItem(id) => {
-            if let Some(item) = data.find_item(id).cloned() {
-                inventory.push(item);
-                changed = true;
-            }
+            out.push(GameEvent::World(WorldEvent::AddEntityItem {
+                entity_id,
+                item_id: id.clone(),
+                amount: 1,
+            }));
+            sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::TakeItem(id) => {
-            if let Some(index) = inventory.iter().position(|item| item.id == *id) {
-                inventory.remove(index);
-                changed = true;
-            }
+            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+                entity_id,
+                item_id: id.clone(),
+                amount: 1,
+            }));
+            sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::GiveGold(amount) => {
-            stats.gold = (stats.gold + *amount).max(0);
-            changed = true;
+            out.push(GameEvent::World(WorldEvent::AddEntityItem {
+                entity_id,
+                item_id: crate::game::GOLD_ITEM_ID.into(),
+                amount: (*amount).max(0),
+            }));
         }
         DialogAction::TakeGold(amount) => {
-            stats.gold = (stats.gold - *amount).max(0);
-            changed = true;
+            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+                entity_id,
+                item_id: crate::game::GOLD_ITEM_ID.into(),
+                amount: (*amount).max(0),
+            }));
         }
-        DialogAction::Heal => {
-            stats.current_hp = stats.max_hp;
-            stats.current_mp = stats.max_mp;
-            changed = true;
-        }
+        DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out),
         DialogAction::GiveQuest(_) | DialogAction::CompleteQuest(_) | DialogAction::OpenShop(_) => {
         }
     }
-
-    if !changed {
-        return Ok(());
-    }
-
-    emit_character_events(
-        stats,
-        inventory,
-        character.equipped_weapon,
-        character.equipped_armor,
-        character.equipped_accessory,
-        out,
-    );
     Ok(())
 }
 
-fn emit_character_events(
-    stats: PlayerStats,
-    inventory: Vec<Item>,
-    equipped_weapon: Option<usize>,
-    equipped_armor: Option<usize>,
-    equipped_accessory: Option<usize>,
+fn sync_leader_combat_stats(
+    data: &GameData,
+    world: &WorldState,
+    entity_id: u32,
     out: &mut Vec<GameEvent>,
 ) {
-    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
-    out.push(GameEvent::World(WorldEvent::SetPlayerInventory(inventory)));
-    out.push(GameEvent::World(WorldEvent::SetEquippedWeapon(
-        equipped_weapon,
-    )));
-    out.push(GameEvent::World(WorldEvent::SetEquippedArmor(
-        equipped_armor,
-    )));
-    out.push(GameEvent::World(WorldEvent::SetEquippedAccessory(
-        equipped_accessory,
-    )));
-}
-
-fn fix_equipped_after_remove(equipped: &mut Option<usize>, removed_index: usize) {
-    if let Some(index) = equipped {
-        if *index > removed_index {
-            *index -= 1;
-        } else if *index == removed_index {
-            *equipped = None;
-        }
+    let Some(entity) = world.entity(entity_id) else {
+        return;
+    };
+    let Some(combatant) = world.combat.combatant(entity_id) else {
+        return;
+    };
+    let mut stats = combatant.stats;
+    let mut atk = entity.stat.base_atk;
+    let mut def = entity.stat.base_def;
+    if let Some(index) = entity.loadout.weapon
+        && let Some(stack) = entity.inventory.get(index)
+        && let Some(item) = data.find_item(&stack.item_id)
+    {
+        atk += item.atk();
     }
+    if let Some(index) = entity.loadout.armor
+        && let Some(stack) = entity.inventory.get(index)
+        && let Some(item) = data.find_item(&stack.item_id)
+    {
+        def += item.def();
+    }
+    if let Some(index) = entity.loadout.accessory
+        && let Some(stack) = entity.inventory.get(index)
+        && let Some(item) = data.find_item(&stack.item_id)
+    {
+        atk += item.atk();
+        def += item.def();
+    }
+    stats.atk = atk;
+    stats.def = def;
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+        entity_id,
+        stats,
+    }));
 }

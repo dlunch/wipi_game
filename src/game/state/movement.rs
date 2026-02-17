@@ -1,9 +1,8 @@
 use crate::data::Direction;
-use anyhow::{Result, ensure};
+use anyhow::Result;
 
 use crate::game::{
-    ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, GameState, MovementEvent,
-    TransitionEvent,
+    ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, TransitionEvent,
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -47,24 +46,16 @@ impl MovementState {
         self.refresh_pressed_direction();
     }
 
-    pub fn apply_event(&mut self, state: &GameState, event: &GameEvent) -> Result<()> {
+    pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement_event, tile_event)) => {
                 let _ = tile_event;
                 self.apply_tick(*movement_event);
             }
             GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) => {
-                ensure!(
-                    matches!(state, GameState::Explore),
-                    "Invalid state: expected Explore"
-                );
                 self.on_direction_released(*direction);
             }
             GameEvent::Explore(ExploreEvent::MoveDirection(direction)) => {
-                ensure!(
-                    matches!(state, GameState::Explore),
-                    "Invalid state: expected Explore"
-                );
                 self.on_direction_pressed(*direction);
             }
             _ => {}

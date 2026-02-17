@@ -22,7 +22,7 @@ impl WorldSlot {
 
     pub fn apply_event(&mut self, event: &GameEvent) {
         match event {
-            GameEvent::World(WorldEvent::Create) => {
+            GameEvent::World(WorldEvent::CreateWorld) => {
                 self.active = Some(WorldState::empty());
             }
             GameEvent::Transition(TransitionEvent::ToMenu) => {

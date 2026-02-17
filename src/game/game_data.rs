@@ -31,11 +31,6 @@ pub struct GameData {
 }
 
 impl GameData {
-    pub const LOAD_STEPS: usize = 8;
-    pub const LOAD_LABELS: [&str; 8] = [
-        "Items", "Enemies", "Maps", "NPCs", "Dialogs", "Quests", "Shops", "Config",
-    ];
-
     pub fn load_step(&mut self, step: usize) -> Result<bool> {
         match step {
             0 => {
@@ -89,6 +84,10 @@ impl GameData {
             return self.items.get(idx);
         }
         self.items.iter().find(|item| item.id == id)
+    }
+
+    pub fn find_enemy(&self, id: &str) -> Option<&Enemy> {
+        self.enemies.iter().find(|enemy| enemy.id == id)
     }
 
     pub fn find_dialog(&self, id: &str) -> Option<&Dialog> {

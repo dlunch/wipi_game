@@ -133,19 +133,10 @@ impl GameEngine {
             self.state
         );
 
-        if let Some(world) = self.world.as_mut() {
-            if world.subscribes(kind) {
-                world.apply_event(&self.data, &event)?;
-            }
-            if world.leader.subscribes(kind) {
-                world.leader.apply_event(&self.data, &event)?;
-            }
-            if world.movement.subscribes(kind) {
-                world.movement.apply_event(&self.state, &event)?;
-            }
-            if world.combat.subscribes(kind) {
-                world.combat.apply_event(&event)?;
-            }
+        if let Some(world) = self.world.as_mut()
+            && world.subscribes(kind)
+        {
+            world.apply_event(&self.data, &event)?;
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(kind) {

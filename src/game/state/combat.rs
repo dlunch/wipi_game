@@ -3,169 +3,179 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::data::{Enemy, SkillType};
-use crate::game::state::StatusState;
-use crate::game::{
-    CombatEvent, GameEvent, GameEventKind, GameEventSubscriber, StatusKind, StatusTarget,
-};
+use crate::game::state::EntityId;
+use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
 
-#[derive(Debug, Clone)]
-pub struct KillReward {
-    pub enemy_id: String,
-    pub exp: i32,
-    pub gold: i32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CombatStatsSnapshot {
+    pub max_hp: i32,
+    pub current_hp: i32,
+    pub max_mp: i32,
+    pub current_mp: i32,
+    pub atk: i32,
+    pub def: i32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct SkillEffect {
-    pub x: usize,
-    pub y: usize,
-    pub effect_type: SkillType,
-    pub timer: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct FieldEnemy {
-    pub instance_id: u32,
-    pub data: Enemy,
-    pub x: usize,
-    pub y: usize,
-    pub hp: i32,
-    pub attack_cooldown: u32,
-    pub status: StatusState,
-}
-
-impl FieldEnemy {
-    pub fn new(data: Enemy, x: usize, y: usize, instance_id: u32) -> Self {
-        let hp = data.hp;
+impl Default for CombatStatsSnapshot {
+    fn default() -> Self {
         Self {
-            instance_id,
-            data,
-            x,
-            y,
-            hp,
-            attack_cooldown: 0,
-            status: StatusState::default(),
+            max_hp: 80,
+            current_hp: 80,
+            max_mp: 30,
+            current_mp: 30,
+            atk: 12,
+            def: 8,
         }
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimedKind {
+    Poison,
+    Stun,
+    ArmorBreak,
+    AttackCooldown,
+    SkillCooldown(u8),
+    MpRegenTick,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimedEffect {
+    pub kind: TimedKind,
+    pub time_left: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TimedState {
+    pub effects: Vec<TimedEffect>,
+}
+
+impl TimedState {
+    pub fn time_left(&self, kind: TimedKind) -> u32 {
+        self.effects
+            .iter()
+            .find_map(|effect| (effect.kind == kind).then_some(effect.time_left))
+            .unwrap_or(0)
+    }
+
+    pub fn set(&mut self, kind: TimedKind, time_left: u32) {
+        if let Some(effect) = self.effects.iter_mut().find(|effect| effect.kind == kind) {
+            effect.time_left = time_left;
+        } else {
+            self.effects.push(TimedEffect { kind, time_left });
+        }
+        self.effects.retain(|effect| effect.time_left > 0);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CombatantState {
+    pub stats: CombatStatsSnapshot,
+    pub timed: TimedState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AllyCombatantState {
+    pub entity_id: EntityId,
+    pub combatant: CombatantState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnemyCombatantState {
+    pub entity_id: EntityId,
+    pub source_enemy_id: String,
+    pub combatant: CombatantState,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CombatState {
-    pub enemies: Vec<FieldEnemy>,
-    pub player_attack_cooldown: u32,
-    pub skill_effects: Vec<SkillEffect>,
+    pub active: bool,
+    pub allies: Vec<AllyCombatantState>,
+    pub enemies: Vec<EnemyCombatantState>,
     pub update_counter: u32,
     pub respawn_timer: u32,
-    pub respawn_positions: Vec<(usize, usize, usize)>,
-    pub next_enemy_instance_id: u32,
 }
 
 impl CombatState {
+    pub fn combatant(&self, entity_id: EntityId) -> Option<&CombatantState> {
+        self.allies
+            .iter()
+            .find_map(|ally| (ally.entity_id == entity_id).then_some(&ally.combatant))
+            .or_else(|| {
+                self.enemies
+                    .iter()
+                    .find_map(|enemy| (enemy.entity_id == entity_id).then_some(&enemy.combatant))
+            })
+    }
+
+    pub fn combatant_mut(&mut self, entity_id: EntityId) -> Option<&mut CombatantState> {
+        if let Some(ally) = self
+            .allies
+            .iter_mut()
+            .find(|ally| ally.entity_id == entity_id)
+        {
+            return Some(&mut ally.combatant);
+        }
+        self.enemies
+            .iter_mut()
+            .find_map(|enemy| (enemy.entity_id == entity_id).then_some(&mut enemy.combatant))
+    }
+
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         let GameEvent::Combat(event) = event else {
             return Ok(());
         };
         match event {
+            CombatEvent::SetActive(active) => {
+                self.active = *active;
+            }
+            CombatEvent::SetAllies(allies) => {
+                self.allies = allies.clone();
+            }
+            CombatEvent::SetEnemies(enemies) => {
+                self.enemies = enemies.clone();
+            }
+            CombatEvent::UpsertEnemy(enemy) => {
+                if let Some(existing) = self
+                    .enemies
+                    .iter_mut()
+                    .find(|existing| existing.entity_id == enemy.entity_id)
+                {
+                    *existing = enemy.clone();
+                } else {
+                    self.enemies.push(enemy.clone());
+                }
+            }
+            CombatEvent::RemoveEnemy(entity_id) => {
+                self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
+            }
+            CombatEvent::SetCombatantStats { entity_id, stats } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats = *stats;
+                }
+            }
+            CombatEvent::SetCombatantTimed {
+                entity_id,
+                kind,
+                time_left,
+            } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.timed.set(*kind, *time_left);
+                }
+            }
             CombatEvent::SetUpdateCounter(update_counter) => {
                 self.update_counter = *update_counter;
-            }
-            CombatEvent::SetMapEnemies {
-                enemies,
-                respawn_positions,
-                next_enemy_instance_id,
-            } => {
-                self.enemies = enemies.clone();
-                self.respawn_positions = respawn_positions.clone();
-                self.respawn_timer = 0;
-                self.player_attack_cooldown = 0;
-                self.skill_effects.clear();
-                self.update_counter = 0;
-                self.next_enemy_instance_id = (*next_enemy_instance_id).max(1);
-            }
-            CombatEvent::EnemySpawn(enemy) => {
-                self.enemies.push(enemy.clone());
-            }
-            CombatEvent::EnemyDespawn(enemy_id) => {
-                self.enemies.retain(|enemy| enemy.instance_id != *enemy_id);
-            }
-            CombatEvent::EnemyMove { enemy_id, x, y } => {
-                if let Some(enemy) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.instance_id == *enemy_id)
-                {
-                    enemy.x = *x;
-                    enemy.y = *y;
-                }
-            }
-            CombatEvent::EnemyHpSet { enemy_id, hp } => {
-                if let Some(enemy) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.instance_id == *enemy_id)
-                {
-                    enemy.hp = *hp;
-                }
-            }
-            CombatEvent::EnemyAttackCooldownSet { enemy_id, cooldown } => {
-                if let Some(enemy) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.instance_id == *enemy_id)
-                {
-                    enemy.attack_cooldown = *cooldown;
-                }
-            }
-            CombatEvent::EnemyHitFlashSet { .. }
-            | CombatEvent::SetPlayerHitFlash(_)
-            | CombatEvent::SetSkillCooldowns(_)
-            | CombatEvent::RecoverMp(_)
-            | CombatEvent::Heal(_)
-            | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::TakeDamage(_) => {}
-            CombatEvent::SetPlayerAttackCooldown(cooldown) => {
-                self.player_attack_cooldown = *cooldown;
-            }
-            CombatEvent::TickSkillEffects => {
-                self.skill_effects.retain_mut(|effect| {
-                    if effect.timer == 0 {
-                        return false;
-                    }
-                    effect.timer -= 1;
-                    effect.timer > 0
-                });
-            }
-            CombatEvent::SetSkillEffects(skill_effects) => {
-                self.skill_effects = skill_effects.clone();
             }
             CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;
             }
-            CombatEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
-                self.next_enemy_instance_id = *next_enemy_instance_id;
-            }
-            CombatEvent::SetStatusTimer {
-                target: StatusTarget::Enemy(enemy_id),
-                kind,
-                timer,
-            } => {
-                if let Some(enemy) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.instance_id == *enemy_id)
-                {
-                    match kind {
-                        StatusKind::Poison => enemy.status.poison_timer = *timer,
-                        StatusKind::Stun => enemy.status.stun_timer = *timer,
-                        StatusKind::ArmorBreak => enemy.status.armor_break_timer = *timer,
-                    }
-                }
-            }
-            CombatEvent::SetStatusTimer {
-                target: StatusTarget::Player,
-                ..
-            } => {}
+            CombatEvent::MoveEnemy { .. }
+            | CombatEvent::EnemyHitFlashSet { .. }
+            | CombatEvent::SetEntityHitFlash { .. }
+            | CombatEvent::GrantKillReward { .. }
+            | CombatEvent::RecoverMp { .. }
+            | CombatEvent::Heal { .. }
+            | CombatEvent::TakeDamage { .. } => {}
         }
         Ok(())
     }

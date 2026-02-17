@@ -238,7 +238,6 @@ fn draw_map_with_entities(
             let py = screen_y * TILE_SIZE;
 
             let color = match effect.effect_type {
-                SkillType::Attack => COLOR_WHITE,
                 SkillType::Ranged => COLOR_YELLOW,
                 SkillType::Heal => COLOR_GREEN,
                 SkillType::Area => COLOR_CYAN,

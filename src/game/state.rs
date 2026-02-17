@@ -1,14 +1,18 @@
-mod character;
 mod combat;
+mod entity;
 mod game_state;
 mod movement;
-mod status;
 pub(crate) mod world;
 pub(crate) mod world_slot;
 
-pub use character::{CharacterState, TileEvent};
-pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
+pub use combat::{
+    AllyCombatantState, CombatState, CombatStatsSnapshot, CombatantState, EnemyCombatantState,
+    TimedEffect, TimedKind, TimedState,
+};
+pub use entity::{
+    EntityId, EntityKind, EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, ItemStack,
+    LoadoutState, PartyState,
+};
 pub use game_state::GameState;
 pub use movement::{MovementState, MovementTickEvent};
-pub use status::StatusState;
 pub(crate) use world_slot::WorldSlot;

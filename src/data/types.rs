@@ -11,9 +11,9 @@ pub enum ItemKind {
 }
 
 /// 아이템 데이터
-/// 포맷: TYPE:id:name:param1:param2:param3
-/// W:sword:녹슨 검:5:0:100    (무기: atk:crit:price)
-/// A:leather:가죽갑옷:3:0:150  (방어구: def:mdef:price)
+/// 포맷: TYPE:id:name:param1:param2:price
+/// W:sword:녹슨 검:5:0:100    (무기: atk:unused:price)
+/// A:leather:가죽갑옷:3:0:150  (방어구: def:unused:price)
 /// C:ring:힘의 반지:2:0:200   (악세서리: atk_bonus:def_bonus:price)
 /// I:potion:회복약:30:50      (소비: hp_restore:price)
 #[derive(Debug, Clone)]
@@ -23,7 +23,6 @@ pub struct Item {
     pub kind: ItemKind,
     pub param1: i32,
     pub param2: i32,
-    pub param3: i32,
     pub price: i32,
 }
 
@@ -177,90 +176,6 @@ impl Map {
     }
 }
 
-/// 플레이어 스탯
-#[derive(Debug, Clone)]
-pub struct PlayerStats {
-    pub level: i32,
-    pub exp: i32,
-    pub exp_to_next: i32,
-    pub max_hp: i32,
-    pub current_hp: i32,
-    pub max_mp: i32,
-    pub current_mp: i32,
-    pub base_atk: i32,
-    pub base_def: i32,
-    pub gold: i32,
-}
-
-impl Default for PlayerStats {
-    fn default() -> Self {
-        Self {
-            level: 1,
-            exp: 0,
-            exp_to_next: 100,
-            max_hp: 80,
-            current_hp: 80,
-            max_mp: 30,
-            current_mp: 30,
-            base_atk: 12,
-            base_def: 8,
-            gold: 50,
-        }
-    }
-}
-
-impl PlayerStats {
-    pub fn total_atk(&self, weapon: Option<&Item>, accessory: Option<&Item>) -> i32 {
-        let weapon_atk = weapon.map(|w| w.atk()).unwrap_or(0);
-        let accessory_atk = accessory.map(|a| a.atk()).unwrap_or(0);
-        self.base_atk + weapon_atk + accessory_atk
-    }
-
-    pub fn total_def(&self, armor: Option<&Item>, accessory: Option<&Item>) -> i32 {
-        let armor_def = armor.map(|a| a.def()).unwrap_or(0);
-        let accessory_def = accessory.map(|a| a.def()).unwrap_or(0);
-        self.base_def + armor_def + accessory_def
-    }
-
-    pub fn heal(&mut self, amount: i32) {
-        self.current_hp = (self.current_hp + amount).min(self.max_hp);
-    }
-
-    pub fn recover_mp(&mut self, amount: i32) {
-        self.current_mp = (self.current_mp + amount).min(self.max_mp);
-    }
-
-    pub fn take_damage(&mut self, damage: i32) {
-        self.current_hp = (self.current_hp - damage).max(0);
-    }
-
-    pub fn is_dead(&self) -> bool {
-        self.current_hp <= 0
-    }
-
-    pub fn add_exp(&mut self, exp: i32) -> bool {
-        self.exp += exp;
-        let mut leveled_up = false;
-        while self.exp >= self.exp_to_next {
-            self.level_up();
-            leveled_up = true;
-        }
-        leveled_up
-    }
-
-    fn level_up(&mut self) {
-        self.exp -= self.exp_to_next;
-        self.level += 1;
-        self.exp_to_next = self.level * 100;
-        self.max_hp += 10;
-        self.current_hp = self.max_hp;
-        self.max_mp += 5;
-        self.current_mp = self.max_mp;
-        self.base_atk += 2;
-        self.base_def += 1;
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Npc {
     pub id: String,
@@ -352,7 +267,6 @@ pub struct Shop {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillType {
-    Attack,
     Ranged,
     Heal,
     Area,
@@ -440,21 +354,20 @@ mod tests {
 
     use super::*;
 
-    fn make_item(kind: ItemKind, p1: i32, p2: i32, p3: i32) -> Item {
+    fn make_item(kind: ItemKind, p1: i32, p2: i32) -> Item {
         Item {
             id: String::from("test"),
             name: String::from("Test"),
             kind,
             param1: p1,
             param2: p2,
-            param3: p3,
             price: 100,
         }
     }
 
     #[test]
     fn item_atk_weapon() {
-        let item = make_item(ItemKind::Weapon, 15, 0, 0);
+        let item = make_item(ItemKind::Weapon, 15, 0);
         assert_eq!(item.atk(), 15);
         assert_eq!(item.def(), 0);
         assert_eq!(item.hp_restore(), 0);
@@ -462,21 +375,21 @@ mod tests {
 
     #[test]
     fn item_def_armor() {
-        let item = make_item(ItemKind::Armor, 10, 5, 0);
+        let item = make_item(ItemKind::Armor, 10, 5);
         assert_eq!(item.atk(), 0);
         assert_eq!(item.def(), 10);
     }
 
     #[test]
     fn item_accessory_gives_both() {
-        let item = make_item(ItemKind::Accessory, 3, 2, 0);
+        let item = make_item(ItemKind::Accessory, 3, 2);
         assert_eq!(item.atk(), 3);
         assert_eq!(item.def(), 2);
     }
 
     #[test]
     fn item_consumable_hp_restore() {
-        let item = make_item(ItemKind::Consumable, 50, 0, 0);
+        let item = make_item(ItemKind::Consumable, 50, 0);
         assert_eq!(item.hp_restore(), 50);
         assert_eq!(item.atk(), 0);
         assert_eq!(item.def(), 0);
@@ -577,88 +490,5 @@ mod tests {
             peaceful: false,
         };
         assert_eq!(map.find_player_start(), None);
-    }
-
-    #[test]
-    fn player_stats_default() {
-        let stats = PlayerStats::default();
-        assert_eq!(stats.level, 1);
-        assert_eq!(stats.max_hp, 80);
-        assert_eq!(stats.current_hp, 80);
-        assert_eq!(stats.gold, 50);
-    }
-
-    #[test]
-    fn player_stats_heal_clamps() {
-        let mut stats = PlayerStats::default();
-        stats.current_hp = 50;
-        stats.heal(100);
-        assert_eq!(stats.current_hp, stats.max_hp);
-    }
-
-    #[test]
-    fn player_stats_take_damage_clamps() {
-        let mut stats = PlayerStats::default();
-        stats.take_damage(9999);
-        assert_eq!(stats.current_hp, 0);
-        assert!(stats.is_dead());
-    }
-
-    #[test]
-    fn player_stats_recover_mp_clamps() {
-        let mut stats = PlayerStats::default();
-        stats.current_mp = 28;
-        stats.recover_mp(100);
-        assert_eq!(stats.current_mp, stats.max_mp);
-    }
-
-    #[test]
-    fn player_stats_level_up() {
-        let mut stats = PlayerStats::default();
-        let leveled = stats.add_exp(100);
-        assert!(leveled);
-        assert_eq!(stats.level, 2);
-        assert_eq!(stats.exp, 0);
-        assert_eq!(stats.exp_to_next, 200);
-        assert_eq!(stats.max_hp, 90);
-        assert_eq!(stats.current_hp, 90); // healed on level up
-    }
-
-    #[test]
-    fn player_stats_multi_level_up() {
-        let mut stats = PlayerStats::default();
-        stats.add_exp(300); // 100 for lv2, 200 for lv3
-        assert_eq!(stats.level, 3);
-        assert_eq!(stats.exp, 0);
-    }
-
-    #[test]
-    fn player_stats_no_level_up() {
-        let mut stats = PlayerStats::default();
-        let leveled = stats.add_exp(50);
-        assert!(!leveled);
-        assert_eq!(stats.level, 1);
-        assert_eq!(stats.exp, 50);
-    }
-
-    #[test]
-    fn player_stats_total_atk_with_equipment() {
-        let stats = PlayerStats::default();
-        let weapon = make_item(ItemKind::Weapon, 10, 0, 0);
-        let accessory = make_item(ItemKind::Accessory, 3, 2, 0);
-        assert_eq!(
-            stats.total_atk(Some(&weapon), Some(&accessory)),
-            12 + 10 + 3
-        );
-        assert_eq!(stats.total_atk(None, None), 12);
-    }
-
-    #[test]
-    fn player_stats_total_def_with_equipment() {
-        let stats = PlayerStats::default();
-        let armor = make_item(ItemKind::Armor, 5, 0, 0);
-        let accessory = make_item(ItemKind::Accessory, 0, 3, 0);
-        assert_eq!(stats.total_def(Some(&armor), Some(&accessory)), 8 + 5 + 3);
-        assert_eq!(stats.total_def(None, None), 8);
     }
 }

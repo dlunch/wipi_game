@@ -43,16 +43,15 @@ pub fn parse_items(data: &str) -> Result<Vec<Item>> {
         let name = parts[2].to_string();
         let param1 = parse_int(parts[3], "param1", line)?;
         let param2 = parse_int(parts[4], "param2", line)?;
-        let (param3, price) = if kind == ItemKind::Consumable {
-            (0, parse_int(parts[4], "price", line)?)
+        let price = if kind == ItemKind::Consumable {
+            parse_int(parts[4], "price", line)?
         } else {
             ensure!(
                 parts.len() >= 6,
                 "too few fields for equipment in: {}",
                 line
             );
-            let p3 = parse_int(parts[5], "price", line)?;
-            (param2, p3)
+            parse_int(parts[5], "price", line)?
         };
 
         items.push(Item {
@@ -65,7 +64,6 @@ pub fn parse_items(data: &str) -> Result<Vec<Item>> {
             } else {
                 param2
             },
-            param3,
             price,
         });
     }

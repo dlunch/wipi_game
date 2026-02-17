@@ -1,69 +1,62 @@
-use crate::data::Direction;
-use crate::game::state::{FieldEnemy, SkillEffect};
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-#[derive(Clone, Copy)]
-pub enum StatusKind {
-    Poison,
-    Stun,
-    ArmorBreak,
-}
-
-#[derive(Clone, Copy)]
-pub enum StatusTarget {
-    Player,
-    Enemy(u32),
-}
+use crate::data::Direction;
+use crate::game::state::{
+    AllyCombatantState, CombatStatsSnapshot, EnemyCombatantState, EntityId, EntityStat,
+    EntityState, ItemStack, LoadoutState, PartyState, TimedKind,
+};
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum CombatEvent {
-    SetUpdateCounter(u32),
-    SetMapEnemies {
-        enemies: Vec<FieldEnemy>,
-        respawn_positions: Vec<(usize, usize, usize)>,
-        next_enemy_instance_id: u32,
-    },
-    EnemySpawn(FieldEnemy),
-    EnemyDespawn(u32),
-    EnemyMove {
-        enemy_id: u32,
+    SetActive(bool),
+    SetAllies(Vec<AllyCombatantState>),
+    SetEnemies(Vec<EnemyCombatantState>),
+    UpsertEnemy(EnemyCombatantState),
+    RemoveEnemy(EntityId),
+    MoveEnemy {
+        entity_id: EntityId,
         x: usize,
         y: usize,
     },
-    EnemyHpSet {
-        enemy_id: u32,
-        hp: i32,
+    SetCombatantStats {
+        entity_id: EntityId,
+        stats: CombatStatsSnapshot,
     },
-    EnemyAttackCooldownSet {
-        enemy_id: u32,
-        cooldown: u32,
+    SetCombatantTimed {
+        entity_id: EntityId,
+        kind: TimedKind,
+        time_left: u32,
     },
+    SetUpdateCounter(u32),
+    SetRespawnTimer(u32),
     EnemyHitFlashSet {
-        enemy_id: u32,
+        entity_id: EntityId,
         hit_flash: u32,
     },
-    SetPlayerAttackCooldown(u32),
-    SetPlayerHitFlash(u32),
-    TickSkillEffects,
-    SetSkillEffects(Vec<SkillEffect>),
-    SetRespawnTimer(u32),
-    SetNextEnemyInstanceId(u32),
-    SetStatusTimer {
-        target: StatusTarget,
-        kind: StatusKind,
+    SetEntityHitFlash {
+        entity_id: EntityId,
         timer: u32,
     },
-    SetSkillCooldowns([u32; 3]),
-    RecoverMp(i32),
-    Heal(i32),
     GrantKillReward {
         enemy_id: String,
         exp: i32,
         gold: i32,
     },
-    TakeDamage(i32),
+    RecoverMp {
+        entity_id: EntityId,
+        amount: i32,
+    },
+    Heal {
+        entity_id: EntityId,
+        amount: i32,
+    },
+    TakeDamage {
+        entity_id: EntityId,
+        amount: i32,
+    },
 }
 
 pub enum GameEvent {
@@ -80,7 +73,7 @@ pub enum GameEvent {
     RestoreHpMp,
     ApplyDialogAction(crate::data::DialogAction),
     ApplyDialogTransition(crate::game::DialogTransition),
-    ShopBuyItem(crate::data::Item),
+    ShopBuyItem(String),
     ShopSellSelected(usize),
     RevivePlayer,
     CombatPlayerAction(crate::game::ExploreAction),
@@ -190,22 +183,54 @@ impl GameEvent {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum WorldEvent {
-    Create,
-    SetPlayerName(String),
-    SetPlayerStats(crate::data::PlayerStats),
-    SetPlayerInventory(Vec<crate::data::Item>),
-    SetPlayerMap(String),
-    SetPlayerPosition { x: usize, y: usize },
-    SetPlayerFacing(Direction),
-    AddPlayerItem(crate::data::Item),
-    SetEquippedWeapon(Option<usize>),
-    SetEquippedArmor(Option<usize>),
-    SetEquippedAccessory(Option<usize>),
+    CreateWorld,
+    SetWorldMap(String),
+    SetParty(PartyState),
+    UpsertEntity(EntityState),
+    RemoveEntity(EntityId),
+    SetEntityMap {
+        entity_id: EntityId,
+        map_id: String,
+    },
+    SetEntityPosition {
+        entity_id: EntityId,
+        x: usize,
+        y: usize,
+    },
+    SetEntityFacing {
+        entity_id: EntityId,
+        facing: Direction,
+    },
+    SetEntityStat {
+        entity_id: EntityId,
+        stat: EntityStat,
+    },
+    SetEntityInventory {
+        entity_id: EntityId,
+        inventory: Vec<ItemStack>,
+    },
+    SetEntityLoadout {
+        entity_id: EntityId,
+        loadout: LoadoutState,
+    },
+    AddEntityItem {
+        entity_id: EntityId,
+        item_id: String,
+        amount: i32,
+    },
+    RemoveEntityItem {
+        entity_id: EntityId,
+        item_id: String,
+        amount: i32,
+    },
     AddQuestProgress(crate::data::QuestProgress),
-    AddOpenedTreasure { map_id: String, x: usize, y: usize },
-    SetSkillCooldowns([u32; 3]),
-    SetMpRegenTimer(u32),
+    AddOpenedTreasure {
+        map_id: String,
+        x: usize,
+        y: usize,
+    },
     ResetMovement,
     ResetCombat,
 }
@@ -223,6 +248,13 @@ pub enum TransitionEvent {
     ReleaseMovementDirection(Direction),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TileEvent {
+    Treasure,
+    MapExit(String),
+    DungeonEntrance(String),
+}
+
 #[derive(Clone)]
 pub enum ExploreEvent {
     MoveDirection(Direction),
@@ -235,8 +267,5 @@ pub enum ExploreEvent {
 
 #[derive(Clone)]
 pub enum MovementEvent {
-    Tick(
-        crate::game::MovementTickEvent,
-        Option<crate::game::TileEvent>,
-    ),
+    Tick(crate::game::MovementTickEvent, Option<TileEvent>),
 }

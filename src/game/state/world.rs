@@ -5,49 +5,65 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::QuestProgress;
-use crate::game::state::FieldEnemy;
-
+use crate::game::state::{
+    CombatState, EntityId, EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
+};
 use crate::game::{
-    CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameEventKind,
-    GameEventSubscriber, MovementState, WorldEvent,
+    CombatEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementState, WorldEvent,
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Default)]
+pub struct OccupancyState {
+    pub map_id: String,
+    pub width: usize,
+    pub height: usize,
+    pub npc_tiles: Vec<bool>,
+    pub enemy_tiles: Vec<bool>,
+}
+
+#[derive(Clone, Default)]
 pub struct WorldState {
-    pub leader: CharacterState,
-    pub companions: Vec<CharacterState>,
+    pub entities: EntityStore,
+    pub party: PartyState,
+    pub movement: MovementState,
+    pub combat: CombatState,
     pub quests: Vec<QuestProgress>,
     pub opened_treasures: Vec<(String, usize, usize)>,
-    pub combat: CombatState,
-    pub movement: MovementState,
-    pub skill_cooldowns: [u32; 3],
-    pub mp_regen_timer: u32,
-    occupied_map_id: String,
-    occupied_width: usize,
-    occupied_height: usize,
-    npc_occupied_tiles: Vec<bool>,
-    enemy_occupied_tiles: Vec<bool>,
-    enemy_positions: Vec<(u32, usize, usize)>,
+    pub occupancy: OccupancyState,
 }
 
 impl WorldState {
     pub fn empty() -> Self {
         Self {
-            leader: CharacterState::new(String::new(), ""),
-            companions: Vec::new(),
+            entities: EntityStore {
+                list: Vec::new(),
+                next_entity_id: 1,
+            },
+            party: PartyState::default(),
+            movement: MovementState::default(),
+            combat: CombatState::default(),
             quests: Vec::new(),
             opened_treasures: Vec::new(),
-            combat: CombatState::default(),
-            movement: MovementState::default(),
-            skill_cooldowns: [0; 3],
-            mp_regen_timer: 0,
-            occupied_map_id: String::new(),
-            occupied_width: 0,
-            occupied_height: 0,
-            npc_occupied_tiles: Vec::new(),
-            enemy_occupied_tiles: Vec::new(),
-            enemy_positions: Vec::new(),
+            occupancy: OccupancyState::default(),
         }
+    }
+
+    pub fn leader_id(&self) -> Option<EntityId> {
+        let leader_id = self.party.leader_id;
+        (leader_id != 0).then_some(leader_id)
+    }
+
+    pub fn leader_entity(&self) -> Option<&EntityState> {
+        self.leader_id()
+            .and_then(|leader_id| self.entities.get(leader_id))
+    }
+
+    pub fn entity(&self, entity_id: EntityId) -> Option<&EntityState> {
+        self.entities.get(entity_id)
+    }
+
+    pub fn entity_mut(&mut self, entity_id: EntityId) -> Option<&mut EntityState> {
+        self.entities.get_mut(entity_id)
     }
 
     pub fn has_quest(&self, quest_id: &str) -> bool {
@@ -68,196 +84,339 @@ impl WorldState {
             .any(|(m, tx, ty)| m == map_id && *tx == x && *ty == y)
     }
 
+    pub fn has_item(&self, entity_id: EntityId, item_id: &str) -> bool {
+        self.entity(entity_id).is_some_and(|entity| {
+            entity
+                .inventory
+                .iter()
+                .any(|stack| stack.item_id == item_id && stack.amount > 0)
+        })
+    }
+
+    pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> i32 {
+        self.entity(entity_id)
+            .and_then(|entity| {
+                entity
+                    .inventory
+                    .iter()
+                    .find_map(|stack| (stack.item_id == item_id).then_some(stack.amount))
+            })
+            .unwrap_or(0)
+            .max(0)
+    }
+
+    pub fn gold_amount(&self, entity_id: EntityId) -> i32 {
+        self.item_amount(entity_id, GOLD_ITEM_ID)
+    }
+
+    pub fn add_item_amount(&mut self, entity_id: EntityId, item_id: &str, amount: i32) {
+        if amount <= 0 {
+            return;
+        }
+        let Some(entity) = self.entity_mut(entity_id) else {
+            return;
+        };
+
+        if let Some(stack) = entity
+            .inventory
+            .iter_mut()
+            .find(|stack| stack.item_id == item_id)
+        {
+            stack.amount += amount;
+        } else {
+            entity
+                .inventory
+                .push(crate::game::state::ItemStack::new(item_id, amount));
+        }
+    }
+
+    pub fn remove_item_amount(&mut self, entity_id: EntityId, item_id: &str, amount: i32) {
+        if amount <= 0 {
+            return;
+        }
+        let Some(entity) = self.entity_mut(entity_id) else {
+            return;
+        };
+
+        if let Some(index) = entity
+            .inventory
+            .iter()
+            .position(|stack| stack.item_id == item_id)
+        {
+            let stack = &mut entity.inventory[index];
+            stack.amount = (stack.amount - amount).max(0);
+            if stack.amount <= 0 {
+                entity.inventory.remove(index);
+                fix_loadout_after_remove(&mut entity.loadout.weapon, index);
+                fix_loadout_after_remove(&mut entity.loadout.armor, index);
+                fix_loadout_after_remove(&mut entity.loadout.accessory, index);
+            }
+        }
+    }
+
     pub fn is_occupied(&self, x: usize, y: usize) -> bool {
-        if self.occupied_width == 0 || self.occupied_height == 0 {
+        if self.occupancy.width == 0 || self.occupancy.height == 0 {
             return false;
         }
-        if x >= self.occupied_width || y >= self.occupied_height {
+        if x >= self.occupancy.width || y >= self.occupancy.height {
             return true;
         }
-        let idx = y * self.occupied_width + x;
-        self.npc_occupied_tiles.get(idx).copied().unwrap_or(false)
-            || self.enemy_occupied_tiles.get(idx).copied().unwrap_or(false)
+        let idx = y * self.occupancy.width + x;
+        self.occupancy.npc_tiles.get(idx).copied().unwrap_or(false)
+            || self
+                .occupancy
+                .enemy_tiles
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+    }
+
+    pub(crate) fn is_occupied_on_map(&self, map: &crate::data::Map, x: usize, y: usize) -> bool {
+        if x >= map.width || y >= map.height {
+            return true;
+        }
+        if self.occupancy.map_id != map.id {
+            return false;
+        }
+        self.is_occupied(x, y)
     }
 
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::World(session_event) => match session_event {
-                WorldEvent::Create => {
-                    self.clear_occupancy();
-                }
-                WorldEvent::SetSkillCooldowns(cooldowns) => {
-                    self.skill_cooldowns = *cooldowns;
-                }
-                WorldEvent::SetMpRegenTimer(timer) => {
-                    self.mp_regen_timer = *timer;
-                }
-                WorldEvent::ResetMovement => {
-                    self.movement = MovementState::default();
-                }
-                WorldEvent::ResetCombat => {
-                    self.combat = CombatState::default();
-                    self.clear_enemy_occupancy();
-                }
-                WorldEvent::SetPlayerMap(map_id) => {
-                    self.rebuild_npc_occupancy_for_map(data, map_id);
-                }
-                WorldEvent::AddQuestProgress(progress) => {
-                    if let Some(existing) = self
-                        .quests
-                        .iter_mut()
-                        .find(|quest| quest.quest_id == progress.quest_id)
-                    {
-                        *existing = progress.clone();
-                    } else {
-                        self.quests.push(progress.clone());
+            GameEvent::World(world_event) => {
+                self.apply_world_event(data, world_event);
+            }
+            GameEvent::Combat(combat_event) => {
+                self.apply_combat_event(combat_event, event)?;
+            }
+            GameEvent::Movement(_) | GameEvent::Explore(_) | GameEvent::Transition(_) => {
+                self.movement.apply_event(event)?;
+                if let GameEvent::Movement(crate::game::MovementEvent::Tick(movement_event, _)) =
+                    event
+                    && let Some(leader_id) = self.leader_id()
+                    && let Some(leader) = self.entities.get_mut(leader_id)
+                {
+                    if let Some((dx, dy)) = movement_event.facing {
+                        leader.facing = match (dx, dy) {
+                            (0, -1) => crate::data::Direction::Up,
+                            (0, 1) => crate::data::Direction::Down,
+                            (-1, 0) => crate::data::Direction::Left,
+                            (1, 0) => crate::data::Direction::Right,
+                            _ => leader.facing,
+                        };
+                    }
+                    if let Some((dx, dy)) = movement_event.step {
+                        leader.x = (leader.x as i32 + dx).max(0) as usize;
+                        leader.y = (leader.y as i32 + dy).max(0) as usize;
                     }
                 }
-                WorldEvent::AddOpenedTreasure { map_id, x, y } => {
-                    if !self.is_treasure_opened(map_id, *x, *y) {
-                        self.opened_treasures.push((map_id.clone(), *x, *y));
-                    }
-                }
-                _ => {}
-            },
-            GameEvent::Combat(combat_event) => match combat_event {
-                CombatEvent::SetMapEnemies { enemies, .. } => {
-                    self.rebuild_enemy_occupancy_from_list(enemies);
-                }
-                CombatEvent::EnemySpawn(enemy) => {
-                    self.add_enemy(enemy.instance_id, enemy.x, enemy.y, enemy.hp > 0);
-                }
-                CombatEvent::EnemyDespawn(enemy_id) => {
-                    self.remove_enemy(*enemy_id);
-                }
-                CombatEvent::EnemyMove { enemy_id, x, y } => {
-                    self.move_enemy(*enemy_id, *x, *y);
-                }
-                CombatEvent::EnemyHpSet { enemy_id, hp } => {
-                    if *hp <= 0 {
-                        self.remove_enemy(*enemy_id);
-                    }
-                }
-                CombatEvent::SetSkillCooldowns(next_skill_cooldowns) => {
-                    self.skill_cooldowns = *next_skill_cooldowns;
-                }
-                _ => {}
-            },
+            }
             _ => {}
         }
         Ok(())
     }
 
-    fn clear_occupancy(&mut self) {
-        self.occupied_map_id.clear();
-        self.occupied_width = 0;
-        self.occupied_height = 0;
-        self.npc_occupied_tiles.clear();
-        self.enemy_occupied_tiles.clear();
-        self.enemy_positions.clear();
-    }
-
-    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: &str) {
-        self.occupied_map_id = map_id.into();
-        if let Some(map) = data.find_map(map_id) {
-            self.occupied_width = map.width;
-            self.occupied_height = map.height;
-            let len = map.width * map.height;
-            self.npc_occupied_tiles = vec![false; len];
-            self.enemy_occupied_tiles = vec![false; len];
-            self.enemy_positions.clear();
-
-            for (x, y, _) in &map.npcs {
-                if *x < map.width && *y < map.height {
-                    self.npc_occupied_tiles[*y * map.width + *x] = true;
+    fn apply_world_event(&mut self, data: &GameData, event: &WorldEvent) {
+        match event {
+            WorldEvent::CreateWorld => {
+                *self = WorldState::empty();
+            }
+            WorldEvent::SetWorldMap(map_id) => {
+                self.rebuild_npc_occupancy_for_map(data, map_id);
+                self.rebuild_enemy_occupancy();
+            }
+            WorldEvent::SetParty(party) => {
+                self.party = party.clone();
+            }
+            WorldEvent::UpsertEntity(entity) => {
+                self.entities.upsert(entity.clone());
+                self.rebuild_enemy_occupancy();
+            }
+            WorldEvent::RemoveEntity(entity_id) => {
+                self.entities.remove(*entity_id);
+                self.party.companion_ids.retain(|id| *id != *entity_id);
+                if self.party.leader_id == *entity_id {
+                    self.party.leader_id = 0;
+                }
+                self.combat
+                    .allies
+                    .retain(|ally| ally.entity_id != *entity_id);
+                self.combat
+                    .enemies
+                    .retain(|enemy| enemy.entity_id != *entity_id);
+                self.rebuild_enemy_occupancy();
+            }
+            WorldEvent::SetEntityMap { entity_id, map_id } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.map_id = map_id.clone();
                 }
             }
-        } else {
-            self.clear_occupancy();
+            WorldEvent::SetEntityPosition { entity_id, x, y } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.x = *x;
+                    entity.y = *y;
+                }
+                self.rebuild_enemy_occupancy();
+            }
+            WorldEvent::SetEntityFacing { entity_id, facing } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.facing = *facing;
+                }
+            }
+            WorldEvent::SetEntityStat { entity_id, stat } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat = *stat;
+                }
+            }
+            WorldEvent::SetEntityInventory {
+                entity_id,
+                inventory,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.inventory = inventory.clone();
+                }
+            }
+            WorldEvent::SetEntityLoadout { entity_id, loadout } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.loadout = *loadout;
+                }
+            }
+            WorldEvent::AddEntityItem {
+                entity_id,
+                item_id,
+                amount,
+            } => self.add_item_amount(*entity_id, item_id, *amount),
+            WorldEvent::RemoveEntityItem {
+                entity_id,
+                item_id,
+                amount,
+            } => self.remove_item_amount(*entity_id, item_id, *amount),
+            WorldEvent::AddQuestProgress(progress) => {
+                if let Some(existing) = self
+                    .quests
+                    .iter_mut()
+                    .find(|quest| quest.quest_id == progress.quest_id)
+                {
+                    *existing = progress.clone();
+                } else {
+                    self.quests.push(progress.clone());
+                }
+            }
+            WorldEvent::AddOpenedTreasure { map_id, x, y } => {
+                if !self.is_treasure_opened(map_id, *x, *y) {
+                    self.opened_treasures.push((map_id.clone(), *x, *y));
+                }
+            }
+            WorldEvent::ResetMovement => {
+                self.movement = MovementState::default();
+            }
+            WorldEvent::ResetCombat => {
+                self.combat = CombatState::default();
+                self.clear_enemy_occupancy();
+            }
         }
+    }
+
+    fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
+        self.combat.apply_event(game_event)?;
+        match event {
+            CombatEvent::MoveEnemy { entity_id, x, y } => {
+                if let Some(enemy_entity) = self.entities.get_mut(*entity_id) {
+                    enemy_entity.x = *x;
+                    enemy_entity.y = *y;
+                }
+                self.rebuild_enemy_occupancy();
+            }
+            CombatEvent::RemoveEnemy(entity_id) => {
+                self.entities.remove(*entity_id);
+                self.rebuild_enemy_occupancy();
+            }
+            CombatEvent::SetEnemies(_)
+            | CombatEvent::UpsertEnemy(_)
+            | CombatEvent::SetCombatantStats { .. }
+            | CombatEvent::SetCombatantTimed { .. } => {
+                self.rebuild_enemy_occupancy();
+            }
+            CombatEvent::SetActive(_)
+            | CombatEvent::SetAllies(_)
+            | CombatEvent::SetUpdateCounter(_)
+            | CombatEvent::SetRespawnTimer(_)
+            | CombatEvent::EnemyHitFlashSet { .. }
+            | CombatEvent::SetEntityHitFlash { .. }
+            | CombatEvent::GrantKillReward { .. }
+            | CombatEvent::RecoverMp { .. }
+            | CombatEvent::Heal { .. }
+            | CombatEvent::TakeDamage { .. } => {}
+        }
+        Ok(())
     }
 
     fn clear_enemy_occupancy(&mut self) {
-        for occupied in &mut self.enemy_occupied_tiles {
+        for occupied in &mut self.occupancy.enemy_tiles {
             *occupied = false;
         }
-        self.enemy_positions.clear();
     }
 
-    fn rebuild_enemy_occupancy_from_list(&mut self, enemies: &[FieldEnemy]) {
+    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: &str) {
+        self.occupancy.map_id = map_id.into();
+        if let Some(map) = data.find_map(map_id) {
+            self.occupancy.width = map.width;
+            self.occupancy.height = map.height;
+            let len = map.width * map.height;
+            self.occupancy.npc_tiles = vec![false; len];
+            self.occupancy.enemy_tiles = vec![false; len];
+
+            for (x, y, _) in &map.npcs {
+                if *x < map.width && *y < map.height {
+                    self.occupancy.npc_tiles[*y * map.width + *x] = true;
+                }
+            }
+        } else {
+            self.occupancy = OccupancyState::default();
+        }
+    }
+
+    fn rebuild_enemy_occupancy(&mut self) {
         self.clear_enemy_occupancy();
-        for enemy in enemies {
-            self.add_enemy(enemy.instance_id, enemy.x, enemy.y, enemy.hp > 0);
-        }
-    }
-
-    fn add_enemy(&mut self, enemy_id: u32, x: usize, y: usize, alive: bool) {
-        if !alive || x >= self.occupied_width || y >= self.occupied_height {
+        if self.occupancy.width == 0 || self.occupancy.height == 0 {
             return;
         }
-        let idx = y * self.occupied_width + x;
-        if let Some(tile) = self.enemy_occupied_tiles.get_mut(idx) {
-            *tile = true;
-        }
-        if let Some(pos) = self
-            .enemy_positions
-            .iter_mut()
-            .find(|(id, _, _)| *id == enemy_id)
-        {
-            pos.1 = x;
-            pos.2 = y;
-        } else {
-            self.enemy_positions.push((enemy_id, x, y));
-        }
-    }
-
-    fn remove_enemy(&mut self, enemy_id: u32) {
-        if let Some(idx) = self
-            .enemy_positions
-            .iter()
-            .position(|(id, _, _)| *id == enemy_id)
-        {
-            let (_, x, y) = self.enemy_positions.swap_remove(idx);
-            if x < self.occupied_width && y < self.occupied_height {
-                self.enemy_occupied_tiles[y * self.occupied_width + x] = false;
+        for enemy in &self.combat.enemies {
+            if enemy.combatant.stats.current_hp <= 0 {
+                continue;
+            }
+            let Some(entity) = self.entities.get(enemy.entity_id) else {
+                continue;
+            };
+            if entity.map_id != self.occupancy.map_id {
+                continue;
+            }
+            if entity.x < self.occupancy.width && entity.y < self.occupancy.height {
+                self.occupancy.enemy_tiles[entity.y * self.occupancy.width + entity.x] = true;
             }
         }
-    }
-
-    fn move_enemy(&mut self, enemy_id: u32, x: usize, y: usize) {
-        if x >= self.occupied_width || y >= self.occupied_height {
-            self.remove_enemy(enemy_id);
-            return;
-        }
-
-        if let Some((_, old_x, old_y)) = self
-            .enemy_positions
-            .iter_mut()
-            .find(|(id, _, _)| *id == enemy_id)
-        {
-            if *old_x < self.occupied_width && *old_y < self.occupied_height {
-                self.enemy_occupied_tiles[*old_y * self.occupied_width + *old_x] = false;
-            }
-            *old_x = x;
-            *old_y = y;
-        } else {
-            self.enemy_positions.push((enemy_id, x, y));
-        }
-        self.enemy_occupied_tiles[y * self.occupied_width + x] = true;
     }
 }
 
-impl WorldState {
-    pub(crate) fn is_occupied_on_map(&self, map: &crate::data::Map, x: usize, y: usize) -> bool {
-        if x >= map.width || y >= map.height {
-            return true;
+fn fix_loadout_after_remove(equipped: &mut Option<usize>, removed_index: usize) {
+    if let Some(index) = equipped {
+        if *index > removed_index {
+            *index -= 1;
+        } else if *index == removed_index {
+            *equipped = None;
         }
-        self.is_occupied(x, y)
     }
 }
 
 impl GameEventSubscriber for WorldState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(kind, GameEventKind::World | GameEventKind::Combat)
+        matches!(
+            kind,
+            GameEventKind::World
+                | GameEventKind::Combat
+                | GameEventKind::Movement
+                | GameEventKind::Explore
+                | GameEventKind::Transition
+        )
     }
 }
