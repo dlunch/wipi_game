@@ -4,7 +4,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Direction, Item, PlayerStats};
-use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, SessionEvent};
+use crate::game::{
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, SessionEvent,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TileEvent {
@@ -75,14 +77,14 @@ impl CharacterState {
 
 impl GameEventSubscriber for CharacterState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(kind, GameEventKind::Session)
+        matches!(kind, GameEventKind::Session | GameEventKind::Movement)
     }
 }
 
 impl CharacterState {
     pub fn apply_event(&mut self, _data: &GameData, event: &GameEvent) -> Result<()> {
-        if let GameEvent::Session(session_event) = event {
-            match session_event {
+        match event {
+            GameEvent::Session(session_event) => match session_event {
                 SessionEvent::Create => {}
                 SessionEvent::SetPlayerName(name) => {
                     self.name = name.clone();
@@ -121,7 +123,23 @@ impl CharacterState {
                 | SessionEvent::SetMpRegenTimer(_)
                 | SessionEvent::ResetMovement
                 | SessionEvent::ResetCombat => {}
+            },
+            GameEvent::Movement(MovementEvent::Tick(movement_event, _)) => {
+                if let Some((dx, dy)) = movement_event.facing {
+                    self.facing = match (dx, dy) {
+                        (0, -1) => Direction::Up,
+                        (0, 1) => Direction::Down,
+                        (-1, 0) => Direction::Left,
+                        (1, 0) => Direction::Right,
+                        _ => self.facing,
+                    };
+                }
+                if let Some((dx, dy)) = movement_event.step {
+                    self.x = (self.x as i32 + dx) as usize;
+                    self.y = (self.y as i32 + dy) as usize;
+                }
             }
+            _ => {}
         }
         Ok(())
     }

@@ -1,9 +1,9 @@
 use crate::data::Direction;
 use anyhow::{Result, ensure};
 
-use super::CharacterState;
 use crate::game::{
-    GameEvent, GameEventKind, GameEventSubscriber, GameState, MovementEvent, TransitionEvent,
+    ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, GameState, MovementEvent,
+    TransitionEvent,
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -20,19 +20,9 @@ pub struct MovementTickEvent {
 }
 
 impl MovementState {
-    pub fn apply_tick(&mut self, player: &mut CharacterState, event: MovementTickEvent) -> bool {
+    pub fn apply_tick(&mut self, event: MovementTickEvent) -> bool {
         *self = event.next_state;
-
-        if let Some((dx, dy)) = event.facing {
-            set_facing(player, dx, dy);
-        }
-
-        if let Some((dx, dy)) = event.step {
-            move_by(player, dx, dy);
-            return true;
-        }
-
-        false
+        event.step.is_some()
     }
 
     pub fn on_direction_pressed(&mut self, direction: Direction) {
@@ -46,16 +36,11 @@ impl MovementState {
         }
     }
 
-    pub fn apply_event(
-        &mut self,
-        state: &GameState,
-        player: &mut CharacterState,
-        event: &GameEvent,
-    ) -> Result<()> {
+    pub fn apply_event(&mut self, state: &GameState, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement_event, tile_event)) => {
                 let _ = tile_event;
-                self.apply_tick(player, *movement_event);
+                self.apply_tick(*movement_event);
             }
             GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) => {
                 ensure!(
@@ -64,7 +49,7 @@ impl MovementState {
                 );
                 self.on_direction_released(*direction);
             }
-            GameEvent::Explore(crate::game::ExploreEvent::MoveDirection(direction)) => {
+            GameEvent::Explore(ExploreEvent::MoveDirection(direction)) => {
                 ensure!(
                     matches!(state, GameState::Explore),
                     "Invalid state: expected Explore"
@@ -84,19 +69,4 @@ impl GameEventSubscriber for MovementState {
             GameEventKind::Movement | GameEventKind::Transition | GameEventKind::Explore
         )
     }
-}
-
-fn set_facing(player: &mut CharacterState, dx: i32, dy: i32) {
-    player.facing = match (dx, dy) {
-        (0, -1) => Direction::Up,
-        (0, 1) => Direction::Down,
-        (-1, 0) => Direction::Left,
-        (1, 0) => Direction::Right,
-        _ => player.facing,
-    };
-}
-
-fn move_by(player: &mut CharacterState, dx: i32, dy: i32) {
-    player.x = (player.x as i32 + dx) as usize;
-    player.y = (player.y as i32 + dy) as usize;
 }

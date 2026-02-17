@@ -478,7 +478,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
@@ -493,11 +493,11 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved = state.apply_tick(&mut player, event);
+        let moved = state.apply_tick(event);
 
         assert!(!moved);
         assert!(state.move_cooldown == 1);
-        assert!(player.x == 1 && player.y == 1);
+        assert!(event.step.is_none());
     }
 
     #[test]
@@ -517,7 +517,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState::default();
@@ -529,11 +529,11 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved = state.apply_tick(&mut player, event);
+        let moved = state.apply_tick(event);
 
         assert!(!moved);
         assert!(state.move_cooldown == 0);
-        assert!(player.x == 1 && player.y == 1);
+        assert!(event.step.is_none());
     }
 
     #[test]
@@ -553,7 +553,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
@@ -568,7 +568,7 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved_while_cooling = state.apply_tick(&mut player, event);
+        let moved_while_cooling = state.apply_tick(event);
         let event = resolve_tick(
             &state,
             &player,
@@ -576,12 +576,12 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved_after_cooling = state.apply_tick(&mut player, event);
+        let moved_after_cooling = state.apply_tick(event);
 
         assert!(!moved_while_cooling);
         assert!(moved_after_cooling);
-        assert!(player.x == 2 && player.y == 1);
-        assert!(matches!(player.facing, Direction::Right));
+        assert!(event.step == Some((1, 0)));
+        assert!(event.facing == Some((1, 0)));
         assert!(state.move_cooldown == MOVE_COOLDOWN);
     }
 
@@ -602,7 +602,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
@@ -617,11 +617,11 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved = state.apply_tick(&mut player, event);
+        let moved = state.apply_tick(event);
 
         assert!(!moved);
-        assert!(player.x == 1 && player.y == 1);
-        assert!(matches!(player.facing, Direction::Right));
+        assert!(event.step.is_none());
+        assert!(event.facing == Some((1, 0)));
     }
 
     #[test]
@@ -641,7 +641,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = vec![(2, 1)];
         let npc_positions: Vec<(usize, usize)> = Vec::new();
         let mut state = MovementState {
@@ -656,11 +656,11 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved = state.apply_tick(&mut player, event);
+        let moved = state.apply_tick(event);
 
         assert!(!moved);
-        assert!(player.x == 1 && player.y == 1);
-        assert!(matches!(player.facing, Direction::Right));
+        assert!(event.step.is_none());
+        assert!(event.facing == Some((1, 0)));
     }
 
     #[test]
@@ -680,7 +680,7 @@ mod tests {
                 Tile::Floor,
             ],
         );
-        let mut player = make_player_at(1, 1, "test_map");
+        let player = make_player_at(1, 1, "test_map");
         let enemy_positions: Vec<(usize, usize)> = Vec::new();
         let npc_positions: Vec<(usize, usize)> = vec![(2, 1)];
         let mut state = MovementState {
@@ -695,11 +695,11 @@ mod tests {
             &enemy_positions,
             &npc_positions,
         );
-        let moved = state.apply_tick(&mut player, event);
+        let moved = state.apply_tick(event);
 
         assert!(!moved);
-        assert!(player.x == 1 && player.y == 1);
-        assert!(matches!(player.facing, Direction::Right));
+        assert!(event.step.is_none());
+        assert!(event.facing == Some((1, 0)));
     }
 
     #[test]

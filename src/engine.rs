@@ -166,20 +166,7 @@ impl GameEngine {
         }
 
         if let Some(session) = self.session.as_mut() {
-            if session.subscribes(event.kind()) {
-                session.apply_event(&self.data, &mut self.state, &event)?;
-            }
-            if session.leader.subscribes(event.kind()) {
-                session.leader.apply_event(&self.data, &event)?;
-            }
-            if session.movement.subscribes(event.kind()) {
-                session
-                    .movement
-                    .apply_event(&self.state, &mut session.leader, &event)?;
-            }
-            if session.combat.subscribes(event.kind()) {
-                session.combat.apply_event(&event)?;
-            }
+            session.apply_domain_event(&self.data, &self.state, &event)?;
 
             if matches!(event, GameEvent::SaveSession) {
                 let _ = crate::game::save_game(session);

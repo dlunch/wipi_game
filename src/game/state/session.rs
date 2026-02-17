@@ -80,12 +80,7 @@ impl SessionState {
             || self.enemy_occupied_tiles.get(idx).copied().unwrap_or(false)
     }
 
-    pub fn apply_event(
-        &mut self,
-        data: &GameData,
-        _state: &mut GameState,
-        event: &GameEvent,
-    ) -> Result<()> {
+    pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Session(session_event) => match session_event {
                 SessionEvent::Create => {
@@ -149,6 +144,27 @@ impl SessionState {
                 _ => {}
             },
             _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn apply_domain_event(
+        &mut self,
+        data: &GameData,
+        state: &GameState,
+        event: &GameEvent,
+    ) -> Result<()> {
+        if self.subscribes(event.kind()) {
+            self.apply_event(data, event)?;
+        }
+        if self.leader.subscribes(event.kind()) {
+            self.leader.apply_event(data, event)?;
+        }
+        if self.movement.subscribes(event.kind()) {
+            self.movement.apply_event(state, event)?;
+        }
+        if self.combat.subscribes(event.kind()) {
+            self.combat.apply_event(event)?;
         }
         Ok(())
     }
