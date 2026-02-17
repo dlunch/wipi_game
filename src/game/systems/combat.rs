@@ -70,7 +70,7 @@ pub fn resolve_tick(
             0
         };
 
-        if do_move && enemy_distance_to(enemy, player_x, player_y) > 1 {
+        if do_move && enemy.distance_to(player_x, player_y) > 1 {
             (next_x, next_y) = next_enemy_position(enemy, player_x, player_y, map);
         }
         if enemy_distance(next_x, next_y, player_x, player_y) <= 1 && next_attack_cooldown == 0 {
@@ -241,11 +241,68 @@ impl DomainEventResolver for CombatResolver {
                 let Some(map) = data.find_map(&session.leader.current_map_id) else {
                     return Ok(());
                 };
-                build_map_enemies(map, &data.enemies, out);
+                Self::build_map_enemies(map, &data.enemies, out);
             }
             _ => {}
         }
         Ok(())
+    }
+}
+
+impl CombatResolver {
+    fn build_map_enemies(map: &Map, enemy_data: &[Enemy], out: &mut Vec<GameEvent>) {
+        let mut enemies = Vec::with_capacity(map.encounters.len().max(4));
+        let mut respawn_positions = Vec::with_capacity(map.encounters.len().max(4));
+        let mut next_enemy_instance_id = 1u32;
+
+        if map.encounters.is_empty() {
+            out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+                enemies,
+                respawn_positions,
+                next_enemy_instance_id,
+            }));
+            return;
+        }
+
+        let encounter_enemy_indices: Vec<usize> = map
+            .encounters
+            .iter()
+            .filter_map(|(id, _)| enemy_data.iter().position(|enemy| &enemy.id == id))
+            .collect();
+        if encounter_enemy_indices.is_empty() {
+            out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+                enemies,
+                respawn_positions,
+                next_enemy_instance_id,
+            }));
+            return;
+        }
+
+        let mut enemy_tile_count = 0usize;
+        for y in 0..map.height {
+            for x in 0..map.width {
+                if map.get_tile(x, y) != crate::data::Tile::Enemy {
+                    continue;
+                }
+
+                let idx = encounter_enemy_indices[enemy_tile_count % encounter_enemy_indices.len()];
+                let Some(enemy) = enemy_data.get(idx) else {
+                    continue;
+                };
+
+                let (instance_id, next_id) = allocate_enemy_instance_id(next_enemy_instance_id);
+                next_enemy_instance_id = next_id;
+                enemies.push(FieldEnemy::new(enemy.clone(), x, y, instance_id));
+                respawn_positions.push((x, y, idx));
+                enemy_tile_count += 1;
+            }
+        }
+
+        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+            enemies,
+            respawn_positions,
+            next_enemy_instance_id: next_enemy_instance_id.max(1),
+        }));
     }
 }
 
@@ -258,12 +315,14 @@ fn allocate_enemy_instance_id(next_enemy_instance_id: u32) -> (u32, u32) {
     (id, next)
 }
 
-fn enemy_distance_to(enemy: &FieldEnemy, px: usize, py: usize) -> usize {
-    enemy_distance(enemy.x, enemy.y, px, py)
-}
-
 fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {
     x.abs_diff(px) + y.abs_diff(py)
+}
+
+impl FieldEnemy {
+    fn distance_to(&self, px: usize, py: usize) -> usize {
+        enemy_distance(self.x, self.y, px, py)
+    }
 }
 
 fn next_enemy_position(
@@ -371,61 +430,6 @@ fn resolve_respawn(
     if next_timer != current_timer {
         out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(next_timer)));
     }
-}
-
-fn build_map_enemies(map: &Map, enemy_data: &[Enemy], out: &mut Vec<GameEvent>) {
-    let mut enemies = Vec::with_capacity(map.encounters.len().max(4));
-    let mut respawn_positions = Vec::with_capacity(map.encounters.len().max(4));
-    let mut next_enemy_instance_id = 1u32;
-
-    if map.encounters.is_empty() {
-        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
-            enemies,
-            respawn_positions,
-            next_enemy_instance_id,
-        }));
-        return;
-    }
-
-    let encounter_enemy_indices: Vec<usize> = map
-        .encounters
-        .iter()
-        .filter_map(|(id, _)| enemy_data.iter().position(|enemy| &enemy.id == id))
-        .collect();
-    if encounter_enemy_indices.is_empty() {
-        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
-            enemies,
-            respawn_positions,
-            next_enemy_instance_id,
-        }));
-        return;
-    }
-
-    let mut enemy_tile_count = 0usize;
-    for y in 0..map.height {
-        for x in 0..map.width {
-            if map.get_tile(x, y) != crate::data::Tile::Enemy {
-                continue;
-            }
-
-            let idx = encounter_enemy_indices[enemy_tile_count % encounter_enemy_indices.len()];
-            let Some(enemy) = enemy_data.get(idx) else {
-                continue;
-            };
-
-            let (instance_id, next_id) = allocate_enemy_instance_id(next_enemy_instance_id);
-            next_enemy_instance_id = next_id;
-            enemies.push(FieldEnemy::new(enemy.clone(), x, y, instance_id));
-            respawn_positions.push((x, y, idx));
-            enemy_tile_count += 1;
-        }
-    }
-
-    out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
-        enemies,
-        respawn_positions,
-        next_enemy_instance_id: next_enemy_instance_id.max(1),
-    }));
 }
 
 fn resolve_player_attack_action(

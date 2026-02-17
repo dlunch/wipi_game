@@ -85,7 +85,7 @@ fn resolve_tick_with_occupancy(
     let new_x = (player.x as i32 + dx) as usize;
     let new_y = (player.y as i32 + dy) as usize;
 
-    if can_move(player, map, dx, dy) && !is_occupied(map, new_x, new_y, session) {
+    if player.can_move(map, dx, dy) && !session.is_occupied_on_map(map, new_x, new_y) {
         step = Some((dx, dy));
     }
 
@@ -96,17 +96,21 @@ fn resolve_tick_with_occupancy(
     }
 }
 
-fn is_occupied(map: &Map, x: usize, y: usize, session: &WorldState) -> bool {
-    if x >= map.width || y >= map.height {
-        return true;
+impl WorldState {
+    fn is_occupied_on_map(&self, map: &Map, x: usize, y: usize) -> bool {
+        if x >= map.width || y >= map.height {
+            return true;
+        }
+        self.is_occupied(x, y)
     }
-    session.is_occupied(x, y)
 }
 
-fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
-    let new_x = (player.x as i32 + dx) as usize;
-    let new_y = (player.y as i32 + dy) as usize;
-    map.get_tile(new_x, new_y).is_passable()
+impl CharacterState {
+    fn can_move(&self, map: &Map, dx: i32, dy: i32) -> bool {
+        let new_x = (self.x as i32 + dx) as usize;
+        let new_y = (self.y as i32 + dy) as usize;
+        map.get_tile(new_x, new_y).is_passable()
+    }
 }
 
 fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) -> Option<TileEvent> {
@@ -395,7 +399,7 @@ mod tests {
         );
         let player = make_player_at(1, 1, "test_map");
 
-        assert!(can_move(&player, &map, 1, 0));
+        assert!(player.can_move(&map, 1, 0));
     }
 
     #[test]
@@ -417,7 +421,7 @@ mod tests {
         );
         let player = make_player_at(1, 1, "test_map");
 
-        assert!(!can_move(&player, &map, 1, 0));
+        assert!(!player.can_move(&map, 1, 0));
     }
 
     #[test]
@@ -439,7 +443,7 @@ mod tests {
         );
         let player = make_player_at(0, 0, "test_map");
 
-        assert!(!can_move(&player, &map, -1, 0));
+        assert!(!player.can_move(&map, -1, 0));
     }
 
     #[test]

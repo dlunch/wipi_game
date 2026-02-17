@@ -311,25 +311,31 @@ fn build_explore_render(
     })
 }
 
-fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
-    explore.first_live_enemy_name = explore
-        .enemies
-        .iter()
-        .find(|enemy| !enemy.dead && enemy.hp > 0)
-        .map(|enemy| enemy.name.clone());
-}
-
-fn item_to_inventory_render(item: &Item) -> InventoryItemRender {
-    InventoryItemRender {
-        name: item.name.clone(),
-        kind: item.kind,
+impl ExploreRender {
+    fn refresh_first_live_enemy_name(&mut self) {
+        self.first_live_enemy_name = self
+            .enemies
+            .iter()
+            .find(|enemy| !enemy.dead && enemy.hp > 0)
+            .map(|enemy| enemy.name.clone());
     }
 }
 
-fn item_to_shop_render(item: &Item) -> ShopItemRender {
-    ShopItemRender {
-        name: item.name.clone(),
-        price: item.price / 2,
+impl InventoryItemRender {
+    fn from_item(item: &Item) -> Self {
+        Self {
+            name: item.name.clone(),
+            kind: item.kind,
+        }
+    }
+}
+
+impl ShopItemRender {
+    fn from_item(item: &Item) -> Self {
+        Self {
+            name: item.name.clone(),
+            price: item.price / 2,
+        }
     }
 }
 
@@ -402,7 +408,7 @@ fn apply_explore_render_event(
                     dead: enemy.hp <= 0,
                 });
             }
-            refresh_first_live_enemy_name(explore);
+            explore.refresh_first_live_enemy_name();
         }
         GameEvent::Combat(CombatEvent::EnemySpawn(enemy)) => {
             explore.enemies.push(EnemyRender {
@@ -415,11 +421,11 @@ fn apply_explore_render_event(
                 hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
                 dead: enemy.hp <= 0,
             });
-            refresh_first_live_enemy_name(explore);
+            explore.refresh_first_live_enemy_name();
         }
         GameEvent::Combat(CombatEvent::EnemyDespawn(enemy_id)) => {
             explore.enemies.retain(|enemy| enemy.enemy_id != *enemy_id);
-            refresh_first_live_enemy_name(explore);
+            explore.refresh_first_live_enemy_name();
         }
         GameEvent::Combat(CombatEvent::EnemyMove { enemy_id, x, y }) => {
             if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
@@ -431,7 +437,7 @@ fn apply_explore_render_event(
             if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
                 enemy.hp = *hp;
                 enemy.dead = *hp <= 0;
-                refresh_first_live_enemy_name(explore);
+                explore.refresh_first_live_enemy_name();
             }
         }
         GameEvent::Combat(CombatEvent::EnemyHitFlashSet { enemy_id, .. }) => {
@@ -504,7 +510,7 @@ pub fn apply_render_event(
                     inventory.items.clear();
                     inventory.items.reserve(player_inventory.len());
                     for item in player_inventory {
-                        inventory.items.push(item_to_inventory_render(item));
+                        inventory.items.push(InventoryItemRender::from_item(item));
                     }
                     if !inventory.items.is_empty() && inventory.selected >= inventory.items.len() {
                         inventory.selected = inventory.items.len() - 1;
@@ -520,14 +526,14 @@ pub fn apply_render_event(
                     shop.player_inventory.clear();
                     shop.player_inventory.reserve(player_inventory.len());
                     for item in player_inventory {
-                        shop.player_inventory.push(item_to_shop_render(item));
+                        shop.player_inventory.push(ShopItemRender::from_item(item));
                     }
                     return;
                 }
             }
             WorldEvent::AddPlayerItem(item) => {
                 if let RenderState::Inventory(inventory) = render_state {
-                    inventory.items.push(item_to_inventory_render(item));
+                    inventory.items.push(InventoryItemRender::from_item(item));
                     inventory.scroll = scroll_for_selection(
                         inventory.selected,
                         inventory.items.len(),
@@ -536,7 +542,7 @@ pub fn apply_render_event(
                     return;
                 }
                 if let RenderState::Shop(shop) = render_state {
-                    shop.player_inventory.push(item_to_shop_render(item));
+                    shop.player_inventory.push(ShopItemRender::from_item(item));
                     return;
                 }
             }
