@@ -78,7 +78,7 @@ impl App for RpgGame {
     fn on_paint(&mut self) {
         let engine = self.engine.borrow();
         let mut fb = Framebuffer::screen_framebuffer();
-        render(engine.render_state(), &mut fb);
+        render(engine.render_state(), engine.sprite_atlas(), &mut fb);
     }
 
     fn on_keydown(&mut self, key: KeyCode) {

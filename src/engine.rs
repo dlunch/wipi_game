@@ -8,8 +8,8 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
+    GameState, InputKey, RenderFxState, RenderState, ResolveContext, SpriteAtlas, UiEvent,
+    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -17,6 +17,7 @@ pub struct GameEngine {
     data: Rc<GameData>,
     world: WorldSlot,
     ui: UiState,
+    sprites: SpriteAtlas,
     render_fx: RenderFxState,
     render_state: RenderState,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
@@ -39,6 +40,7 @@ impl GameEngine {
             data: Rc::new(GameData::default()),
             world: WorldSlot::empty(),
             ui: UiState::default(),
+            sprites: SpriteAtlas::load_default(),
             render_fx: RenderFxState::default(),
             render_state: RenderState::Loading { step: 0 },
             resolver_buckets,
@@ -60,6 +62,10 @@ impl GameEngine {
 
     pub fn render_state(&self) -> &RenderState {
         &self.render_state
+    }
+
+    pub fn sprite_atlas(&self) -> &SpriteAtlas {
+        &self.sprites
     }
 
     fn update(&mut self) {

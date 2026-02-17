@@ -9,7 +9,7 @@ use crate::game::ui::{
     ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
 };
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameState, MovementEvent, WorldEvent, WorldState,
+    CombatEvent, GameData, GameEvent, GameState, MovementEvent, SpriteAtlas, WorldEvent, WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -949,7 +949,7 @@ fn render_state_from_game_state(
     }
 }
 
-pub fn render(state: &RenderState, fb: &mut Framebuffer) {
+pub fn render(state: &RenderState, sprites: &SpriteAtlas, fb: &mut Framebuffer) {
     match state {
         RenderState::Loading { step } => draw_loading(fb, *step),
         RenderState::Menu {
@@ -957,7 +957,7 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
             items,
             selected,
         } => draw_menu(fb, title, items, *selected),
-        RenderState::Explore(explore) => draw_explore(fb, explore),
+        RenderState::Explore(explore) => draw_explore(fb, explore, sprites),
         RenderState::Inventory(inventory) => draw_inventory(fb, inventory),
         RenderState::Stats(stats) => draw_stats(fb, stats),
         RenderState::Dialog {
@@ -969,7 +969,7 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
             has_next,
         } => {
             if let Some(explore_state) = explore {
-                draw_explore(fb, explore_state);
+                draw_explore(fb, explore_state, sprites);
             }
             draw_dialog(fb, npc_name, current_text.as_deref(), *has_next);
         }
@@ -981,7 +981,7 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
             selected,
         } => {
             if let Some(explore_state) = explore {
-                draw_explore(fb, explore_state);
+                draw_explore(fb, explore_state, sprites);
             }
             draw_pause_menu(fb, items, *selected);
         }

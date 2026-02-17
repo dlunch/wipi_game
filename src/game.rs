@@ -18,7 +18,7 @@ pub use game_event::{
 };
 pub use rendering::{
     ExploreRender, InventoryRender, QuestLogRender, RenderFxState, RenderState, ShopRender,
-    StatsRender, render,
+    SpriteAtlas, StatsRender, render,
 };
 pub(crate) use state::WorldSlot;
 pub use state::{

@@ -8,11 +8,12 @@ use super::renderer::{
     COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
     draw_rect, draw_text, fill_rect,
 };
+use super::sprites::SpriteAtlas;
 use crate::data::{Direction, Map, SkillType, Tile};
 use crate::game::ExploreAction;
 use crate::game::ExploreRender;
 
-pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender) {
+pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender, sprites: &SpriteAtlas) {
     let Some(map) = state.data.find_map(&state.map_id) else {
         clear_screen(fb);
         draw_text(fb, 16, 16, "ERR: Map not found", COLOR_RED);
@@ -21,7 +22,7 @@ pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender) {
 
     clear_screen(fb);
     let screen_h = fb.height() as i32;
-    draw_map_with_entities(fb, map, state, screen_h);
+    draw_map_with_entities(fb, map, state, sprites, screen_h);
     draw_hud(fb, map.name.as_str(), state, screen_h);
     draw_quest_notice(fb, state.quest_notice_timer);
 }
@@ -42,7 +43,13 @@ fn draw_quest_notice(fb: &mut Framebuffer, timer: u32) {
     draw_text(fb, x + 8, y + 5, "Quest Accepted", COLOR_GREEN);
 }
 
-fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender, screen_h: i32) {
+fn draw_map_with_entities(
+    fb: &mut Framebuffer,
+    map: &Map,
+    state: &ExploreRender,
+    sprites: &SpriteAtlas,
+    screen_h: i32,
+) {
     let screen_w = fb.width() as i32;
     let view_tiles_x = (screen_w / TILE_SIZE) as usize;
     let view_tiles_y = ((screen_h - 30) / TILE_SIZE) as usize;
@@ -96,7 +103,19 @@ fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender
         {
             let px = screen_x * TILE_SIZE;
             let py = screen_y * TILE_SIZE;
-            fill_rect(fb, px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_CYAN);
+            if let Some(npc_sprite) = sprites.npc.as_ref() {
+                fb.draw_image(
+                    px,
+                    py,
+                    npc_sprite.width().min(TILE_SIZE as u32),
+                    npc_sprite.height().min(TILE_SIZE as u32),
+                    npc_sprite,
+                    0,
+                    0,
+                );
+            } else {
+                fill_rect(fb, px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_CYAN);
+            }
 
             let dist = state.player_x.abs_diff(npc.x) + state.player_y.abs_diff(npc.y);
             if dist <= 2 {
@@ -127,14 +146,29 @@ fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender
                 COLOR_RED
             };
 
-            fill_rect(
-                fb,
-                px + 1,
-                py + 1,
-                TILE_SIZE - 2,
-                TILE_SIZE - 2,
-                enemy_color,
-            );
+            if let Some(enemy_sprite) = sprites.enemy.as_ref() {
+                fb.draw_image(
+                    px,
+                    py,
+                    enemy_sprite.width().min(TILE_SIZE as u32),
+                    enemy_sprite.height().min(TILE_SIZE as u32),
+                    enemy_sprite,
+                    0,
+                    0,
+                );
+                if enemy.hit_flash > 0 {
+                    draw_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_WHITE);
+                }
+            } else {
+                fill_rect(
+                    fb,
+                    px + 1,
+                    py + 1,
+                    TILE_SIZE - 2,
+                    TILE_SIZE - 2,
+                    enemy_color,
+                );
+            }
 
             let bar_width = if enemy.max_hp > 0 {
                 enemy.hp.max(0) * (TILE_SIZE - 2) / enemy.max_hp
@@ -154,14 +188,29 @@ fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender
     } else {
         COLOR_WHITE
     };
-    fill_rect(
-        fb,
-        px + 1,
-        py + 1,
-        TILE_SIZE - 2,
-        TILE_SIZE - 2,
-        player_color,
-    );
+    if let Some(player_sprite) = sprites.player.as_ref() {
+        fb.draw_image(
+            px,
+            py,
+            player_sprite.width().min(TILE_SIZE as u32),
+            player_sprite.height().min(TILE_SIZE as u32),
+            player_sprite,
+            0,
+            0,
+        );
+        if state.player_hit_flash > 0 {
+            draw_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_RED);
+        }
+    } else {
+        fill_rect(
+            fb,
+            px + 1,
+            py + 1,
+            TILE_SIZE - 2,
+            TILE_SIZE - 2,
+            player_color,
+        );
+    }
 
     let hp_bar_width = ((state.hp * (TILE_SIZE - 2) as u32) / state.max_hp) as i32;
     fill_rect(
