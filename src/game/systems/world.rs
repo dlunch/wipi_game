@@ -252,6 +252,9 @@ fn resolve_revive_player(data: &GameData, session: &WorldState, out: &mut Vec<Ga
     }
     out.push(GameEvent::World(WorldEvent::ResetMovement));
     out.push(GameEvent::World(WorldEvent::ResetCombat));
+    out.push(GameEvent::World(WorldEvent::SetPoisonTimer(0)));
+    out.push(GameEvent::World(WorldEvent::SetStunTimer(0)));
+    out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(0)));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));
     out.push(GameEvent::Transition(TransitionEvent::ToExplore));
 }

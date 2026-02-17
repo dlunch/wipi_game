@@ -76,6 +76,9 @@ pub struct ExploreRender {
     pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffectRender>,
     pub skill_cooldowns: [u32; 3],
+    pub poison_timer: u32,
+    pub stun_timer: u32,
+    pub armor_break_timer: u32,
     pub key_actions: [Option<ExploreAction>; 3],
     pub peaceful: bool,
     pub quest_notice_timer: u32,
@@ -371,6 +374,9 @@ fn build_explore_render(
         player_hit_flash: render_fx.player_hit_flash,
         skill_effects,
         skill_cooldowns: session.skill_cooldowns,
+        poison_timer: session.poison_timer,
+        stun_timer: session.stun_timer,
+        armor_break_timer: session.armor_break_timer,
         key_actions: ui.explore.key_actions,
         peaceful: map.peaceful,
         quest_notice_timer: render_fx.quest_notice_timer,
@@ -498,6 +504,15 @@ impl ExploreRender {
             }
             GameEvent::World(WorldEvent::SetSkillCooldowns(cooldowns)) => {
                 self.skill_cooldowns = *cooldowns;
+            }
+            GameEvent::World(WorldEvent::SetPoisonTimer(timer)) => {
+                self.poison_timer = *timer;
+            }
+            GameEvent::World(WorldEvent::SetStunTimer(timer)) => {
+                self.stun_timer = *timer;
+            }
+            GameEvent::World(WorldEvent::SetArmorBreakTimer(timer)) => {
+                self.armor_break_timer = *timer;
             }
             GameEvent::World(WorldEvent::AddOpenedTreasure { map_id, x, y }) => {
                 if !self

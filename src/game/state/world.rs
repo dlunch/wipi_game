@@ -22,6 +22,9 @@ pub struct WorldState {
     pub movement: MovementState,
     pub skill_cooldowns: [u32; 3],
     pub mp_regen_timer: u32,
+    pub poison_timer: u32,
+    pub stun_timer: u32,
+    pub armor_break_timer: u32,
     occupied_map_id: String,
     occupied_width: usize,
     occupied_height: usize,
@@ -41,6 +44,9 @@ impl WorldState {
             movement: MovementState::default(),
             skill_cooldowns: [0; 3],
             mp_regen_timer: 0,
+            poison_timer: 0,
+            stun_timer: 0,
+            armor_break_timer: 0,
             occupied_map_id: String::new(),
             occupied_width: 0,
             occupied_height: 0,
@@ -85,12 +91,24 @@ impl WorldState {
             GameEvent::World(session_event) => match session_event {
                 WorldEvent::Create => {
                     self.clear_occupancy();
+                    self.poison_timer = 0;
+                    self.stun_timer = 0;
+                    self.armor_break_timer = 0;
                 }
                 WorldEvent::SetSkillCooldowns(cooldowns) => {
                     self.skill_cooldowns = *cooldowns;
                 }
                 WorldEvent::SetMpRegenTimer(timer) => {
                     self.mp_regen_timer = *timer;
+                }
+                WorldEvent::SetPoisonTimer(timer) => {
+                    self.poison_timer = *timer;
+                }
+                WorldEvent::SetStunTimer(timer) => {
+                    self.stun_timer = *timer;
+                }
+                WorldEvent::SetArmorBreakTimer(timer) => {
+                    self.armor_break_timer = *timer;
                 }
                 WorldEvent::ResetMovement => {
                     self.movement = MovementState::default();

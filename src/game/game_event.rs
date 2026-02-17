@@ -188,6 +188,9 @@ pub enum WorldEvent {
     AddOpenedTreasure { map_id: String, x: usize, y: usize },
     SetSkillCooldowns([u32; 3]),
     SetMpRegenTimer(u32),
+    SetPoisonTimer(u32),
+    SetStunTimer(u32),
+    SetArmorBreakTimer(u32),
     ResetMovement,
     ResetCombat,
 }

@@ -20,6 +20,11 @@ const PLAYER_ATTACK_COOLDOWN: u32 = 15;
 const ATTACK_EFFECT_DURATION: u32 = 6;
 const SKILL_EFFECT_DURATION: u32 = 8;
 const HEAL_EFFECT_DURATION: u32 = 15;
+const STATUS_TICK_INTERVAL: u32 = 20;
+const POISON_DAMAGE: i32 = 2;
+const POISON_DURATION: u32 = 180;
+const STUN_DURATION: u32 = 20;
+const ARMOR_BREAK_DURATION: u32 = 120;
 
 pub fn resolve_tick(
     state: &CombatState,
@@ -184,18 +189,32 @@ impl DomainEventResolver for CombatResolver {
                 let Some(map) = data.find_map(&s.leader.current_map_id) else {
                     return Ok(());
                 };
+                let next_counter = s.combat.update_counter.wrapping_add(1);
+                let effective_def = if s.armor_break_timer > 0 {
+                    s.leader.total_def() / 2
+                } else {
+                    s.leader.total_def()
+                };
                 resolve_tick(
                     &s.combat,
                     (s.leader.x, s.leader.y),
-                    s.leader.total_def(),
+                    effective_def,
                     (s.skill_cooldowns, s.mp_regen_timer),
                     map,
                     &data.enemies,
                     out,
                 );
+                resolve_status_timers(s, next_counter, out);
+                let attacks = attacks_on_player_this_tick(&s.combat, (s.leader.x, s.leader.y), map);
+                if attacks > 0 {
+                    maybe_apply_enemy_statuses(s, next_counter, attacks, out);
+                }
             }
             GameEvent::CombatPlayerAction(action) => {
                 let s = world.ok_or_else(|| anyhow!("No active world"))?;
+                if s.stun_timer > 0 {
+                    return Ok(());
+                }
 
                 if let Some((slot, skill)) = action.skill() {
                     if !s
@@ -243,6 +262,89 @@ impl DomainEventResolver for CombatResolver {
         }
         Ok(())
     }
+}
+
+fn resolve_status_timers(session: &WorldState, next_counter: u32, out: &mut Vec<GameEvent>) {
+    if session.poison_timer > 0 {
+        out.push(GameEvent::World(WorldEvent::SetPoisonTimer(
+            session.poison_timer - 1,
+        )));
+        if next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
+            out.push(GameEvent::Combat(CombatEvent::TakeDamage(POISON_DAMAGE)));
+            out.push(GameEvent::Combat(CombatEvent::SetPlayerHitFlash(
+                HIT_FLASH_DURATION / 2,
+            )));
+        }
+    }
+    if session.stun_timer > 0 {
+        out.push(GameEvent::World(WorldEvent::SetStunTimer(
+            session.stun_timer - 1,
+        )));
+    }
+    if session.armor_break_timer > 0 {
+        out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(
+            session.armor_break_timer - 1,
+        )));
+    }
+}
+
+fn attacks_on_player_this_tick(state: &CombatState, player: (usize, usize), map: &Map) -> usize {
+    let (player_x, player_y) = player;
+    let update_counter = state.update_counter.wrapping_add(1);
+    let do_move = update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL);
+    let mut count = 0usize;
+
+    for enemy in &state.enemies {
+        if enemy.hp <= 0 {
+            continue;
+        }
+        let mut next_x = enemy.x;
+        let mut next_y = enemy.y;
+        let next_attack_cooldown = if enemy.attack_cooldown > 0 {
+            enemy.attack_cooldown - 1
+        } else {
+            0
+        };
+
+        if do_move && enemy.distance_to(player_x, player_y) > 1 {
+            (next_x, next_y) = next_enemy_position(enemy, player_x, player_y, map);
+        }
+        if enemy_distance(next_x, next_y, player_x, player_y) <= 1 && next_attack_cooldown == 0 {
+            count += 1;
+        }
+    }
+
+    count
+}
+
+fn maybe_apply_enemy_statuses(
+    session: &WorldState,
+    next_counter: u32,
+    attacks: usize,
+    out: &mut Vec<GameEvent>,
+) {
+    if session.stun_timer == 0 && status_roll(next_counter, attacks as u32, 31, 18) {
+        out.push(GameEvent::World(WorldEvent::SetStunTimer(STUN_DURATION)));
+    }
+    if session.poison_timer == 0 && status_roll(next_counter, attacks as u32, 53, 24) {
+        out.push(GameEvent::World(WorldEvent::SetPoisonTimer(
+            POISON_DURATION,
+        )));
+    }
+    if session.armor_break_timer == 0 && status_roll(next_counter, attacks as u32, 79, 20) {
+        out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(
+            ARMOR_BREAK_DURATION,
+        )));
+    }
+}
+
+fn status_roll(counter: u32, attacks: u32, salt: u32, chance_percent: u32) -> bool {
+    let value = counter
+        .wrapping_mul(1103515245)
+        .wrapping_add(attacks.wrapping_mul(12345))
+        .wrapping_add(salt)
+        % 100;
+    value < chance_percent
 }
 
 impl CombatResolver {

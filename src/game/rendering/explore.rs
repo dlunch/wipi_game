@@ -308,6 +308,20 @@ fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_
         draw_text(fb, 4, hud_y + 20, hint, COLOR_CYAN);
     }
 
+    let mut status = String::new();
+    if state.poison_timer > 0 {
+        status.push_str("PSN ");
+    }
+    if state.stun_timer > 0 {
+        status.push_str("STN ");
+    }
+    if state.armor_break_timer > 0 {
+        status.push_str("BRK ");
+    }
+    if !status.is_empty() {
+        draw_text(fb, screen_w - 70, hud_y + 20, status.trim_end(), COLOR_RED);
+    }
+
     if !state.peaceful {
         draw_skill_bar(
             fb,

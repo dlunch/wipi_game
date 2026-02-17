@@ -123,6 +123,9 @@ impl CharacterState {
                 | WorldEvent::AddOpenedTreasure { .. }
                 | WorldEvent::SetSkillCooldowns(_)
                 | WorldEvent::SetMpRegenTimer(_)
+                | WorldEvent::SetPoisonTimer(_)
+                | WorldEvent::SetStunTimer(_)
+                | WorldEvent::SetArmorBreakTimer(_)
                 | WorldEvent::ResetMovement
                 | WorldEvent::ResetCombat => {}
             },
