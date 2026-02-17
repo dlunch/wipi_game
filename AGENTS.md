@@ -48,37 +48,40 @@ Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
 ```
 src/
 ├── main.rs              # Entry point + WIPI App glue (timer/input/render wiring)
-├── engine.rs            # GameEngine orchestration (event queue resolve/apply loop)
+├── engine.rs            # GameEngine orchestration (input queue + game event queue + render cache)
 ├── data.rs              # Re-exports from data module
 ├── data/
 │   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
 │   └── parser.rs        # Text file parsers for .dat resources
 ├── game.rs              # Re-exports from game module (state, systems, rendering, ui)
 └── game/
-    ├── intent.rs        # InputKey, GameInput enums
+    ├── game_event.rs    # GameEvent and domain sub-events
     ├── state.rs         # GameState enum + state module re-exports
     ├── state/
-    │   ├── player.rs    # PlayerState + tile events + player mutations
+    │   ├── character.rs # CharacterState + tile events + character mutations
     │   ├── combat.rs    # CombatState + combat actions/events + combat mutations
-    │   └── movement.rs  # MovementState + movement tick event + movement mutations
-    ├── ui.rs            # UiState + UI-only states (menu/dialog/shop/inventory/pause/explore bindings)
-    ├── session.rs       # SessionState domain appliers for runtime events
-    ├── runtime_event.rs # RuntimeEvent and domain sub-events
+    │   ├── movement.rs  # MovementState + movement tick event + movement mutations
+    │   └── session.rs   # SessionState domain appliers and occupancy caches
+    ├── session.rs       # Re-export for state/session.rs
+    ├── ui.rs            # UI module re-exports
+    ├── ui/
+    │   ├── state.rs     # UiState + UiEvent + input/ui-event mapping
+    │   └── game_event.rs# UiState apply_game_event bridge for GameEvent
     ├── systems.rs       # Re-exports from systems sub-modules
     ├── systems/
-    │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
+    │   ├── runtime.rs   # ResolveContext + DomainEventResolver trait
+    │   ├── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
     │   ├── movement.rs  # Movement resolve_tick + resolve_world_tick
-    │   ├── explore.rs   # Explore input resolution
-    │   ├── dialog.rs    # Dialog input resolution
-    │   ├── shop.rs      # Shop input resolution
-    │   ├── menu.rs      # Menu/pause input resolution
-    │   ├── inventory.rs # Inventory input resolution
-    │   ├── npc.rs       # NPC interaction resolution
-    │   └── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
+    │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
+    │   ├── explore.rs   # Explore command resolution
+    │   ├── shop.rs      # Shop command resolution
+    │   ├── session.rs   # Session-related command resolution
+    │   ├── character.rs # Character-related command resolution
+    │   └── npc.rs       # NPC interaction resolution
     ├── rendering.rs     # Re-exports from rendering sub-modules
     ├── rendering/
     │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
-    │   ├── game.rs      # Main render dispatch, loading screen
+    │   ├── game.rs      # Main render dispatch + RenderState/RenderFxState
     │   ├── dialog.rs    # Dialog box rendering
     │   ├── explore.rs   # Map/entity/HUD rendering
     │   ├── inventory.rs # Inventory & stats UI
@@ -96,17 +99,16 @@ resources/
 
 The codebase follows an **event queue + resolve systems + apply + rendering** pattern:
 
-- **State** (`state/`): Core state types and domain mutations (`PlayerState`, `CombatState`, `MovementState`).
-- **UI State** (`ui.rs`): UI-only interaction state (`MenuUiState`, `DialogUiState`, `ShopUiState`, etc.).
-- **Session State** (`session.rs`): Active gameplay container + single-domain update appliers.
-- **Systems** (`systems/`): Stateless event/input resolution only. Prefer `resolve_*` naming.
-- **Runtime Engine** (`engine.rs`): Cross-system orchestration (`RuntimeEvent queue -> resolve_event -> apply_event` until queue drains).
-- **Rendering** (`rendering/`): Pure draw functions. No game logic — only reads state and draws to framebuffer.
+- **State** (`state/`): Core state types and domain mutations (`CharacterState`, `CombatState`, `MovementState`, `SessionState`).
+- **UI State** (`ui/state.rs`): UI-only interaction state + `UiEvent` mapping/apply.
+- **Systems** (`systems/`): Stateless `GameEvent` resolution only. Prefer `resolve_*` naming.
+- **Runtime Engine** (`engine.rs`): Cross-system orchestration (`GameEvent queue -> resolve -> apply -> enqueue`) with overflow guard.
+- **Rendering** (`rendering/`): RenderState-based drawing + incremental patch helpers (`apply_render_event`, `apply_render_tick`, `apply_ui_render_patch`).
 - **App** (`main.rs`): Entry glue only (WIPI `App` trait hooks, timer, repaint).
 
-Input flow: `key → UI maps to RuntimeEvent input events → resolve_event(...) emits derived events → apply_event(...) mutates state → queue continues until empty → build_render_state(...) → render(...)`
+Input flow: `keydown/keyup -> pending input queue -> UiEvent resolve/apply -> GameEvent dispatch -> resolve/apply loop -> render patch or rebuild`
 
-Update flow (timer tick): `Tick event → UpdateLoading/UpdateMovement/UpdateCombat events → resolve_tick/resolve_world_tick + session apply_* → build_render_state`.
+Update flow (timer tick): `process pending inputs -> render fx tick -> UpdateLoading/UpdateMovement/UpdateCombat events -> resolve/apply -> render patch or rebuild`.
 
 Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `engine.rs` event queue handlers.
 
@@ -179,7 +181,7 @@ if matches!(self.state, GameState::Explore) { ... }
 
 ### Module Organization
 - Each system has its own file under `game/systems/`
-- Persistent world state lives under `game/state/`, UI state lives in `game/ui.rs`, rendering under `game/rendering/`
+- Persistent world state lives under `game/state/`, UI state lives under `game/ui/`, rendering under `game/rendering/`
 - `main.rs` should stay thin; orchestration belongs in `engine.rs`
 - Module files (`game.rs`, `data.rs`, `state.rs`, etc.) should primarily contain `mod` and `pub use`
 - Prefer methods for state/session mutation and functions for stateless system resolution
@@ -187,7 +189,7 @@ if matches!(self.state, GameState::Explore) { ... }
 ### Functions
 - Keep functions small and focused
 - Use descriptive names over comments
-- Prefer `resolve`/`resolve_*` returning events and separate state/session apply methods for mutation
+- Prefer `resolve`/`resolve_*` emitting events (`out: &mut Vec<GameEvent>`) and separate state/session apply methods for mutation
 
 ## Key Constraints
 
