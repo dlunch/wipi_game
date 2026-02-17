@@ -23,8 +23,6 @@ pub struct GameEngine {
     render_state: RenderState,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
     pending_inputs: VecDeque<GameInput>,
-    event_queue: VecDeque<GameEvent>,
-    derived_events: Vec<GameEvent>,
 }
 
 impl GameEngine {
@@ -47,8 +45,6 @@ impl GameEngine {
             render_state: RenderState::Loading { step: 0 },
             resolver_buckets,
             pending_inputs: VecDeque::with_capacity(32),
-            event_queue: VecDeque::with_capacity(128),
-            derived_events: Vec::with_capacity(32),
         }
     }
 
@@ -188,13 +184,11 @@ impl GameEngine {
         if initial_events.is_empty() {
             return;
         }
-        let mut queue = mem::take(&mut self.event_queue);
-        queue.clear();
+        let mut queue = VecDeque::with_capacity(128);
         for event in initial_events {
             queue.push_back(event);
         }
-        let mut derived = mem::take(&mut self.derived_events);
-        derived.clear();
+        let mut derived = Vec::with_capacity(32);
         let mut processed = 0usize;
         let mut error_message: Option<String> = None;
 
@@ -222,9 +216,6 @@ impl GameEngine {
                 queue.push_back(derived_event);
             }
         }
-
-        self.event_queue = queue;
-        self.derived_events = derived;
 
         if let Some(message) = error_message {
             self.state = GameState::Error(message);
