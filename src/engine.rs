@@ -133,8 +133,7 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        let mut event = event;
-        apply_state_event(&mut self.state, &mut self.data, &mut event)?;
+        let event = apply_state_event(&mut self.state, &mut self.data, event)?;
 
         let is_session_event = matches!(event, GameEvent::World(_));
 

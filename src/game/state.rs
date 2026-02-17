@@ -137,15 +137,13 @@ impl GameState {
 pub fn apply_state_event(
     state: &mut GameState,
     data: &mut Rc<GameData>,
-    event: &mut GameEvent,
-) -> Result<()> {
-    if let Some(next_event) = loading::apply_loading_update(state, data, event) {
-        *event = next_event;
-    }
+    event: GameEvent,
+) -> Result<GameEvent> {
+    let event = loading::apply_loading_update(state, data, &event).unwrap_or(event);
     if state.subscribes(event.kind()) {
-        state.apply_event(event)?;
+        state.apply_event(&event)?;
     }
-    Ok(())
+    Ok(event)
 }
 
 impl GameEventSubscriber for GameState {
