@@ -23,6 +23,23 @@ pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender) {
     let screen_h = fb.height() as i32;
     draw_map_with_entities(fb, map, state, screen_h);
     draw_hud(fb, map.name.as_str(), state, screen_h);
+    draw_quest_notice(fb, state.quest_notice_timer);
+}
+
+fn draw_quest_notice(fb: &mut Framebuffer, timer: u32) {
+    if timer == 0 {
+        return;
+    }
+
+    let screen_w = fb.width() as i32;
+    let box_w = 140;
+    let box_h = 18;
+    let x = (screen_w - box_w) / 2;
+    let y = 8;
+
+    fill_rect(fb, x, y, box_w, box_h, COLOR_BLACK);
+    draw_rect(fb, x, y, box_w, box_h, COLOR_YELLOW);
+    draw_text(fb, x + 8, y + 5, "Quest Accepted", COLOR_GREEN);
 }
 
 fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender, screen_h: i32) {

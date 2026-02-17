@@ -75,6 +75,7 @@ pub struct ExploreRender {
     pub skill_cooldowns: [u32; 3],
     pub key_actions: [Option<ExploreAction>; 3],
     pub peaceful: bool,
+    pub quest_notice_timer: u32,
 }
 
 pub struct EnemyRender {
@@ -153,7 +154,10 @@ pub struct QuestEntryRender {
 pub struct RenderFxState {
     player_hit_flash: u32,
     enemy_hit_flashes: Vec<(u32, u32)>,
+    quest_notice_timer: u32,
 }
+
+const QUEST_NOTICE_DURATION: u32 = 90;
 
 impl RenderFxState {
     pub fn tick(&mut self) -> bool {
@@ -171,57 +175,71 @@ impl RenderFxState {
         }
         let before = self.enemy_hit_flashes.len();
         self.enemy_hit_flashes.retain(|(_, timer)| *timer > 0);
+        if self.quest_notice_timer > 0 {
+            self.quest_notice_timer -= 1;
+            changed = true;
+        }
         changed || before != self.enemy_hit_flashes.len()
     }
 
-    pub fn apply_event(&mut self, event: &GameEvent) -> bool {
-        let GameEvent::Combat(combat) = event else {
-            return false;
-        };
-        match combat {
-            CombatEvent::SetPlayerHitFlash(timer) => {
-                if self.player_hit_flash == *timer {
-                    return false;
-                }
-                self.player_hit_flash = *timer;
-                true
-            }
-            CombatEvent::EnemyHitFlashSet {
-                enemy_id,
-                hit_flash,
-            } => {
-                if *hit_flash == 0 {
-                    let before = self.enemy_hit_flashes.len();
-                    self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
-                    return before != self.enemy_hit_flashes.len();
-                }
-
-                if let Some((_, timer)) = self
-                    .enemy_hit_flashes
-                    .iter_mut()
-                    .find(|(id, _)| *id == *enemy_id)
-                {
-                    if *timer == *hit_flash {
+    pub fn apply_event(&mut self, state: &GameState, event: &GameEvent) -> bool {
+        match event {
+            GameEvent::Combat(combat) => match combat {
+                CombatEvent::SetPlayerHitFlash(timer) => {
+                    if self.player_hit_flash == *timer {
                         return false;
                     }
-                    *timer = *hit_flash;
-                } else {
-                    self.enemy_hit_flashes.push((*enemy_id, *hit_flash));
+                    self.player_hit_flash = *timer;
+                    true
                 }
-                true
-            }
-            CombatEvent::EnemyDespawn(enemy_id) => {
-                let before = self.enemy_hit_flashes.len();
-                self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
-                before != self.enemy_hit_flashes.len()
-            }
-            CombatEvent::SetMapEnemies { .. } => {
-                if self.enemy_hit_flashes.is_empty() && self.player_hit_flash == 0 {
-                    return false;
+                CombatEvent::EnemyHitFlashSet {
+                    enemy_id,
+                    hit_flash,
+                } => {
+                    if *hit_flash == 0 {
+                        let before = self.enemy_hit_flashes.len();
+                        self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
+                        return before != self.enemy_hit_flashes.len();
+                    }
+
+                    if let Some((_, timer)) = self
+                        .enemy_hit_flashes
+                        .iter_mut()
+                        .find(|(id, _)| *id == *enemy_id)
+                    {
+                        if *timer == *hit_flash {
+                            return false;
+                        }
+                        *timer = *hit_flash;
+                    } else {
+                        self.enemy_hit_flashes.push((*enemy_id, *hit_flash));
+                    }
+                    true
                 }
-                self.enemy_hit_flashes.clear();
-                self.player_hit_flash = 0;
-                true
+                CombatEvent::EnemyDespawn(enemy_id) => {
+                    let before = self.enemy_hit_flashes.len();
+                    self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
+                    before != self.enemy_hit_flashes.len()
+                }
+                CombatEvent::SetMapEnemies { .. } => {
+                    if self.enemy_hit_flashes.is_empty() && self.player_hit_flash == 0 {
+                        return false;
+                    }
+                    self.enemy_hit_flashes.clear();
+                    self.player_hit_flash = 0;
+                    true
+                }
+                _ => false,
+            },
+            GameEvent::World(WorldEvent::AddQuestProgress(progress))
+                if matches!(state, GameState::Explore | GameState::Dialog)
+                    && progress.current_count == 0
+                    && !progress.completed
+                    && !progress.rewarded =>
+            {
+                let changed = self.quest_notice_timer != QUEST_NOTICE_DURATION;
+                self.quest_notice_timer = QUEST_NOTICE_DURATION;
+                changed
             }
             _ => false,
         }
@@ -318,6 +336,7 @@ fn build_explore_render(
         skill_cooldowns: session.skill_cooldowns,
         key_actions: ui.explore.key_actions,
         peaceful: map.peaceful,
+        quest_notice_timer: render_fx.quest_notice_timer,
     })
 }
 
@@ -749,6 +768,7 @@ impl RenderState {
                         enemy.hit_flash = next;
                     }
                 }
+                explore.quest_notice_timer = render_fx.quest_notice_timer;
             }
             _ => {}
         }

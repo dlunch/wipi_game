@@ -146,7 +146,7 @@ impl GameEngine {
             self.ui.apply_game_event(self.world.as_ref(), &event)?;
         }
 
-        if self.render_fx.apply_event(&event) {
+        if self.render_fx.apply_event(&self.state, &event) {
             self.render_state.apply_tick(&self.render_fx);
         }
         self.render_state.apply_event(
