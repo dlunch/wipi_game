@@ -8,13 +8,10 @@ pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
 
 use alloc::format;
-use alloc::rc::Rc;
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{
-    GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent,
-};
+use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -147,52 +144,6 @@ impl GameEventSubscriber for GameState {
 }
 
 impl GameState {
-    fn apply_loading_update(
-        &self,
-        data: &mut Rc<GameData>,
-        event: &GameEvent,
-    ) -> Option<GameEvent> {
-        let GameEvent::Loading(LoadingEvent::Tick) = event else {
-            return None;
-        };
-
-        let step = match self {
-            GameState::Loading(step) => *step,
-            _ => {
-                return Some(GameEvent::Loading(LoadingEvent::Error(String::from(
-                    "Invalid state: expected Loading",
-                ))));
-            }
-        };
-
-        let load_result = if let Some(data_mut) = Rc::get_mut(data) {
-            data_mut
-                .load_step(step)
-                .map_err(|e| format!("Load error: {}", e))
-        } else {
-            Err(String::from("Load error: data is shared"))
-        };
-
-        let loading = match load_result {
-            Ok(true) => LoadingEvent::Loaded,
-            Ok(false) => LoadingEvent::Advance(step + 1),
-            Err(e) => LoadingEvent::Error(e),
-        };
-        Some(GameEvent::Loading(loading))
-    }
-
-    pub fn apply_with_data(
-        &mut self,
-        data: &mut Rc<GameData>,
-        event: GameEvent,
-    ) -> Result<GameEvent> {
-        let event = self.apply_loading_update(data, &event).unwrap_or(event);
-        if self.subscribes(event.kind()) {
-            self.apply_event(&event)?;
-        }
-        Ok(event)
-    }
-
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Loading(event) => match event {

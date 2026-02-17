@@ -3,9 +3,8 @@ use alloc::vec::Vec;
 
 use super::state::{
     DialogUiState, ExploreUiState, GameInput, InputKey, InventoryUiState, MenuUiState,
-    PauseMenuUiState, ShopMode, ShopUiState, UiEvent, UiState,
+    PauseMenuUiState, UiEvent, UiState,
 };
-use crate::game::selection::{step_down, step_up};
 use crate::game::{GameState, WorldState};
 
 pub trait UiInputEventResolver {
@@ -89,74 +88,6 @@ impl InventoryUiState {
     }
 }
 
-impl ShopUiState {
-    pub fn handle_key(&mut self, key: InputKey, inventory_len: usize) -> Option<UiEvent> {
-        let shop_items_len = self
-            .state
-            .as_ref()
-            .map(|state| state.items.len())
-            .unwrap_or(0);
-
-        match self.mode {
-            ShopMode::Select => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, 2);
-                    None
-                }
-                InputKey::Ok => {
-                    if self.selected == 0 {
-                        self.mode = ShopMode::Buy;
-                    } else {
-                        self.mode = ShopMode::Sell;
-                    }
-                    self.selected = 0;
-                    None
-                }
-                InputKey::Back => Some(UiEvent::ShopClose),
-                _ => None,
-            },
-            ShopMode::Buy => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, shop_items_len);
-                    None
-                }
-                InputKey::Ok => Some(UiEvent::ShopBuySelected(self.selected)),
-                InputKey::Back => {
-                    self.mode = ShopMode::Select;
-                    self.selected = 0;
-                    None
-                }
-                _ => None,
-            },
-            ShopMode::Sell => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, inventory_len);
-                    None
-                }
-                InputKey::Ok => Some(UiEvent::ShopSellSelected(self.selected)),
-                InputKey::Back => {
-                    self.mode = ShopMode::Select;
-                    self.selected = 0;
-                    None
-                }
-                _ => None,
-            },
-        }
-    }
-}
-
 impl DialogUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
         if matches!(key, InputKey::Ok | InputKey::Back) {
@@ -187,10 +118,15 @@ fn resolve_keydown(
         }
         GameState::Dialog => ui.dialog.event_for_key(key).into_iter().collect(),
         GameState::Shop => {
-            let inventory_len = session
-                .map(|session_state| session_state.leader.inventory.len())
-                .unwrap_or(0);
-            ui.shop.handle_key(key, inventory_len).into_iter().collect()
+            let _ = session;
+            if matches!(
+                key,
+                InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
+            ) {
+                vec![UiEvent::ShopInput(key)]
+            } else {
+                Vec::new()
+            }
         }
         GameState::PauseMenu => ui.pause_menu.event_for_key(key).into_iter().collect(),
         GameState::GameOver => {

@@ -65,9 +65,7 @@ pub enum UiEvent {
     InventoryInput(InputKey),
     DialogInput(InputKey),
     PauseMenuInput(InputKey),
-    ShopBuySelected(usize),
-    ShopSellSelected(usize),
-    ShopClose,
+    ShopInput(InputKey),
 }
 
 #[derive(Clone, Copy)]

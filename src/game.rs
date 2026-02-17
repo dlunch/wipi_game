@@ -1,3 +1,4 @@
+mod effects;
 mod game_data;
 mod game_event;
 mod rendering;
@@ -9,6 +10,7 @@ mod systems;
 mod ui;
 mod world;
 
+pub use effects::apply_effects;
 pub use game_data::GameData;
 pub use game_event::{
     CombatEvent, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent,

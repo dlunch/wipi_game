@@ -82,9 +82,6 @@ impl WorldState {
 
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::SaveWorld => {
-                let _ = crate::game::save_game(self);
-            }
             GameEvent::World(session_event) => match session_event {
                 WorldEvent::Create => {
                     self.clear_occupancy();
@@ -275,9 +272,6 @@ impl WorldState {
 
 impl GameEventSubscriber for WorldState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(
-            kind,
-            GameEventKind::SaveWorld | GameEventKind::World | GameEventKind::Combat
-        )
+        matches!(kind, GameEventKind::World | GameEventKind::Combat)
     }
 }

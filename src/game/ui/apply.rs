@@ -1,6 +1,8 @@
 use alloc::vec::Vec;
 
-use super::state::{DialogTransition, ExploreCommand, InputKey, MenuAction, UiEvent, UiState};
+use super::state::{
+    DialogTransition, ExploreCommand, InputKey, MenuAction, ShopMode, UiEvent, UiState,
+};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
 use crate::game::{GameEvent, TransitionEvent, WorldState};
@@ -54,11 +56,7 @@ impl UiEventApplier for UiState {
             UiEvent::ExploreInput(key) => apply_explore_input(key, out),
             UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out),
             UiEvent::DialogInput(key) => apply_dialog_input(self, key, out),
-            UiEvent::ShopBuySelected(selected) => {
-                apply_shop_buy_selected(self, session, selected, out)
-            }
-            UiEvent::ShopSellSelected(selected) => apply_shop_sell_selected(selected, out),
-            UiEvent::ShopClose => out.push(GameEvent::Transition(TransitionEvent::ToExplore)),
+            UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out),
         };
     }
 }
@@ -180,8 +178,68 @@ fn apply_shop_buy_selected(
     }
 }
 
-fn apply_shop_sell_selected(selected: usize, out: &mut Vec<GameEvent>) {
-    out.push(GameEvent::ShopSellSelected(selected));
+fn apply_shop_input(
+    ui: &mut UiState,
+    session: Option<&WorldState>,
+    key: InputKey,
+    out: &mut Vec<GameEvent>,
+) {
+    let shop_items_len = ui
+        .shop
+        .state
+        .as_ref()
+        .map(|state| state.items.len())
+        .unwrap_or(0);
+    let inventory_len = session.map(|s| s.leader.inventory.len()).unwrap_or(0);
+
+    match ui.shop.mode {
+        ShopMode::Select => match key {
+            InputKey::Up => {
+                ui.shop.selected = step_up(ui.shop.selected);
+            }
+            InputKey::Down => {
+                ui.shop.selected = step_down(ui.shop.selected, 2);
+            }
+            InputKey::Ok => {
+                if ui.shop.selected == 0 {
+                    ui.shop.mode = ShopMode::Buy;
+                } else {
+                    ui.shop.mode = ShopMode::Sell;
+                }
+                ui.shop.selected = 0;
+            }
+            InputKey::Back => out.push(GameEvent::Transition(TransitionEvent::ToExplore)),
+            _ => {}
+        },
+        ShopMode::Buy => match key {
+            InputKey::Up => {
+                ui.shop.selected = step_up(ui.shop.selected);
+            }
+            InputKey::Down => {
+                ui.shop.selected = step_down(ui.shop.selected, shop_items_len);
+            }
+            InputKey::Ok => apply_shop_buy_selected(ui, session, ui.shop.selected, out),
+            InputKey::Back => {
+                ui.shop.mode = ShopMode::Select;
+                ui.shop.selected = 0;
+            }
+            _ => {}
+        },
+        ShopMode::Sell => match key {
+            InputKey::Up => {
+                ui.shop.selected = step_up(ui.shop.selected);
+            }
+            InputKey::Down => {
+                ui.shop.selected = step_down(ui.shop.selected, inventory_len);
+            }
+            InputKey::Ok => out.push(GameEvent::ShopSellSelected(ui.shop.selected)),
+            InputKey::Back => {
+                ui.shop.mode = ShopMode::Select;
+                ui.shop.selected = 0;
+            }
+            _ => {}
+        },
+    }
 }
 
 fn apply_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {

@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldState, domain_resolvers,
+    UiInputEventResolver, UiState, WorldState, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -124,7 +124,9 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        let event = self.state.apply_with_data(&mut self.data, event)?;
+        if self.state.subscribes(event.kind()) {
+            self.state.apply_event(&event)?;
+        }
 
         let is_session_event = matches!(event, GameEvent::World(_));
 
@@ -184,6 +186,7 @@ impl GameEngine {
             queue.push_back(event);
         }
         let mut derived = Vec::with_capacity(32);
+        let mut effect_events = Vec::with_capacity(4);
         let mut processed = 0usize;
 
         while let Some(event) = queue.pop_front() {
@@ -196,11 +199,22 @@ impl GameEngine {
             }
 
             self.resolve_with_handlers(&event, &mut derived)?;
+            effect_events.clear();
+            apply_effects(
+                &self.state,
+                &mut self.data,
+                self.world.as_ref(),
+                &event,
+                &mut effect_events,
+            )?;
 
             self.apply_with_handlers(event)?;
 
             for derived_event in derived.drain(..) {
                 queue.push_back(derived_event);
+            }
+            for effect_event in effect_events.drain(..) {
+                queue.push_back(effect_event);
             }
         }
         Ok(())
