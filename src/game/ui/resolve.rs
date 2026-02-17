@@ -129,13 +129,6 @@ fn resolve_keydown(
             }
         }
         GameState::PauseMenu => ui.pause_menu.event_for_key(key).into_iter().collect(),
-        GameState::GameOver => {
-            if matches!(key, InputKey::Ok) {
-                vec![UiEvent::GameOverConfirmRequested]
-            } else {
-                Vec::new()
-            }
-        }
         GameState::Error(_) => {
             if matches!(key, InputKey::Ok) {
                 vec![UiEvent::ErrorConfirmRequested]

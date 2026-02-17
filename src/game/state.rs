@@ -26,7 +26,6 @@ pub enum GameState {
     Shop,
     QuestLog,
     PauseMenu,
-    GameOver,
     Error(String),
 }
 
@@ -41,7 +40,6 @@ enum GameStateKind {
     Shop,
     QuestLog,
     PauseMenu,
-    GameOver,
     Error,
 }
 
@@ -57,7 +55,6 @@ impl GameState {
             GameState::Shop => GameStateKind::Shop,
             GameState::QuestLog => GameStateKind::QuestLog,
             GameState::PauseMenu => GameStateKind::PauseMenu,
-            GameState::GameOver => GameStateKind::GameOver,
             GameState::Error(_) => GameStateKind::Error,
         }
     }
@@ -72,7 +69,6 @@ impl GameState {
                 | GameState::Shop
                 | GameState::QuestLog
                 | GameState::PauseMenu
-                | GameState::GameOver
         )
     }
 
@@ -101,7 +97,6 @@ impl GameState {
                     | GameStateKind::Dialog
                     | GameStateKind::Shop
                     | GameStateKind::PauseMenu
-                    | GameStateKind::GameOver
                     | GameStateKind::Error
             ),
             GameStateKind::Inventory => {
@@ -126,7 +121,6 @@ impl GameState {
                     | GameStateKind::QuestLog
                     | GameStateKind::Error
             ),
-            GameStateKind::GameOver => matches!(target, GameStateKind::Menu | GameStateKind::Error),
             GameStateKind::Error => false,
         }
     }
@@ -158,8 +152,7 @@ impl GameState {
             | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
                 self.transition_to(GameState::Explore)
             }
-            GameEvent::Transition(TransitionEvent::ToMenu)
-            | GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
+            GameEvent::Transition(TransitionEvent::ToMenu) => {
                 self.transition_to(GameState::Menu);
             }
             GameEvent::Transition(TransitionEvent::ToPauseMenu) => {
@@ -173,9 +166,6 @@ impl GameState {
             }
             GameEvent::Transition(TransitionEvent::ToQuestLog) => {
                 self.transition_to(GameState::QuestLog);
-            }
-            GameEvent::Transition(TransitionEvent::ToGameOver) => {
-                self.transition_to(GameState::GameOver)
             }
             GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => self.transition_to(GameState::Dialog),
@@ -204,7 +194,7 @@ mod tests {
 
     use super::GameState;
 
-    fn states() -> [GameState; 11] {
+    fn states() -> [GameState; 10] {
         [
             GameState::Loading(0),
             GameState::Menu,
@@ -215,7 +205,6 @@ mod tests {
             GameState::Shop,
             GameState::QuestLog,
             GameState::PauseMenu,
-            GameState::GameOver,
             GameState::Error(String::from("error")),
         ]
     }
@@ -234,7 +223,6 @@ mod tests {
                     | S::Dialog
                     | S::Shop
                     | S::PauseMenu
-                    | S::GameOver
                     | S::Error(_)
             ),
             S::Inventory => matches!(to, S::Inventory | S::Explore | S::Error(_)),
@@ -246,7 +234,6 @@ mod tests {
                 to,
                 S::PauseMenu | S::Explore | S::Inventory | S::Stats | S::QuestLog | S::Error(_)
             ),
-            S::GameOver => matches!(to, S::GameOver | S::Menu | S::Error(_)),
             S::Error(_) => matches!(to, S::Error(_)),
         }
     }
@@ -259,7 +246,6 @@ mod tests {
         assert!(GameState::Explore.can_transition_to(&GameState::PauseMenu));
         assert!(GameState::PauseMenu.can_transition_to(&GameState::QuestLog));
         assert!(GameState::Dialog.can_transition_to(&GameState::Shop));
-        assert!(GameState::GameOver.can_transition_to(&GameState::Menu));
     }
 
     #[test]
@@ -267,7 +253,6 @@ mod tests {
         assert!(!GameState::Menu.can_transition_to(&GameState::Shop));
         assert!(!GameState::Inventory.can_transition_to(&GameState::Dialog));
         assert!(!GameState::Stats.can_transition_to(&GameState::PauseMenu));
-        assert!(!GameState::GameOver.can_transition_to(&GameState::Explore));
     }
 
     #[test]

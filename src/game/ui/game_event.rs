@@ -15,8 +15,7 @@ impl UiState {
                 *self = UiState::default();
             }
             GameEvent::Loading(crate::game::LoadingEvent::Loaded)
-            | GameEvent::Transition(crate::game::TransitionEvent::ToMenu)
-            | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver) => {
+            | GameEvent::Transition(crate::game::TransitionEvent::ToMenu) => {
                 self.menu.state = MenuState::new(has_save_data());
                 self.menu.selected = 0;
             }

@@ -25,8 +25,7 @@ impl WorldSlot {
             GameEvent::World(WorldEvent::Create) => {
                 self.active = Some(WorldState::empty());
             }
-            GameEvent::Transition(TransitionEvent::ToMenu)
-            | GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
+            GameEvent::Transition(TransitionEvent::ToMenu) => {
                 self.active = None;
             }
             _ => {}

@@ -57,7 +57,6 @@ pub struct UiState {
 
 pub enum UiEvent {
     OverlayCloseRequested,
-    GameOverConfirmRequested,
     ErrorConfirmRequested,
     MovementKeyReleased(Direction),
     MenuInput(InputKey),

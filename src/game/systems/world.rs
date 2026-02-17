@@ -53,7 +53,7 @@ impl DomainEventResolver for SessionLogicResolver {
                 gold,
             }) => resolve_kill_reward(ctx, session, enemy_id, *exp, *gold, out),
             GameEvent::Combat(CombatEvent::TakeDamage(damage)) => {
-                resolve_take_damage(session, *damage, out);
+                resolve_take_damage(ctx, session, *damage, out);
             }
             _ => {}
         }
@@ -213,14 +213,37 @@ fn resolve_kill_reward(
     }
 }
 
-fn resolve_take_damage(session: &crate::game::WorldState, damage: i32, out: &mut Vec<GameEvent>) {
+fn resolve_take_damage(
+    ctx: &ResolveContext<'_>,
+    session: &crate::game::WorldState,
+    damage: i32,
+    out: &mut Vec<GameEvent>,
+) {
     if damage <= 0 {
         return;
     }
     let mut stats = session.leader.stats.clone();
     stats.take_damage(damage);
-    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats.clone())));
     if stats.is_dead() {
-        out.push(GameEvent::Transition(TransitionEvent::ToGameOver));
+        let mut revived = stats.clone();
+        let gold_penalty = (revived.gold / 10).max(10);
+        revived.gold = (revived.gold - gold_penalty).max(0);
+        revived.current_hp = (revived.max_hp / 2).max(1);
+        revived.current_mp = (revived.max_mp / 2).max(0);
+        out.push(GameEvent::World(WorldEvent::SetPlayerStats(revived)));
+        let village_map_id = ctx.data.newgame.start_map.clone();
+        out.push(GameEvent::World(WorldEvent::SetPlayerMap(
+            village_map_id.clone(),
+        )));
+        if let Some(village_map) = ctx.data.find_map(&village_map_id) {
+            let (x, y) = village_map.find_player_start().unwrap_or((0, 0));
+            out.push(GameEvent::World(WorldEvent::SetPlayerPosition { x, y }));
+        }
+        out.push(GameEvent::World(WorldEvent::ResetMovement));
+        out.push(GameEvent::World(WorldEvent::ResetCombat));
+        out.push(GameEvent::Transition(TransitionEvent::MapChanged));
+        out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+    } else {
+        out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
     }
 }
