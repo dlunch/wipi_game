@@ -4,7 +4,7 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
@@ -129,13 +129,11 @@ impl GameEngine {
 
         self.world.apply_event(&event);
 
-        if self.state.requires_world() && self.world.as_ref().is_none() {
-            self.state = GameState::Error(format!(
-                "Missing world for state transition: {:?}",
-                self.state
-            ));
-            return Ok(());
-        }
+        ensure!(
+            !self.state.requires_world() || self.world.as_ref().is_some(),
+            "Missing world for state transition: {:?}",
+            self.state
+        );
 
         if let Some(world) = self.world.as_mut() {
             if world.subscribes(event.kind()) {
