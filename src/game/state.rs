@@ -6,14 +6,16 @@ pub(crate) mod world;
 
 pub use character::{CharacterState, TileEvent};
 pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
-pub use loading::apply_loading_update;
 pub use movement::{MovementState, MovementTickEvent};
 
 use alloc::format;
+use alloc::rc::Rc;
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent};
+use crate::game::{
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent,
+};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -130,6 +132,20 @@ impl GameState {
             GameStateKind::Error => false,
         }
     }
+}
+
+pub fn apply_state_event(
+    state: &mut GameState,
+    data: &mut Rc<GameData>,
+    event: &mut GameEvent,
+) -> Result<()> {
+    if let Some(next_event) = loading::apply_loading_update(state, data, event) {
+        *event = next_event;
+    }
+    if state.subscribes(event.kind()) {
+        state.apply_event(event)?;
+    }
+    Ok(())
 }
 
 impl GameEventSubscriber for GameState {

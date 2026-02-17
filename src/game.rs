@@ -24,7 +24,7 @@ pub use rendering::{
 pub use save::{has_save_data, load_game, save_game};
 pub use state::{
     CharacterState, CombatState, GameState, MovementState, MovementTickEvent, TileEvent,
-    apply_loading_update,
+    apply_state_event,
 };
 pub use systems::{
     DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, ResolveContext, domain_resolvers,

@@ -11,8 +11,8 @@ use core::mem;
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldState, apply_loading_update, apply_render_event,
-    apply_render_tick, apply_ui_render_patch, domain_resolvers,
+    UiInputEventResolver, UiState, WorldState, apply_render_event, apply_render_tick,
+    apply_state_event, apply_ui_render_patch, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -134,9 +134,7 @@ impl GameEngine {
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
         let mut event = event;
-        if let Some(next_event) = apply_loading_update(&self.state, &mut self.data, &event) {
-            event = next_event;
-        }
+        apply_state_event(&mut self.state, &mut self.data, &mut event)?;
 
         let is_session_event = matches!(event, GameEvent::World(_));
 
@@ -146,10 +144,6 @@ impl GameEngine {
 
         if let GameEvent::Exit(code) = &event {
             wipi::kernel::exit(*code);
-        }
-
-        if self.state.subscribes(event.kind()) {
-            self.state.apply_event(&event)?;
         }
 
         if self.state.requires_world() && self.world.is_none() {
