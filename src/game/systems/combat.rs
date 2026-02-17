@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -6,8 +7,11 @@ use anyhow::{Result, anyhow, ensure};
 use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
-use crate::game::{CombatEvent, GameEvent, GameEventKind, GameState, TransitionEvent, WorldEvent};
+use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::{
+    CombatEvent, GameData, GameEvent, GameEventKind, GameState, TransitionEvent, WorldEvent,
+    WorldState,
+};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -169,18 +173,20 @@ impl DomainEventResolver for CombatResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         match event {
             GameEvent::UpdateCombat => {
                 ensure!(
-                    matches!(ctx.state, GameState::Explore),
+                    matches!(state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let data = ctx.data.as_ref();
-                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+                let data = data.as_ref();
+                let s = world.ok_or_else(|| anyhow!("No active world"))?;
                 let Some(map) = data.find_map(&s.leader.current_map_id) else {
                     return Ok(());
                 };
@@ -196,10 +202,10 @@ impl DomainEventResolver for CombatResolver {
             }
             GameEvent::CombatPlayerAction(action) => {
                 ensure!(
-                    matches!(ctx.state, GameState::Explore),
+                    matches!(state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+                let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
                 if let Some((slot, skill)) = action.skill() {
                     if !s
@@ -236,8 +242,8 @@ impl DomainEventResolver for CombatResolver {
                 }
             }
             GameEvent::Transition(TransitionEvent::MapChanged) => {
-                let data = ctx.data.as_ref();
-                let session = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+                let data = data.as_ref();
+                let session = world.ok_or_else(|| anyhow!("No active world"))?;
                 let Some(map) = data.find_map(&session.leader.current_map_id) else {
                     return Ok(());
                 };

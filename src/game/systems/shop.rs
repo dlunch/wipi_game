@@ -1,11 +1,12 @@
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameEventKind, ShopState};
+use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::{GameData, GameEvent, GameEventKind, GameState, ShopState, WorldState};
 struct OpenShopByIdResolver;
 
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
@@ -21,7 +22,9 @@ impl DomainEventResolver for OpenShopByIdResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        _state: &GameState,
+        data: &Rc<GameData>,
+        _world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
@@ -29,10 +32,10 @@ impl DomainEventResolver for OpenShopByIdResolver {
             return Err(anyhow!("Invalid event: expected OpenShopById"));
         };
 
-        let Some(shop) = ctx.data.find_shop(shop_id).cloned() else {
+        let Some(shop) = data.find_shop(shop_id).cloned() else {
             return Err(anyhow!("Shop not found: {shop_id}"));
         };
-        let shop_items = ctx.data.get_shop_items(&shop);
+        let shop_items = data.get_shop_items(&shop);
         out.push(GameEvent::OpenShopState(Box::new(ShopState::new(
             shop, shop_items,
         ))));

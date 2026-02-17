@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -5,7 +6,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Direction, Map, Tile};
 
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
     MovementTickEvent, TileEvent, WorldState,
@@ -137,17 +138,19 @@ impl DomainEventResolver for UpdateMovementResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         _event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         ensure!(
-            matches!(ctx.state, GameState::Explore),
+            matches!(state, GameState::Explore),
             "Invalid state: expected Explore"
         );
-        let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+        let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
-        let movement = resolve_world_tick(&s.movement, &s.leader, s, ctx.data);
+        let movement = resolve_world_tick(&s.movement, &s.leader, s, data);
 
         let has_meaningful_movement = movement.movement_event.next_state != s.movement
             || movement.movement_event.facing.is_some()

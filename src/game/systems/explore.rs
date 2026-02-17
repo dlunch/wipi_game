@@ -1,10 +1,11 @@
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
-use crate::game::{ExploreEvent, GameEvent, GameEventKind};
+use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::{ExploreEvent, GameData, GameEvent, GameEventKind, GameState, WorldState};
 
 struct ExploreResolver;
 
@@ -21,7 +22,9 @@ impl DomainEventResolver for ExploreResolver {
 
     fn resolve(
         &self,
-        _ctx: &ResolveContext<'_>,
+        _state: &GameState,
+        _data: &Rc<GameData>,
+        _world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {

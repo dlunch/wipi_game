@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -6,9 +7,10 @@ use anyhow::Result;
 
 use crate::data::Tile;
 use crate::game::save::load_game;
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CharacterState, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
+    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, TransitionEvent,
+    WorldEvent, WorldState,
 };
 
 #[derive(Clone)]
@@ -44,16 +46,18 @@ impl DomainEventResolver for LifecycleResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        _state: &GameState,
+        data: &Rc<GameData>,
+        _world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         match event {
             GameEvent::StartNewGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-                Self::setup_new_game_events(ctx.data, out);
+                Self::setup_new_game_events(data, out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-                if let Some(dialog_state) = Self::intro_dialog_state(ctx.data) {
+                if let Some(dialog_state) = Self::intro_dialog_state(data) {
                     out.push(GameEvent::OpenDialogState(dialog_state));
                 }
             }
@@ -62,7 +66,7 @@ impl DomainEventResolver for LifecycleResolver {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ContinueSetup));
             }
             GameEvent::Lifecycle(LifecycleEvent::ContinueSetup) => {
-                Self::setup_continue_events(ctx.data, out);
+                Self::setup_continue_events(data, out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}

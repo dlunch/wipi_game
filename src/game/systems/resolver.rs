@@ -5,17 +5,13 @@ use anyhow::Result;
 
 use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, WorldState};
 
-pub struct ResolveContext<'a> {
-    pub state: &'a GameState,
-    pub data: &'a Rc<GameData>,
-    pub world: Option<&'a WorldState>,
-}
-
 pub trait DomainEventResolver: GameEventSubscriber {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()>;

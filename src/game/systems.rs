@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use npc::NpcEvent;
-pub use resolver::{DomainEventResolver, ResolveContext};
+pub use resolver::DomainEventResolver;
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];

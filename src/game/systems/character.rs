@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -5,8 +6,8 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, Item, ItemKind, PlayerStats};
 use crate::game::state::CharacterState;
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameEventKind, WorldEvent};
+use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::{GameData, GameEvent, GameEventKind, GameState, WorldEvent, WorldState};
 
 struct CharacterMutationResolver;
 
@@ -29,11 +30,13 @@ impl DomainEventResolver for CharacterMutationResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        _state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let leader = &ctx.world.ok_or_else(|| anyhow!("No active world"))?.leader;
+        let leader = &world.ok_or_else(|| anyhow!("No active world"))?.leader;
 
         match event {
             GameEvent::UseInventorySelected(index) => resolve_use_item(leader, *index, out),
@@ -41,7 +44,7 @@ impl DomainEventResolver for CharacterMutationResolver {
             GameEvent::ShopSellSelected(index) => resolve_shop_sell(leader, *index, out),
             GameEvent::RestoreHpMp => resolve_restore_hp_mp(leader, out),
             GameEvent::ApplyDialogAction(action) => {
-                resolve_dialog_action(ctx, leader, action, out)?
+                resolve_dialog_action(data, leader, action, out)?
             }
             _ => {}
         }
@@ -146,7 +149,7 @@ fn resolve_restore_hp_mp(character: &CharacterState, out: &mut Vec<GameEvent>) {
 }
 
 fn resolve_dialog_action(
-    ctx: &ResolveContext<'_>,
+    data: &GameData,
     character: &CharacterState,
     action: &DialogAction,
     out: &mut Vec<GameEvent>,
@@ -157,7 +160,7 @@ fn resolve_dialog_action(
 
     match action {
         DialogAction::GiveItem(id) => {
-            if let Some(item) = ctx.data.find_item(id).cloned() {
+            if let Some(item) = data.find_item(id).cloned() {
                 inventory.push(item);
                 changed = true;
             }

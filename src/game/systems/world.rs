@@ -1,12 +1,14 @@
+use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, QuestProgress, QuestType};
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameEvent, GameEventKind, MovementEvent, TransitionEvent, WorldEvent,
+    CombatEvent, GameData, GameEvent, GameEventKind, GameState, MovementEvent, TransitionEvent,
+    WorldEvent, WorldState,
 };
 
 struct SessionLogicResolver;
@@ -29,20 +31,22 @@ impl DomainEventResolver for SessionLogicResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        _state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let session = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+        let session = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement, Some(tile_event))) => {
-                resolve_tile_event(ctx, session, movement.step, tile_event, out);
+                resolve_tile_event(data, session, movement.step, tile_event, out);
             }
             GameEvent::ApplyDialogAction(DialogAction::GiveQuest(id)) => {
                 resolve_give_quest(session, id, out);
             }
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
-                resolve_complete_quest(ctx, session, id, out);
+                resolve_complete_quest(data, session, id, out);
             }
             GameEvent::Combat(CombatEvent::RecoverMp(recover_mp)) => {
                 resolve_recover_mp(session, *recover_mp, out);
@@ -52,12 +56,12 @@ impl DomainEventResolver for SessionLogicResolver {
                 enemy_id,
                 exp,
                 gold,
-            }) => resolve_kill_reward(ctx, session, enemy_id, *exp, *gold, out),
+            }) => resolve_kill_reward(data, session, enemy_id, *exp, *gold, out),
             GameEvent::Combat(CombatEvent::TakeDamage(damage)) => {
                 resolve_take_damage(session, *damage, out);
             }
             GameEvent::RevivePlayer => {
-                resolve_revive_player(ctx, session, out);
+                resolve_revive_player(data, session, out);
             }
             _ => {}
         }
@@ -66,8 +70,8 @@ impl DomainEventResolver for SessionLogicResolver {
 }
 
 fn resolve_tile_event(
-    ctx: &ResolveContext<'_>,
-    session: &crate::game::WorldState,
+    data: &GameData,
+    session: &WorldState,
     step: Option<(i32, i32)>,
     tile_event: &crate::game::TileEvent,
     out: &mut Vec<GameEvent>,
@@ -92,8 +96,8 @@ fn resolve_tile_event(
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(item_id) = ctx.data.newgame.treasure_item.as_deref()
-                && let Some(item) = ctx.data.find_item(item_id).cloned()
+            if let Some(item_id) = data.newgame.treasure_item.as_deref()
+                && let Some(item) = data.find_item(item_id).cloned()
             {
                 out.push(GameEvent::World(WorldEvent::AddPlayerItem(item)));
             }
@@ -103,7 +107,7 @@ fn resolve_tile_event(
             if target.is_empty() {
                 return;
             }
-            let Some(map) = ctx.data.find_map(target) else {
+            let Some(map) = data.find_map(target) else {
                 return;
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
@@ -114,7 +118,7 @@ fn resolve_tile_event(
     }
 }
 
-fn resolve_give_quest(session: &crate::game::WorldState, id: &str, out: &mut Vec<GameEvent>) {
+fn resolve_give_quest(session: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
     if session.quests.iter().any(|quest| quest.quest_id == id) {
         return;
     }
@@ -129,8 +133,8 @@ fn resolve_give_quest(session: &crate::game::WorldState, id: &str, out: &mut Vec
 }
 
 fn resolve_complete_quest(
-    ctx: &ResolveContext<'_>,
-    session: &crate::game::WorldState,
+    data: &GameData,
+    session: &WorldState,
     id: &str,
     out: &mut Vec<GameEvent>,
 ) {
@@ -142,7 +146,7 @@ fn resolve_complete_quest(
         return;
     }
 
-    let Some(quest) = ctx.data.find_quest(id) else {
+    let Some(quest) = data.find_quest(id) else {
         return;
     };
 
@@ -152,7 +156,7 @@ fn resolve_complete_quest(
 
     out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
     if let Some(item_id) = &quest.reward_item
-        && let Some(item) = ctx.data.find_item(item_id).cloned()
+        && let Some(item) = data.find_item(item_id).cloned()
     {
         out.push(GameEvent::World(WorldEvent::AddPlayerItem(item)));
     }
@@ -163,11 +167,7 @@ fn resolve_complete_quest(
     }
 }
 
-fn resolve_recover_mp(
-    session: &crate::game::WorldState,
-    recover_mp: i32,
-    out: &mut Vec<GameEvent>,
-) {
+fn resolve_recover_mp(session: &WorldState, recover_mp: i32, out: &mut Vec<GameEvent>) {
     let mut stats = session.leader.stats.clone();
     if recover_mp > 0 {
         stats.recover_mp(recover_mp);
@@ -177,7 +177,7 @@ fn resolve_recover_mp(
     out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
 }
 
-fn resolve_heal(session: &crate::game::WorldState, heal: i32, out: &mut Vec<GameEvent>) {
+fn resolve_heal(session: &WorldState, heal: i32, out: &mut Vec<GameEvent>) {
     if heal <= 0 {
         return;
     }
@@ -187,8 +187,8 @@ fn resolve_heal(session: &crate::game::WorldState, heal: i32, out: &mut Vec<Game
 }
 
 fn resolve_kill_reward(
-    ctx: &ResolveContext<'_>,
-    session: &crate::game::WorldState,
+    data: &GameData,
+    session: &WorldState,
     enemy_id: &str,
     exp: i32,
     gold: i32,
@@ -203,7 +203,7 @@ fn resolve_kill_reward(
         if progress.completed || progress.rewarded {
             continue;
         }
-        if let Some(quest) = ctx.data.find_quest(&progress.quest_id)
+        if let Some(quest) = data.find_quest(&progress.quest_id)
             && quest.quest_type == QuestType::Kill
             && quest.target_id == enemy_id
         {
@@ -217,7 +217,7 @@ fn resolve_kill_reward(
     }
 }
 
-fn resolve_take_damage(session: &crate::game::WorldState, damage: i32, out: &mut Vec<GameEvent>) {
+fn resolve_take_damage(session: &WorldState, damage: i32, out: &mut Vec<GameEvent>) {
     if damage <= 0 {
         return;
     }
@@ -231,11 +231,7 @@ fn resolve_take_damage(session: &crate::game::WorldState, damage: i32, out: &mut
     }
 }
 
-fn resolve_revive_player(
-    ctx: &ResolveContext<'_>,
-    session: &crate::game::WorldState,
-    out: &mut Vec<GameEvent>,
-) {
+fn resolve_revive_player(data: &GameData, session: &WorldState, out: &mut Vec<GameEvent>) {
     if !session.leader.stats.is_dead() {
         return;
     }
@@ -247,11 +243,11 @@ fn resolve_revive_player(
     revived.current_mp = (revived.max_mp / 2).max(0);
     out.push(GameEvent::World(WorldEvent::SetPlayerStats(revived)));
 
-    let village_map_id = ctx.data.newgame.start_map.clone();
+    let village_map_id = data.newgame.start_map.clone();
     out.push(GameEvent::World(WorldEvent::SetPlayerMap(
         village_map_id.clone(),
     )));
-    if let Some(village_map) = ctx.data.find_map(&village_map_id) {
+    if let Some(village_map) = data.find_map(&village_map_id) {
         let (x, y) = village_map.find_player_start().unwrap_or((0, 0));
         out.push(GameEvent::World(WorldEvent::SetPlayerPosition { x, y }));
     }

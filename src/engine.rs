@@ -8,8 +8,8 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderFxState, RenderState, ResolveContext, SpriteAtlas, UiEvent,
-    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
+    GameState, InputKey, RenderFxState, RenderState, SpriteAtlas, UiEvent, UiEventApplier,
+    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -110,12 +110,13 @@ impl GameEngine {
         let mut out = Vec::with_capacity(8);
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
-            let ctx = ResolveContext {
-                state: &self.state,
-                data: &self.data,
-                world: self.world.as_ref(),
-            };
-            resolver.resolve(&ctx, event, &mut out)?;
+            resolver.resolve(
+                &self.state,
+                &self.data,
+                self.world.as_ref(),
+                event,
+                &mut out,
+            )?;
         }
         Ok(out)
     }

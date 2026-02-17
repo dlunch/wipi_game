@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -6,7 +7,7 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
-use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, GameState, WorldState,
 };
@@ -104,7 +105,9 @@ impl DomainEventResolver for NpcResolver {
 
     fn resolve(
         &self,
-        ctx: &ResolveContext<'_>,
+        state: &GameState,
+        data: &Rc<GameData>,
+        world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
@@ -114,18 +117,17 @@ impl DomainEventResolver for NpcResolver {
                 fallback_action,
             }) => {
                 ensure!(
-                    matches!(ctx.state, GameState::Explore),
+                    matches!(state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
+                let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
-                if let Some(npc_event) = try_interact_npc(s, ctx.data, *facing) {
+                if let Some(npc_event) = try_interact_npc(s, data, *facing) {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
                     return Ok(());
                 }
 
-                let is_peaceful = ctx
-                    .data
+                let is_peaceful = data
                     .find_map(&s.leader.current_map_id)
                     .is_some_and(|map| map.peaceful);
                 if !is_peaceful && let Some(action) = fallback_action {

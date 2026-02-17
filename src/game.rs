@@ -24,9 +24,7 @@ pub(crate) use state::WorldSlot;
 pub use state::{
     CharacterState, CombatState, GameState, MovementState, MovementTickEvent, TileEvent,
 };
-pub use systems::{
-    DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, ResolveContext, domain_resolvers,
-};
+pub use systems::{DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, domain_resolvers};
 pub use ui::{
     DialogState, DialogTransition, ExploreAction, GameInput, InputKey, MenuAction, ShopMode,
     ShopState, UiEvent, UiEventApplier, UiInputEventResolver, UiState,
