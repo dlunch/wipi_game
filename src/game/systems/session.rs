@@ -107,6 +107,7 @@ fn resolve_tile_event(
                 map.id.clone(),
             )));
             out.push(GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }));
+            out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::data::{Direction, Map, Tile};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
-    MovementTickEvent, SessionState, TileEvent, TransitionEvent,
+    MovementTickEvent, SessionState, TileEvent,
 };
 
 const MOVE_COOLDOWN: u32 = 2;
@@ -16,7 +16,6 @@ const MOVE_COOLDOWN: u32 = 2;
 pub struct MovementUpdateResult {
     pub movement_event: MovementTickEvent,
     pub tile_event: Option<TileEvent>,
-    pub map_changed: bool,
 }
 
 pub fn resolve_world_tick(
@@ -35,17 +34,9 @@ pub fn resolve_world_tick(
         None
     };
 
-    let map_changed = tile_event.as_ref().is_some_and(|event| match event {
-        TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-            !target.is_empty() && data.find_map(target).is_some()
-        }
-        TileEvent::Treasure => false,
-    });
-
     MovementUpdateResult {
         movement_event,
         tile_event,
-        map_changed,
     }
 }
 
@@ -180,9 +171,6 @@ impl DomainEventResolver for UpdateMovementResolver {
                 movement.movement_event,
                 movement.tile_event,
             )));
-        }
-        if movement.map_changed {
-            out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
         Ok(())
     }
@@ -710,7 +698,6 @@ mod tests {
         let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::Treasure)));
-        assert!(!result.map_changed);
     }
 
     #[test]
@@ -726,7 +713,6 @@ mod tests {
         let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::MapExit(target)) if target == "town"));
-        assert!(result.map_changed);
     }
 
     #[test]
@@ -744,7 +730,6 @@ mod tests {
         assert!(
             matches!(result.tile_event, Some(TileEvent::DungeonEntrance(target)) if target == "cave")
         );
-        assert!(result.map_changed);
     }
 
     #[test]
@@ -760,6 +745,5 @@ mod tests {
         let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(result.tile_event.is_none());
-        assert!(!result.map_changed);
     }
 }
