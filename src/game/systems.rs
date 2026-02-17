@@ -16,26 +16,12 @@ pub use resolver::DomainEventResolver;
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];
-    for resolver in lifecycle::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in movement::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in combat::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in world::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in character::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in shop::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in npc::resolvers() {
-        handlers.push(resolver);
-    }
+    handlers.extend(lifecycle::resolvers());
+    handlers.extend(movement::resolvers());
+    handlers.extend(combat::resolvers());
+    handlers.extend(world::resolvers());
+    handlers.extend(character::resolvers());
+    handlers.extend(shop::resolvers());
+    handlers.extend(npc::resolvers());
     handlers
 }

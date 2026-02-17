@@ -76,7 +76,7 @@ impl GameEngine {
             let ui_events = self
                 .ui
                 .resolve_input(input, &self.state, self.world.as_ref());
-            initial_events.extend(self.apply_ui_events(ui_events));
+            self.apply_ui_events(ui_events, &mut initial_events);
         }
         self.render_state
             .apply_ui_patch(&self.ui, self.world.as_ref());
@@ -84,41 +84,44 @@ impl GameEngine {
         if self.render_fx.tick() {
             self.render_state.apply_tick(&self.render_fx);
         }
-        initial_events.extend(self.resolve_tick_game_events());
+        self.resolve_tick_game_events(&mut initial_events);
         if let Err(e) = self.dispatch_game_events(initial_events) {
             self.state = GameState::Error(format!("{e}"));
         }
     }
 
-    fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
+    fn resolve_tick_game_events(&self, out: &mut Vec<GameEvent>) {
         match self.state {
             GameState::Loading(_) => {
-                vec![GameEvent::Loading(crate::game::LoadingEvent::Tick)]
+                out.push(GameEvent::Loading(crate::game::LoadingEvent::Tick));
             }
-            GameState::Explore => vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
-            _ => Vec::new(),
+            GameState::Explore => {
+                out.push(GameEvent::UpdateMovement);
+                out.push(GameEvent::UpdateCombat);
+            }
+            _ => {}
         }
     }
 
-    fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>) -> Vec<GameEvent> {
-        let mut out = Vec::with_capacity(ui_events.len() * 2);
+    fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>, out: &mut Vec<GameEvent>) {
+        out.reserve(ui_events.len() * 2);
         for event in ui_events {
-            self.ui.apply_ui_event(self.world.as_ref(), event, &mut out);
+            self.ui.apply_ui_event(self.world.as_ref(), event, out);
         }
-        out
     }
 
-    fn resolve_with_handlers(&self, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let mut out = Vec::with_capacity(8);
+    fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
-            resolver.resolve(&self.data, self.world.as_ref(), event, &mut out)?;
+            resolver.resolve(&self.data, self.world.as_ref(), event, out)?;
         }
-        Ok(out)
+        Ok(())
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        if self.state.subscribes(event.kind()) {
+        let kind = event.kind();
+
+        if self.state.subscribes(kind) {
             self.state.apply_event(&event)?;
         }
 
@@ -131,22 +134,22 @@ impl GameEngine {
         );
 
         if let Some(world) = self.world.as_mut() {
-            if world.subscribes(event.kind()) {
+            if world.subscribes(kind) {
                 world.apply_event(&self.data, &event)?;
             }
-            if world.leader.subscribes(event.kind()) {
+            if world.leader.subscribes(kind) {
                 world.leader.apply_event(&self.data, &event)?;
             }
-            if world.movement.subscribes(event.kind()) {
+            if world.movement.subscribes(kind) {
                 world.movement.apply_event(&self.state, &event)?;
             }
-            if world.combat.subscribes(event.kind()) {
+            if world.combat.subscribes(kind) {
                 world.combat.apply_event(&event)?;
             }
         }
 
-        if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
-            self.ui.apply_game_event(self.world.as_ref(), &event)?;
+        if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(kind) {
+            self.ui.apply_game_event(&event)?;
         }
 
         if self.render_fx.apply_event(&self.state, &event) {
@@ -166,6 +169,7 @@ impl GameEngine {
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<()> {
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
+        let mut derived = Vec::with_capacity(8);
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
@@ -176,13 +180,14 @@ impl GameEngine {
                 ));
             }
 
-            let derived = self.resolve_with_handlers(&event)?;
+            derived.clear();
+            self.resolve_with_handlers(&event, &mut derived)?;
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
             self.apply_with_handlers(event)?;
 
-            queue.extend(derived);
+            queue.extend(derived.drain(..));
             queue.extend(effect_events);
         }
         Ok(())

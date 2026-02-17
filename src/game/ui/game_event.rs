@@ -2,14 +2,10 @@ use anyhow::Result;
 
 use super::state::MenuState;
 use crate::game::save::has_save_data;
-use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, UiState, WorldState};
+use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, UiState};
 
 impl UiState {
-    pub fn apply_game_event(
-        &mut self,
-        _session: Option<&WorldState>,
-        event: &GameEvent,
-    ) -> Result<()> {
+    pub fn apply_game_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
                 *self = UiState::default();
