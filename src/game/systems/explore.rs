@@ -28,20 +28,8 @@ impl DomainEventResolver for ExploreResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        match event {
-            GameEvent::Explore(ExploreEvent::UseAction(action)) => {
-                out.push(GameEvent::CombatPlayerAction(*action));
-            }
-            GameEvent::Explore(ExploreEvent::EnterPauseMenu) => {
-                out.push(GameEvent::Transition(
-                    crate::game::TransitionEvent::ToPauseMenu,
-                ));
-            }
-            GameEvent::Explore(ExploreEvent::EnterMenu) => {
-                out.push(GameEvent::SaveWorld);
-                out.push(GameEvent::Transition(crate::game::TransitionEvent::ToMenu));
-            }
-            _ => {}
+        if let GameEvent::Explore(ExploreEvent::UseAction(action)) = event {
+            out.push(GameEvent::CombatPlayerAction(*action));
         }
         Ok(())
     }

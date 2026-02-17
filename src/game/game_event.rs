@@ -218,8 +218,6 @@ pub enum ExploreEvent {
     },
     Npc(crate::game::NpcEvent),
     UseAction(crate::game::ExploreAction),
-    EnterPauseMenu,
-    EnterMenu,
 }
 
 #[derive(Clone)]

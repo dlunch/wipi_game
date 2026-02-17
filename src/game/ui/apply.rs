@@ -99,8 +99,11 @@ fn apply_explore_input(
                 out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
             }
         }
-        InputKey::Key0 => out.push(GameEvent::Explore(ExploreEvent::EnterPauseMenu)),
-        InputKey::Back => out.push(GameEvent::Explore(ExploreEvent::EnterMenu)),
+        InputKey::Key0 => out.push(GameEvent::Transition(TransitionEvent::ToPauseMenu)),
+        InputKey::Back => {
+            out.push(GameEvent::SaveWorld);
+            out.push(GameEvent::Transition(TransitionEvent::ToMenu));
+        }
         _ => {}
     }
 }
