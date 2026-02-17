@@ -169,7 +169,6 @@ impl GameEngine {
         for event in initial_events {
             queue.push_back(event);
         }
-        let mut effect_events = Vec::with_capacity(4);
         let mut processed = 0usize;
 
         while let Some(event) = queue.pop_front() {
@@ -182,21 +181,15 @@ impl GameEngine {
             }
 
             let derived = self.resolve_with_handlers(&event)?;
-            effect_events.clear();
-            apply_effects(
-                &self.state,
-                &mut self.data,
-                self.world.as_ref(),
-                &event,
-                &mut effect_events,
-            )?;
+            let effect_events =
+                apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
             self.apply_with_handlers(event)?;
 
             for derived_event in derived {
                 queue.push_back(derived_event);
             }
-            for effect_event in effect_events.drain(..) {
+            for effect_event in effect_events {
                 queue.push_back(effect_event);
             }
         }
