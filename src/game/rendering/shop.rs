@@ -87,14 +87,10 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopRender) {
         let y = 30 + (i as i32 * 12);
 
         let is_selected = actual_idx == state.selected;
-        let can_afford = state.player_gold >= item.price;
-
         let (text_color1, text_color2) = if is_selected {
             (COLOR_WHITE, COLOR_WHITE)
-        } else if can_afford {
-            (COLOR_GRAY, COLOR_GRAY)
         } else {
-            (COLOR_GRAY, COLOR_DARK_GRAY)
+            (COLOR_GRAY, COLOR_GRAY)
         };
 
         if is_selected {
