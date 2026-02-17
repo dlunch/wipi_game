@@ -2,6 +2,7 @@ pub mod character;
 pub mod combat;
 pub mod explore;
 pub mod lifecycle;
+pub mod loading;
 pub mod movement;
 pub mod npc;
 pub mod resolver;
@@ -17,6 +18,9 @@ pub use resolver::{DomainEventResolver, ResolveContext};
 
 pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
     let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];
+    for resolver in loading::resolvers() {
+        handlers.push(resolver);
+    }
     for resolver in lifecycle::resolvers() {
         handlers.push(resolver);
     }

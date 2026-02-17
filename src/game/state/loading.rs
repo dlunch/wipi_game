@@ -9,7 +9,7 @@ pub fn apply_loading_update(
     data: &mut Rc<GameData>,
     event: &GameEvent,
 ) -> Option<GameEvent> {
-    let GameEvent::UpdateLoading = event else {
+    let GameEvent::Loading(LoadingEvent::Tick) = event else {
         return None;
     };
 

@@ -13,6 +13,7 @@ use crate::game::{
 
 #[derive(Clone)]
 pub enum LoadingEvent {
+    Tick,
     Advance(usize),
     Loaded,
     Error(String),

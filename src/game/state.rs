@@ -149,6 +149,7 @@ impl GameState {
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Loading(event) => match event {
+                LoadingEvent::Tick => {}
                 LoadingEvent::Advance(step) => self.transition_to(GameState::Loading(*step)),
                 LoadingEvent::Loaded => self.transition_to(GameState::Menu),
                 LoadingEvent::Error(msg) => self.set_error(msg.clone()),
