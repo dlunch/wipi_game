@@ -103,16 +103,8 @@ fn draw_map_with_entities(
         {
             let px = screen_x * TILE_SIZE;
             let py = screen_y * TILE_SIZE;
-            if let Some(npc_sprite) = sprites.npc.as_ref() {
-                fb.draw_image(
-                    px,
-                    py,
-                    npc_sprite.width().min(TILE_SIZE as u32),
-                    npc_sprite.height().min(TILE_SIZE as u32),
-                    npc_sprite,
-                    0,
-                    0,
-                );
+            if let Some((npc_sprite, frame)) = sprites.npc_frame(state.anim_tick) {
+                fb.draw_image(px, py, frame.w, frame.h, npc_sprite, frame.sx, frame.sy);
             } else {
                 fill_rect(fb, px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_CYAN);
             }
@@ -146,16 +138,8 @@ fn draw_map_with_entities(
                 COLOR_RED
             };
 
-            if let Some(enemy_sprite) = sprites.enemy.as_ref() {
-                fb.draw_image(
-                    px,
-                    py,
-                    enemy_sprite.width().min(TILE_SIZE as u32),
-                    enemy_sprite.height().min(TILE_SIZE as u32),
-                    enemy_sprite,
-                    0,
-                    0,
-                );
+            if let Some((enemy_sprite, frame)) = sprites.enemy_frame(state.anim_tick) {
+                fb.draw_image(px, py, frame.w, frame.h, enemy_sprite, frame.sx, frame.sy);
                 if enemy.hit_flash > 0 {
                     draw_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_WHITE);
                 }
@@ -188,16 +172,10 @@ fn draw_map_with_entities(
     } else {
         COLOR_WHITE
     };
-    if let Some(player_sprite) = sprites.player.as_ref() {
-        fb.draw_image(
-            px,
-            py,
-            player_sprite.width().min(TILE_SIZE as u32),
-            player_sprite.height().min(TILE_SIZE as u32),
-            player_sprite,
-            0,
-            0,
-        );
+    if let Some((player_sprite, frame)) =
+        sprites.player_frame(state.player_facing, state.player_moving, state.anim_tick)
+    {
+        fb.draw_image(px, py, frame.w, frame.h, player_sprite, frame.sx, frame.sy);
         if state.player_hit_flash > 0 {
             draw_rect(fb, px, py, TILE_SIZE, TILE_SIZE, COLOR_RED);
         }

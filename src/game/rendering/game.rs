@@ -61,6 +61,7 @@ pub struct ExploreRender {
     pub player_x: usize,
     pub player_y: usize,
     pub player_facing: Direction,
+    pub player_moving: bool,
     pub hp: u32,
     pub max_hp: u32,
     pub mp: u32,
@@ -76,6 +77,7 @@ pub struct ExploreRender {
     pub key_actions: [Option<ExploreAction>; 3],
     pub peaceful: bool,
     pub quest_notice_timer: u32,
+    pub anim_tick: u32,
 }
 
 pub struct EnemyRender {
@@ -157,6 +159,7 @@ pub struct RenderFxState {
     enemy_hit_flashes: Vec<(u32, u32)>,
     quest_notice_timer: u32,
     shop_purchase_notice_timer: u32,
+    anim_tick: u32,
 }
 
 const QUEST_NOTICE_DURATION: u32 = 90;
@@ -164,7 +167,8 @@ const SHOP_PURCHASE_NOTICE_DURATION: u32 = 45;
 
 impl RenderFxState {
     pub fn tick(&mut self) -> bool {
-        let mut changed = false;
+        let mut changed = true;
+        self.anim_tick = self.anim_tick.wrapping_add(1);
         if self.player_hit_flash > 0 {
             self.player_hit_flash -= 1;
             changed = true;
@@ -330,6 +334,7 @@ fn build_explore_render(
         player_x: session.leader.x,
         player_y: session.leader.y,
         player_facing: session.leader.facing,
+        player_moving: session.movement.pressed_direction.is_some(),
         hp: as_u32(session.leader.stats.current_hp),
         max_hp: as_u32(session.leader.stats.max_hp),
         mp: as_u32(session.leader.stats.current_mp),
@@ -349,6 +354,7 @@ fn build_explore_render(
         key_actions: ui.explore.key_actions,
         peaceful: map.peaceful,
         quest_notice_timer: render_fx.quest_notice_timer,
+        anim_tick: render_fx.anim_tick,
     })
 }
 
@@ -368,6 +374,7 @@ impl ExploreRender {
                     self.player_x = (self.player_x as i32 + dx) as usize;
                     self.player_y = (self.player_y as i32 + dy) as usize;
                 }
+                self.player_moving = movement.next_state.pressed_direction.is_some();
                 if let Some((dx, dy)) = movement.facing {
                     self.player_facing = match (dx, dy) {
                         (0, -1) => Direction::Up,
@@ -781,6 +788,7 @@ impl RenderState {
                     }
                 }
                 explore.quest_notice_timer = render_fx.quest_notice_timer;
+                explore.anim_tick = render_fx.anim_tick;
             }
             RenderState::Shop(shop) => {
                 shop.purchase_notice_timer = render_fx.shop_purchase_notice_timer;
