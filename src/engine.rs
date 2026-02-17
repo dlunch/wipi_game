@@ -6,7 +6,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::Result;
-use core::mem;
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
@@ -65,24 +64,20 @@ impl GameEngine {
     }
 
     fn update(&mut self) {
-        let mut initial_events = self.process_pending_inputs();
-        if self.render_fx.tick() {
-            self.render_state.apply_tick(&self.render_fx);
-        }
-        initial_events.extend(self.resolve_tick_game_events());
-        self.dispatch_game_events(initial_events);
-    }
-
-    fn process_pending_inputs(&mut self) -> Vec<GameEvent> {
         let mut initial_events = Vec::with_capacity(16);
-        let mut pending = mem::take(&mut self.pending_inputs);
+        let mut pending = VecDeque::with_capacity(32);
+        core::mem::swap(&mut pending, &mut self.pending_inputs);
         while let Some(input) = pending.pop_front() {
             let ui_events = self.resolve_ui_input_event(input);
             let initial = self.apply_ui_events(ui_events);
             initial_events.extend(initial);
         }
         self.pending_inputs = pending;
-        initial_events
+        if self.render_fx.tick() {
+            self.render_state.apply_tick(&self.render_fx);
+        }
+        initial_events.extend(self.resolve_tick_game_events());
+        self.dispatch_game_events(initial_events);
     }
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
