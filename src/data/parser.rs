@@ -113,14 +113,10 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
             if let Some(builder) = current_map.take() {
                 maps.push(builder.build()?);
             }
-
-            let parts: Vec<&str> = rest.split(':').collect();
-            ensure!(!parts.is_empty(), "missing map id in: {}", line);
-            let id = parts[0].to_string();
-            let name = parts
-                .get(1)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| id.clone());
+            ensure!(!rest.is_empty(), "missing map id in: {}", line);
+            let (id_raw, name_raw) = rest.split_once(':').unwrap_or((rest, rest));
+            let id = id_raw.to_string();
+            let name = name_raw.to_string();
 
             current_map = Some(MapBuilder::new(id, name));
         } else if line == "@END" {
@@ -129,39 +125,47 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
             }
         } else if let Some(rest) = line.strip_prefix("@ENCOUNTERS:") {
             if let Some(ref mut builder) = current_map {
-                let parts: Vec<&str> = rest.split(':').collect();
-                let mut i = 0;
-                while i + 1 < parts.len() {
-                    let enemy_id = parts[i].to_string();
-                    let weight = parse_int(parts[i + 1], "encounter weight", line)?;
-                    builder.encounters.push((enemy_id, weight));
-                    i += 2;
+                let mut parts = rest.split(':');
+                while let Some(enemy_id) = parts.next() {
+                    let Some(weight_raw) = parts.next() else {
+                        break;
+                    };
+                    let weight = parse_int(weight_raw, "encounter weight", line)?;
+                    builder.encounters.push((enemy_id.to_string(), weight));
                 }
             }
         } else if let Some(rest) = line.strip_prefix("@NEXT:") {
             if let Some(ref mut builder) = current_map {
-                let parts: Vec<&str> = rest.split(':').collect();
-                ensure!(
-                    parts.len() >= 3,
-                    "too few fields in @NEXT directive: {}",
-                    line
-                );
-                let x = parse_usize(parts[0], "exit x", line)?;
-                let y = parse_usize(parts[1], "exit y", line)?;
-                let target = parts[2].to_string();
+                let mut parts = rest.splitn(3, ':');
+                let Some(x_raw) = parts.next() else {
+                    bail!("too few fields in @NEXT directive: {}", line);
+                };
+                let Some(y_raw) = parts.next() else {
+                    bail!("too few fields in @NEXT directive: {}", line);
+                };
+                let Some(target_raw) = parts.next() else {
+                    bail!("too few fields in @NEXT directive: {}", line);
+                };
+                let x = parse_usize(x_raw, "exit x", line)?;
+                let y = parse_usize(y_raw, "exit y", line)?;
+                let target = target_raw.to_string();
                 builder.exits.push((x, y, target));
             }
         } else if let Some(rest) = line.strip_prefix("@DUNGEON:") {
             if let Some(ref mut builder) = current_map {
-                let parts: Vec<&str> = rest.split(':').collect();
-                ensure!(
-                    parts.len() >= 3,
-                    "too few fields in @DUNGEON directive: {}",
-                    line
-                );
-                let x = parse_usize(parts[0], "dungeon x", line)?;
-                let y = parse_usize(parts[1], "dungeon y", line)?;
-                let target = parts[2].to_string();
+                let mut parts = rest.splitn(3, ':');
+                let Some(x_raw) = parts.next() else {
+                    bail!("too few fields in @DUNGEON directive: {}", line);
+                };
+                let Some(y_raw) = parts.next() else {
+                    bail!("too few fields in @DUNGEON directive: {}", line);
+                };
+                let Some(target_raw) = parts.next() else {
+                    bail!("too few fields in @DUNGEON directive: {}", line);
+                };
+                let x = parse_usize(x_raw, "dungeon x", line)?;
+                let y = parse_usize(y_raw, "dungeon y", line)?;
+                let target = target_raw.to_string();
                 builder.dungeons.push((x, y, target));
             }
         } else if line == "@PEACEFUL" {
@@ -170,15 +174,19 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
             }
         } else if let Some(rest) = line.strip_prefix("@NPC:") {
             if let Some(ref mut builder) = current_map {
-                let parts: Vec<&str> = rest.split(':').collect();
-                ensure!(
-                    parts.len() >= 3,
-                    "too few fields in @NPC directive: {}",
-                    line
-                );
-                let x = parse_usize(parts[0], "npc x", line)?;
-                let y = parse_usize(parts[1], "npc y", line)?;
-                let npc_id = parts[2].to_string();
+                let mut parts = rest.splitn(3, ':');
+                let Some(x_raw) = parts.next() else {
+                    bail!("too few fields in @NPC directive: {}", line);
+                };
+                let Some(y_raw) = parts.next() else {
+                    bail!("too few fields in @NPC directive: {}", line);
+                };
+                let Some(id_raw) = parts.next() else {
+                    bail!("too few fields in @NPC directive: {}", line);
+                };
+                let x = parse_usize(x_raw, "npc x", line)?;
+                let y = parse_usize(y_raw, "npc y", line)?;
+                let npc_id = id_raw.to_string();
                 builder.npcs.push((x, y, npc_id));
             }
         } else if !line.is_empty()
@@ -508,13 +516,13 @@ impl MapBuilder {
         ensure!(!self.rows.is_empty(), "map '{}' has no tile rows", self.id);
 
         let height = self.rows.len();
-        let width = self.rows[0].chars().count();
+        let width = self.rows[0].len();
 
         let mut tiles = vec![Tile::Floor; width * height];
         let mut auto_exits = Vec::new();
 
         for (y, row) in self.rows.iter().enumerate() {
-            let row_width = row.chars().count();
+            let row_width = row.len();
             ensure!(
                 row_width <= width,
                 "map '{}' row {} is longer than first row ({} > {})",
@@ -523,8 +531,8 @@ impl MapBuilder {
                 row_width,
                 width
             );
-            for (x, c) in row.chars().enumerate() {
-                let tile = Tile::from_char(c);
+            for (x, b) in row.bytes().enumerate() {
+                let tile = Tile::from_char(b as char);
                 tiles[y * width + x] = tile;
 
                 if tile == Tile::Exit {

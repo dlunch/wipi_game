@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::str;
 
@@ -116,6 +117,15 @@ impl GameData {
 
     fn resolve_map_npcs(maps: &[Map], npc_defs: &[Npc]) -> Result<Vec<Npc>> {
         let mut npcs = Vec::new();
+        let mut npc_index: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut used = vec![false; npc_defs.len()];
+
+        for (idx, def) in npc_defs.iter().enumerate() {
+            npc_index.insert(def.id.as_str(), idx);
+        }
+
+        let placement_count = maps.iter().map(|map| map.npcs.len()).sum();
+        npcs.reserve(placement_count);
 
         for map in maps {
             for (x, y, npc_id) in &map.npcs {
@@ -136,9 +146,11 @@ impl GameData {
                     y
                 );
 
-                let Some(def) = npc_defs.iter().find(|npc| npc.id == *npc_id) else {
+                let Some(def_idx) = npc_index.get(npc_id.as_str()).copied() else {
                     bail!("map '{}' references unknown npc id '{}'", map.id, npc_id);
                 };
+                let def = &npc_defs[def_idx];
+                used[def_idx] = true;
 
                 let mut npc = def.clone();
                 npc.map_id = map.id.clone();
@@ -148,9 +160,9 @@ impl GameData {
             }
         }
 
-        for def in npc_defs {
+        for (idx, def) in npc_defs.iter().enumerate() {
             ensure!(
-                npcs.iter().any(|npc| npc.id == def.id),
+                used[idx],
                 "npc '{}' is defined but not placed in any map",
                 def.id
             );
