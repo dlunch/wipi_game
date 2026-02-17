@@ -7,7 +7,7 @@ use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, UiState, WorldS
 impl UiState {
     pub fn apply_game_event(
         &mut self,
-        session: Option<&WorldState>,
+        _session: Option<&WorldState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {
@@ -37,13 +37,8 @@ impl UiState {
                 }
             },
             GameEvent::ShopSellSelected(index) => {
-                if let Some(s) = session.as_ref() {
-                    let len_after = s.leader.inventory.len();
-                    let current_selected = self.shop.selected;
-                    if *index >= len_after && current_selected >= len_after && current_selected > 0
-                    {
-                        self.shop.selected = current_selected - 1;
-                    }
+                if *index <= self.shop.selected && self.shop.selected > 0 {
+                    self.shop.selected -= 1;
                 }
             }
             GameEvent::OpenDialogState(dialog_state) => {
