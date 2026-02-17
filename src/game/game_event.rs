@@ -194,7 +194,6 @@ pub enum SessionEvent {
     SetMpRegenTimer(u32),
     ResetMovement,
     ResetCombat,
-    SpawnCurrentMapEnemies,
 }
 
 #[derive(Clone, Copy)]

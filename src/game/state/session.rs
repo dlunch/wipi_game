@@ -104,9 +104,6 @@ impl SessionState {
                     self.combat = CombatState::default();
                     self.clear_enemy_occupancy();
                 }
-                SessionEvent::SpawnCurrentMapEnemies => {
-                    self.clear_enemy_occupancy();
-                }
                 SessionEvent::SetPlayerMap(map_id) => {
                     self.rebuild_npc_occupancy_for_map(data, map_id);
                 }

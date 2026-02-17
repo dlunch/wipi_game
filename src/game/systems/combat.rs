@@ -261,7 +261,7 @@ impl DomainEventResolver for CombatPlayerActionResolver {
 
 impl DomainEventResolver for CombatMapSyncResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::Transition, GameEventKind::Session]
+        &[GameEventKind::Transition]
     }
 
     fn resolve(
@@ -270,11 +270,7 @@ impl DomainEventResolver for CombatMapSyncResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        if !matches!(
-            event,
-            GameEvent::Transition(TransitionEvent::MapChanged)
-                | GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies)
-        ) {
+        if !matches!(event, GameEvent::Transition(TransitionEvent::MapChanged)) {
             return Ok(());
         }
         let data = ctx.data.as_ref();

@@ -186,7 +186,7 @@ fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
     out.push(GameEvent::Session(SessionEvent::ResetMovement));
     out.push(GameEvent::Session(SessionEvent::ResetCombat));
-    out.push(GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies));
+    out.push(GameEvent::Transition(TransitionEvent::MapChanged));
 }
 
 fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) {
@@ -264,7 +264,7 @@ fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) {
             out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
             out.push(GameEvent::Session(SessionEvent::ResetMovement));
             out.push(GameEvent::Session(SessionEvent::ResetCombat));
-            out.push(GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies));
+            out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
         Ok(false) | Err(_) => setup_new_game_events(data, out),
     }

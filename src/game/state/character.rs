@@ -120,8 +120,7 @@ impl CharacterState {
                 | SessionEvent::SetSkillCooldowns(_)
                 | SessionEvent::SetMpRegenTimer(_)
                 | SessionEvent::ResetMovement
-                | SessionEvent::ResetCombat
-                | SessionEvent::SpawnCurrentMapEnemies => {}
+                | SessionEvent::ResetCombat => {}
             }
         }
         Ok(())
