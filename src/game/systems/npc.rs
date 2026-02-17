@@ -100,20 +100,15 @@ fn filter_lines(session: &SessionState, dialog: &Dialog) -> Vec<DialogLine> {
         .collect()
 }
 
-struct ExploreNpcCascadeResolver;
-struct ExploreNpcInteractResolver;
+struct NpcResolver;
 
-static EXPLORE_NPC_CASCADE_RESOLVER: ExploreNpcCascadeResolver = ExploreNpcCascadeResolver;
-static EXPLORE_NPC_INTERACT_RESOLVER: ExploreNpcInteractResolver = ExploreNpcInteractResolver;
+static NPC_RESOLVER: NpcResolver = NpcResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![
-        &EXPLORE_NPC_INTERACT_RESOLVER,
-        &EXPLORE_NPC_CASCADE_RESOLVER,
-    ]
+    vec![&NPC_RESOLVER]
 }
 
-impl DomainEventResolver for ExploreNpcInteractResolver {
+impl DomainEventResolver for NpcResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
         &[GameEventKind::Explore]
     }
@@ -124,66 +119,50 @@ impl DomainEventResolver for ExploreNpcInteractResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let GameEvent::Explore(ExploreEvent::TryNpcInteract {
-            facing,
-            fallback_action,
-        }) = event
-        else {
-            return Ok(());
-        };
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+        match event {
+            GameEvent::Explore(ExploreEvent::TryNpcInteract {
+                facing,
+                fallback_action,
+            }) => {
+                ensure!(
+                    matches!(ctx.state, GameState::Explore),
+                    "Invalid state: expected Explore"
+                );
+                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        if let Some(npc_event) = resolve(s, ctx.data(), NpcIntent::Interact { facing: *facing }) {
-            out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
-            return Ok(());
-        }
+                if let Some(npc_event) =
+                    resolve(s, ctx.data(), NpcIntent::Interact { facing: *facing })
+                {
+                    out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
+                    return Ok(());
+                }
 
-        if let Some(action) = fallback_action {
-            out.push(GameEvent::Explore(ExploreEvent::UseAction(*action)));
-        }
-
-        Ok(())
-    }
-}
-
-impl DomainEventResolver for ExploreNpcCascadeResolver {
-    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::Explore]
-    }
-
-    fn resolve(
-        &self,
-        _ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-        out: &mut Vec<GameEvent>,
-    ) -> Result<()> {
-        let GameEvent::Explore(ExploreEvent::Npc(npc_event)) = event else {
-            return Ok(());
-        };
-        match npc_event {
-            NpcEvent::OpenDialog(dialog_spec) => {
-                if dialog_spec.restore {
+                if let Some(action) = fallback_action {
+                    out.push(GameEvent::Explore(ExploreEvent::UseAction(*action)));
+                }
+            }
+            GameEvent::Explore(ExploreEvent::Npc(npc_event)) => match npc_event {
+                NpcEvent::OpenDialog(dialog_spec) => {
+                    if dialog_spec.restore {
+                        out.push(GameEvent::RestoreHpMp);
+                    }
+                    out.push(GameEvent::OpenDialogState(DialogState::new(
+                        dialog_spec.npc_name.clone(),
+                        dialog_spec.lines.clone(),
+                    )));
+                }
+                NpcEvent::OpenShop(shop_id) => {
+                    out.push(GameEvent::OpenShopById(shop_id.clone()));
+                }
+                NpcEvent::RestoreStats => {
                     out.push(GameEvent::RestoreHpMp);
                 }
-                out.push(GameEvent::OpenDialogState(DialogState::new(
-                    dialog_spec.npc_name.clone(),
-                    dialog_spec.lines.clone(),
-                )));
-                Ok(())
-            }
-            NpcEvent::OpenShop(shop_id) => {
-                out.push(GameEvent::OpenShopById(shop_id.clone()));
-                Ok(())
-            }
-            NpcEvent::RestoreStats => {
-                out.push(GameEvent::RestoreHpMp);
-                Ok(())
+            },
+            _ => {
+                return Ok(());
             }
         }
+        Ok(())
     }
 }
 

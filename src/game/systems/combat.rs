@@ -152,58 +152,21 @@ fn tick_resource_state(
     }
 }
 
-struct UpdateCombatResolver;
-struct CombatPlayerActionResolver;
-struct CombatMapSyncResolver;
+struct CombatResolver;
 
-static UPDATE_COMBAT_RESOLVER: UpdateCombatResolver = UpdateCombatResolver;
-static COMBAT_PLAYER_ACTION_RESOLVER: CombatPlayerActionResolver = CombatPlayerActionResolver;
-static COMBAT_MAP_SYNC_RESOLVER: CombatMapSyncResolver = CombatMapSyncResolver;
+static COMBAT_RESOLVER: CombatResolver = CombatResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![
-        &UPDATE_COMBAT_RESOLVER,
-        &COMBAT_PLAYER_ACTION_RESOLVER,
-        &COMBAT_MAP_SYNC_RESOLVER,
-    ]
+    vec![&COMBAT_RESOLVER]
 }
 
-impl DomainEventResolver for UpdateCombatResolver {
+impl DomainEventResolver for CombatResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::UpdateCombat]
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        _event: &GameEvent,
-        out: &mut Vec<GameEvent>,
-    ) -> Result<()> {
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let data = ctx.data.as_ref();
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = data.find_map(&s.leader.current_map_id) else {
-            return Ok(());
-        };
-        resolve_tick(
-            &s.combat,
-            (s.leader.x, s.leader.y),
-            s.leader.total_def(),
-            (s.skill_cooldowns, s.mp_regen_timer),
-            map,
-            &data.enemies,
-            out,
-        );
-        Ok(())
-    }
-}
-
-impl DomainEventResolver for CombatPlayerActionResolver {
-    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::CombatPlayerAction]
+        &[
+            GameEventKind::UpdateCombat,
+            GameEventKind::CombatPlayerAction,
+            GameEventKind::Transition,
+        ]
     }
 
     fn resolve(
@@ -212,74 +175,78 @@ impl DomainEventResolver for CombatPlayerActionResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        ensure!(
-            matches!(ctx.state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
-        let GameEvent::CombatPlayerAction(action) = event else {
-            return Ok(());
-        };
-        let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-
-        if let Some((slot, skill)) = action.skill() {
-            if !s
-                .leader
-                .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
-            {
-                return Ok(());
+        match event {
+            GameEvent::UpdateCombat => {
+                ensure!(
+                    matches!(ctx.state, GameState::Explore),
+                    "Invalid state: expected Explore"
+                );
+                let data = ctx.data.as_ref();
+                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let Some(map) = data.find_map(&s.leader.current_map_id) else {
+                    return Ok(());
+                };
+                resolve_tick(
+                    &s.combat,
+                    (s.leader.x, s.leader.y),
+                    s.leader.total_def(),
+                    (s.skill_cooldowns, s.mp_regen_timer),
+                    map,
+                    &data.enemies,
+                    out,
+                );
             }
+            GameEvent::CombatPlayerAction(action) => {
+                ensure!(
+                    matches!(ctx.state, GameState::Explore),
+                    "Invalid state: expected Explore"
+                );
+                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-            out.push(GameEvent::Combat(CombatEvent::SetSkillCooldowns({
-                let mut next_skill_cooldowns = s.skill_cooldowns;
-                next_skill_cooldowns[slot] = skill.cooldown;
-                next_skill_cooldowns
-            })));
-            out.push(GameEvent::Combat(CombatEvent::RecoverMp(-skill.mp_cost)));
-            resolve_skill_action(
-                &s.combat,
-                skill,
-                s.leader.x,
-                s.leader.y,
-                s.leader.total_atk(),
-                s.leader.facing,
-                out,
-            );
-        } else {
-            resolve_player_attack_action(
-                &s.combat,
-                s.leader.x,
-                s.leader.y,
-                s.leader.total_atk(),
-                s.leader.facing,
-                out,
-            );
+                if let Some((slot, skill)) = action.skill() {
+                    if !s
+                        .leader
+                        .can_use_skill(&s.skill_cooldowns, slot, skill.mp_cost)
+                    {
+                        return Ok(());
+                    }
+
+                    out.push(GameEvent::Combat(CombatEvent::SetSkillCooldowns({
+                        let mut next_skill_cooldowns = s.skill_cooldowns;
+                        next_skill_cooldowns[slot] = skill.cooldown;
+                        next_skill_cooldowns
+                    })));
+                    out.push(GameEvent::Combat(CombatEvent::RecoverMp(-skill.mp_cost)));
+                    resolve_skill_action(
+                        &s.combat,
+                        skill,
+                        s.leader.x,
+                        s.leader.y,
+                        s.leader.total_atk(),
+                        s.leader.facing,
+                        out,
+                    );
+                } else {
+                    resolve_player_attack_action(
+                        &s.combat,
+                        s.leader.x,
+                        s.leader.y,
+                        s.leader.total_atk(),
+                        s.leader.facing,
+                        out,
+                    );
+                }
+            }
+            GameEvent::Transition(TransitionEvent::MapChanged) => {
+                let data = ctx.data.as_ref();
+                let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let Some(map) = data.find_map(&session.leader.current_map_id) else {
+                    return Ok(());
+                };
+                build_map_enemies(map, &data.enemies, out);
+            }
+            _ => {}
         }
-
-        Ok(())
-    }
-}
-
-impl DomainEventResolver for CombatMapSyncResolver {
-    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::Transition]
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        event: &GameEvent,
-        out: &mut Vec<GameEvent>,
-    ) -> Result<()> {
-        if !matches!(event, GameEvent::Transition(TransitionEvent::MapChanged)) {
-            return Ok(());
-        }
-        let data = ctx.data.as_ref();
-        let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = data.find_map(&session.leader.current_map_id) else {
-            return Ok(());
-        };
-
-        build_map_enemies(map, &data.enemies, out);
         Ok(())
     }
 }

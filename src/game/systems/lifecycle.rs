@@ -43,43 +43,21 @@ pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
         .map_err(|e| format!("Load error: {}", e))
 }
 
-struct UpdateLoadingResolver;
-struct StartContinueResolver;
+struct LifecycleResolver;
 
-static UPDATE_LOADING_RESOLVER: UpdateLoadingResolver = UpdateLoadingResolver;
-static START_CONTINUE_RESOLVER: StartContinueResolver = StartContinueResolver;
+static LIFECYCLE_RESOLVER: LifecycleResolver = LifecycleResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![&UPDATE_LOADING_RESOLVER, &START_CONTINUE_RESOLVER]
+    vec![&LIFECYCLE_RESOLVER]
 }
 
-impl DomainEventResolver for UpdateLoadingResolver {
+impl DomainEventResolver for LifecycleResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::UpdateLoading]
-    }
-
-    fn resolve(
-        &self,
-        ctx: &mut ResolveContext<'_>,
-        _event: &GameEvent,
-        out: &mut Vec<GameEvent>,
-    ) -> Result<()> {
-        let step = if let GameState::Loading(step) = ctx.state {
-            *step
-        } else {
-            return Err(anyhow!("Invalid state: expected Loading"));
-        };
-
-        let load_result = load_step(ctx.data, step);
-
-        out.push(GameEvent::Loading(resolve_loading(step, load_result)));
-        Ok(())
-    }
-}
-
-impl DomainEventResolver for StartContinueResolver {
-    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::StartNewGame, GameEventKind::ContinueGame]
+        &[
+            GameEventKind::UpdateLoading,
+            GameEventKind::StartNewGame,
+            GameEventKind::ContinueGame,
+        ]
     }
 
     fn resolve(
@@ -88,10 +66,20 @@ impl DomainEventResolver for StartContinueResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-
         match event {
+            GameEvent::UpdateLoading => {
+                let step = if let GameState::Loading(step) = ctx.state {
+                    *step
+                } else {
+                    return Err(anyhow!("Invalid state: expected Loading"));
+                };
+
+                let load_result = load_step(ctx.data, step);
+
+                out.push(GameEvent::Loading(resolve_loading(step, load_result)));
+            }
             GameEvent::StartNewGame => {
+                out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
                 setup_new_game_events(ctx.data(), out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
                 if let Some(dialog_state) = intro_dialog_state(ctx.data()) {
@@ -99,6 +87,7 @@ impl DomainEventResolver for StartContinueResolver {
                 }
             }
             GameEvent::ContinueGame => {
+                out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
                 setup_continue_events(ctx.data(), out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
