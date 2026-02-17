@@ -87,7 +87,7 @@ impl GameEngine {
         self.resolve_tick_game_events(&mut initial_events);
         if let Err(e) = self.dispatch_game_events(initial_events) {
             self.state = GameState::Error(format!("{e}"));
-            self.render_state.rebuild(
+            self.render_state.apply_state(
                 &self.state,
                 self.world.as_ref(),
                 &self.ui,

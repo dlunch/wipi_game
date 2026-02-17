@@ -419,201 +419,149 @@ fn build_interaction_hint(world: &WorldState, data: &Rc<GameData>) -> Option<Str
     Some(String::from(text))
 }
 
-fn render_state_from_game_state(
-    state: &GameState,
-    world: Option<&WorldState>,
+fn build_inventory_render(
+    world: &WorldState,
+    ui: &UiState,
+    data: &Rc<GameData>,
+) -> InventoryRender {
+    let Some(leader) = world.leader_entity() else {
+        return InventoryRender {
+            items: Vec::new(),
+            equipped_weapon: None,
+            equipped_armor: None,
+            equipped_accessory: None,
+            selected: 0,
+            scroll: 0,
+        };
+    };
+
+    let mut items = Vec::with_capacity(leader.inventory.len());
+    for stack in &leader.inventory {
+        let item = data.find_item(&stack.item_id);
+        let name = if let Some(item) = item {
+            if stack.amount > 1 {
+                format!("{} x{}", item.name, stack.amount)
+            } else {
+                item.name.clone()
+            }
+        } else if stack.amount > 1 {
+            format!("{} x{}", stack.item_id, stack.amount)
+        } else {
+            stack.item_id.clone()
+        };
+        let kind = item.map(|item| item.kind).unwrap_or(ItemKind::Consumable);
+        items.push(InventoryItemRender { name, kind });
+    }
+
+    InventoryRender {
+        items,
+        equipped_weapon: leader.loadout.weapon,
+        equipped_armor: leader.loadout.armor,
+        equipped_accessory: leader.loadout.accessory,
+        selected: ui.inventory.selected,
+        scroll: scroll_for_selection(
+            ui.inventory.selected,
+            leader.inventory.len(),
+            INVENTORY_VISIBLE_ITEMS,
+        ),
+    }
+}
+
+fn build_stats_render(world: &WorldState) -> Option<StatsRender> {
+    let leader_id = world.leader_id()?;
+    let leader = world.leader_entity()?;
+    let combatant = world.combat.combatant(leader_id)?;
+
+    Some(StatsRender {
+        hp: as_u32(combatant.stats.current_hp),
+        max_hp: as_u32(combatant.stats.max_hp),
+        mp: as_u32(combatant.stats.current_mp),
+        max_mp: as_u32(combatant.stats.max_mp),
+        level: as_u32(leader.stat.level),
+        atk: as_u32(combatant.stats.atk),
+        def: as_u32(combatant.stats.def),
+        exp: as_u32(leader.stat.exp),
+        gold: as_u32(world.gold_amount(leader_id)),
+    })
+}
+
+fn build_shop_render(
+    world: &WorldState,
     ui: &UiState,
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
-) -> RenderState {
-    match state {
-        GameState::Loading(step) => RenderState::Loading { step: *step },
-        GameState::Menu => RenderState::Menu {
-            title: ui.menu.state.title,
-            items: ui.menu.state.items.clone(),
-            selected: ui.menu.selected,
-        },
-        GameState::Explore => {
-            let Some(world) = world else {
-                return RenderState::NoSession;
-            };
-            let Some(explore) = build_explore_render(world, ui, data, render_fx) else {
-                return RenderState::Error(String::from("Map not found"));
-            };
-            RenderState::Explore(explore)
+) -> Option<ShopRender> {
+    let leader_id = world.leader_id()?;
+    let leader = world.leader_entity()?;
+    let shop_state = ui.shop.state.as_ref()?;
+
+    let mut buy_items = Vec::with_capacity(shop_state.items.len());
+    for item in &shop_state.items {
+        buy_items.push(ShopItemRender {
+            name: item.name.clone(),
+            price: item.price,
+        });
+    }
+    let mut player_inventory = Vec::new();
+    for stack in &leader.inventory {
+        if stack.item_id == crate::game::GOLD_ITEM_ID {
+            continue;
         }
-        GameState::Inventory => {
-            let Some(world) = world else {
-                return RenderState::NoSession;
-            };
-            let Some(leader) = world.leader_entity() else {
-                return RenderState::NoSession;
-            };
-            let mut items = Vec::with_capacity(leader.inventory.len());
-            for stack in &leader.inventory {
-                let item = data.find_item(&stack.item_id);
-                let name = if let Some(item) = item {
-                    if stack.amount > 1 {
-                        format!("{} x{}", item.name, stack.amount)
-                    } else {
-                        item.name.clone()
-                    }
-                } else if stack.amount > 1 {
-                    format!("{} x{}", stack.item_id, stack.amount)
-                } else {
-                    stack.item_id.clone()
-                };
-                let kind = item.map(|item| item.kind).unwrap_or(ItemKind::Consumable);
-                items.push(InventoryItemRender { name, kind });
-            }
-            RenderState::Inventory(InventoryRender {
-                items,
-                equipped_weapon: leader.loadout.weapon,
-                equipped_armor: leader.loadout.armor,
-                equipped_accessory: leader.loadout.accessory,
-                selected: ui.inventory.selected,
-                scroll: scroll_for_selection(
-                    ui.inventory.selected,
-                    leader.inventory.len(),
-                    INVENTORY_VISIBLE_ITEMS,
-                ),
-            })
+        let name = data
+            .find_item(&stack.item_id)
+            .map(|item| item.name.clone())
+            .unwrap_or_else(|| stack.item_id.clone());
+        let sell_price = data
+            .find_item(&stack.item_id)
+            .map(|item| item.price / 2)
+            .unwrap_or(0);
+        for _ in 0..stack.amount.max(0) {
+            player_inventory.push(ShopItemRender {
+                name: name.clone(),
+                price: sell_price,
+            });
         }
-        GameState::Stats => {
-            let Some(world) = world else {
-                return RenderState::NoSession;
-            };
-            let Some(leader_id) = world.leader_id() else {
-                return RenderState::NoSession;
-            };
-            let Some(leader) = world.leader_entity() else {
-                return RenderState::NoSession;
-            };
-            let Some(combatant) = world.combat.combatant(leader_id) else {
-                return RenderState::NoSession;
-            };
-            RenderState::Stats(StatsRender {
-                hp: as_u32(combatant.stats.current_hp),
-                max_hp: as_u32(combatant.stats.max_hp),
-                mp: as_u32(combatant.stats.current_mp),
-                max_mp: as_u32(combatant.stats.max_mp),
-                level: as_u32(leader.stat.level),
-                atk: as_u32(combatant.stats.atk),
-                def: as_u32(combatant.stats.def),
-                exp: as_u32(leader.stat.exp),
-                gold: as_u32(world.gold_amount(leader_id)),
-            })
+    }
+    let total = match ui.shop.mode {
+        ShopMode::Select => 2,
+        ShopMode::Buy | ShopMode::ConfirmBuy => buy_items.len(),
+        ShopMode::Sell | ShopMode::ConfirmSell => player_inventory.len(),
+    };
+
+    Some(ShopRender {
+        shop_name: shop_state.shop.name.clone(),
+        mode: ui.shop.mode,
+        selected: ui.shop.selected,
+        scroll: scroll_for_selection(ui.shop.selected, total, SHOP_VISIBLE_ITEMS),
+        buy_items,
+        player_gold: world.gold_amount(leader_id),
+        player_inventory,
+        purchase_notice_timer: render_fx.shop_purchase_notice_timer,
+    })
+}
+
+fn build_quest_log_render(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> QuestLogRender {
+    let mut quests = Vec::with_capacity(world.quests.len());
+    for quest in &world.quests {
+        if quest.rewarded {
+            continue;
         }
-        GameState::Dialog => {
-            let Some(dialog_state) = ui.dialog.state.as_ref() else {
-                return RenderState::Error(String::from("No dialog state"));
-            };
-            let current_text = dialog_state
-                .lines
-                .get(dialog_state.current_line)
-                .map(|line| line.text.clone());
-            RenderState::Dialog {
-                explore: world.and_then(|world| build_explore_render(world, ui, data, render_fx)),
-                npc_name: dialog_state.npc_name.clone(),
-                lines: dialog_state
-                    .lines
-                    .iter()
-                    .map(|line| line.text.clone())
-                    .collect(),
-                current_line: dialog_state.current_line,
-                current_text,
-                has_next: dialog_state.current_line + 1 < dialog_state.lines.len(),
-            }
+        if let Some(quest_data) = data.find_quest(&quest.quest_id) {
+            quests.push(QuestEntryRender {
+                quest_id: quest.quest_id.clone(),
+                name: quest_data.name.clone(),
+                description: quest_data.description.clone(),
+                current_count: as_u32(quest.current_count),
+                target_count: as_u32(quest_data.target_count),
+                completed: quest.completed,
+            });
         }
-        GameState::Shop => {
-            let Some(world) = world else {
-                return RenderState::NoSession;
-            };
-            let Some(leader_id) = world.leader_id() else {
-                return RenderState::NoSession;
-            };
-            let Some(leader) = world.leader_entity() else {
-                return RenderState::NoSession;
-            };
-            let Some(shop_state) = ui.shop.state.as_ref() else {
-                return RenderState::Error(String::from("No shop state"));
-            };
-            let mut buy_items = Vec::with_capacity(shop_state.items.len());
-            for item in &shop_state.items {
-                buy_items.push(ShopItemRender {
-                    name: item.name.clone(),
-                    price: item.price,
-                });
-            }
-            let mut player_inventory = Vec::new();
-            for stack in &leader.inventory {
-                if stack.item_id == crate::game::GOLD_ITEM_ID {
-                    continue;
-                }
-                let name = data
-                    .find_item(&stack.item_id)
-                    .map(|item| item.name.clone())
-                    .unwrap_or_else(|| stack.item_id.clone());
-                let sell_price = data
-                    .find_item(&stack.item_id)
-                    .map(|item| item.price / 2)
-                    .unwrap_or(0);
-                for _ in 0..stack.amount.max(0) {
-                    player_inventory.push(ShopItemRender {
-                        name: name.clone(),
-                        price: sell_price,
-                    });
-                }
-            }
-            let total = match ui.shop.mode {
-                ShopMode::Select => 2,
-                ShopMode::Buy | ShopMode::ConfirmBuy => buy_items.len(),
-                ShopMode::Sell | ShopMode::ConfirmSell => player_inventory.len(),
-            };
-            RenderState::Shop(ShopRender {
-                shop_name: shop_state.shop.name.clone(),
-                mode: ui.shop.mode,
-                selected: ui.shop.selected,
-                scroll: scroll_for_selection(ui.shop.selected, total, SHOP_VISIBLE_ITEMS),
-                buy_items,
-                player_gold: world.gold_amount(leader_id),
-                player_inventory,
-                purchase_notice_timer: render_fx.shop_purchase_notice_timer,
-            })
-        }
-        GameState::QuestLog => {
-            let Some(world) = world else {
-                return RenderState::NoSession;
-            };
-            let mut quests = Vec::with_capacity(world.quests.len());
-            for quest in &world.quests {
-                if quest.rewarded {
-                    continue;
-                }
-                if let Some(quest_data) = data.find_quest(&quest.quest_id) {
-                    quests.push(QuestEntryRender {
-                        quest_id: quest.quest_id.clone(),
-                        name: quest_data.name.clone(),
-                        description: quest_data.description.clone(),
-                        current_count: as_u32(quest.current_count),
-                        target_count: as_u32(quest_data.target_count),
-                        completed: quest.completed,
-                    });
-                }
-            }
-            RenderState::QuestLog(QuestLogRender {
-                quests,
-                selected: ui.quest_log.selected,
-                tracked_quest_id: ui.quest_log.tracked_quest_id.clone(),
-            })
-        }
-        GameState::PauseMenu => RenderState::PauseMenu {
-            explore: world.and_then(|world| build_explore_render(world, ui, data, render_fx)),
-            items: ui.pause_menu.state.items.clone(),
-            selected: ui.pause_menu.selected,
-        },
-        GameState::Dead => RenderState::Dead,
-        GameState::Error(msg) => RenderState::Error(msg.clone()),
+    }
+
+    QuestLogRender {
+        quests,
+        selected: ui.quest_log.selected,
+        tracked_quest_id: ui.quest_log.tracked_quest_id.clone(),
     }
 }
 
@@ -635,7 +583,7 @@ impl RenderState {
         )
     }
 
-    pub fn rebuild(
+    pub fn apply_state(
         &mut self,
         state: &GameState,
         world: Option<&WorldState>,
@@ -643,7 +591,68 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) {
-        *self = render_state_from_game_state(state, world, ui, data, render_fx);
+        *self = match state {
+            GameState::Loading(step) => RenderState::Loading { step: *step },
+            GameState::Menu => RenderState::Menu {
+                title: ui.menu.state.title,
+                items: ui.menu.state.items.clone(),
+                selected: ui.menu.selected,
+            },
+            GameState::Explore => {
+                match world.and_then(|world| build_explore_render(world, ui, data, render_fx)) {
+                    Some(explore) => RenderState::Explore(explore),
+                    None => RenderState::NoSession,
+                }
+            }
+            GameState::Inventory => match world {
+                Some(world) => RenderState::Inventory(build_inventory_render(world, ui, data)),
+                None => RenderState::NoSession,
+            },
+            GameState::Stats => match world.and_then(build_stats_render) {
+                Some(stats) => RenderState::Stats(stats),
+                None => RenderState::NoSession,
+            },
+            GameState::Dialog => {
+                if let Some(dialog_state) = ui.dialog.state.as_ref() {
+                    let current_text = dialog_state
+                        .lines
+                        .get(dialog_state.current_line)
+                        .map(|line| line.text.clone());
+                    RenderState::Dialog {
+                        explore: world
+                            .and_then(|world| build_explore_render(world, ui, data, render_fx)),
+                        npc_name: dialog_state.npc_name.clone(),
+                        lines: dialog_state
+                            .lines
+                            .iter()
+                            .map(|line| line.text.clone())
+                            .collect(),
+                        current_line: dialog_state.current_line,
+                        current_text,
+                        has_next: dialog_state.current_line + 1 < dialog_state.lines.len(),
+                    }
+                } else {
+                    RenderState::Error(String::from("No dialog state"))
+                }
+            }
+            GameState::Shop => {
+                match world.and_then(|world| build_shop_render(world, ui, data, render_fx)) {
+                    Some(shop) => RenderState::Shop(shop),
+                    None => RenderState::NoSession,
+                }
+            }
+            GameState::QuestLog => match world {
+                Some(world) => RenderState::QuestLog(build_quest_log_render(world, ui, data)),
+                None => RenderState::NoSession,
+            },
+            GameState::PauseMenu => RenderState::PauseMenu {
+                explore: world.and_then(|world| build_explore_render(world, ui, data, render_fx)),
+                items: ui.pause_menu.state.items.clone(),
+                selected: ui.pause_menu.selected,
+            },
+            GameState::Dead => RenderState::Dead,
+            GameState::Error(msg) => RenderState::Error(msg.clone()),
+        };
     }
 
     pub fn apply_game_event(
@@ -656,7 +665,7 @@ impl RenderState {
         render_fx: &RenderFxState,
     ) {
         if !self.matches_state(state) {
-            self.rebuild(state, world, ui, data, render_fx);
+            self.apply_state(state, world, ui, data, render_fx);
             return;
         }
 
@@ -682,15 +691,7 @@ impl RenderState {
             }
             RenderState::Inventory(inventory) => {
                 inventory.selected = ui.inventory.selected;
-                let inventory_len = world
-                    .and_then(|world| world.leader_entity().map(|leader| leader.inventory.len()))
-                    .unwrap_or(0);
-                inventory.scroll = scroll_for_selection(
-                    inventory.selected,
-                    inventory_len,
-                    INVENTORY_VISIBLE_ITEMS,
-                );
-                !matches!(
+                if matches!(
                     event,
                     GameEvent::World(
                         WorldEvent::SetEntityInventory { .. }
@@ -702,7 +703,26 @@ impl RenderState {
                     ) | GameEvent::ShopSellSelected(_)
                         | GameEvent::ShopBuyItem(_)
                         | GameEvent::UseInventorySelected(_)
-                )
+                ) {
+                    if let Some(world) = world {
+                        *inventory = build_inventory_render(world, ui, data);
+                    } else {
+                        return;
+                    }
+                    true
+                } else {
+                    let inventory_len = world
+                        .and_then(|world| {
+                            world.leader_entity().map(|leader| leader.inventory.len())
+                        })
+                        .unwrap_or(0);
+                    inventory.scroll = scroll_for_selection(
+                        inventory.selected,
+                        inventory_len,
+                        INVENTORY_VISIBLE_ITEMS,
+                    );
+                    true
+                }
             }
             RenderState::Stats(stats) => sync_stats_render(stats, world),
             RenderState::Dialog {
@@ -746,7 +766,7 @@ impl RenderState {
                     ShopMode::Sell | ShopMode::ConfirmSell => shop.player_inventory.len(),
                 };
                 shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
-                !matches!(
+                if matches!(
                     event,
                     GameEvent::World(
                         WorldEvent::SetEntityInventory { .. }
@@ -758,7 +778,18 @@ impl RenderState {
                     ) | GameEvent::ShopBuyItem(_)
                         | GameEvent::ShopSellSelected(_)
                         | GameEvent::OpenShopState(_)
-                )
+                ) {
+                    if let Some(world) = world
+                        && let Some(next_shop) = build_shop_render(world, ui, data, render_fx)
+                    {
+                        *shop = next_shop;
+                        true
+                    } else {
+                        return;
+                    }
+                } else {
+                    true
+                }
             }
             RenderState::QuestLog(quest_log) => {
                 quest_log.tracked_quest_id = ui.quest_log.tracked_quest_id.clone();
@@ -767,7 +798,14 @@ impl RenderState {
                 } else {
                     quest_log.selected = ui.quest_log.selected.min(quest_log.quests.len() - 1);
                 }
-                !matches!(event, GameEvent::World(WorldEvent::AddQuestProgress(_)))
+                if matches!(event, GameEvent::World(WorldEvent::AddQuestProgress(_))) {
+                    if let Some(world) = world {
+                        *quest_log = build_quest_log_render(world, ui, data);
+                    } else {
+                        return;
+                    }
+                }
+                true
             }
             RenderState::PauseMenu {
                 explore,
@@ -793,7 +831,7 @@ impl RenderState {
         };
 
         if !handled {
-            self.rebuild(state, world, ui, data, render_fx);
+            self.apply_state(state, world, ui, data, render_fx);
         }
     }
 
@@ -1047,6 +1085,10 @@ fn apply_event_to_explore_render(
             requires_hint_refresh = true;
         }
         GameEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
+            if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+                *explore = next;
+                return true;
+            }
             return false;
         }
         GameEvent::Combat(combat_event) => match combat_event {
@@ -1088,6 +1130,10 @@ fn apply_event_to_explore_render(
                 enemy_changed = before != explore.enemies.len();
             }
             CombatEvent::SetEnemies(_) => {
+                if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+                    *explore = next;
+                    return true;
+                }
                 return false;
             }
             CombatEvent::EnemyHitFlashSet {
@@ -1137,6 +1183,10 @@ fn apply_event_to_explore_render(
                 }
             }
             WorldEvent::SetEntityMap { .. } | WorldEvent::SetWorldMap(_) => {
+                if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+                    *explore = next;
+                    return true;
+                }
                 return false;
             }
             WorldEvent::SetEntityStat { entity_id, .. } => {
