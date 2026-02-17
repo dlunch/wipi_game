@@ -11,8 +11,8 @@ use core::mem;
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldState, apply_render_event, apply_render_tick,
-    apply_ui_render_patch, domain_resolvers, load_step, resolve_loading,
+    UiInputEventResolver, UiState, WorldState, apply_loading_update, apply_render_event,
+    apply_render_tick, apply_ui_render_patch, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -93,12 +93,9 @@ impl GameEngine {
             .resolve_input(input, &self.state, self.world.as_ref())
     }
 
-    fn resolve_tick_game_events(&mut self) -> Vec<GameEvent> {
+    fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
         match self.state {
-            GameState::Loading(step) => {
-                let load_result = load_step(&mut self.data, step);
-                vec![GameEvent::Loading(resolve_loading(step, load_result))]
-            }
+            GameState::Loading(_) => vec![GameEvent::UpdateLoading],
             GameState::Explore => vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
             _ => Vec::new(),
         }
@@ -136,6 +133,11 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
+        let mut event = event;
+        if let Some(next_event) = apply_loading_update(&self.state, &mut self.data, &event) {
+            event = next_event;
+        }
+
         let is_session_event = matches!(event, GameEvent::World(_));
 
         if matches!(event, GameEvent::World(crate::game::WorldEvent::Create)) {

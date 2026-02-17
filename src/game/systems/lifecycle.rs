@@ -1,5 +1,3 @@
-use alloc::format;
-use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -23,24 +21,6 @@ pub enum LoadingEvent {
 #[derive(Clone, Copy)]
 pub enum LifecycleEvent {
     ResetUi,
-}
-
-pub fn resolve_loading(step: usize, load_result: Result<bool, String>) -> LoadingEvent {
-    match load_result {
-        Ok(true) => LoadingEvent::Loaded,
-        Ok(false) => LoadingEvent::Advance(step + 1),
-        Err(e) => LoadingEvent::Error(e),
-    }
-}
-
-pub fn load_step(data: &mut Rc<GameData>, step: usize) -> Result<bool, String> {
-    let Some(data_mut) = Rc::get_mut(data) else {
-        return Err(String::from("Load error: data is shared"));
-    };
-
-    data_mut
-        .load_step(step)
-        .map_err(|e| format!("Load error: {}", e))
 }
 
 struct LifecycleResolver;

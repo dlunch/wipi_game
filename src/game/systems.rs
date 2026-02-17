@@ -11,7 +11,7 @@ pub mod world;
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub use lifecycle::{LifecycleEvent, LoadingEvent, load_step, resolve_loading};
+pub use lifecycle::{LifecycleEvent, LoadingEvent};
 pub use npc::NpcEvent;
 pub use resolver::{DomainEventResolver, ResolveContext};
 

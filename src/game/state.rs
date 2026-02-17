@@ -1,10 +1,12 @@
 mod character;
 mod combat;
+mod loading;
 mod movement;
 pub(crate) mod world;
 
 pub use character::{CharacterState, TileEvent};
 pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
+pub use loading::apply_loading_update;
 pub use movement::{MovementState, MovementTickEvent};
 
 use alloc::format;
