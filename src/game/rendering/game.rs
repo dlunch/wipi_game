@@ -618,6 +618,23 @@ fn render_state_from_game_state(
 }
 
 impl RenderState {
+    fn matches_state(&self, state: &GameState) -> bool {
+        matches!(
+            (self, state),
+            (RenderState::Loading { .. }, GameState::Loading(_))
+                | (RenderState::Menu { .. }, GameState::Menu)
+                | (RenderState::Explore(_), GameState::Explore)
+                | (RenderState::Inventory(_), GameState::Inventory)
+                | (RenderState::Stats(_), GameState::Stats)
+                | (RenderState::Dialog { .. }, GameState::Dialog)
+                | (RenderState::Shop(_), GameState::Shop)
+                | (RenderState::QuestLog(_), GameState::QuestLog)
+                | (RenderState::PauseMenu { .. }, GameState::PauseMenu)
+                | (RenderState::Dead, GameState::Dead)
+                | (RenderState::Error(_), GameState::Error(_))
+        )
+    }
+
     pub fn rebuild(
         &mut self,
         state: &GameState,
@@ -627,6 +644,157 @@ impl RenderState {
         render_fx: &RenderFxState,
     ) {
         *self = render_state_from_game_state(state, world, ui, data, render_fx);
+    }
+
+    pub fn apply_game_event(
+        &mut self,
+        state: &GameState,
+        world: Option<&WorldState>,
+        ui: &UiState,
+        data: &Rc<GameData>,
+        event: &GameEvent,
+        render_fx: &RenderFxState,
+    ) {
+        if !self.matches_state(state) {
+            self.rebuild(state, world, ui, data, render_fx);
+            return;
+        }
+
+        let handled = match self {
+            RenderState::Loading { step } => {
+                if let GameEvent::Loading(crate::game::LoadingEvent::Advance(next_step)) = event {
+                    *step = *next_step;
+                }
+                true
+            }
+            RenderState::Menu {
+                title,
+                items,
+                selected,
+            } => {
+                *title = ui.menu.state.title;
+                *items = ui.menu.state.items.clone();
+                *selected = ui.menu.selected;
+                true
+            }
+            RenderState::Explore(explore) => {
+                apply_event_to_explore_render(explore, world, ui, data, event, render_fx)
+            }
+            RenderState::Inventory(inventory) => {
+                inventory.selected = ui.inventory.selected;
+                let inventory_len = world
+                    .and_then(|world| world.leader_entity().map(|leader| leader.inventory.len()))
+                    .unwrap_or(0);
+                inventory.scroll = scroll_for_selection(
+                    inventory.selected,
+                    inventory_len,
+                    INVENTORY_VISIBLE_ITEMS,
+                );
+                !matches!(
+                    event,
+                    GameEvent::World(
+                        WorldEvent::SetEntityInventory { .. }
+                            | WorldEvent::SetEntityLoadout { .. }
+                            | WorldEvent::AddEntityItem { .. }
+                            | WorldEvent::RemoveEntityItem { .. }
+                            | WorldEvent::RemoveEntity(_)
+                            | WorldEvent::UpsertEntity(_)
+                    ) | GameEvent::ShopSellSelected(_)
+                        | GameEvent::ShopBuyItem(_)
+                        | GameEvent::UseInventorySelected(_)
+                )
+            }
+            RenderState::Stats(stats) => sync_stats_render(stats, world),
+            RenderState::Dialog {
+                explore,
+                npc_name,
+                lines,
+                current_line,
+                current_text,
+                has_next,
+            } => {
+                if let Some(dialog_state) = ui.dialog.state.as_ref()
+                    && matches!(
+                        event,
+                        GameEvent::ApplyDialogTransition(_)
+                            | GameEvent::OpenDialogState(_)
+                            | GameEvent::ApplyDialogAction(_)
+                    )
+                {
+                    *npc_name = dialog_state.npc_name.clone();
+                    *lines = dialog_state
+                        .lines
+                        .iter()
+                        .map(|line| line.text.clone())
+                        .collect();
+                    *current_line = dialog_state.current_line;
+                    *current_text = lines.get(*current_line).cloned();
+                    *has_next = *current_line + 1 < lines.len();
+                }
+                if let Some(explore_render) = explore {
+                    apply_event_to_explore_render(explore_render, world, ui, data, event, render_fx)
+                } else {
+                    true
+                }
+            }
+            RenderState::Shop(shop) => {
+                shop.mode = ui.shop.mode;
+                shop.selected = ui.shop.selected;
+                let total = match ui.shop.mode {
+                    ShopMode::Select => 2,
+                    ShopMode::Buy | ShopMode::ConfirmBuy => shop.buy_items.len(),
+                    ShopMode::Sell | ShopMode::ConfirmSell => shop.player_inventory.len(),
+                };
+                shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
+                !matches!(
+                    event,
+                    GameEvent::World(
+                        WorldEvent::SetEntityInventory { .. }
+                            | WorldEvent::SetEntityLoadout { .. }
+                            | WorldEvent::AddEntityItem { .. }
+                            | WorldEvent::RemoveEntityItem { .. }
+                            | WorldEvent::RemoveEntity(_)
+                            | WorldEvent::UpsertEntity(_)
+                    ) | GameEvent::ShopBuyItem(_)
+                        | GameEvent::ShopSellSelected(_)
+                        | GameEvent::OpenShopState(_)
+                )
+            }
+            RenderState::QuestLog(quest_log) => {
+                quest_log.tracked_quest_id = ui.quest_log.tracked_quest_id.clone();
+                if quest_log.quests.is_empty() {
+                    quest_log.selected = 0;
+                } else {
+                    quest_log.selected = ui.quest_log.selected.min(quest_log.quests.len() - 1);
+                }
+                !matches!(event, GameEvent::World(WorldEvent::AddQuestProgress(_)))
+            }
+            RenderState::PauseMenu {
+                explore,
+                items,
+                selected,
+            } => {
+                *items = ui.pause_menu.state.items.clone();
+                *selected = ui.pause_menu.selected;
+                if let Some(explore_render) = explore {
+                    apply_event_to_explore_render(explore_render, world, ui, data, event, render_fx)
+                } else {
+                    true
+                }
+            }
+            RenderState::Dead => true,
+            RenderState::Error(msg) => {
+                if let GameState::Error(next) = state {
+                    *msg = next.clone();
+                }
+                true
+            }
+            RenderState::NoSession => world.is_none(),
+        };
+
+        if !handled {
+            self.rebuild(state, world, ui, data, render_fx);
+        }
     }
 
     pub fn apply_ui_patch(&mut self, ui: &UiState, world: Option<&WorldState>) {
@@ -732,6 +900,280 @@ impl RenderState {
             _ => {}
         }
     }
+}
+
+fn sync_stats_render(stats: &mut StatsRender, world: Option<&WorldState>) -> bool {
+    let Some(world) = world else {
+        return false;
+    };
+    let Some(leader_id) = world.leader_id() else {
+        return false;
+    };
+    let Some(leader) = world.leader_entity() else {
+        return false;
+    };
+    let Some(combatant) = world.combat.combatant(leader_id) else {
+        return false;
+    };
+
+    stats.hp = as_u32(combatant.stats.current_hp);
+    stats.max_hp = as_u32(combatant.stats.max_hp);
+    stats.mp = as_u32(combatant.stats.current_mp);
+    stats.max_mp = as_u32(combatant.stats.max_mp);
+    stats.level = as_u32(leader.stat.level);
+    stats.atk = as_u32(combatant.stats.atk);
+    stats.def = as_u32(combatant.stats.def);
+    stats.exp = as_u32(leader.stat.exp);
+    stats.gold = as_u32(world.gold_amount(leader_id));
+    true
+}
+
+fn sync_explore_runtime(
+    explore: &mut ExploreRender,
+    world: &WorldState,
+    ui: &UiState,
+    render_fx: &RenderFxState,
+) -> bool {
+    let Some(leader_id) = world.leader_id() else {
+        return false;
+    };
+    let Some(leader) = world.leader_entity() else {
+        return false;
+    };
+    let Some(leader_combatant) = world.combat.combatant(leader_id) else {
+        return false;
+    };
+
+    explore.player_x = leader.x;
+    explore.player_y = leader.y;
+    explore.player_facing = leader.facing;
+    explore.player_moving = world.movement.pressed_direction.is_some();
+    explore.hp = as_u32(leader_combatant.stats.current_hp);
+    explore.max_hp = as_u32(leader_combatant.stats.max_hp);
+    explore.mp = as_u32(leader_combatant.stats.current_mp);
+    explore.max_mp = as_u32(leader_combatant.stats.max_mp);
+    explore.level = as_u32(leader.stat.level);
+    explore.player_status = timed_to_status(&leader_combatant.timed);
+    explore.skill_cooldowns = skill_cooldowns_from_timed(&leader_combatant.timed);
+    explore.key_actions = ui.explore.key_actions;
+    explore.player_hit_flash = render_fx.player_hit_flash;
+    explore.quest_notice_timer = render_fx.quest_notice_timer;
+    explore.anim_tick = render_fx.anim_tick;
+    true
+}
+
+fn enemy_render_from_world(
+    world: &WorldState,
+    data: &Rc<GameData>,
+    render_fx: &RenderFxState,
+    entity_id: u32,
+) -> Option<EnemyRender> {
+    let enemy = world
+        .combat
+        .enemies
+        .iter()
+        .find(|enemy| enemy.entity_id == entity_id)?;
+    let entity = world.entity(entity_id)?;
+    let name = data
+        .find_enemy(&enemy.source_enemy_id)
+        .map(|enemy_data| enemy_data.name.clone())
+        .unwrap_or_else(|| enemy.source_enemy_id.clone());
+    Some(EnemyRender {
+        enemy_id: entity_id,
+        name,
+        x: entity.x,
+        y: entity.y,
+        hp: enemy.combatant.stats.current_hp,
+        max_hp: enemy.combatant.stats.max_hp,
+        attack_cooldown: enemy.combatant.timed.time_left(TimedKind::AttackCooldown),
+        hit_flash: render_fx.enemy_hit_flash(entity_id),
+        dead: enemy.combatant.stats.current_hp <= 0,
+    })
+}
+
+fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
+    explore.first_live_enemy_name = explore
+        .enemies
+        .iter()
+        .find(|enemy| enemy.hp > 0)
+        .map(|enemy| enemy.name.clone());
+}
+
+fn upsert_enemy_render(
+    explore: &mut ExploreRender,
+    world: &WorldState,
+    data: &Rc<GameData>,
+    render_fx: &RenderFxState,
+    entity_id: u32,
+) {
+    let Some(next_enemy) = enemy_render_from_world(world, data, render_fx, entity_id) else {
+        return;
+    };
+    if let Some(existing) = explore
+        .enemies
+        .iter_mut()
+        .find(|enemy| enemy.enemy_id == entity_id)
+    {
+        *existing = next_enemy;
+    } else {
+        explore.enemies.push(next_enemy);
+    }
+}
+
+fn apply_event_to_explore_render(
+    explore: &mut ExploreRender,
+    world: Option<&WorldState>,
+    ui: &UiState,
+    data: &Rc<GameData>,
+    event: &GameEvent,
+    render_fx: &RenderFxState,
+) -> bool {
+    let Some(world) = world else {
+        return false;
+    };
+    if !sync_explore_runtime(explore, world, ui, render_fx) {
+        return false;
+    }
+
+    let leader_id = world.leader_id();
+    let mut enemy_changed = false;
+    let mut requires_hint_refresh = false;
+
+    match event {
+        GameEvent::Movement(_) | GameEvent::Explore(_) => {
+            requires_hint_refresh = true;
+        }
+        GameEvent::Transition(crate::game::TransitionEvent::ReleaseMovementDirection(_)) => {
+            requires_hint_refresh = true;
+        }
+        GameEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
+            return false;
+        }
+        GameEvent::Combat(combat_event) => match combat_event {
+            CombatEvent::MoveEnemy { entity_id, x, y } => {
+                if let Some(enemy) = explore
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.enemy_id == *entity_id)
+                {
+                    enemy.x = *x;
+                    enemy.y = *y;
+                    enemy_changed = true;
+                } else {
+                    upsert_enemy_render(explore, world, data, render_fx, *entity_id);
+                    enemy_changed = true;
+                }
+            }
+            CombatEvent::SetCombatantStats { entity_id, .. } => {
+                if Some(*entity_id) != leader_id {
+                    upsert_enemy_render(explore, world, data, render_fx, *entity_id);
+                    enemy_changed = true;
+                }
+            }
+            CombatEvent::SetCombatantTimed {
+                entity_id, kind, ..
+            } => {
+                if Some(*entity_id) != leader_id && matches!(kind, TimedKind::AttackCooldown) {
+                    upsert_enemy_render(explore, world, data, render_fx, *entity_id);
+                    enemy_changed = true;
+                }
+            }
+            CombatEvent::UpsertEnemy(enemy_state) => {
+                upsert_enemy_render(explore, world, data, render_fx, enemy_state.entity_id);
+                enemy_changed = true;
+            }
+            CombatEvent::RemoveEnemy(entity_id) => {
+                let before = explore.enemies.len();
+                explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
+                enemy_changed = before != explore.enemies.len();
+            }
+            CombatEvent::SetEnemies(_) => {
+                return false;
+            }
+            CombatEvent::EnemyHitFlashSet {
+                entity_id,
+                hit_flash,
+            } => {
+                if let Some(enemy) = explore
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.enemy_id == *entity_id)
+                {
+                    enemy.hit_flash = *hit_flash;
+                }
+            }
+            _ => {}
+        },
+        GameEvent::World(world_event) => match world_event {
+            WorldEvent::AddOpenedTreasure { map_id, x, y } => {
+                if &explore.map_id == map_id
+                    && !explore
+                        .opened_treasures
+                        .iter()
+                        .any(|(m, tx, ty)| m == map_id && *tx == *x && *ty == *y)
+                {
+                    explore.opened_treasures.push((map_id.clone(), *x, *y));
+                }
+            }
+            WorldEvent::AddQuestProgress(_) => {
+                explore.active_quest_count = world
+                    .quests
+                    .iter()
+                    .filter(|quest| !quest.rewarded && !quest.completed)
+                    .count();
+                explore.tracked_quest = build_tracked_quest_render(
+                    world,
+                    data,
+                    ui.quest_log.tracked_quest_id.as_deref(),
+                );
+            }
+            WorldEvent::SetEntityPosition { entity_id, .. }
+            | WorldEvent::SetEntityFacing { entity_id, .. } => {
+                if Some(*entity_id) == leader_id {
+                    requires_hint_refresh = true;
+                } else {
+                    upsert_enemy_render(explore, world, data, render_fx, *entity_id);
+                    enemy_changed = true;
+                }
+            }
+            WorldEvent::SetEntityMap { .. } | WorldEvent::SetWorldMap(_) => {
+                return false;
+            }
+            WorldEvent::SetEntityStat { entity_id, .. } => {
+                if Some(*entity_id) == leader_id
+                    && let Some(leader) = world.leader_entity()
+                {
+                    explore.level = as_u32(leader.stat.level);
+                }
+            }
+            WorldEvent::RemoveEntity(entity_id) => {
+                let before = explore.enemies.len();
+                explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
+                enemy_changed = before != explore.enemies.len();
+            }
+            WorldEvent::ResetCombat => {
+                explore.enemies.clear();
+                enemy_changed = true;
+            }
+            WorldEvent::UpsertEntity(_)
+            | WorldEvent::SetEntityInventory { .. }
+            | WorldEvent::SetEntityLoadout { .. }
+            | WorldEvent::AddEntityItem { .. }
+            | WorldEvent::RemoveEntityItem { .. }
+            | WorldEvent::SetParty(_)
+            | WorldEvent::CreateWorld
+            | WorldEvent::ResetMovement => {}
+        },
+        _ => {}
+    }
+
+    if requires_hint_refresh {
+        explore.interaction_hint = build_interaction_hint(world, data);
+    }
+    if enemy_changed {
+        refresh_first_live_enemy_name(explore);
+    }
+    true
 }
 
 pub fn render(state: &RenderState, sprites: &SpriteAtlas, fb: &mut Framebuffer) {
