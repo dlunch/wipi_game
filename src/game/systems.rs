@@ -1,6 +1,5 @@
 pub mod character;
 pub mod combat;
-pub mod explore;
 pub mod lifecycle;
 pub mod loading;
 pub mod movement;
@@ -34,9 +33,6 @@ pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
         handlers.push(resolver);
     }
     for resolver in character::resolvers() {
-        handlers.push(resolver);
-    }
-    for resolver in explore::resolvers() {
         handlers.push(resolver);
     }
     for resolver in shop::resolvers() {
