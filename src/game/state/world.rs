@@ -9,7 +9,7 @@ use crate::game::state::FieldEnemy;
 
 use crate::game::{
     CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameEventKind,
-    GameEventSubscriber, GameState, MovementState, WorldEvent,
+    GameEventSubscriber, MovementState, WorldEvent,
 };
 
 #[derive(Clone)]
@@ -144,27 +144,6 @@ impl WorldState {
                 _ => {}
             },
             _ => {}
-        }
-        Ok(())
-    }
-
-    pub fn apply_domain_event(
-        &mut self,
-        data: &GameData,
-        state: &GameState,
-        event: &GameEvent,
-    ) -> Result<()> {
-        if self.subscribes(event.kind()) {
-            self.apply_event(data, event)?;
-        }
-        if self.leader.subscribes(event.kind()) {
-            self.leader.apply_event(data, event)?;
-        }
-        if self.movement.subscribes(event.kind()) {
-            self.movement.apply_event(state, event)?;
-        }
-        if self.combat.subscribes(event.kind()) {
-            self.combat.apply_event(event)?;
         }
         Ok(())
     }

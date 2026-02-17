@@ -156,7 +156,18 @@ impl GameEngine {
         }
 
         if let Some(world) = self.world.as_mut() {
-            world.apply_domain_event(&self.data, &self.state, &event)?;
+            if world.subscribes(event.kind()) {
+                world.apply_event(&self.data, &event)?;
+            }
+            if world.leader.subscribes(event.kind()) {
+                world.leader.apply_event(&self.data, &event)?;
+            }
+            if world.movement.subscribes(event.kind()) {
+                world.movement.apply_event(&self.state, &event)?;
+            }
+            if world.combat.subscribes(event.kind()) {
+                world.combat.apply_event(&event)?;
+            }
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
