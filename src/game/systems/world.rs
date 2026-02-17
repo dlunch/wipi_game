@@ -88,8 +88,8 @@ fn resolve_tile_event(
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(item_id) = ctx.data().newgame.treasure_item.as_deref()
-                && let Some(item) = ctx.data().find_item(item_id).cloned()
+            if let Some(item_id) = ctx.data.newgame.treasure_item.as_deref()
+                && let Some(item) = ctx.data.find_item(item_id).cloned()
             {
                 out.push(GameEvent::World(WorldEvent::AddPlayerItem(item)));
             }
@@ -99,7 +99,7 @@ fn resolve_tile_event(
             if target.is_empty() {
                 return;
             }
-            let Some(map) = ctx.data().find_map(target) else {
+            let Some(map) = ctx.data.find_map(target) else {
                 return;
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
@@ -138,7 +138,7 @@ fn resolve_complete_quest(
         return;
     }
 
-    let Some(quest) = ctx.data().find_quest(id) else {
+    let Some(quest) = ctx.data.find_quest(id) else {
         return;
     };
 
@@ -148,7 +148,7 @@ fn resolve_complete_quest(
 
     out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
     if let Some(item_id) = &quest.reward_item
-        && let Some(item) = ctx.data().find_item(item_id).cloned()
+        && let Some(item) = ctx.data.find_item(item_id).cloned()
     {
         out.push(GameEvent::World(WorldEvent::AddPlayerItem(item)));
     }
@@ -199,7 +199,7 @@ fn resolve_kill_reward(
         if progress.completed || progress.rewarded {
             continue;
         }
-        if let Some(quest) = ctx.data().find_quest(&progress.quest_id)
+        if let Some(quest) = ctx.data.find_quest(&progress.quest_id)
             && quest.quest_type == QuestType::Kill
             && quest.target_id == enemy_id
         {

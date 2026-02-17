@@ -155,7 +155,7 @@ fn resolve_dialog_action(
 
     match action {
         DialogAction::GiveItem(id) => {
-            if let Some(item) = ctx.data().find_item(id).cloned() {
+            if let Some(item) = ctx.data.find_item(id).cloned() {
                 inventory.push(item);
                 changed = true;
             }

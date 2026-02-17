@@ -39,7 +39,7 @@ impl DomainEventResolver for ExploreResolver {
                     }
                     ExploreCommand::Confirm => {
                         let is_peaceful = ctx
-                            .data()
+                            .data
                             .find_map(&s.leader.current_map_id)
                             .is_some_and(|map| map.peaceful);
                         out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {

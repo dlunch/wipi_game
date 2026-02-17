@@ -121,7 +121,7 @@ impl DomainEventResolver for NpcResolver {
                 );
                 let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
-                if let Some(npc_event) = s.try_interact_npc(ctx.data(), *facing) {
+                if let Some(npc_event) = s.try_interact_npc(ctx.data, *facing) {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
                     return Ok(());
                 }

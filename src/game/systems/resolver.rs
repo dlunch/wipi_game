@@ -14,12 +14,6 @@ pub struct ResolveContext<'a> {
     pub ui: &'a UiState,
 }
 
-impl<'a> ResolveContext<'a> {
-    pub fn data(&self) -> &GameData {
-        self.data
-    }
-}
-
 pub trait DomainEventResolver: GameEventSubscriber {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];
     fn resolve(

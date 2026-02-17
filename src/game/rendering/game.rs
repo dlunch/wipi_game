@@ -464,10 +464,6 @@ impl ShopItemRender {
     }
 }
 
-fn dialog_text_at(lines: &[String], line: usize) -> Option<String> {
-    lines.get(line).cloned()
-}
-
 impl RenderState {
     pub fn apply_event(
         &mut self,
@@ -620,7 +616,7 @@ impl RenderState {
                 .map(|line| line.text.clone())
                 .collect();
             *current_line = dialog_state.current_line;
-            *current_text = dialog_text_at(lines, *current_line);
+            *current_text = lines.get(*current_line).cloned();
             *has_next = *current_line + 1 < lines.len();
             return;
         }
@@ -636,7 +632,7 @@ impl RenderState {
             } = self
         {
             *current_line = *line;
-            *current_text = dialog_text_at(lines, *current_line);
+            *current_text = lines.get(*current_line).cloned();
             *has_next = *current_line + 1 < lines.len();
             return;
         }
@@ -716,7 +712,7 @@ impl RenderState {
                     .map(|line| line.text.clone())
                     .collect();
                 *current_line = dialog_state.current_line;
-                *current_text = dialog_text_at(lines, *current_line);
+                *current_text = lines.get(*current_line).cloned();
                 *has_next = *current_line + 1 < lines.len();
             }
             _ => {}

@@ -164,7 +164,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         );
         let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
-        let movement = resolve_world_tick(&s.movement, &s.leader, s, ctx.data());
+        let movement = resolve_world_tick(&s.movement, &s.leader, s, ctx.data);
 
         let has_meaningful_movement = movement.movement_event.next_state != s.movement
             || movement.movement_event.facing.is_some()

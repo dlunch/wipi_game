@@ -46,15 +46,15 @@ impl DomainEventResolver for LifecycleResolver {
         match event {
             GameEvent::StartNewGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-                Self::setup_new_game_events(ctx.data(), out);
+                Self::setup_new_game_events(ctx.data, out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-                if let Some(dialog_state) = Self::intro_dialog_state(ctx.data()) {
+                if let Some(dialog_state) = Self::intro_dialog_state(ctx.data) {
                     out.push(GameEvent::OpenDialogState(dialog_state));
                 }
             }
             GameEvent::ContinueGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-                Self::setup_continue_events(ctx.data(), out);
+                Self::setup_continue_events(ctx.data, out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
