@@ -65,22 +65,24 @@ impl GameEngine {
     }
 
     fn update(&mut self) {
-        self.process_pending_inputs();
+        let mut initial_events = self.process_pending_inputs();
         if self.render_fx.tick() {
             self.render_state.apply_tick(&self.render_fx);
         }
-        let initial = self.resolve_tick_game_events();
-        self.dispatch_game_events(initial);
+        initial_events.extend(self.resolve_tick_game_events());
+        self.dispatch_game_events(initial_events);
     }
 
-    fn process_pending_inputs(&mut self) {
+    fn process_pending_inputs(&mut self) -> Vec<GameEvent> {
+        let mut initial_events = Vec::with_capacity(16);
         let mut pending = mem::take(&mut self.pending_inputs);
         while let Some(input) = pending.pop_front() {
             let ui_events = self.resolve_ui_input_event(input);
             let initial = self.apply_ui_events(ui_events);
-            self.dispatch_game_events(initial);
+            initial_events.extend(initial);
         }
         self.pending_inputs = pending;
+        initial_events
     }
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
