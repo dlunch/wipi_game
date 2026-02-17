@@ -19,22 +19,23 @@ pub struct SpriteFrame {
 struct SpriteClip {
     fps: u8,
     looped: bool,
+    sheet_id: String,
     frames: Vec<SpriteFrame>,
 }
 
-struct SpriteSheet {
-    image: Image,
+struct AtlasData {
+    sheets: BTreeMap<String, Image>,
     clips: BTreeMap<String, SpriteClip>,
 }
 
 pub struct SpriteAtlas {
-    sheet: Option<SpriteSheet>,
+    data: Option<AtlasData>,
 }
 
 impl SpriteAtlas {
     pub fn load_default() -> Self {
-        let sheet = Self::load_sheet("images/atlas.meta");
-        Self { sheet }
+        let data = Self::load_atlas("images/atlas.meta");
+        Self { data }
     }
 
     pub fn player_frame(
@@ -66,8 +67,8 @@ impl SpriteAtlas {
     }
 
     fn frame_for_clip(&self, name: &str, tick: u32) -> Option<(&Image, SpriteFrame)> {
-        let sheet = self.sheet.as_ref()?;
-        let clip = sheet.clips.get(name)?;
+        let atlas = self.data.as_ref()?;
+        let clip = atlas.clips.get(name)?;
         if clip.frames.is_empty() {
             return None;
         }
@@ -85,28 +86,34 @@ impl SpriteAtlas {
             clip.frames[idx]
         };
 
-        Some((&sheet.image, frame))
+        let image = atlas.sheets.get(clip.sheet_id.as_str())?;
+        Some((image, frame))
     }
 
-    fn load_sheet(meta_path: &str) -> Option<SpriteSheet> {
+    fn load_atlas(meta_path: &str) -> Option<AtlasData> {
         let resource = Resource::new(meta_path).ok()?;
         let text = str::from_utf8(resource.read()).ok()?;
         let parsed = parse_meta(text).ok()?;
-        let image = Image::new(parsed.sheet_path.as_str()).ok()?;
-        Some(SpriteSheet {
-            image,
+        let mut sheets = BTreeMap::new();
+        for (sheet_id, sheet_path) in parsed.sheets {
+            let image = Image::new(sheet_path.as_str()).ok()?;
+            sheets.insert(sheet_id, image);
+        }
+        Some(AtlasData {
+            sheets,
             clips: parsed.clips,
         })
     }
 }
 
 struct ParsedMeta {
-    sheet_path: String,
+    sheets: BTreeMap<String, String>,
     clips: BTreeMap<String, SpriteClip>,
 }
 
 fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
-    let mut sheet_path: Option<String> = None;
+    let mut sheets: BTreeMap<String, String> = BTreeMap::new();
+    let mut default_sheet_id: Option<String> = None;
     let mut tile_w: u32 = 16;
     let mut tile_h: u32 = 16;
     let mut clips: BTreeMap<String, SpriteClip> = BTreeMap::new();
@@ -127,10 +134,19 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
 
         match cmd {
             "sheet" => {
-                let Some(path) = parts.next() else {
+                let Some(first) = parts.next() else {
                     return Err(());
                 };
-                sheet_path = Some(String::from(path));
+                let second = parts.next();
+                let (sheet_id, sheet_path) = if let Some(path) = second {
+                    (String::from(first), String::from(path))
+                } else {
+                    (String::from("main"), String::from(first))
+                };
+                if default_sheet_id.is_none() {
+                    default_sheet_id = Some(sheet_id.clone());
+                }
+                sheets.insert(sheet_id, sheet_path);
             }
             "tile" => {
                 let Some(w) = parts.next() else {
@@ -150,6 +166,7 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
                 let Some(name) = parts.next() else {
                     return Err(());
                 };
+                let mut sheet_id = default_sheet_id.clone().ok_or(())?;
                 let mut fps = 8u8;
                 let mut looped = true;
                 for token in parts {
@@ -157,6 +174,8 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
                         fps = raw_fps.parse().map_err(|_| ())?;
                     } else if let Some(raw_loop) = token.strip_prefix("loop=") {
                         looped = !matches!(raw_loop, "0" | "false" | "False");
+                    } else if let Some(raw_sheet) = token.strip_prefix("sheet=") {
+                        sheet_id = String::from(raw_sheet);
                     }
                 }
 
@@ -164,6 +183,7 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
                 current_clip = Some(SpriteClip {
                     fps,
                     looped,
+                    sheet_id,
                     frames: Vec::new(),
                 });
             }
@@ -199,9 +219,9 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
         clips.insert(name, clip);
     }
 
-    let Some(sheet_path) = sheet_path else {
+    if sheets.is_empty() {
         return Err(());
-    };
+    }
 
-    Ok(ParsedMeta { sheet_path, clips })
+    Ok(ParsedMeta { sheets, clips })
 }
