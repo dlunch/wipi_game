@@ -199,11 +199,10 @@ mod tests {
     }
 
     fn make_game_data_with_npc(npc: Npc, dialog: Dialog) -> GameData {
-        GameData {
-            npcs: vec![npc],
-            dialogs: vec![dialog],
-            ..GameData::default()
-        }
+        let mut data = GameData::default();
+        data.npcs = vec![npc];
+        data.dialogs = vec![dialog];
+        data
     }
 
     fn make_shop(id: &str, items: Vec<String>) -> Shop {

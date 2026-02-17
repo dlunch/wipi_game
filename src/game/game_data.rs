@@ -78,28 +78,38 @@ impl GameData {
     }
 
     pub fn find_map(&self, id: &str) -> Option<&Map> {
-        let idx = *self.map_index.get(id)?;
-        self.maps.get(idx)
+        if let Some(idx) = self.map_index.get(id).copied() {
+            return self.maps.get(idx);
+        }
+        self.maps.iter().find(|map| map.id == id)
     }
 
     pub fn find_item(&self, id: &str) -> Option<&Item> {
-        let idx = *self.item_index.get(id)?;
-        self.items.get(idx)
+        if let Some(idx) = self.item_index.get(id).copied() {
+            return self.items.get(idx);
+        }
+        self.items.iter().find(|item| item.id == id)
     }
 
     pub fn find_dialog(&self, id: &str) -> Option<&Dialog> {
-        let idx = *self.dialog_index.get(id)?;
-        self.dialogs.get(idx)
+        if let Some(idx) = self.dialog_index.get(id).copied() {
+            return self.dialogs.get(idx);
+        }
+        self.dialogs.iter().find(|dialog| dialog.id == id)
     }
 
     pub fn find_quest(&self, id: &str) -> Option<&Quest> {
-        let idx = *self.quest_index.get(id)?;
-        self.quests.get(idx)
+        if let Some(idx) = self.quest_index.get(id).copied() {
+            return self.quests.get(idx);
+        }
+        self.quests.iter().find(|quest| quest.id == id)
     }
 
     pub fn find_shop(&self, id: &str) -> Option<&Shop> {
-        let idx = *self.shop_index.get(id)?;
-        self.shops.get(idx)
+        if let Some(idx) = self.shop_index.get(id).copied() {
+            return self.shops.get(idx);
+        }
+        self.shops.iter().find(|shop| shop.id == id)
     }
 
     pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {

@@ -198,9 +198,7 @@ mod tests {
     use super::*;
     use crate::data::{Direction, Enemy, Map, Tile};
     use crate::game::state::FieldEnemy;
-    use crate::game::{
-        CharacterState, CombatEvent, GameData, GameEvent, GameState, SessionEvent, SessionState,
-    };
+    use crate::game::{CharacterState, CombatEvent, GameData, GameEvent, SessionEvent, SessionState};
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {
@@ -277,14 +275,9 @@ mod tests {
 
     fn make_session_with_map(data: &GameData, map_id: &str) -> SessionState {
         let mut session = SessionState::empty();
-        let mut state = GameState::Explore;
         assert!(
             session
-                .apply_event(
-                    data,
-                    &mut state,
-                    &GameEvent::Session(SessionEvent::SetPlayerMap(map_id.into())),
-                )
+                .apply_event(data, &GameEvent::Session(SessionEvent::SetPlayerMap(map_id.into())))
                 .is_ok()
         );
         session
@@ -310,12 +303,10 @@ mod tests {
             .collect();
         data.maps.push(map_with_npcs);
 
-        let mut game_state = GameState::Explore;
         assert!(
             session
                 .apply_event(
                     &data,
-                    &mut game_state,
                     &GameEvent::Session(SessionEvent::SetPlayerMap(map_ref.id.clone())),
                 )
                 .is_ok()
@@ -345,7 +336,6 @@ mod tests {
             session
                 .apply_event(
                     &data,
-                    &mut game_state,
                     &GameEvent::Combat(CombatEvent::SetMapEnemies {
                         enemies,
                         respawn_positions: Vec::new(),
