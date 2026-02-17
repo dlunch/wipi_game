@@ -62,10 +62,7 @@ impl CombatState {
             return Ok(());
         };
         match event {
-            CombatEvent::SyncCounters {
-                update_counter,
-                mp_regen_timer: _,
-            } => {
+            CombatEvent::SetUpdateCounter(update_counter) => {
                 self.update_counter = *update_counter;
             }
             CombatEvent::SetMapEnemies {

@@ -6,10 +6,7 @@ use alloc::vec::Vec;
 
 #[derive(Clone)]
 pub enum CombatEvent {
-    SyncCounters {
-        update_counter: u32,
-        mp_regen_timer: u32,
-    },
+    SetUpdateCounter(u32),
     SetMapEnemies {
         enemies: Vec<FieldEnemy>,
         respawn_positions: Vec<(usize, usize, usize)>,

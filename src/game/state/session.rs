@@ -129,12 +129,6 @@ impl SessionState {
                 _ => {}
             },
             GameEvent::Combat(combat_event) => match combat_event {
-                CombatEvent::SyncCounters {
-                    update_counter: _,
-                    mp_regen_timer,
-                } => {
-                    self.mp_regen_timer = *mp_regen_timer;
-                }
                 CombatEvent::SetMapEnemies { enemies, .. } => {
                     self.rebuild_enemy_occupancy_from_list(enemies);
                 }
