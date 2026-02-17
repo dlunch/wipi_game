@@ -199,7 +199,7 @@ impl GameState {
                 LoadingEvent::Tick => {}
                 LoadingEvent::Advance(step) => self.transition_to(GameState::Loading(*step)),
                 LoadingEvent::Loaded => self.transition_to(GameState::Menu),
-                LoadingEvent::Error(msg) => self.set_error(msg.clone()),
+                LoadingEvent::Error(msg) => *self = GameState::Error(msg.clone()),
             },
             GameEvent::Transition(TransitionEvent::ToExplore) => {
                 self.transition_to(GameState::Explore)
@@ -246,10 +246,6 @@ impl GameState {
             "Invalid state transition: {:?} -> {:?}",
             self, next
         ));
-    }
-
-    pub(crate) fn set_error(&mut self, message: String) {
-        *self = GameState::Error(message);
     }
 }
 

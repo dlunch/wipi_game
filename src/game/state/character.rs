@@ -45,25 +45,18 @@ impl CharacterState {
         }
     }
 
-    pub fn get_weapon(&self) -> Option<&Item> {
-        self.equipped_weapon.and_then(|i| self.inventory.get(i))
-    }
-
-    pub fn get_armor(&self) -> Option<&Item> {
-        self.equipped_armor.and_then(|i| self.inventory.get(i))
-    }
-
-    pub fn get_accessory(&self) -> Option<&Item> {
-        self.equipped_accessory.and_then(|i| self.inventory.get(i))
-    }
-
     pub fn total_atk(&self) -> i32 {
-        self.stats
-            .total_atk(self.get_weapon(), self.get_accessory())
+        self.stats.total_atk(
+            self.equipped_weapon.and_then(|i| self.inventory.get(i)),
+            self.equipped_accessory.and_then(|i| self.inventory.get(i)),
+        )
     }
 
     pub fn total_def(&self) -> i32 {
-        self.stats.total_def(self.get_armor(), self.get_accessory())
+        self.stats.total_def(
+            self.equipped_armor.and_then(|i| self.inventory.get(i)),
+            self.equipped_accessory.and_then(|i| self.inventory.get(i)),
+        )
     }
 
     pub fn has_item(&self, item_id: &str) -> bool {

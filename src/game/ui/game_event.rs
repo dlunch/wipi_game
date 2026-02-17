@@ -17,13 +17,14 @@ impl UiState {
             GameEvent::Loading(crate::game::LoadingEvent::Loaded)
             | GameEvent::Transition(crate::game::TransitionEvent::ToMenu)
             | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver) => {
-                self.menu.set_menu(MenuState::new(has_save_data()));
+                self.menu.state = MenuState::new(has_save_data());
+                self.menu.selected = 0;
             }
             GameEvent::Transition(crate::game::TransitionEvent::ToPauseMenu) => {
-                self.pause_menu.reset();
+                self.pause_menu.selected = 0;
             }
             GameEvent::Transition(crate::game::TransitionEvent::ToInventory) => {
-                self.inventory.reset();
+                self.inventory.selected = 0;
             }
             GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
@@ -32,7 +33,7 @@ impl UiState {
                     }
                 }
                 crate::game::DialogTransition::CloseToExplore => {
-                    self.dialog.close();
+                    self.dialog.state = None;
                 }
             },
             GameEvent::ShopBuyItem(_) => {}
@@ -42,15 +43,17 @@ impl UiState {
                     let current_selected = self.shop.selected;
                     if *index >= len_after && current_selected >= len_after && current_selected > 0
                     {
-                        self.shop.set_selected(current_selected - 1);
+                        self.shop.selected = current_selected - 1;
                     }
                 }
             }
             GameEvent::OpenDialogState(dialog_state) => {
-                self.dialog.open(dialog_state.clone());
+                self.dialog.state = Some(dialog_state.clone());
             }
             GameEvent::OpenShopState(shop_state) => {
-                self.shop.open((**shop_state).clone());
+                self.shop.state = Some((**shop_state).clone());
+                self.shop.mode = crate::game::ShopMode::Select;
+                self.shop.selected = 0;
             }
             _ => {}
         }

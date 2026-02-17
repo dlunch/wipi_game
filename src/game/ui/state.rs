@@ -3,7 +3,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
-use crate::game::selection::{step_down, step_up};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -133,28 +132,6 @@ impl Default for ExploreUiState {
     }
 }
 
-impl ExploreUiState {
-    pub fn events_for_key(&self, key: InputKey) -> Vec<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up
-                | InputKey::Down
-                | InputKey::Left
-                | InputKey::Right
-                | InputKey::Ok
-                | InputKey::Key0
-                | InputKey::Key1
-                | InputKey::Key2
-                | InputKey::Key3
-                | InputKey::Back
-        ) {
-            vec![UiEvent::ExploreInput(key)]
-        } else {
-            Vec::new()
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct MenuUiState {
     pub state: MenuState,
@@ -167,25 +144,6 @@ impl Default for MenuUiState {
             state: MenuState::new(false),
             selected: 0,
         }
-    }
-}
-
-impl MenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(key, InputKey::Up | InputKey::Down | InputKey::Ok) {
-            Some(UiEvent::MenuInput(key))
-        } else {
-            None
-        }
-    }
-
-    pub fn set_menu(&mut self, state: MenuState) {
-        self.state = state;
-        self.selected = 0;
-    }
-
-    pub fn set_selected(&mut self, selected: usize) {
-        self.selected = selected;
     }
 }
 
@@ -204,51 +162,9 @@ impl Default for PauseMenuUiState {
     }
 }
 
-impl PauseMenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back | InputKey::Key0
-        ) {
-            Some(UiEvent::PauseMenuInput(key))
-        } else {
-            None
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.selected = 0;
-    }
-
-    pub fn set_selected(&mut self, selected: usize) {
-        self.selected = selected;
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct InventoryUiState {
     pub selected: usize,
-}
-
-impl InventoryUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
-        ) {
-            Some(UiEvent::InventoryInput(key))
-        } else {
-            None
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.selected = 0;
-    }
-
-    pub fn set_selected(&mut self, selected: usize) {
-        self.selected = selected;
-    }
 }
 
 #[derive(Debug)]
@@ -268,109 +184,9 @@ impl Default for ShopUiState {
     }
 }
 
-impl ShopUiState {
-    pub fn open(&mut self, state: ShopState) {
-        self.state = Some(state);
-        self.mode = ShopMode::Select;
-        self.selected = 0;
-    }
-
-    pub fn reset(&mut self) {
-        *self = Self::default();
-    }
-
-    pub fn set_selected(&mut self, selected: usize) {
-        self.selected = selected;
-    }
-
-    pub fn handle_key(&mut self, key: InputKey, inventory_len: usize) -> Option<UiEvent> {
-        let shop_items_len = self
-            .state
-            .as_ref()
-            .map(|state| state.items.len())
-            .unwrap_or(0);
-
-        match self.mode {
-            ShopMode::Select => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, 2);
-                    None
-                }
-                InputKey::Ok => {
-                    if self.selected == 0 {
-                        self.mode = ShopMode::Buy;
-                    } else {
-                        self.mode = ShopMode::Sell;
-                    }
-                    self.selected = 0;
-                    None
-                }
-                InputKey::Back => Some(UiEvent::ShopClose),
-                _ => None,
-            },
-            ShopMode::Buy => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, shop_items_len);
-                    None
-                }
-                InputKey::Ok => Some(UiEvent::ShopBuySelected(self.selected)),
-                InputKey::Back => {
-                    self.mode = ShopMode::Select;
-                    self.selected = 0;
-                    None
-                }
-                _ => None,
-            },
-            ShopMode::Sell => match key {
-                InputKey::Up => {
-                    self.selected = step_up(self.selected);
-                    None
-                }
-                InputKey::Down => {
-                    self.selected = step_down(self.selected, inventory_len);
-                    None
-                }
-                InputKey::Ok => Some(UiEvent::ShopSellSelected(self.selected)),
-                InputKey::Back => {
-                    self.mode = ShopMode::Select;
-                    self.selected = 0;
-                    None
-                }
-                _ => None,
-            },
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct DialogUiState {
     pub state: Option<DialogState>,
-}
-
-impl DialogUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(key, InputKey::Ok | InputKey::Back) {
-            Some(UiEvent::DialogInput(key))
-        } else {
-            None
-        }
-    }
-
-    pub fn open(&mut self, state: DialogState) {
-        self.state = Some(state);
-    }
-
-    pub fn close(&mut self) {
-        self.state = None;
-    }
 }
 
 #[derive(Debug)]
@@ -459,87 +275,4 @@ pub enum ShopMode {
     Buy,
     Sell,
     Select,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn explore_ui_maps_ok_to_npc_interact_with_fallback_action() {
-        let ui = ExploreUiState::default();
-        let events = ui.events_for_key(InputKey::Ok);
-        assert!(matches!(
-            events.as_slice(),
-            [UiEvent::ExploreInput(InputKey::Ok)]
-        ));
-    }
-
-    #[test]
-    fn menu_ui_maps_up_down_ok_keys() {
-        let ui = MenuUiState::default();
-
-        assert!(matches!(
-            ui.event_for_key(InputKey::Up),
-            Some(UiEvent::MenuInput(InputKey::Up))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Down),
-            Some(UiEvent::MenuInput(InputKey::Down))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::MenuInput(InputKey::Ok))
-        ));
-    }
-
-    #[test]
-    fn pause_menu_ui_maps_back_and_zero_to_back_intent() {
-        let ui = PauseMenuUiState::default();
-
-        assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::PauseMenuInput(InputKey::Back))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Key0),
-            Some(UiEvent::PauseMenuInput(InputKey::Key0))
-        ));
-    }
-
-    #[test]
-    fn inventory_ui_maps_expected_keys() {
-        let ui = InventoryUiState::default();
-
-        assert!(matches!(
-            ui.event_for_key(InputKey::Up),
-            Some(UiEvent::InventoryInput(InputKey::Up))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Down),
-            Some(UiEvent::InventoryInput(InputKey::Down))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::InventoryInput(InputKey::Ok))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::InventoryInput(InputKey::Back))
-        ));
-    }
-
-    #[test]
-    fn dialog_ui_maps_expected_keys() {
-        let ui = DialogUiState::default();
-
-        assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::DialogInput(InputKey::Ok))
-        ));
-        assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::DialogInput(InputKey::Back))
-        ));
-    }
 }

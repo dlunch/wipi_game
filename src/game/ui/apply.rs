@@ -98,13 +98,13 @@ fn apply_inventory_input(
         InputKey::Up => {
             let next = step_up(selected);
             if next != selected {
-                ui.inventory.set_selected(next);
+                ui.inventory.selected = next;
             }
         }
         InputKey::Down => {
             let next = step_down(selected, s.leader.inventory.len());
             if next != selected {
-                ui.inventory.set_selected(next);
+                ui.inventory.selected = next;
             }
         }
         InputKey::Ok => {
@@ -218,7 +218,7 @@ fn apply_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {
     match event {
         MenuEvent::None => {}
         MenuEvent::SetSelected(selected) => {
-            ui.menu.set_selected(selected);
+            ui.menu.selected = selected;
         }
         MenuEvent::Action(action) => match action {
             MenuAction::NewGame => out.push(GameEvent::StartNewGame),
@@ -236,14 +236,14 @@ fn apply_pause_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEve
         InputKey::Up => {
             let next = step_up(selected);
             if next != selected {
-                ui.pause_menu.set_selected(next);
+                ui.pause_menu.selected = next;
             }
             PauseMenuAction::None
         }
         InputKey::Down => {
             let next = step_down(selected, item_count);
             if next != selected {
-                ui.pause_menu.set_selected(next);
+                ui.pause_menu.selected = next;
             }
             PauseMenuAction::None
         }
@@ -261,7 +261,7 @@ fn apply_pause_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEve
     match action {
         PauseMenuAction::None => {}
         PauseMenuAction::OpenInventory => {
-            ui.inventory.reset();
+            ui.inventory.selected = 0;
             out.push(GameEvent::Transition(TransitionEvent::ToInventory));
         }
         PauseMenuAction::OpenStats => {
@@ -271,7 +271,7 @@ fn apply_pause_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEve
             out.push(GameEvent::Transition(TransitionEvent::ToQuestLog));
         }
         PauseMenuAction::SaveAndReturnExplore => {
-            ui.shop.reset();
+            ui.shop = Default::default();
             out.push(GameEvent::SaveWorld);
             out.push(GameEvent::Transition(TransitionEvent::ToExplore));
         }
