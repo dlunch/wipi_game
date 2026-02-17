@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::data::{Direction, Item, PlayerStats};
 use crate::game::{
-    GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, SessionEvent,
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, WorldEvent,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,52 +77,52 @@ impl CharacterState {
 
 impl GameEventSubscriber for CharacterState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(kind, GameEventKind::Session | GameEventKind::Movement)
+        matches!(kind, GameEventKind::World | GameEventKind::Movement)
     }
 }
 
 impl CharacterState {
     pub fn apply_event(&mut self, _data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::Session(session_event) => match session_event {
-                SessionEvent::Create => {}
-                SessionEvent::SetPlayerName(name) => {
+            GameEvent::World(session_event) => match session_event {
+                WorldEvent::Create => {}
+                WorldEvent::SetPlayerName(name) => {
                     self.name = name.clone();
                 }
-                SessionEvent::SetPlayerStats(stats) => {
+                WorldEvent::SetPlayerStats(stats) => {
                     self.stats = stats.clone();
                 }
-                SessionEvent::SetPlayerInventory(inventory) => {
+                WorldEvent::SetPlayerInventory(inventory) => {
                     self.inventory = inventory.clone();
                 }
-                SessionEvent::SetPlayerMap(map_id) => {
+                WorldEvent::SetPlayerMap(map_id) => {
                     self.current_map_id = map_id.clone();
                 }
-                SessionEvent::SetPlayerPosition { x, y } => {
+                WorldEvent::SetPlayerPosition { x, y } => {
                     self.x = *x;
                     self.y = *y;
                 }
-                SessionEvent::SetPlayerFacing(facing) => {
+                WorldEvent::SetPlayerFacing(facing) => {
                     self.facing = *facing;
                 }
-                SessionEvent::AddPlayerItem(item) => {
+                WorldEvent::AddPlayerItem(item) => {
                     self.inventory.push(item.clone());
                 }
-                SessionEvent::SetEquippedWeapon(index) => {
+                WorldEvent::SetEquippedWeapon(index) => {
                     self.equipped_weapon = *index;
                 }
-                SessionEvent::SetEquippedArmor(index) => {
+                WorldEvent::SetEquippedArmor(index) => {
                     self.equipped_armor = *index;
                 }
-                SessionEvent::SetEquippedAccessory(index) => {
+                WorldEvent::SetEquippedAccessory(index) => {
                     self.equipped_accessory = *index;
                 }
-                SessionEvent::AddQuestProgress(_)
-                | SessionEvent::AddOpenedTreasure { .. }
-                | SessionEvent::SetSkillCooldowns(_)
-                | SessionEvent::SetMpRegenTimer(_)
-                | SessionEvent::ResetMovement
-                | SessionEvent::ResetCombat => {}
+                WorldEvent::AddQuestProgress(_)
+                | WorldEvent::AddOpenedTreasure { .. }
+                | WorldEvent::SetSkillCooldowns(_)
+                | WorldEvent::SetMpRegenTimer(_)
+                | WorldEvent::ResetMovement
+                | WorldEvent::ResetCombat => {}
             },
             GameEvent::Movement(MovementEvent::Tick(movement_event, _)) => {
                 if let Some((dx, dy)) = movement_event.facing {
@@ -151,7 +151,7 @@ mod tests {
 
     use super::*;
     use crate::data::{Item, ItemKind};
-    use crate::game::{GameEvent, SessionEvent};
+    use crate::game::{GameEvent, WorldEvent};
 
     fn make_item(id: &str, kind: ItemKind) -> Item {
         Item {
@@ -210,15 +210,15 @@ mod tests {
         ];
         player.apply_event(
             &GameData::default(),
-            &GameEvent::Session(SessionEvent::SetPlayerInventory(inventory)),
+            &GameEvent::World(WorldEvent::SetPlayerInventory(inventory)),
         )?;
         player.apply_event(
             &GameData::default(),
-            &GameEvent::Session(SessionEvent::SetEquippedWeapon(Some(0))),
+            &GameEvent::World(WorldEvent::SetEquippedWeapon(Some(0))),
         )?;
         player.apply_event(
             &GameData::default(),
-            &GameEvent::Session(SessionEvent::SetEquippedArmor(Some(1))),
+            &GameEvent::World(WorldEvent::SetEquippedArmor(Some(1))),
         )?;
         assert_eq!(player.equipped_weapon, Some(0));
         assert_eq!(player.equipped_armor, Some(1));

@@ -7,9 +7,7 @@ use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{
-    CombatEvent, GameEvent, GameEventKind, GameState, SessionEvent, TransitionEvent,
-};
+use crate::game::{CombatEvent, GameEvent, GameEventKind, GameState, TransitionEvent, WorldEvent};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -146,7 +144,7 @@ fn tick_resource_state(
         events.push(GameEvent::Combat(CombatEvent::RecoverMp(1)));
     }
     if next_mp_regen_timer != mp_regen_timer {
-        events.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(
+        events.push(GameEvent::World(WorldEvent::SetMpRegenTimer(
             next_mp_regen_timer,
         )));
     }
@@ -182,7 +180,7 @@ impl DomainEventResolver for CombatResolver {
                     "Invalid state: expected Explore"
                 );
                 let data = ctx.data.as_ref();
-                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
                 let Some(map) = data.find_map(&s.leader.current_map_id) else {
                     return Ok(());
                 };
@@ -201,7 +199,7 @@ impl DomainEventResolver for CombatResolver {
                     matches!(ctx.state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
                 if let Some((slot, skill)) = action.skill() {
                     if !s
@@ -239,7 +237,7 @@ impl DomainEventResolver for CombatResolver {
             }
             GameEvent::Transition(TransitionEvent::MapChanged) => {
                 let data = ctx.data.as_ref();
-                let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let session = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
                 let Some(map) = data.find_map(&session.leader.current_map_id) else {
                     return Ok(());
                 };

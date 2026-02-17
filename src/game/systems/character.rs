@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use crate::data::{DialogAction, Item, ItemKind, PlayerStats};
 use crate::game::state::CharacterState;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{GameEvent, GameEventKind, SessionEvent};
+use crate::game::{GameEvent, GameEventKind, WorldEvent};
 
 struct CharacterMutationResolver;
 
@@ -33,10 +33,7 @@ impl DomainEventResolver for CharacterMutationResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let leader = &ctx
-            .session
-            .ok_or_else(|| anyhow!("No active session"))?
-            .leader;
+        let leader = &ctx.world.ok_or_else(|| anyhow!("No active world"))?.leader;
 
         match event {
             GameEvent::UseInventorySelected(index) => resolve_use_item(leader, *index, out),
@@ -196,7 +193,7 @@ fn resolve_restore_hp_mp(character: &CharacterState, out: &mut Vec<GameEvent>) {
     let mut stats = character.stats.clone();
     stats.current_hp = stats.max_hp;
     stats.current_mp = stats.max_mp;
-    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
+    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
 }
 
 fn emit_character_events(
@@ -207,17 +204,15 @@ fn emit_character_events(
     equipped_accessory: Option<usize>,
     out: &mut Vec<GameEvent>,
 ) {
-    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerInventory(
-        inventory,
-    )));
-    out.push(GameEvent::Session(SessionEvent::SetEquippedWeapon(
+    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
+    out.push(GameEvent::World(WorldEvent::SetPlayerInventory(inventory)));
+    out.push(GameEvent::World(WorldEvent::SetEquippedWeapon(
         equipped_weapon,
     )));
-    out.push(GameEvent::Session(SessionEvent::SetEquippedArmor(
+    out.push(GameEvent::World(WorldEvent::SetEquippedArmor(
         equipped_armor,
     )));
-    out.push(GameEvent::Session(SessionEvent::SetEquippedAccessory(
+    out.push(GameEvent::World(WorldEvent::SetEquippedAccessory(
         equipped_accessory,
     )));
 }

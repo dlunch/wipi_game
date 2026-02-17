@@ -8,7 +8,7 @@ use crate::data::{Direction, Item, ItemKind, SkillType};
 use crate::game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatEvent, ExploreAction,
     GameData, GameEvent, GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, MovementEvent,
-    SHOP_VISIBLE_ITEMS, SessionEvent, SessionState, ShopMode, UiState, clear_screen, draw_dialog,
+    SHOP_VISIBLE_ITEMS, ShopMode, UiState, WorldEvent, WorldState, clear_screen, draw_dialog,
     draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
     draw_stats, draw_text, fill_rect,
 };
@@ -244,7 +244,7 @@ fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize 
 }
 
 fn build_explore_render(
-    session: &SessionState,
+    session: &WorldState,
     ui: &UiState,
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
@@ -358,27 +358,27 @@ fn apply_explore_render_event(
                 };
             }
         }
-        GameEvent::Session(SessionEvent::SetPlayerMap(map_id)) => {
+        GameEvent::World(WorldEvent::SetPlayerMap(map_id)) => {
             explore.map_id = map_id.clone();
         }
-        GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }) => {
+        GameEvent::World(WorldEvent::SetPlayerPosition { x, y }) => {
             explore.player_x = *x;
             explore.player_y = *y;
         }
-        GameEvent::Session(SessionEvent::SetPlayerFacing(facing)) => {
+        GameEvent::World(WorldEvent::SetPlayerFacing(facing)) => {
             explore.player_facing = *facing;
         }
-        GameEvent::Session(SessionEvent::SetPlayerStats(stats)) => {
+        GameEvent::World(WorldEvent::SetPlayerStats(stats)) => {
             explore.hp = as_u32(stats.current_hp);
             explore.max_hp = as_u32(stats.max_hp);
             explore.mp = as_u32(stats.current_mp);
             explore.max_mp = as_u32(stats.max_mp);
             explore.level = as_u32(stats.level);
         }
-        GameEvent::Session(SessionEvent::SetSkillCooldowns(cooldowns)) => {
+        GameEvent::World(WorldEvent::SetSkillCooldowns(cooldowns)) => {
             explore.skill_cooldowns = *cooldowns;
         }
-        GameEvent::Session(SessionEvent::AddOpenedTreasure { map_id, x, y }) => {
+        GameEvent::World(WorldEvent::AddOpenedTreasure { map_id, x, y }) => {
             if !explore
                 .opened_treasures
                 .iter()
@@ -469,7 +469,7 @@ fn apply_explore_render_event(
 pub fn apply_render_event(
     render_state: &mut RenderState,
     state: &GameState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
     ui: &UiState,
     data: &Rc<GameData>,
     event: &GameEvent,
@@ -497,9 +497,9 @@ pub fn apply_render_event(
         return;
     }
 
-    if let GameEvent::Session(session_event) = event {
+    if let GameEvent::World(session_event) = event {
         match session_event {
-            SessionEvent::SetPlayerInventory(player_inventory) => {
+            WorldEvent::SetPlayerInventory(player_inventory) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.items.clear();
                     inventory.items.reserve(player_inventory.len());
@@ -525,7 +525,7 @@ pub fn apply_render_event(
                     return;
                 }
             }
-            SessionEvent::AddPlayerItem(item) => {
+            WorldEvent::AddPlayerItem(item) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.items.push(item_to_inventory_render(item));
                     inventory.scroll = scroll_for_selection(
@@ -540,25 +540,25 @@ pub fn apply_render_event(
                     return;
                 }
             }
-            SessionEvent::SetEquippedWeapon(index) => {
+            WorldEvent::SetEquippedWeapon(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_weapon = *index;
                     return;
                 }
             }
-            SessionEvent::SetEquippedArmor(index) => {
+            WorldEvent::SetEquippedArmor(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_armor = *index;
                     return;
                 }
             }
-            SessionEvent::SetEquippedAccessory(index) => {
+            WorldEvent::SetEquippedAccessory(index) => {
                 if let RenderState::Inventory(inventory) = render_state {
                     inventory.equipped_accessory = *index;
                     return;
                 }
             }
-            SessionEvent::SetPlayerStats(stats) => {
+            WorldEvent::SetPlayerStats(stats) => {
                 if let RenderState::Shop(shop) = render_state {
                     shop.player_gold = stats.gold;
                     return;
@@ -574,7 +574,7 @@ pub fn apply_render_event(
                     return;
                 }
             }
-            SessionEvent::AddQuestProgress(progress) => {
+            WorldEvent::AddQuestProgress(progress) => {
                 if let RenderState::QuestLog(quest_log) = render_state {
                     if progress.rewarded {
                         quest_log
@@ -652,7 +652,7 @@ pub fn apply_render_event(
 pub fn apply_ui_render_patch(
     render_state: &mut RenderState,
     ui: &UiState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
 ) {
     match render_state {
         RenderState::Menu {
@@ -759,7 +759,7 @@ pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxSta
 
 fn render_state_from_game_state(
     state: &GameState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
     ui: &UiState,
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
@@ -972,7 +972,7 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
         }
         RenderState::NoSession => {
             clear_screen(fb);
-            draw_text(fb, 16, 16, "ERR: No session", COLOR_RED);
+            draw_text(fb, 16, 16, "ERR: No world", COLOR_RED);
         }
     }
 }

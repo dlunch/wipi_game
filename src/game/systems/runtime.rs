@@ -4,13 +4,13 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, SessionState, UiState,
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, UiState, WorldState,
 };
 
 pub struct ResolveContext<'a> {
     pub state: &'a GameState,
     pub data: &'a mut Rc<GameData>,
-    pub session: Option<&'a SessionState>,
+    pub world: Option<&'a WorldState>,
     pub ui: &'a UiState,
 }
 

@@ -5,13 +5,13 @@ use core::str;
 use anyhow::{Result, anyhow};
 use wipi::database::{Database, OpenMode};
 
-use super::{CharacterState, SessionState};
+use super::{CharacterState, WorldState};
 use crate::data::QuestProgress;
 use crate::game::save_schema;
 
 const SAVE_DB_NAME: &str = "save";
 
-pub fn save_game(session: &SessionState) -> Result<()> {
+pub fn save_game(session: &WorldState) -> Result<()> {
     let data = save_schema::serialize(&session.leader, &session.quests, &session.opened_treasures);
 
     let mut db = Database::open(SAVE_DB_NAME, OpenMode::ReadWrite)

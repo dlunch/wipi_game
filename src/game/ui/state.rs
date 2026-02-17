@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use crate::data::{Dialog, DialogAction, DialogLine, Direction, Item, Shop, Skill};
 use crate::game::selection::{step_down, step_up};
-use crate::game::{GameEvent, GameState, SessionState, TransitionEvent};
+use crate::game::{GameEvent, GameState, TransitionEvent, WorldState};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -62,7 +62,7 @@ pub trait UiInputEventResolver {
         &mut self,
         input: GameInput,
         game_state: &GameState,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
     ) -> Vec<UiEvent>;
 }
 
@@ -86,7 +86,7 @@ impl UiInputEventResolver for UiState {
         &mut self,
         input: GameInput,
         game_state: &GameState,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
     ) -> Vec<UiEvent> {
         resolve_input(input, game_state, self, session)
     }
@@ -95,7 +95,7 @@ impl UiInputEventResolver for UiState {
 pub trait UiEventApplier {
     fn apply_ui_event(
         &mut self,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
     );
@@ -136,7 +136,7 @@ pub enum DialogTransition {
 impl UiEventApplier for UiState {
     fn apply_ui_event(
         &mut self,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
     ) {
@@ -188,7 +188,7 @@ impl UiState {
 
     fn apply_inventory_input(
         &mut self,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
         key: InputKey,
         out: &mut Vec<GameEvent>,
     ) {
@@ -263,7 +263,7 @@ impl UiState {
 
     fn apply_shop_buy_selected(
         &self,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
         selected: usize,
         out: &mut Vec<GameEvent>,
     ) {
@@ -375,7 +375,7 @@ impl UiState {
             }
             PauseMenuAction::SaveAndReturnExplore => {
                 self.shop.reset();
-                out.push(GameEvent::SaveSession);
+                out.push(GameEvent::SaveWorld);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             PauseMenuAction::BackToExplore => {
@@ -389,7 +389,7 @@ fn resolve_input(
     input: GameInput,
     game_state: &GameState,
     ui: &mut UiState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
 ) -> Vec<UiEvent> {
     match input {
         GameInput::KeyDown(key) => resolve_keydown(key, game_state, ui, session),
@@ -401,7 +401,7 @@ fn resolve_keydown(
     key: InputKey,
     game_state: &GameState,
     ui: &mut UiState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
 ) -> Vec<UiEvent> {
     match game_state {
         GameState::Loading(_) => Vec::new(),
@@ -446,7 +446,7 @@ fn resolve_keydown(
 fn resolve_keyup(
     key: InputKey,
     game_state: &GameState,
-    session: Option<&SessionState>,
+    session: Option<&WorldState>,
 ) -> Vec<UiEvent> {
     if matches!(game_state, GameState::Explore)
         && session.is_some()

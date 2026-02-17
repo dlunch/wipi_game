@@ -10,15 +10,15 @@ use core::mem;
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderFxState, RenderState, ResolveContext, SessionState, UiEvent,
-    UiEventApplier, UiInputEventResolver, UiState, apply_render_event, apply_render_tick,
+    GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
+    UiInputEventResolver, UiState, WorldState, apply_render_event, apply_render_tick,
     apply_ui_render_patch, domain_resolvers,
 };
 
 pub struct GameEngine {
     state: GameState,
     data: Rc<GameData>,
-    session: Option<SessionState>,
+    world: Option<WorldState>,
     ui: UiState,
     render_fx: RenderFxState,
     render_state: RenderState,
@@ -42,7 +42,7 @@ impl GameEngine {
         Self {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
-            session: None,
+            world: None,
             ui: UiState::default(),
             render_fx: RenderFxState::default(),
             render_state: RenderState::Loading { step: 0 },
@@ -90,7 +90,7 @@ impl GameEngine {
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
         self.ui
-            .resolve_input(input, &self.state, self.session.as_ref())
+            .resolve_input(input, &self.state, self.world.as_ref())
     }
 
     fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
@@ -104,11 +104,10 @@ impl GameEngine {
     fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>) -> Vec<GameEvent> {
         let mut out = Vec::with_capacity(ui_events.len() * 2);
         for event in ui_events {
-            self.ui
-                .apply_ui_event(self.session.as_ref(), event, &mut out);
+            self.ui.apply_ui_event(self.world.as_ref(), event, &mut out);
         }
         if out.is_empty() {
-            apply_ui_render_patch(&mut self.render_state, &self.ui, self.session.as_ref());
+            apply_ui_render_patch(&mut self.render_state, &self.ui, self.world.as_ref());
         }
         out
     }
@@ -116,16 +115,16 @@ impl GameEngine {
     fn resolve_with_handlers(&mut self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
         out.clear();
         if matches!(event, GameEvent::UpdateCombat)
-            && let Some(session) = self.session.as_ref()
+            && let Some(world) = self.world.as_ref()
         {
-            out.reserve(session.combat.enemies.len() * 4 + 16);
+            out.reserve(world.combat.enemies.len() * 4 + 16);
         }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
             let mut ctx = ResolveContext {
                 state: &self.state,
                 data: &mut self.data,
-                session: self.session.as_ref(),
+                world: self.world.as_ref(),
                 ui: &self.ui,
             };
             (*resolver).resolve(&mut ctx, event, out)?;
@@ -134,10 +133,10 @@ impl GameEngine {
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
-        let is_session_event = matches!(event, GameEvent::Session(_));
+        let is_session_event = matches!(event, GameEvent::World(_));
 
-        if matches!(event, GameEvent::Session(crate::game::SessionEvent::Create)) {
-            self.session = Some(SessionState::empty());
+        if matches!(event, GameEvent::World(crate::game::WorldEvent::Create)) {
+            self.world = Some(WorldState::empty());
         }
 
         if let GameEvent::Exit(code) = &event {
@@ -148,9 +147,9 @@ impl GameEngine {
             self.state.apply_event(&event)?;
         }
 
-        if self.state.requires_session() && self.session.is_none() {
+        if self.state.requires_world() && self.world.is_none() {
             self.state = GameState::Error(format!(
-                "Missing session for state transition: {:?}",
+                "Missing world for state transition: {:?}",
                 self.state
             ));
             return Ok(());
@@ -162,19 +161,19 @@ impl GameEngine {
                 | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver)
         ) && !is_session_event
         {
-            self.session = None;
+            self.world = None;
         }
 
-        if let Some(session) = self.session.as_mut() {
-            session.apply_domain_event(&self.data, &self.state, &event)?;
+        if let Some(world) = self.world.as_mut() {
+            world.apply_domain_event(&self.data, &self.state, &event)?;
 
-            if matches!(event, GameEvent::SaveSession) {
-                let _ = crate::game::save_game(session);
+            if matches!(event, GameEvent::SaveWorld) {
+                let _ = crate::game::save_game(world);
             }
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
-            self.ui.apply_game_event(self.session.as_ref(), &event)?;
+            self.ui.apply_game_event(self.world.as_ref(), &event)?;
         }
 
         if self.render_fx.apply_event(&event) {
@@ -183,7 +182,7 @@ impl GameEngine {
         apply_render_event(
             &mut self.render_state,
             &self.state,
-            self.session.as_ref(),
+            self.world.as_ref(),
             &self.ui,
             &self.data,
             &event,

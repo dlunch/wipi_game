@@ -8,7 +8,7 @@ use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, GameState, SessionState,
+    DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, GameState, WorldState,
 };
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub enum NpcEvent {
     RestoreStats,
 }
 
-fn try_interact(session: &SessionState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
+fn try_interact(session: &WorldState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
     let (target_x, target_y) = facing.apply(session.leader.x, session.leader.y);
 
     let npc = data.find_npc_at(&session.leader.current_map_id, target_x, target_y)?;
@@ -74,7 +74,7 @@ fn try_interact(session: &SessionState, data: &GameData, facing: Direction) -> O
     None
 }
 
-fn filter_lines(session: &SessionState, dialog: &Dialog) -> Vec<DialogLine> {
+fn filter_lines(session: &WorldState, dialog: &Dialog) -> Vec<DialogLine> {
     dialog
         .lines
         .iter()
@@ -117,7 +117,7 @@ impl DomainEventResolver for NpcResolver {
                     matches!(ctx.state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
                 if let Some(npc_event) = try_interact(s, ctx.data(), *facing) {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
@@ -162,8 +162,8 @@ mod tests {
     use super::*;
     use crate::data::{Npc, QuestProgress, Shop};
 
-    fn make_session() -> SessionState {
-        let mut session = SessionState::empty();
+    fn make_session() -> WorldState {
+        let mut session = WorldState::empty();
         session.leader = crate::game::CharacterState::new(String::from("H"), "v");
         session
     }

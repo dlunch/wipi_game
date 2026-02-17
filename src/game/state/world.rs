@@ -9,11 +9,11 @@ use crate::game::state::FieldEnemy;
 
 use crate::game::{
     CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameEventKind,
-    GameEventSubscriber, GameState, MovementState, SessionEvent,
+    GameEventSubscriber, GameState, MovementState, WorldEvent,
 };
 
 #[derive(Clone)]
-pub struct SessionState {
+pub struct WorldState {
     pub leader: CharacterState,
     pub companions: Vec<CharacterState>,
     pub quests: Vec<QuestProgress>,
@@ -30,7 +30,7 @@ pub struct SessionState {
     enemy_positions: Vec<(u32, usize, usize)>,
 }
 
-impl SessionState {
+impl WorldState {
     pub fn empty() -> Self {
         Self {
             leader: CharacterState::new(String::new(), ""),
@@ -82,27 +82,27 @@ impl SessionState {
 
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::Session(session_event) => match session_event {
-                SessionEvent::Create => {
+            GameEvent::World(session_event) => match session_event {
+                WorldEvent::Create => {
                     self.clear_occupancy();
                 }
-                SessionEvent::SetSkillCooldowns(cooldowns) => {
+                WorldEvent::SetSkillCooldowns(cooldowns) => {
                     self.skill_cooldowns = *cooldowns;
                 }
-                SessionEvent::SetMpRegenTimer(timer) => {
+                WorldEvent::SetMpRegenTimer(timer) => {
                     self.mp_regen_timer = *timer;
                 }
-                SessionEvent::ResetMovement => {
+                WorldEvent::ResetMovement => {
                     self.movement = MovementState::default();
                 }
-                SessionEvent::ResetCombat => {
+                WorldEvent::ResetCombat => {
                     self.combat = CombatState::default();
                     self.clear_enemy_occupancy();
                 }
-                SessionEvent::SetPlayerMap(map_id) => {
+                WorldEvent::SetPlayerMap(map_id) => {
                     self.rebuild_npc_occupancy_for_map(data, map_id);
                 }
-                SessionEvent::AddQuestProgress(progress) => {
+                WorldEvent::AddQuestProgress(progress) => {
                     if let Some(existing) = self
                         .quests
                         .iter_mut()
@@ -113,7 +113,7 @@ impl SessionState {
                         self.quests.push(progress.clone());
                     }
                 }
-                SessionEvent::AddOpenedTreasure { map_id, x, y } => {
+                WorldEvent::AddOpenedTreasure { map_id, x, y } => {
                     if !self.is_treasure_opened(map_id, *x, *y) {
                         self.opened_treasures.push((map_id.clone(), *x, *y));
                     }
@@ -170,7 +170,7 @@ impl SessionState {
     }
 }
 
-impl SessionState {
+impl WorldState {
     fn clear_occupancy(&mut self) {
         self.occupied_map_id.clear();
         self.occupied_width = 0;
@@ -270,8 +270,8 @@ impl SessionState {
     }
 }
 
-impl GameEventSubscriber for SessionState {
+impl GameEventSubscriber for WorldState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(kind, GameEventKind::Session | GameEventKind::Combat)
+        matches!(kind, GameEventKind::World | GameEventKind::Combat)
     }
 }

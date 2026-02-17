@@ -1,13 +1,13 @@
 use anyhow::Result;
 
 use crate::game::{
-    GameEvent, GameEventKind, GameEventSubscriber, MenuState, SessionState, UiState, has_save_data,
+    GameEvent, GameEventKind, GameEventSubscriber, MenuState, UiState, WorldState, has_save_data,
 };
 
 impl UiState {
     pub fn apply_game_event(
         &mut self,
-        session: Option<&SessionState>,
+        session: Option<&WorldState>,
         event: &GameEvent,
     ) -> Result<()> {
         match event {

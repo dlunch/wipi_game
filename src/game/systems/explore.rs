@@ -31,7 +31,7 @@ impl DomainEventResolver for ExploreResolver {
                     matches!(ctx.state, GameState::Explore),
                     "Invalid state: expected Explore"
                 );
-                let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
+                let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
                 match input {
                     ExploreCommand::Move(direction) => {
@@ -74,7 +74,7 @@ impl DomainEventResolver for ExploreResolver {
                 ));
             }
             GameEvent::Explore(ExploreEvent::EnterMenu) => {
-                out.push(GameEvent::SaveSession);
+                out.push(GameEvent::SaveWorld);
                 out.push(GameEvent::Transition(crate::game::TransitionEvent::ToMenu));
             }
             _ => {}

@@ -1,7 +1,7 @@
 mod character;
 mod combat;
 mod movement;
-pub(crate) mod session;
+pub(crate) mod world;
 
 pub use character::{CharacterState, TileEvent};
 pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
@@ -60,7 +60,7 @@ impl GameState {
         }
     }
 
-    pub fn requires_session(&self) -> bool {
+    pub fn requires_world(&self) -> bool {
         matches!(
             self,
             GameState::Explore

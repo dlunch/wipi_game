@@ -4,15 +4,15 @@ mod rendering;
 mod save;
 mod save_schema;
 mod selection;
-mod session;
 mod state;
 mod systems;
 mod ui;
+mod world;
 
 pub use game_data::GameData;
 pub use game_event::{
     CombatEvent, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent,
-    SessionEvent, TransitionEvent,
+    TransitionEvent, WorldEvent,
 };
 pub use rendering::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreRender,
@@ -22,7 +22,6 @@ pub use rendering::{
     draw_stats, draw_text, fill_rect, render,
 };
 pub use save::{has_save_data, load_game, save_game};
-pub use session::SessionState;
 pub use state::{
     CharacterState, CombatState, GameState, MovementState, MovementTickEvent, TileEvent,
 };
@@ -34,3 +33,4 @@ pub use ui::{
     INVENTORY_VISIBLE_ITEMS, InputKey, MenuAction, MenuState, SHOP_VISIBLE_ITEMS, ShopMode,
     ShopState, UiEvent, UiEventApplier, UiInputEventResolver, UiState,
 };
+pub use world::WorldState;

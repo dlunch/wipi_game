@@ -9,8 +9,8 @@ use anyhow::{Result, anyhow};
 use crate::data::Tile;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, SessionEvent,
-    TransitionEvent, load_game,
+    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, TransitionEvent,
+    WorldEvent, load_game,
 };
 
 #[derive(Clone)]
@@ -137,44 +137,40 @@ fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) {
         player.y = y;
     }
 
-    out.push(GameEvent::Session(SessionEvent::Create));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerName(
+    out.push(GameEvent::World(WorldEvent::Create));
+    out.push(GameEvent::World(WorldEvent::SetPlayerName(
         player.name.clone(),
     )));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(
+    out.push(GameEvent::World(WorldEvent::SetPlayerStats(
         player.stats.clone(),
     )));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerMap(
+    out.push(GameEvent::World(WorldEvent::SetPlayerMap(
         player.current_map_id.clone(),
     )));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerPosition {
+    out.push(GameEvent::World(WorldEvent::SetPlayerPosition {
         x: player.x,
         y: player.y,
     }));
-    out.push(GameEvent::Session(SessionEvent::SetPlayerFacing(
-        player.facing,
-    )));
+    out.push(GameEvent::World(WorldEvent::SetPlayerFacing(player.facing)));
 
     for item in &player.inventory {
-        out.push(GameEvent::Session(SessionEvent::AddPlayerItem(
-            item.clone(),
-        )));
+        out.push(GameEvent::World(WorldEvent::AddPlayerItem(item.clone())));
     }
 
-    out.push(GameEvent::Session(SessionEvent::SetEquippedWeapon(
+    out.push(GameEvent::World(WorldEvent::SetEquippedWeapon(
         player.equipped_weapon,
     )));
-    out.push(GameEvent::Session(SessionEvent::SetEquippedArmor(
+    out.push(GameEvent::World(WorldEvent::SetEquippedArmor(
         player.equipped_armor,
     )));
-    out.push(GameEvent::Session(SessionEvent::SetEquippedAccessory(
+    out.push(GameEvent::World(WorldEvent::SetEquippedAccessory(
         player.equipped_accessory,
     )));
 
-    out.push(GameEvent::Session(SessionEvent::SetSkillCooldowns([0; 3])));
-    out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
-    out.push(GameEvent::Session(SessionEvent::ResetMovement));
-    out.push(GameEvent::Session(SessionEvent::ResetCombat));
+    out.push(GameEvent::World(WorldEvent::SetSkillCooldowns([0; 3])));
+    out.push(GameEvent::World(WorldEvent::SetMpRegenTimer(0)));
+    out.push(GameEvent::World(WorldEvent::ResetMovement));
+    out.push(GameEvent::World(WorldEvent::ResetCombat));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));
 }
 
@@ -202,57 +198,53 @@ fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) {
                 player.y = y;
             }
 
-            out.push(GameEvent::Session(SessionEvent::Create));
-            out.push(GameEvent::Session(SessionEvent::SetPlayerName(
+            out.push(GameEvent::World(WorldEvent::Create));
+            out.push(GameEvent::World(WorldEvent::SetPlayerName(
                 player.name.clone(),
             )));
-            out.push(GameEvent::Session(SessionEvent::SetPlayerStats(
+            out.push(GameEvent::World(WorldEvent::SetPlayerStats(
                 player.stats.clone(),
             )));
-            out.push(GameEvent::Session(SessionEvent::SetPlayerMap(
+            out.push(GameEvent::World(WorldEvent::SetPlayerMap(
                 player.current_map_id.clone(),
             )));
-            out.push(GameEvent::Session(SessionEvent::SetPlayerPosition {
+            out.push(GameEvent::World(WorldEvent::SetPlayerPosition {
                 x: player.x,
                 y: player.y,
             }));
-            out.push(GameEvent::Session(SessionEvent::SetPlayerFacing(
-                player.facing,
-            )));
+            out.push(GameEvent::World(WorldEvent::SetPlayerFacing(player.facing)));
 
             for item in &player.inventory {
-                out.push(GameEvent::Session(SessionEvent::AddPlayerItem(
-                    item.clone(),
-                )));
+                out.push(GameEvent::World(WorldEvent::AddPlayerItem(item.clone())));
             }
 
-            out.push(GameEvent::Session(SessionEvent::SetEquippedWeapon(
+            out.push(GameEvent::World(WorldEvent::SetEquippedWeapon(
                 player.equipped_weapon,
             )));
-            out.push(GameEvent::Session(SessionEvent::SetEquippedArmor(
+            out.push(GameEvent::World(WorldEvent::SetEquippedArmor(
                 player.equipped_armor,
             )));
-            out.push(GameEvent::Session(SessionEvent::SetEquippedAccessory(
+            out.push(GameEvent::World(WorldEvent::SetEquippedAccessory(
                 player.equipped_accessory,
             )));
 
             for quest in &quests {
-                out.push(GameEvent::Session(SessionEvent::AddQuestProgress(
+                out.push(GameEvent::World(WorldEvent::AddQuestProgress(
                     quest.clone(),
                 )));
             }
             for (map_id, x, y) in &opened_treasures {
-                out.push(GameEvent::Session(SessionEvent::AddOpenedTreasure {
+                out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
                     map_id: map_id.clone(),
                     x: *x,
                     y: *y,
                 }));
             }
 
-            out.push(GameEvent::Session(SessionEvent::SetSkillCooldowns([0; 3])));
-            out.push(GameEvent::Session(SessionEvent::SetMpRegenTimer(0)));
-            out.push(GameEvent::Session(SessionEvent::ResetMovement));
-            out.push(GameEvent::Session(SessionEvent::ResetCombat));
+            out.push(GameEvent::World(WorldEvent::SetSkillCooldowns([0; 3])));
+            out.push(GameEvent::World(WorldEvent::SetMpRegenTimer(0)));
+            out.push(GameEvent::World(WorldEvent::ResetMovement));
+            out.push(GameEvent::World(WorldEvent::ResetCombat));
             out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
         Ok(false) | Err(_) => setup_new_game_events(data, out),
