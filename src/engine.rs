@@ -73,6 +73,8 @@ impl GameEngine {
             let initial = self.apply_ui_events(ui_events);
             initial_events.extend(initial);
         }
+        self.render_state
+            .apply_ui_patch(&self.ui, self.world.as_ref());
         self.pending_inputs = pending;
         if self.render_fx.tick() {
             self.render_state.apply_tick(&self.render_fx);
@@ -96,8 +98,6 @@ impl GameEngine {
         for event in ui_events {
             self.ui.apply_ui_event(self.world.as_ref(), event, &mut out);
         }
-        self.render_state
-            .apply_ui_patch(&self.ui, self.world.as_ref());
         out
     }
 
