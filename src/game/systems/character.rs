@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use crate::data::{DialogAction, Item, ItemKind, PlayerStats};
 use crate::game::state::CharacterState;
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{GameData, GameEvent, GameEventKind, GameState, WorldEvent, WorldState};
+use crate::game::{GameData, GameEvent, GameEventKind, WorldEvent, WorldState};
 
 struct CharacterMutationResolver;
 
@@ -30,7 +30,6 @@ impl DomainEventResolver for CharacterMutationResolver {
 
     fn resolve(
         &self,
-        _state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,

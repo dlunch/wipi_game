@@ -2,15 +2,14 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, GameState, TransitionEvent, WorldEvent,
-    WorldState,
+    CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
 };
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -173,7 +172,6 @@ impl DomainEventResolver for CombatResolver {
 
     fn resolve(
         &self,
-        state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,
@@ -181,10 +179,6 @@ impl DomainEventResolver for CombatResolver {
     ) -> Result<()> {
         match event {
             GameEvent::UpdateCombat => {
-                ensure!(
-                    matches!(state, GameState::Explore),
-                    "Invalid state: expected Explore"
-                );
                 let data = data.as_ref();
                 let s = world.ok_or_else(|| anyhow!("No active world"))?;
                 let Some(map) = data.find_map(&s.leader.current_map_id) else {
@@ -201,10 +195,6 @@ impl DomainEventResolver for CombatResolver {
                 );
             }
             GameEvent::CombatPlayerAction(action) => {
-                ensure!(
-                    matches!(state, GameState::Explore),
-                    "Invalid state: expected Explore"
-                );
                 let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
                 if let Some((slot, skill)) = action.skill() {

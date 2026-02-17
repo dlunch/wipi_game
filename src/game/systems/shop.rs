@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{GameData, GameEvent, GameEventKind, GameState, ShopState, WorldState};
+use crate::game::{GameData, GameEvent, GameEventKind, ShopState, WorldState};
 struct OpenShopByIdResolver;
 
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;
@@ -22,7 +22,6 @@ impl DomainEventResolver for OpenShopByIdResolver {
 
     fn resolve(
         &self,
-        _state: &GameState,
         data: &Rc<GameData>,
         _world: Option<&WorldState>,
         event: &GameEvent,

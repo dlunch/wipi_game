@@ -7,8 +7,8 @@ use anyhow::{Result, anyhow};
 use crate::data::{DialogAction, QuestProgress, QuestType};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, GameState, MovementEvent, TransitionEvent,
-    WorldEvent, WorldState,
+    CombatEvent, GameData, GameEvent, GameEventKind, MovementEvent, TransitionEvent, WorldEvent,
+    WorldState,
 };
 
 struct SessionLogicResolver;
@@ -31,7 +31,6 @@ impl DomainEventResolver for SessionLogicResolver {
 
     fn resolve(
         &self,
-        _state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,

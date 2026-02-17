@@ -3,13 +3,12 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, WorldState};
+use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, WorldState};
 
 pub trait DomainEventResolver: GameEventSubscriber {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];
     fn resolve(
         &self,
-        state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,

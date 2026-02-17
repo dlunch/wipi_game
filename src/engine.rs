@@ -112,13 +112,7 @@ impl GameEngine {
         let mut out = Vec::with_capacity(8);
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
-            resolver.resolve(
-                &self.state,
-                &self.data,
-                self.world.as_ref(),
-                event,
-                &mut out,
-            )?;
+            resolver.resolve(&self.data, self.world.as_ref(), event, &mut out)?;
         }
         Ok(out)
     }

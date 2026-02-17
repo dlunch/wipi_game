@@ -9,8 +9,8 @@ use crate::data::Tile;
 use crate::game::save::load_game;
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, TransitionEvent,
-    WorldEvent, WorldState,
+    CharacterState, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
+    WorldState,
 };
 
 #[derive(Clone)]
@@ -46,7 +46,6 @@ impl DomainEventResolver for LifecycleResolver {
 
     fn resolve(
         &self,
-        _state: &GameState,
         data: &Rc<GameData>,
         _world: Option<&WorldState>,
         event: &GameEvent,

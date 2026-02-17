@@ -3,14 +3,12 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, GameState, WorldState,
-};
+use crate::game::{DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, WorldState};
 
 #[derive(Debug, Clone)]
 pub struct DialogSpec {
@@ -105,7 +103,6 @@ impl DomainEventResolver for NpcResolver {
 
     fn resolve(
         &self,
-        state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,
@@ -116,10 +113,6 @@ impl DomainEventResolver for NpcResolver {
                 facing,
                 fallback_action,
             }) => {
-                ensure!(
-                    matches!(state, GameState::Explore),
-                    "Invalid state: expected Explore"
-                );
                 let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
                 if let Some(npc_event) = try_interact_npc(s, data, *facing) {

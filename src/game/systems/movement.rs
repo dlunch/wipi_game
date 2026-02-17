@@ -2,13 +2,13 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Map, Tile};
 
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
+    CharacterState, GameData, GameEvent, GameEventKind, MovementEvent, MovementState,
     MovementTickEvent, TileEvent, WorldState,
 };
 
@@ -138,16 +138,11 @@ impl DomainEventResolver for UpdateMovementResolver {
 
     fn resolve(
         &self,
-        state: &GameState,
         data: &Rc<GameData>,
         world: Option<&WorldState>,
         _event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        ensure!(
-            matches!(state, GameState::Explore),
-            "Invalid state: expected Explore"
-        );
         let s = world.ok_or_else(|| anyhow!("No active world"))?;
 
         let movement = resolve_world_tick(&s.movement, &s.leader, s, data);
