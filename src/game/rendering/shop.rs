@@ -82,7 +82,7 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopRender) {
         } else if can_afford {
             (COLOR_GRAY, COLOR_GRAY)
         } else {
-            (COLOR_DARK_GRAY, COLOR_DARK_GRAY)
+            (COLOR_GRAY, COLOR_DARK_GRAY)
         };
 
         if is_selected {
