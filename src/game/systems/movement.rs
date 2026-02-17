@@ -58,19 +58,6 @@ pub fn resolve_world_tick(
     }
 }
 
-#[cfg(test)]
-pub fn resolve_tick(
-    state: &MovementState,
-    player: &CharacterState,
-    map: Option<&Map>,
-    enemy_positions: &[(usize, usize)],
-    npc_positions: &[(usize, usize)],
-) -> MovementTickEvent {
-    resolve_tick_with_occupancy(state, player, map, |x, y| {
-        position_occupied(enemy_positions, x, y) || position_occupied(npc_positions, x, y)
-    })
-}
-
 fn resolve_tick_with_occupancy(
     state: &MovementState,
     player: &CharacterState,
@@ -131,11 +118,6 @@ fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
     let new_x = (player.x as i32 + dx) as usize;
     let new_y = (player.y as i32 + dy) as usize;
     map.get_tile(new_x, new_y).is_passable()
-}
-
-#[cfg(test)]
-fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
-    positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
 }
 
 fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) -> Option<TileEvent> {
@@ -283,6 +265,22 @@ mod tests {
             peaceful: false,
         });
         data
+    }
+
+    fn resolve_tick(
+        state: &MovementState,
+        player: &CharacterState,
+        map: Option<&Map>,
+        enemy_positions: &[(usize, usize)],
+        npc_positions: &[(usize, usize)],
+    ) -> MovementTickEvent {
+        super::resolve_tick_with_occupancy(state, player, map, |x, y| {
+            position_occupied(enemy_positions, x, y) || position_occupied(npc_positions, x, y)
+        })
+    }
+
+    fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
+        positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
     }
 
     #[test]
