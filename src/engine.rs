@@ -78,10 +78,8 @@ impl GameEngine {
     fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>) -> Vec<GameEvent> {
         let mut out = Vec::with_capacity(ui_events.len() * 2);
         for event in ui_events {
-            let ui_out = self.ui.apply_ui_event(self.session.as_ref(), event);
-            for game_event in ui_out {
-                out.push(game_event);
-            }
+            self.ui
+                .apply_ui_event(self.session.as_ref(), event, &mut out);
         }
         out
     }

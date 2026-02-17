@@ -93,7 +93,12 @@ impl UiInputEventResolver for UiState {
 }
 
 pub trait UiEventApplier {
-    fn apply_ui_event(&mut self, session: Option<&SessionState>, event: UiEvent) -> Vec<GameEvent>;
+    fn apply_ui_event(
+        &mut self,
+        session: Option<&SessionState>,
+        event: UiEvent,
+        out: &mut Vec<GameEvent>,
+    );
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -129,27 +134,60 @@ pub enum DialogTransition {
 }
 
 impl UiEventApplier for UiState {
-    fn apply_ui_event(&mut self, session: Option<&SessionState>, event: UiEvent) -> Vec<GameEvent> {
+    fn apply_ui_event(
+        &mut self,
+        session: Option<&SessionState>,
+        event: UiEvent,
+        out: &mut Vec<GameEvent>,
+    ) {
         match event {
             UiEvent::OverlayCloseRequested => {
-                vec![GameEvent::Transition(TransitionEvent::ToExplore)]
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore))
             }
             UiEvent::GameOverConfirmRequested => {
-                vec![GameEvent::Transition(TransitionEvent::ToMenuFromGameOver)]
+                out.push(GameEvent::Transition(TransitionEvent::ToMenuFromGameOver))
             }
-            UiEvent::ErrorConfirmRequested => vec![GameEvent::Exit(1)],
-            UiEvent::MovementKeyReleased(direction) => vec![GameEvent::Transition(
+            UiEvent::ErrorConfirmRequested => out.push(GameEvent::Exit(1)),
+            UiEvent::MovementKeyReleased(direction) => out.push(GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
-            )],
-            UiEvent::MenuInput(key) => self.resolve_menu_input(key),
-            UiEvent::PauseMenuInput(key) => self.resolve_pause_menu_input(key),
-            UiEvent::ExploreInput(key) => self.resolve_explore_input(key),
-            UiEvent::InventoryInput(key) => self.resolve_inventory_input(session, key),
-            UiEvent::DialogInput(key) => self.resolve_dialog_input(key),
-            UiEvent::ShopBuySelected(selected) => self.resolve_shop_buy_selected(session, selected),
-            UiEvent::ShopSellSelected(selected) => self.resolve_shop_sell_selected(selected),
-            UiEvent::ShopClose => vec![GameEvent::Transition(TransitionEvent::ToExplore)],
-        }
+            )),
+            UiEvent::MenuInput(key) => {
+                for event in self.resolve_menu_input(key) {
+                    out.push(event);
+                }
+            }
+            UiEvent::PauseMenuInput(key) => {
+                for event in self.resolve_pause_menu_input(key) {
+                    out.push(event);
+                }
+            }
+            UiEvent::ExploreInput(key) => {
+                for event in self.resolve_explore_input(key) {
+                    out.push(event);
+                }
+            }
+            UiEvent::InventoryInput(key) => {
+                for event in self.resolve_inventory_input(session, key) {
+                    out.push(event);
+                }
+            }
+            UiEvent::DialogInput(key) => {
+                for event in self.resolve_dialog_input(key) {
+                    out.push(event);
+                }
+            }
+            UiEvent::ShopBuySelected(selected) => {
+                for event in self.resolve_shop_buy_selected(session, selected) {
+                    out.push(event);
+                }
+            }
+            UiEvent::ShopSellSelected(selected) => {
+                for event in self.resolve_shop_sell_selected(selected) {
+                    out.push(event);
+                }
+            }
+            UiEvent::ShopClose => out.push(GameEvent::Transition(TransitionEvent::ToExplore)),
+        };
     }
 }
 
