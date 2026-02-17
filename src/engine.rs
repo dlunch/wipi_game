@@ -96,10 +96,8 @@ impl GameEngine {
         for event in ui_events {
             self.ui.apply_ui_event(self.world.as_ref(), event, &mut out);
         }
-        if out.is_empty() {
-            self.render_state
-                .apply_ui_patch(&self.ui, self.world.as_ref());
-        }
+        self.render_state
+            .apply_ui_patch(&self.ui, self.world.as_ref());
         out
     }
 
