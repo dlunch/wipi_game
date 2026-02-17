@@ -24,6 +24,7 @@ pub struct GameEngine {
     render_state: RenderState,
     render_dirty: bool,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
+    pending_inputs: VecDeque<GameInput>,
     event_queue: VecDeque<GameEvent>,
     derived_events: Vec<GameEvent>,
 }
@@ -48,23 +49,18 @@ impl GameEngine {
             render_state: RenderState::Loading { step: 0 },
             render_dirty: true,
             resolver_buckets,
+            pending_inputs: VecDeque::with_capacity(32),
             event_queue: VecDeque::with_capacity(128),
             derived_events: Vec::with_capacity(32),
         }
     }
 
     pub fn on_keydown(&mut self, key: InputKey) {
-        let ui_events = self.resolve_ui_input_event(GameInput::KeyDown(key));
-        let initial = self.apply_ui_events(ui_events);
-        self.dispatch_game_events(initial);
-        self.rebuild_render_state_if_dirty();
+        self.pending_inputs.push_back(GameInput::KeyDown(key));
     }
 
     pub fn on_keyup(&mut self, key: InputKey) {
-        let ui_events = self.resolve_ui_input_event(GameInput::KeyUp(key));
-        let initial = self.apply_ui_events(ui_events);
-        self.dispatch_game_events(initial);
-        self.rebuild_render_state_if_dirty();
+        self.pending_inputs.push_back(GameInput::KeyUp(key));
     }
 
     pub fn tick(&mut self) {
@@ -77,11 +73,22 @@ impl GameEngine {
     }
 
     fn update(&mut self) {
+        self.process_pending_inputs();
         if self.render_fx.tick() && !apply_render_tick(&mut self.render_state, &self.render_fx) {
             self.render_dirty = true;
         }
         let initial = self.resolve_tick_game_events();
         self.dispatch_game_events(initial);
+    }
+
+    fn process_pending_inputs(&mut self) {
+        let mut pending = mem::take(&mut self.pending_inputs);
+        while let Some(input) = pending.pop_front() {
+            let ui_events = self.resolve_ui_input_event(input);
+            let initial = self.apply_ui_events(ui_events);
+            self.dispatch_game_events(initial);
+        }
+        self.pending_inputs = pending;
     }
 
     fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
