@@ -5,7 +5,9 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, QuestProgress, QuestType};
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{CombatEvent, GameEvent, MovementEvent, SessionEvent, TransitionEvent};
+use crate::game::{
+    CombatEvent, GameEvent, GameEventKind, MovementEvent, SessionEvent, TransitionEvent,
+};
 
 struct SessionLogicResolver;
 
@@ -16,45 +18,46 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for SessionLogicResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(
-            event,
-            GameEvent::Movement(MovementEvent::Tick(_, Some(_)))
-                | GameEvent::ApplyDialogAction(DialogAction::GiveQuest(_))
-                | GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(_))
-                | GameEvent::Combat(CombatEvent::RecoverMp(_))
-                | GameEvent::Combat(CombatEvent::Heal(_))
-                | GameEvent::Combat(CombatEvent::GrantKillReward { .. })
-                | GameEvent::Combat(CombatEvent::TakeDamage(_))
-        )
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[
+            GameEventKind::Movement,
+            GameEventKind::ApplyDialogAction,
+            GameEventKind::Combat,
+        ]
     }
 
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement, Some(tile_event))) => {
-                Ok(resolve_tile_event(ctx, session, movement.step, tile_event))
+                resolve_tile_event(ctx, session, movement.step, tile_event, out);
             }
             GameEvent::ApplyDialogAction(DialogAction::GiveQuest(id)) => {
-                Ok(resolve_give_quest(session, id))
+                resolve_give_quest(session, id, out);
             }
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
-                Ok(resolve_complete_quest(ctx, session, id))
+                resolve_complete_quest(ctx, session, id, out);
             }
             GameEvent::Combat(CombatEvent::RecoverMp(recover_mp)) => {
-                Ok(resolve_recover_mp(session, *recover_mp))
+                resolve_recover_mp(session, *recover_mp, out);
             }
-            GameEvent::Combat(CombatEvent::Heal(heal)) => Ok(resolve_heal(session, *heal)),
+            GameEvent::Combat(CombatEvent::Heal(heal)) => resolve_heal(session, *heal, out),
             GameEvent::Combat(CombatEvent::GrantKillReward {
                 enemy_id,
                 exp,
                 gold,
-            }) => Ok(resolve_kill_reward(ctx, session, enemy_id, *exp, *gold)),
+            }) => resolve_kill_reward(ctx, session, enemy_id, *exp, *gold, out),
             GameEvent::Combat(CombatEvent::TakeDamage(damage)) => {
-                Ok(resolve_take_damage(session, *damage))
+                resolve_take_damage(session, *damage, out);
             }
-            _ => Ok(Vec::new()),
+            _ => {}
         }
+        Ok(())
     }
 }
 
@@ -63,19 +66,12 @@ fn resolve_tile_event(
     session: &crate::game::SessionState,
     step: Option<(i32, i32)>,
     tile_event: &crate::game::TileEvent,
-) -> Vec<GameEvent> {
+    out: &mut Vec<GameEvent>,
+) {
     let (next_x, next_y) = if let Some((dx, dy)) = step {
         (
-            session
-                .leader
-                .x
-                .checked_add_signed(dx as isize)
-                .unwrap_or(session.leader.x),
-            session
-                .leader
-                .y
-                .checked_add_signed(dy as isize)
-                .unwrap_or(session.leader.y),
+            (session.leader.x as i32 + dx) as usize,
+            (session.leader.y as i32 + dy) as usize,
         )
     } else {
         (session.leader.x, session.leader.y)
@@ -85,73 +81,73 @@ fn resolve_tile_event(
         crate::game::TileEvent::Treasure => {
             let map_id = session.leader.current_map_id.clone();
             if session.is_treasure_opened(&map_id, next_x, next_y) {
-                return Vec::new();
+                return;
             }
-            let mut out = vec![GameEvent::Session(SessionEvent::AddOpenedTreasure {
+            out.push(GameEvent::Session(SessionEvent::AddOpenedTreasure {
                 map_id,
                 x: next_x,
                 y: next_y,
-            })];
+            }));
             if let Some(item_id) = ctx.data().newgame.treasure_item.as_deref()
                 && let Some(item) = ctx.data().find_item(item_id).cloned()
             {
                 out.push(GameEvent::Session(SessionEvent::AddPlayerItem(item)));
             }
-            out
         }
         crate::game::TileEvent::MapExit(target)
         | crate::game::TileEvent::DungeonEntrance(target) => {
             if target.is_empty() {
-                return Vec::new();
+                return;
             }
             let Some(map) = ctx.data().find_map(target) else {
-                return Vec::new();
+                return;
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
-            vec![
-                GameEvent::Session(SessionEvent::SetPlayerMap(map.id.clone())),
-                GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }),
-            ]
+            out.push(GameEvent::Session(SessionEvent::SetPlayerMap(
+                map.id.clone(),
+            )));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }));
         }
     }
 }
 
-fn resolve_give_quest(session: &crate::game::SessionState, id: &str) -> Vec<GameEvent> {
+fn resolve_give_quest(session: &crate::game::SessionState, id: &str, out: &mut Vec<GameEvent>) {
     if session.quests.iter().any(|quest| quest.quest_id == id) {
-        return Vec::new();
+        return;
     }
-    vec![GameEvent::Session(SessionEvent::AddQuestProgress(
+    out.push(GameEvent::Session(SessionEvent::AddQuestProgress(
         QuestProgress {
             quest_id: id.into(),
             current_count: 0,
             completed: false,
             rewarded: false,
         },
-    ))]
+    )));
 }
 
 fn resolve_complete_quest(
     ctx: &ResolveContext<'_>,
     session: &crate::game::SessionState,
     id: &str,
-) -> Vec<GameEvent> {
+    out: &mut Vec<GameEvent>,
+) {
     let can_reward = session
         .quests
         .iter()
         .any(|quest| quest.quest_id == id && quest.completed && !quest.rewarded);
     if !can_reward {
-        return Vec::new();
+        return;
     }
 
     let Some(quest) = ctx.data().find_quest(id) else {
-        return Vec::new();
+        return;
     };
 
     let mut stats = session.leader.stats.clone();
     stats.add_exp(quest.reward_exp);
     stats.gold = (stats.gold + quest.reward_gold).max(0);
 
-    let mut out = vec![GameEvent::Session(SessionEvent::SetPlayerStats(stats))];
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
     if let Some(item_id) = &quest.reward_item
         && let Some(item) = ctx.data().find_item(item_id).cloned()
     {
@@ -162,26 +158,29 @@ fn resolve_complete_quest(
         progress.rewarded = true;
         out.push(GameEvent::Session(SessionEvent::AddQuestProgress(progress)));
     }
-    out
 }
 
-fn resolve_recover_mp(session: &crate::game::SessionState, recover_mp: i32) -> Vec<GameEvent> {
+fn resolve_recover_mp(
+    session: &crate::game::SessionState,
+    recover_mp: i32,
+    out: &mut Vec<GameEvent>,
+) {
     let mut stats = session.leader.stats.clone();
     if recover_mp > 0 {
         stats.recover_mp(recover_mp);
     } else if recover_mp < 0 {
         stats.current_mp = (stats.current_mp + recover_mp).max(0);
     }
-    vec![GameEvent::Session(SessionEvent::SetPlayerStats(stats))]
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
 }
 
-fn resolve_heal(session: &crate::game::SessionState, heal: i32) -> Vec<GameEvent> {
+fn resolve_heal(session: &crate::game::SessionState, heal: i32, out: &mut Vec<GameEvent>) {
     if heal <= 0 {
-        return Vec::new();
+        return;
     }
     let mut stats = session.leader.stats.clone();
     stats.heal(heal);
-    vec![GameEvent::Session(SessionEvent::SetPlayerStats(stats))]
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
 }
 
 fn resolve_kill_reward(
@@ -190,12 +189,13 @@ fn resolve_kill_reward(
     enemy_id: &str,
     exp: i32,
     gold: i32,
-) -> Vec<GameEvent> {
+    out: &mut Vec<GameEvent>,
+) {
     let mut stats = session.leader.stats.clone();
     stats.add_exp(exp);
     stats.gold = (stats.gold + gold).max(0);
 
-    let mut out = vec![GameEvent::Session(SessionEvent::SetPlayerStats(stats))];
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(stats)));
     for progress in &session.quests {
         if progress.completed || progress.rewarded {
             continue;
@@ -212,20 +212,18 @@ fn resolve_kill_reward(
             out.push(GameEvent::Session(SessionEvent::AddQuestProgress(next)));
         }
     }
-    out
 }
 
-fn resolve_take_damage(session: &crate::game::SessionState, damage: i32) -> Vec<GameEvent> {
+fn resolve_take_damage(session: &crate::game::SessionState, damage: i32, out: &mut Vec<GameEvent>) {
     if damage <= 0 {
-        return Vec::new();
+        return;
     }
     let mut stats = session.leader.stats.clone();
     stats.take_damage(damage);
-    let mut out = vec![GameEvent::Session(SessionEvent::SetPlayerStats(
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(
         stats.clone(),
-    ))];
+    )));
     if stats.is_dead() {
         out.push(GameEvent::Transition(TransitionEvent::ToGameOver));
     }
-    out
 }

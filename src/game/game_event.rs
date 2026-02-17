@@ -76,6 +76,105 @@ pub enum GameEvent {
     Exit(i32),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GameEventKind {
+    UpdateLoading,
+    UpdateMovement,
+    UpdateCombat,
+    ExploreCommand,
+    StartNewGame,
+    ContinueGame,
+    SaveSession,
+    UseInventorySelected,
+    Session,
+    OpenDialogState,
+    OpenShopById,
+    OpenShopState,
+    RestoreHpMp,
+    ApplyDialogAction,
+    ApplyDialogTransition,
+    ShopBuyItem,
+    ShopSellSelected,
+    CombatPlayerAction,
+    Loading,
+    Movement,
+    Combat,
+    Explore,
+    Lifecycle,
+    Transition,
+    Exit,
+}
+
+pub trait GameEventSubscriber {
+    fn subscribes(&self, kind: GameEventKind) -> bool;
+}
+
+impl GameEventKind {
+    pub const COUNT: usize = 25;
+
+    pub const fn as_usize(self) -> usize {
+        match self {
+            Self::UpdateLoading => 0,
+            Self::UpdateMovement => 1,
+            Self::UpdateCombat => 2,
+            Self::ExploreCommand => 3,
+            Self::StartNewGame => 4,
+            Self::ContinueGame => 5,
+            Self::SaveSession => 6,
+            Self::UseInventorySelected => 7,
+            Self::Session => 8,
+            Self::OpenDialogState => 9,
+            Self::OpenShopById => 10,
+            Self::OpenShopState => 11,
+            Self::RestoreHpMp => 12,
+            Self::ApplyDialogAction => 13,
+            Self::ApplyDialogTransition => 14,
+            Self::ShopBuyItem => 15,
+            Self::ShopSellSelected => 16,
+            Self::CombatPlayerAction => 17,
+            Self::Loading => 18,
+            Self::Movement => 19,
+            Self::Combat => 20,
+            Self::Explore => 21,
+            Self::Lifecycle => 22,
+            Self::Transition => 23,
+            Self::Exit => 24,
+        }
+    }
+}
+
+impl GameEvent {
+    pub const fn kind(&self) -> GameEventKind {
+        match self {
+            Self::UpdateLoading => GameEventKind::UpdateLoading,
+            Self::UpdateMovement => GameEventKind::UpdateMovement,
+            Self::UpdateCombat => GameEventKind::UpdateCombat,
+            Self::ExploreCommand(_) => GameEventKind::ExploreCommand,
+            Self::StartNewGame => GameEventKind::StartNewGame,
+            Self::ContinueGame => GameEventKind::ContinueGame,
+            Self::SaveSession => GameEventKind::SaveSession,
+            Self::UseInventorySelected(_) => GameEventKind::UseInventorySelected,
+            Self::Session(_) => GameEventKind::Session,
+            Self::OpenDialogState(_) => GameEventKind::OpenDialogState,
+            Self::OpenShopById(_) => GameEventKind::OpenShopById,
+            Self::OpenShopState(_) => GameEventKind::OpenShopState,
+            Self::RestoreHpMp => GameEventKind::RestoreHpMp,
+            Self::ApplyDialogAction(_) => GameEventKind::ApplyDialogAction,
+            Self::ApplyDialogTransition(_) => GameEventKind::ApplyDialogTransition,
+            Self::ShopBuyItem(_) => GameEventKind::ShopBuyItem,
+            Self::ShopSellSelected(_) => GameEventKind::ShopSellSelected,
+            Self::CombatPlayerAction(_) => GameEventKind::CombatPlayerAction,
+            Self::Loading(_) => GameEventKind::Loading,
+            Self::Movement(_) => GameEventKind::Movement,
+            Self::Combat(_) => GameEventKind::Combat,
+            Self::Explore(_) => GameEventKind::Explore,
+            Self::Lifecycle(_) => GameEventKind::Lifecycle,
+            Self::Transition(_) => GameEventKind::Transition,
+            Self::Exit(_) => GameEventKind::Exit,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum SessionEvent {
     Create,

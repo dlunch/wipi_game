@@ -7,9 +7,9 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::{
-    DomainEventResolver, GameData, GameEvent, GameInput, GameState, InputKey, RenderState,
-    ResolveContext, SessionState, UiEvent, UiEventApplier, UiInputEventResolver, UiState,
-    build_render_state, domain_resolvers,
+    DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
+    GameState, InputKey, RenderState, ResolveContext, SessionState, UiEvent, UiEventApplier,
+    UiInputEventResolver, UiState, build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -17,17 +17,26 @@ pub struct GameEngine {
     data: Rc<GameData>,
     session: Option<SessionState>,
     ui: UiState,
-    resolvers: Vec<&'static dyn DomainEventResolver>,
+    resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
 }
 
 impl GameEngine {
     pub fn new() -> Self {
+        let resolvers = domain_resolvers();
+        let mut resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>> =
+            vec![Vec::new(); GameEventKind::COUNT];
+        for resolver in resolvers {
+            for kind in resolver.subscribed_kinds() {
+                resolver_buckets[kind.as_usize()].push(resolver);
+            }
+        }
+
         Self {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
             session: None,
             ui: UiState::default(),
-            resolvers: domain_resolvers(),
+            resolver_buckets,
         }
     }
 
@@ -67,25 +76,27 @@ impl GameEngine {
     }
 
     fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>) -> Vec<GameEvent> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(ui_events.len() * 2);
         for event in ui_events {
-            out.extend(self.ui.apply_ui_event(self.session.as_ref(), event));
+            let ui_out = self.ui.apply_ui_event(self.session.as_ref(), event);
+            for game_event in ui_out {
+                out.push(game_event);
+            }
         }
         out
     }
 
     fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let mut derived = Vec::new();
-        for resolver in &self.resolvers {
-            if resolver.handles(event) {
-                let mut ctx = ResolveContext {
-                    state: &self.state,
-                    data: &mut self.data,
-                    session: self.session.as_ref(),
-                    ui: &self.ui,
-                };
-                derived.extend((*resolver).resolve(&mut ctx, event)?);
-            }
+        let mut derived = Vec::with_capacity(8);
+        let bucket = &self.resolver_buckets[event.kind().as_usize()];
+        for resolver in bucket {
+            let mut ctx = ResolveContext {
+                state: &self.state,
+                data: &mut self.data,
+                session: self.session.as_ref(),
+                ui: &self.ui,
+            };
+            (*resolver).resolve(&mut ctx, event, &mut derived)?;
         }
         Ok(derived)
     }
@@ -101,7 +112,9 @@ impl GameEngine {
             wipi::kernel::exit(*code);
         }
 
-        self.state.apply_event(&event)?;
+        if self.state.subscribes(event.kind()) {
+            self.state.apply_event(&event)?;
+        }
 
         if self.state.requires_session() && self.session.is_none() {
             self.state = GameState::Error(format!(
@@ -116,19 +129,27 @@ impl GameEngine {
         }
 
         if let Some(session) = self.session.as_mut() {
-            session.apply_event(&self.data, &mut self.state, &event)?;
-            session.leader.apply_event(&self.data, &event)?;
-            session
-                .movement
-                .apply_event(&self.state, &mut session.leader, &event)?;
-            session.combat.apply_event(&event)?;
+            if session.subscribes(event.kind()) {
+                session.apply_event(&self.data, &mut self.state, &event)?;
+            }
+            if session.leader.subscribes(event.kind()) {
+                session.leader.apply_event(&self.data, &event)?;
+            }
+            if session.movement.subscribes(event.kind()) {
+                session
+                    .movement
+                    .apply_event(&self.state, &mut session.leader, &event)?;
+            }
+            if session.combat.subscribes(event.kind()) {
+                session.combat.apply_event(&event)?;
+            }
 
             if matches!(event, GameEvent::SaveSession) {
                 let _ = crate::game::save_game(session);
             }
         }
 
-        if !matches!(self.state, GameState::Error(_)) {
+        if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
             self.ui.apply_game_event(self.session.as_ref(), &event)?;
         }
         Ok(())

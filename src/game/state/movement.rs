@@ -2,7 +2,9 @@ use crate::data::Direction;
 use anyhow::{Result, ensure};
 
 use super::CharacterState;
-use crate::game::{GameEvent, GameState, MovementEvent, TransitionEvent};
+use crate::game::{
+    GameEvent, GameEventKind, GameEventSubscriber, GameState, MovementEvent, TransitionEvent,
+};
 
 #[derive(Default, Clone, Copy)]
 pub struct MovementState {
@@ -75,6 +77,15 @@ impl MovementState {
     }
 }
 
+impl GameEventSubscriber for MovementState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(
+            kind,
+            GameEventKind::Movement | GameEventKind::Transition | GameEventKind::Explore
+        )
+    }
+}
+
 fn set_facing(player: &mut CharacterState, dx: i32, dy: i32) {
     player.facing = match (dx, dy) {
         (0, -1) => Direction::Up,
@@ -86,10 +97,6 @@ fn set_facing(player: &mut CharacterState, dx: i32, dy: i32) {
 }
 
 fn move_by(player: &mut CharacterState, dx: i32, dy: i32) {
-    if let Some(new_x) = player.x.checked_add_signed(dx as isize) {
-        player.x = new_x;
-    }
-    if let Some(new_y) = player.y.checked_add_signed(dy as isize) {
-        player.y = new_y;
-    }
+    player.x = (player.x as i32 + dx) as usize;
+    player.y = (player.y as i32 + dy) as usize;
 }

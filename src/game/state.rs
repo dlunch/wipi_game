@@ -11,7 +11,7 @@ use alloc::format;
 use alloc::string::String;
 use anyhow::Result;
 
-use crate::game::{GameEvent, LoadingEvent, TransitionEvent};
+use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent};
 
 #[derive(Debug)]
 pub enum GameState {
@@ -127,6 +127,19 @@ impl GameState {
             GameStateKind::GameOver => matches!(target, GameStateKind::Menu | GameStateKind::Error),
             GameStateKind::Error => false,
         }
+    }
+}
+
+impl GameEventSubscriber for GameState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(
+            kind,
+            GameEventKind::Loading
+                | GameEventKind::Transition
+                | GameEventKind::ApplyDialogTransition
+                | GameEventKind::OpenDialogState
+                | GameEventKind::OpenShopState
+        )
     }
 }
 

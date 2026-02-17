@@ -141,8 +141,13 @@ fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize 
         return 0;
     }
 
-    let max_scroll = total.saturating_sub(visible);
-    selected.saturating_sub(visible - 1).min(max_scroll)
+    let max_scroll = total - visible;
+    let desired = if selected + 1 > visible {
+        selected - (visible - 1)
+    } else {
+        0
+    };
+    desired.min(max_scroll)
 }
 
 fn build_explore_render(

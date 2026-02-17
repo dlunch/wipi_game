@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow, ensure};
 
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
-use crate::game::{ExploreCommand, ExploreEvent, GameEvent, GameState};
+use crate::game::{ExploreCommand, ExploreEvent, GameEvent, GameEventKind, GameState};
 
 struct ExploreInputResolver;
 struct ExploreUseActionCascadeResolver;
@@ -27,11 +27,16 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for ExploreInputResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::ExploreCommand(_))
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::ExploreCommand]
     }
 
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         let GameEvent::ExploreCommand(input) = event else {
             return Err(anyhow!("Invalid event: expected ExploreCommand"));
         };
@@ -41,7 +46,6 @@ impl DomainEventResolver for ExploreInputResolver {
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        let mut out = Vec::new();
         match input {
             ExploreCommand::Move(direction) => {
                 out.push(GameEvent::Explore(ExploreEvent::MoveDirection(*direction)));
@@ -72,44 +76,66 @@ impl DomainEventResolver for ExploreInputResolver {
                 out.push(GameEvent::Explore(ExploreEvent::EnterMenu));
             }
         }
-        Ok(out)
+        Ok(())
     }
 }
 
 impl DomainEventResolver for ExploreUseActionCascadeResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(ExploreEvent::UseAction(_)))
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::Explore]
     }
 
-    fn resolve(&self, _ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve(
+        &self,
+        _ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         let GameEvent::Explore(ExploreEvent::UseAction(action)) = event else {
-            return Err(anyhow!("Invalid event: expected Explore(UseAction)"));
+            return Ok(());
         };
-        Ok(vec![GameEvent::CombatPlayerAction(*action)])
+        out.push(GameEvent::CombatPlayerAction(*action));
+        Ok(())
     }
 }
 
 impl DomainEventResolver for ExplorePauseCascadeResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(ExploreEvent::EnterPauseMenu))
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::Explore]
     }
 
-    fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(vec![GameEvent::Transition(
+    fn resolve(
+        &self,
+        _ctx: &mut ResolveContext<'_>,
+        _event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
+        if !matches!(_event, GameEvent::Explore(ExploreEvent::EnterPauseMenu)) {
+            return Ok(());
+        }
+        out.push(GameEvent::Transition(
             crate::game::TransitionEvent::ToPauseMenu,
-        )])
+        ));
+        Ok(())
     }
 }
 
 impl DomainEventResolver for ExploreMenuCascadeResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::Explore(ExploreEvent::EnterMenu))
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::Explore]
     }
 
-    fn resolve(&self, _ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
-        Ok(vec![
-            GameEvent::SaveSession,
-            GameEvent::Transition(crate::game::TransitionEvent::ToMenu),
-        ])
+    fn resolve(
+        &self,
+        _ctx: &mut ResolveContext<'_>,
+        _event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
+        if !matches!(_event, GameEvent::Explore(ExploreEvent::EnterMenu)) {
+            return Ok(());
+        }
+        out.push(GameEvent::SaveSession);
+        out.push(GameEvent::Transition(crate::game::TransitionEvent::ToMenu));
+        Ok(())
     }
 }

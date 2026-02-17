@@ -3,7 +3,9 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::game::{GameData, GameEvent, GameState, SessionState, UiState};
+use crate::game::{
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, SessionState, UiState,
+};
 
 pub struct ResolveContext<'a> {
     pub state: &'a GameState,
@@ -18,7 +20,21 @@ impl<'a> ResolveContext<'a> {
     }
 }
 
-pub trait DomainEventResolver {
-    fn handles(&self, event: &GameEvent) -> bool;
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>>;
+pub trait DomainEventResolver: GameEventSubscriber {
+    fn subscribed_kinds(&self) -> &'static [GameEventKind];
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()>;
+}
+
+impl<T: DomainEventResolver + ?Sized> GameEventSubscriber for T {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        self.subscribed_kinds()
+            .iter()
+            .copied()
+            .any(|subscribed| subscribed == kind)
+    }
 }

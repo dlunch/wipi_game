@@ -116,10 +116,7 @@ pub fn draw_stats(fb: &mut Framebuffer, state: &StatsRender) {
     draw_text(fb, 94, stat_y, &hp_text, COLOR_WHITE);
 
     draw_text(fb, 10, stat_y + line_height, "MP", COLOR_BLUE);
-    let mp_fill = (state.mp * 60)
-        .checked_div(state.max_mp)
-        .map(|fill| fill as i32)
-        .unwrap_or(0);
+    let mp_fill = ((state.mp * 60) / state.max_mp) as i32;
     fill_rect(fb, 30, stat_y + line_height + 2, 60, 4, COLOR_DARK_GRAY);
     fill_rect(fb, 30, stat_y + line_height + 2, mp_fill, 4, COLOR_BLUE);
     draw_rect(fb, 30, stat_y + line_height + 2, 60, 4, COLOR_WHITE);

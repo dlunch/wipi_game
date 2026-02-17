@@ -146,10 +146,7 @@ fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender
         player_color,
     );
 
-    let hp_bar_width = (state.hp * (TILE_SIZE - 2) as u32)
-        .checked_div(state.max_hp)
-        .map(|width| width as i32)
-        .unwrap_or(0);
+    let hp_bar_width = ((state.hp * (TILE_SIZE - 2) as u32) / state.max_hp) as i32;
     fill_rect(
         fb,
         px + 1,
@@ -160,10 +157,7 @@ fn draw_map_with_entities(fb: &mut Framebuffer, map: &Map, state: &ExploreRender
     );
     fill_rect(fb, px + 1, py + TILE_SIZE, hp_bar_width, 2, COLOR_GREEN);
 
-    let mp_bar_width = (state.mp * (TILE_SIZE - 2) as u32)
-        .checked_div(state.max_mp)
-        .map(|width| width as i32)
-        .unwrap_or(0);
+    let mp_bar_width = ((state.mp * (TILE_SIZE - 2) as u32) / state.max_mp) as i32;
     fill_rect(
         fb,
         px + 1,

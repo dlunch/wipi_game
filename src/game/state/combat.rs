@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Enemy, SkillType};
-use crate::game::{CombatEvent, GameEvent};
+use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
 
 #[derive(Debug, Clone)]
 pub struct KillReward {
@@ -151,5 +151,11 @@ impl CombatState {
             | CombatEvent::TakeDamage(_) => {}
         }
         Ok(())
+    }
+}
+
+impl GameEventSubscriber for CombatState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(kind, GameEventKind::Combat)
     }
 }

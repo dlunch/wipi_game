@@ -1,6 +1,8 @@
 use anyhow::Result;
 
-use crate::game::{GameEvent, MenuState, SessionState, UiState, has_save_data};
+use crate::game::{
+    GameEvent, GameEventKind, GameEventSubscriber, MenuState, SessionState, UiState, has_save_data,
+};
 
 impl UiState {
     pub fn apply_game_event(
@@ -53,5 +55,20 @@ impl UiState {
             _ => {}
         }
         Ok(())
+    }
+}
+
+impl GameEventSubscriber for UiState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(
+            kind,
+            GameEventKind::Lifecycle
+                | GameEventKind::Loading
+                | GameEventKind::Transition
+                | GameEventKind::ApplyDialogTransition
+                | GameEventKind::ShopSellSelected
+                | GameEventKind::OpenDialogState
+                | GameEventKind::OpenShopState
+        )
     }
 }

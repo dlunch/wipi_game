@@ -9,8 +9,8 @@ use anyhow::{Result, anyhow};
 use crate::data::Tile;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CharacterState, DialogState, GameData, GameEvent, GameState, SessionEvent, TransitionEvent,
-    load_game,
+    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, SessionEvent,
+    TransitionEvent, load_game,
 };
 
 #[derive(Clone)]
@@ -54,11 +54,16 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for UpdateLoadingResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::UpdateLoading)
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::UpdateLoading]
     }
 
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        _event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         let step = if let GameState::Loading(step) = ctx.state {
             *step
         } else {
@@ -67,35 +72,40 @@ impl DomainEventResolver for UpdateLoadingResolver {
 
         let load_result = load_step(ctx.data, step);
 
-        Ok(vec![GameEvent::Loading(resolve_loading(step, load_result))])
+        out.push(GameEvent::Loading(resolve_loading(step, load_result)));
+        Ok(())
     }
 }
 
 impl DomainEventResolver for StartContinueResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::StartNewGame | GameEvent::ContinueGame)
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::StartNewGame, GameEventKind::ContinueGame]
     }
 
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let mut out = Vec::new();
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
 
         match event {
             GameEvent::StartNewGame => {
-                out.extend(setup_new_game_events(ctx.data()));
+                setup_new_game_events(ctx.data(), out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
                 if let Some(dialog_state) = intro_dialog_state(ctx.data()) {
                     out.push(GameEvent::OpenDialogState(dialog_state));
                 }
             }
             GameEvent::ContinueGame => {
-                out.extend(setup_continue_events(ctx.data()));
+                setup_continue_events(ctx.data(), out);
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
         }
 
-        Ok(out)
+        Ok(())
     }
 }
 
@@ -105,7 +115,7 @@ fn intro_dialog_state(data: &GameData) -> Option<DialogState> {
     Some(DialogState::from_dialog(npc_name.clone(), dialog))
 }
 
-fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
+fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) {
     let config = &data.newgame;
     let mut player = CharacterState::new(config.player_name.clone(), &config.start_map);
 
@@ -138,17 +148,23 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
         player.y = y;
     }
 
-    let mut out = vec![
-        GameEvent::Session(SessionEvent::Create),
-        GameEvent::Session(SessionEvent::SetPlayerName(player.name.clone())),
-        GameEvent::Session(SessionEvent::SetPlayerStats(player.stats.clone())),
-        GameEvent::Session(SessionEvent::SetPlayerMap(player.current_map_id.clone())),
-        GameEvent::Session(SessionEvent::SetPlayerPosition {
-            x: player.x,
-            y: player.y,
-        }),
-        GameEvent::Session(SessionEvent::SetPlayerFacing(player.facing)),
-    ];
+    out.push(GameEvent::Session(SessionEvent::Create));
+    out.push(GameEvent::Session(SessionEvent::SetPlayerName(
+        player.name.clone(),
+    )));
+    out.push(GameEvent::Session(SessionEvent::SetPlayerStats(
+        player.stats.clone(),
+    )));
+    out.push(GameEvent::Session(SessionEvent::SetPlayerMap(
+        player.current_map_id.clone(),
+    )));
+    out.push(GameEvent::Session(SessionEvent::SetPlayerPosition {
+        x: player.x,
+        y: player.y,
+    }));
+    out.push(GameEvent::Session(SessionEvent::SetPlayerFacing(
+        player.facing,
+    )));
 
     for item in &player.inventory {
         out.push(GameEvent::Session(SessionEvent::AddPlayerItem(
@@ -171,14 +187,13 @@ fn setup_new_game_events(data: &GameData) -> Vec<GameEvent> {
     out.push(GameEvent::Session(SessionEvent::ResetMovement));
     out.push(GameEvent::Session(SessionEvent::ResetCombat));
     out.push(GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies));
-    out
 }
 
-fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
+fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) {
     let config = &data.newgame;
     let mut player = CharacterState::new(config.player_name.clone(), &config.start_map);
-    let mut quests = Vec::new();
-    let mut opened_treasures = Vec::new();
+    let mut quests = Vec::with_capacity(16);
+    let mut opened_treasures = Vec::with_capacity(16);
 
     match load_game(&mut player, &mut quests, &mut opened_treasures) {
         Ok(true) => {
@@ -198,17 +213,23 @@ fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
                 player.y = y;
             }
 
-            let mut out = vec![
-                GameEvent::Session(SessionEvent::Create),
-                GameEvent::Session(SessionEvent::SetPlayerName(player.name.clone())),
-                GameEvent::Session(SessionEvent::SetPlayerStats(player.stats.clone())),
-                GameEvent::Session(SessionEvent::SetPlayerMap(player.current_map_id.clone())),
-                GameEvent::Session(SessionEvent::SetPlayerPosition {
-                    x: player.x,
-                    y: player.y,
-                }),
-                GameEvent::Session(SessionEvent::SetPlayerFacing(player.facing)),
-            ];
+            out.push(GameEvent::Session(SessionEvent::Create));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerName(
+                player.name.clone(),
+            )));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerStats(
+                player.stats.clone(),
+            )));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerMap(
+                player.current_map_id.clone(),
+            )));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerPosition {
+                x: player.x,
+                y: player.y,
+            }));
+            out.push(GameEvent::Session(SessionEvent::SetPlayerFacing(
+                player.facing,
+            )));
 
             for item in &player.inventory {
                 out.push(GameEvent::Session(SessionEvent::AddPlayerItem(
@@ -244,8 +265,7 @@ fn setup_continue_events(data: &GameData) -> Vec<GameEvent> {
             out.push(GameEvent::Session(SessionEvent::ResetMovement));
             out.push(GameEvent::Session(SessionEvent::ResetCombat));
             out.push(GameEvent::Session(SessionEvent::SpawnCurrentMapEnemies));
-            out
         }
-        Ok(false) | Err(_) => setup_new_game_events(data),
+        Ok(false) | Err(_) => setup_new_game_events(data, out),
     }
 }

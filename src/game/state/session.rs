@@ -6,8 +6,8 @@ use anyhow::Result;
 use crate::data::QuestProgress;
 
 use crate::game::{
-    CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameState, MovementState,
-    SessionEvent,
+    CharacterState, CombatEvent, CombatState, GameData, GameEvent, GameEventKind,
+    GameEventSubscriber, GameState, MovementState, SessionEvent,
 };
 
 #[derive(Clone)]
@@ -106,5 +106,11 @@ impl SessionState {
             _ => {}
         }
         Ok(())
+    }
+}
+
+impl GameEventSubscriber for SessionState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(kind, GameEventKind::Session | GameEventKind::Combat)
     }
 }

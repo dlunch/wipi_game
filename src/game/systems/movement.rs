@@ -8,7 +8,7 @@ use crate::data::{Direction, Map, Tile};
 use crate::game::state::FieldEnemy;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CharacterState, GameData, GameEvent, GameState, MovementEvent, MovementState,
+    CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
     MovementTickEvent, TileEvent, TransitionEvent,
 };
 
@@ -37,15 +37,9 @@ pub fn resolve_world_tick(
                 .any(|npc| npc.map_id == player.current_map_id && npc.x == x && npc.y == y)
     });
     let tile_event = if let Some((dx, dy)) = movement_event.step {
-        if let Some(next_x) = player.x.checked_add_signed(dx as isize) {
-            if let Some(next_y) = player.y.checked_add_signed(dy as isize) {
-                tile_event_for_position(&player.current_map_id, next_x, next_y, data)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        let next_x = (player.x as i32 + dx) as usize;
+        let next_y = (player.y as i32 + dy) as usize;
+        tile_event_for_position(&player.current_map_id, next_x, next_y, data)
     } else {
         None
     };
@@ -119,12 +113,10 @@ fn resolve_tick_with_occupancy(
 
     next_state.move_cooldown = MOVE_COOLDOWN;
     let mut step = None;
+    let new_x = (player.x as i32 + dx) as usize;
+    let new_y = (player.y as i32 + dy) as usize;
 
-    if can_move(player, map, dx, dy)
-        && let Some(new_x) = player.x.checked_add_signed(dx as isize)
-        && let Some(new_y) = player.y.checked_add_signed(dy as isize)
-        && !is_occupied(new_x, new_y)
-    {
+    if can_move(player, map, dx, dy) && !is_occupied(new_x, new_y) {
         step = Some((dx, dy));
     }
 
@@ -136,12 +128,8 @@ fn resolve_tick_with_occupancy(
 }
 
 fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
-    let Some(new_x) = player.x.checked_add_signed(dx as isize) else {
-        return false;
-    };
-    let Some(new_y) = player.y.checked_add_signed(dy as isize) else {
-        return false;
-    };
+    let new_x = (player.x as i32 + dx) as usize;
+    let new_y = (player.y as i32 + dy) as usize;
     map.get_tile(new_x, new_y).is_passable()
 }
 
@@ -185,11 +173,16 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 }
 
 impl DomainEventResolver for UpdateMovementResolver {
-    fn handles(&self, event: &GameEvent) -> bool {
-        matches!(event, GameEvent::UpdateMovement)
+    fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+        &[GameEventKind::UpdateMovement]
     }
 
-    fn resolve(&self, ctx: &mut ResolveContext<'_>, _event: &GameEvent) -> Result<Vec<GameEvent>> {
+    fn resolve(
+        &self,
+        ctx: &mut ResolveContext<'_>,
+        _event: &GameEvent,
+        out: &mut Vec<GameEvent>,
+    ) -> Result<()> {
         ensure!(
             matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
@@ -198,15 +191,14 @@ impl DomainEventResolver for UpdateMovementResolver {
 
         let movement = resolve_world_tick(&s.movement, &s.leader, &s.combat.enemies, ctx.data());
 
-        let mut events = Vec::with_capacity(if movement.map_changed { 2 } else { 1 });
-        events.push(GameEvent::Movement(MovementEvent::Tick(
+        out.push(GameEvent::Movement(MovementEvent::Tick(
             movement.movement_event,
             movement.tile_event,
         )));
         if movement.map_changed {
-            events.push(GameEvent::Transition(TransitionEvent::MapChanged));
+            out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
-        Ok(events)
+        Ok(())
     }
 }
 

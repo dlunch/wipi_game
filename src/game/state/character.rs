@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Direction, Item, PlayerStats};
-use crate::game::{GameData, GameEvent, SessionEvent};
+use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, SessionEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TileEvent {
@@ -70,6 +70,12 @@ impl CharacterState {
 
     pub fn can_use_skill(&self, cooldowns: &[u32; 3], slot: usize, mp_cost: i32) -> bool {
         slot < 3 && cooldowns[slot] == 0 && self.stats.current_mp >= mp_cost
+    }
+}
+
+impl GameEventSubscriber for CharacterState {
+    fn subscribes(&self, kind: GameEventKind) -> bool {
+        matches!(kind, GameEventKind::Session)
     }
 }
 
