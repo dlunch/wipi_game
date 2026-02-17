@@ -103,11 +103,6 @@ impl GameEngine {
 
     fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
         let mut out = Vec::with_capacity(8);
-        if matches!(event, GameEvent::UpdateCombat)
-            && let Some(world) = self.world.as_ref()
-        {
-            out.reserve(world.combat.enemies.len() * 4 + 16);
-        }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
             let ctx = ResolveContext {
