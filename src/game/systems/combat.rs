@@ -283,13 +283,7 @@ impl DomainEventResolver for CombatMapSyncResolver {
             return Ok(());
         };
 
-        let (enemies, respawn_positions, next_enemy_instance_id) =
-            build_map_enemies(map, &data.enemies);
-        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
-            enemies,
-            respawn_positions,
-            next_enemy_instance_id,
-        }));
+        build_map_enemies(map, &data.enemies, out);
         Ok(())
     }
 }
@@ -418,16 +412,18 @@ fn resolve_respawn(
     }
 }
 
-fn build_map_enemies(
-    map: &Map,
-    enemy_data: &[Enemy],
-) -> (Vec<FieldEnemy>, Vec<(usize, usize, usize)>, u32) {
+fn build_map_enemies(map: &Map, enemy_data: &[Enemy], out: &mut Vec<GameEvent>) {
     let mut enemies = Vec::with_capacity(map.encounters.len().max(4));
     let mut respawn_positions = Vec::with_capacity(map.encounters.len().max(4));
     let mut next_enemy_instance_id = 1u32;
 
     if map.encounters.is_empty() {
-        return (enemies, respawn_positions, next_enemy_instance_id);
+        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+            enemies,
+            respawn_positions,
+            next_enemy_instance_id,
+        }));
+        return;
     }
 
     let encounter_enemy_indices: Vec<usize> = map
@@ -436,7 +432,12 @@ fn build_map_enemies(
         .filter_map(|(id, _)| enemy_data.iter().position(|enemy| &enemy.id == id))
         .collect();
     if encounter_enemy_indices.is_empty() {
-        return (enemies, respawn_positions, next_enemy_instance_id);
+        out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+            enemies,
+            respawn_positions,
+            next_enemy_instance_id,
+        }));
+        return;
     }
 
     let mut enemy_tile_count = 0usize;
@@ -459,7 +460,11 @@ fn build_map_enemies(
         }
     }
 
-    (enemies, respawn_positions, next_enemy_instance_id.max(1))
+    out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
+        enemies,
+        respawn_positions,
+        next_enemy_instance_id: next_enemy_instance_id.max(1),
+    }));
 }
 
 fn resolve_player_attack_action(
