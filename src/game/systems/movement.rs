@@ -5,11 +5,10 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::data::{Direction, Map, Tile};
 
-use crate::game::state::FieldEnemy;
 use crate::game::systems::runtime::{DomainEventResolver, ResolveContext};
 use crate::game::{
     CharacterState, GameData, GameEvent, GameEventKind, GameState, MovementEvent, MovementState,
-    MovementTickEvent, TileEvent, TransitionEvent,
+    MovementTickEvent, SessionState, TileEvent, TransitionEvent,
 };
 
 const MOVE_COOLDOWN: u32 = 2;
@@ -23,19 +22,11 @@ pub struct MovementUpdateResult {
 pub fn resolve_world_tick(
     state: &MovementState,
     player: &CharacterState,
-    enemies: &[FieldEnemy],
+    session: &SessionState,
     data: &GameData,
 ) -> MovementUpdateResult {
     let map = data.find_map(&player.current_map_id);
-    let movement_event = resolve_tick_with_occupancy(state, player, map, |x, y| {
-        enemies
-            .iter()
-            .any(|enemy| enemy.hp > 0 && enemy.x == x && enemy.y == y)
-            || data
-                .npcs
-                .iter()
-                .any(|npc| npc.map_id == player.current_map_id && npc.x == x && npc.y == y)
-    });
+    let movement_event = resolve_tick_with_occupancy(state, player, session, map);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
         let next_x = (player.x as i32 + dx) as usize;
         let next_y = (player.y as i32 + dy) as usize;
@@ -61,8 +52,8 @@ pub fn resolve_world_tick(
 fn resolve_tick_with_occupancy(
     state: &MovementState,
     player: &CharacterState,
+    session: &SessionState,
     map: Option<&Map>,
-    mut is_occupied: impl FnMut(usize, usize) -> bool,
 ) -> MovementTickEvent {
     let mut next_state = *state;
 
@@ -103,7 +94,7 @@ fn resolve_tick_with_occupancy(
     let new_x = (player.x as i32 + dx) as usize;
     let new_y = (player.y as i32 + dy) as usize;
 
-    if can_move(player, map, dx, dy) && !is_occupied(new_x, new_y) {
+    if can_move(player, map, dx, dy) && !is_occupied(map, new_x, new_y, session) {
         step = Some((dx, dy));
     }
 
@@ -112,6 +103,13 @@ fn resolve_tick_with_occupancy(
         facing: Some((dx, dy)),
         step,
     }
+}
+
+fn is_occupied(map: &Map, x: usize, y: usize, session: &SessionState) -> bool {
+    if x >= map.width || y >= map.height {
+        return true;
+    }
+    session.is_occupied(x, y)
 }
 
 fn can_move(player: &CharacterState, map: &Map, dx: i32, dy: i32) -> bool {
@@ -171,7 +169,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         );
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
 
-        let movement = resolve_world_tick(&s.movement, &s.leader, &s.combat.enemies, ctx.data());
+        let movement = resolve_world_tick(&s.movement, &s.leader, s, ctx.data());
 
         out.push(GameEvent::Movement(MovementEvent::Tick(
             movement.movement_event,
@@ -186,13 +184,17 @@ impl DomainEventResolver for UpdateMovementResolver {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::string::String;
     use alloc::vec;
     use alloc::vec::Vec;
 
     use super::*;
-    use crate::data::{Direction, Map, Tile};
-    use crate::game::{CharacterState, GameData};
+    use crate::data::{Direction, Enemy, Map, Tile};
+    use crate::game::state::FieldEnemy;
+    use crate::game::{
+        CharacterState, CombatEvent, GameData, GameEvent, GameState, SessionEvent, SessionState,
+    };
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {
@@ -267,6 +269,21 @@ mod tests {
         data
     }
 
+    fn make_session_with_map(data: &GameData, map_id: &str) -> SessionState {
+        let mut session = SessionState::empty();
+        let mut state = GameState::Explore;
+        assert!(
+            session
+                .apply_event(
+                    data,
+                    &mut state,
+                    &GameEvent::Session(SessionEvent::SetPlayerMap(map_id.into())),
+                )
+                .is_ok()
+        );
+        session
+    }
+
     fn resolve_tick(
         state: &MovementState,
         player: &CharacterState,
@@ -274,13 +291,65 @@ mod tests {
         enemy_positions: &[(usize, usize)],
         npc_positions: &[(usize, usize)],
     ) -> MovementTickEvent {
-        super::resolve_tick_with_occupancy(state, player, map, |x, y| {
-            position_occupied(enemy_positions, x, y) || position_occupied(npc_positions, x, y)
-        })
-    }
+        let mut session = SessionState::empty();
+        let Some(map_ref) = map else {
+            return super::resolve_tick_with_occupancy(state, player, &session, map);
+        };
 
-    fn position_occupied(positions: &[(usize, usize)], x: usize, y: usize) -> bool {
-        positions.iter().any(|(ox, oy)| *ox == x && *oy == y)
+        let mut data = GameData::default();
+        let mut map_with_npcs = map_ref.clone();
+        map_with_npcs.npcs = npc_positions
+            .iter()
+            .map(|(x, y)| (*x, *y, String::from("npc")))
+            .collect();
+        data.maps.push(map_with_npcs);
+
+        let mut game_state = GameState::Explore;
+        assert!(
+            session
+                .apply_event(
+                    &data,
+                    &mut game_state,
+                    &GameEvent::Session(SessionEvent::SetPlayerMap(map_ref.id.clone())),
+                )
+                .is_ok()
+        );
+
+        let enemies: Vec<FieldEnemy> = enemy_positions
+            .iter()
+            .enumerate()
+            .map(|(idx, (x, y))| {
+                FieldEnemy::new(
+                    Enemy {
+                        id: format!("e{idx}"),
+                        name: String::from("Enemy"),
+                        hp: 10,
+                        atk: 1,
+                        def: 0,
+                        exp: 0,
+                        gold: 0,
+                    },
+                    *x,
+                    *y,
+                    (idx as u32) + 1,
+                )
+            })
+            .collect();
+        assert!(
+            session
+                .apply_event(
+                    &data,
+                    &mut game_state,
+                    &GameEvent::Combat(CombatEvent::SetMapEnemies {
+                        enemies,
+                        respawn_positions: Vec::new(),
+                        next_enemy_instance_id: 1,
+                    }),
+                )
+                .is_ok()
+        );
+
+        super::resolve_tick_with_occupancy(state, player, &session, Some(map_ref))
     }
 
     #[test]
@@ -630,14 +699,14 @@ mod tests {
     #[test]
     fn resolve_world_tick_sets_treasure_tile_event_without_map_change() {
         let data = make_world_data();
-        let enemies: Vec<FieldEnemy> = Vec::new();
+        let session = make_session_with_map(&data, "field");
         let state = MovementState {
             pressed_direction: Some(Direction::Down),
             move_cooldown: 0,
         };
         let player = make_player_at(1, 0, "field");
 
-        let result = resolve_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::Treasure)));
         assert!(!result.map_changed);
@@ -646,14 +715,14 @@ mod tests {
     #[test]
     fn resolve_world_tick_sets_exit_tile_event_with_map_change() {
         let data = make_world_data();
-        let enemies: Vec<FieldEnemy> = Vec::new();
+        let session = make_session_with_map(&data, "field");
         let state = MovementState {
             pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
         let player = make_player_at(1, 1, "field");
 
-        let result = resolve_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(matches!(result.tile_event, Some(TileEvent::MapExit(target)) if target == "town"));
         assert!(result.map_changed);
@@ -662,14 +731,14 @@ mod tests {
     #[test]
     fn resolve_world_tick_sets_dungeon_tile_event_with_map_change() {
         let data = make_world_data();
-        let enemies: Vec<FieldEnemy> = Vec::new();
+        let session = make_session_with_map(&data, "field");
         let state = MovementState {
             pressed_direction: Some(Direction::Down),
             move_cooldown: 0,
         };
         let player = make_player_at(1, 1, "field");
 
-        let result = resolve_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(
             matches!(result.tile_event, Some(TileEvent::DungeonEntrance(target)) if target == "cave")
@@ -680,14 +749,14 @@ mod tests {
     #[test]
     fn resolve_world_tick_sets_no_tile_event_on_floor() {
         let data = make_world_data();
-        let enemies: Vec<FieldEnemy> = Vec::new();
+        let session = make_session_with_map(&data, "field");
         let state = MovementState {
             pressed_direction: Some(Direction::Right),
             move_cooldown: 0,
         };
         let player = make_player_at(0, 0, "field");
 
-        let result = resolve_world_tick(&state, &player, &enemies, &data);
+        let result = resolve_world_tick(&state, &player, &session, &data);
 
         assert!(result.tile_event.is_none());
         assert!(!result.map_changed);
