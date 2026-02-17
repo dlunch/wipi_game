@@ -151,48 +151,22 @@ impl UiEventApplier for UiState {
             UiEvent::MovementKeyReleased(direction) => out.push(GameEvent::Transition(
                 TransitionEvent::ReleaseMovementDirection(direction),
             )),
-            UiEvent::MenuInput(key) => {
-                for event in self.apply_menu_input(key) {
-                    out.push(event);
-                }
-            }
-            UiEvent::PauseMenuInput(key) => {
-                for event in self.apply_pause_menu_input(key) {
-                    out.push(event);
-                }
-            }
-            UiEvent::ExploreInput(key) => {
-                for event in self.apply_explore_input(key) {
-                    out.push(event);
-                }
-            }
-            UiEvent::InventoryInput(key) => {
-                for event in self.apply_inventory_input(session, key) {
-                    out.push(event);
-                }
-            }
-            UiEvent::DialogInput(key) => {
-                for event in self.apply_dialog_input(key) {
-                    out.push(event);
-                }
-            }
+            UiEvent::MenuInput(key) => self.apply_menu_input(key, out),
+            UiEvent::PauseMenuInput(key) => self.apply_pause_menu_input(key, out),
+            UiEvent::ExploreInput(key) => self.apply_explore_input(key, out),
+            UiEvent::InventoryInput(key) => self.apply_inventory_input(session, key, out),
+            UiEvent::DialogInput(key) => self.apply_dialog_input(key, out),
             UiEvent::ShopBuySelected(selected) => {
-                for event in self.apply_shop_buy_selected(session, selected) {
-                    out.push(event);
-                }
+                self.apply_shop_buy_selected(session, selected, out)
             }
-            UiEvent::ShopSellSelected(selected) => {
-                for event in self.apply_shop_sell_selected(selected) {
-                    out.push(event);
-                }
-            }
+            UiEvent::ShopSellSelected(selected) => self.apply_shop_sell_selected(selected, out),
             UiEvent::ShopClose => out.push(GameEvent::Transition(TransitionEvent::ToExplore)),
         };
     }
 }
 
 impl UiState {
-    fn apply_explore_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_explore_input(&self, key: InputKey, out: &mut Vec<GameEvent>) {
         let event = match key {
             InputKey::Up => Some(ExploreCommand::Move(Direction::Up)),
             InputKey::Down => Some(ExploreCommand::Move(Direction::Down)),
@@ -207,16 +181,19 @@ impl UiState {
             _ => None,
         };
 
-        event.map(GameEvent::ExploreCommand).into_iter().collect()
+        if let Some(command) = event {
+            out.push(GameEvent::ExploreCommand(command));
+        }
     }
 
     fn apply_inventory_input(
         &mut self,
         session: Option<&SessionState>,
         key: InputKey,
-    ) -> Vec<GameEvent> {
+        out: &mut Vec<GameEvent>,
+    ) {
         let Some(s) = session else {
-            return Vec::new();
+            return;
         };
 
         let selected = self.inventory.selected;
@@ -234,27 +211,27 @@ impl UiState {
                 }
             }
             InputKey::Ok => {
-                return vec![GameEvent::UseInventorySelected(selected)];
+                out.push(GameEvent::UseInventorySelected(selected));
             }
             InputKey::Back => {
-                return vec![GameEvent::Transition(TransitionEvent::ToExplore)];
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
         }
-        Vec::new()
     }
 
-    fn apply_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_dialog_input(&self, key: InputKey, out: &mut Vec<GameEvent>) {
         match key {
-            InputKey::Back => vec![GameEvent::ApplyDialogTransition(
+            InputKey::Back => out.push(GameEvent::ApplyDialogTransition(
                 DialogTransition::CloseToExplore,
-            )],
+            )),
             InputKey::Ok => {
                 if let Some(dialog_state_ref) = self.dialog.state.as_ref() {
                     if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
-                        return vec![GameEvent::ApplyDialogTransition(
+                        out.push(GameEvent::ApplyDialogTransition(
                             DialogTransition::CloseToExplore,
-                        )];
+                        ));
+                        return;
                     }
 
                     let transition =
@@ -264,7 +241,7 @@ impl UiState {
                             DialogTransition::CloseToExplore
                         };
 
-                    let mut events = vec![GameEvent::ApplyDialogTransition(transition)];
+                    out.push(GameEvent::ApplyDialogTransition(transition));
                     if let Some(action) = dialog_state_ref
                         .lines
                         .get(dialog_state_ref.current_line)
@@ -273,17 +250,14 @@ impl UiState {
                     {
                         match action {
                             DialogAction::OpenShop(shop_id) => {
-                                events.push(GameEvent::OpenShopById(shop_id))
+                                out.push(GameEvent::OpenShopById(shop_id));
                             }
-                            _ => events.push(GameEvent::ApplyDialogAction(action)),
+                            _ => out.push(GameEvent::ApplyDialogAction(action)),
                         }
                     }
-                    events
-                } else {
-                    Vec::new()
                 }
             }
-            _ => Vec::new(),
+            _ => {}
         }
     }
 
@@ -291,9 +265,10 @@ impl UiState {
         &self,
         session: Option<&SessionState>,
         selected: usize,
-    ) -> Vec<GameEvent> {
+        out: &mut Vec<GameEvent>,
+    ) {
         let Some(s) = session else {
-            return Vec::new();
+            return;
         };
         let shop_items = self
             .shop
@@ -304,17 +279,15 @@ impl UiState {
         if let Some(item) = shop_items.get(selected).cloned()
             && s.leader.stats.gold >= item.price
         {
-            vec![GameEvent::ShopBuyItem(item)]
-        } else {
-            Vec::new()
+            out.push(GameEvent::ShopBuyItem(item));
         }
     }
 
-    fn apply_shop_sell_selected(&self, selected: usize) -> Vec<GameEvent> {
-        vec![GameEvent::ShopSellSelected(selected)]
+    fn apply_shop_sell_selected(&self, selected: usize, out: &mut Vec<GameEvent>) {
+        out.push(GameEvent::ShopSellSelected(selected));
     }
 
-    fn apply_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_menu_input(&mut self, key: InputKey, out: &mut Vec<GameEvent>) {
         let selected = self.menu.selected;
         let items = &self.menu.state.items;
 
@@ -346,20 +319,19 @@ impl UiState {
         };
 
         match event {
-            MenuEvent::None => Vec::new(),
+            MenuEvent::None => {}
             MenuEvent::SetSelected(selected) => {
                 self.menu.set_selected(selected);
-                Vec::new()
             }
             MenuEvent::Action(action) => match action {
-                MenuAction::NewGame => vec![GameEvent::StartNewGame],
-                MenuAction::Continue => vec![GameEvent::ContinueGame],
-                MenuAction::Exit => vec![GameEvent::Exit(0)],
+                MenuAction::NewGame => out.push(GameEvent::StartNewGame),
+                MenuAction::Continue => out.push(GameEvent::ContinueGame),
+                MenuAction::Exit => out.push(GameEvent::Exit(0)),
             },
         }
     }
 
-    fn apply_pause_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_pause_menu_input(&mut self, key: InputKey, out: &mut Vec<GameEvent>) {
         let selected = self.pause_menu.selected;
         let item_count = self.pause_menu.state.items.len();
 
@@ -390,26 +362,24 @@ impl UiState {
         };
 
         match action {
-            PauseMenuAction::None => Vec::new(),
+            PauseMenuAction::None => {}
             PauseMenuAction::OpenInventory => {
                 self.inventory.reset();
-                vec![GameEvent::Transition(TransitionEvent::ToInventory)]
+                out.push(GameEvent::Transition(TransitionEvent::ToInventory));
             }
             PauseMenuAction::OpenStats => {
-                vec![GameEvent::Transition(TransitionEvent::ToStats)]
+                out.push(GameEvent::Transition(TransitionEvent::ToStats));
             }
             PauseMenuAction::OpenQuestLog => {
-                vec![GameEvent::Transition(TransitionEvent::ToQuestLog)]
+                out.push(GameEvent::Transition(TransitionEvent::ToQuestLog));
             }
             PauseMenuAction::SaveAndReturnExplore => {
                 self.shop.reset();
-                vec![
-                    GameEvent::SaveSession,
-                    GameEvent::Transition(TransitionEvent::ToExplore),
-                ]
+                out.push(GameEvent::SaveSession);
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             PauseMenuAction::BackToExplore => {
-                vec![GameEvent::Transition(TransitionEvent::ToExplore)]
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
         }
     }
