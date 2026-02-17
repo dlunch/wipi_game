@@ -68,15 +68,6 @@ pub enum UiEvent {
     ShopInput(InputKey),
 }
 
-#[derive(Clone, Copy)]
-pub enum ExploreCommand {
-    Move(Direction),
-    Confirm,
-    UseSlot(usize),
-    OpenPauseMenu,
-    OpenMenu,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum DialogTransition {
     SetLine(usize),

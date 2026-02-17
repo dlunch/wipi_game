@@ -9,13 +9,13 @@ use anyhow::{Result, anyhow};
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldState, apply_effects, domain_resolvers,
+    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
     state: GameState,
     data: Rc<GameData>,
-    world: Option<WorldState>,
+    world: WorldSlot,
     ui: UiState,
     render_fx: RenderFxState,
     render_state: RenderState,
@@ -37,7 +37,7 @@ impl GameEngine {
         Self {
             state: GameState::Loading(0),
             data: Rc::new(GameData::default()),
-            world: None,
+            world: WorldSlot::empty(),
             ui: UiState::default(),
             render_fx: RenderFxState::default(),
             render_state: RenderState::Loading { step: 0 },
@@ -116,7 +116,6 @@ impl GameEngine {
                 state: &self.state,
                 data: &self.data,
                 world: self.world.as_ref(),
-                ui: &self.ui,
             };
             (*resolver).resolve(&ctx, event, out)?;
         }
@@ -128,31 +127,14 @@ impl GameEngine {
             self.state.apply_event(&event)?;
         }
 
-        let is_session_event = matches!(event, GameEvent::World(_));
+        self.world.apply_event(&event);
 
-        if matches!(event, GameEvent::World(crate::game::WorldEvent::Create)) {
-            self.world = Some(WorldState::empty());
-        }
-
-        if let GameEvent::Exit(code) = &event {
-            wipi::kernel::exit(*code);
-        }
-
-        if self.state.requires_world() && self.world.is_none() {
+        if self.state.requires_world() && self.world.as_ref().is_none() {
             self.state = GameState::Error(format!(
                 "Missing world for state transition: {:?}",
                 self.state
             ));
             return Ok(());
-        }
-
-        if matches!(
-            event,
-            GameEvent::Transition(crate::game::TransitionEvent::ToMenu)
-                | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver)
-        ) && !is_session_event
-        {
-            self.world = None;
         }
 
         if let Some(world) = self.world.as_mut() {

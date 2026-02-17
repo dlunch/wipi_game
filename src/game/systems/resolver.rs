@@ -3,15 +3,12 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
-use crate::game::{
-    GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, UiState, WorldState,
-};
+use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, GameState, WorldState};
 
 pub struct ResolveContext<'a> {
     pub state: &'a GameState,
     pub data: &'a Rc<GameData>,
     pub world: Option<&'a WorldState>,
-    pub ui: &'a UiState,
 }
 
 pub trait DomainEventResolver: GameEventSubscriber {

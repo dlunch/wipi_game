@@ -147,9 +147,7 @@ impl WorldState {
         }
         Ok(())
     }
-}
 
-impl WorldState {
     fn clear_occupancy(&mut self) {
         self.occupied_map_id.clear();
         self.occupied_width = 0;

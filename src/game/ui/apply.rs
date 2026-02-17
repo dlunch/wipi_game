@@ -1,11 +1,9 @@
 use alloc::vec::Vec;
 
-use super::state::{
-    DialogTransition, ExploreCommand, InputKey, MenuAction, ShopMode, UiEvent, UiState,
-};
+use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
-use crate::game::{GameEvent, TransitionEvent, WorldState};
+use crate::game::{ExploreEvent, GameEvent, TransitionEvent, WorldState};
 
 pub trait UiEventApplier {
     fn apply_ui_event(
@@ -53,7 +51,7 @@ impl UiEventApplier for UiState {
             )),
             UiEvent::MenuInput(key) => apply_menu_input(self, key, out),
             UiEvent::PauseMenuInput(key) => apply_pause_menu_input(self, key, out),
-            UiEvent::ExploreInput(key) => apply_explore_input(key, out),
+            UiEvent::ExploreInput(key) => apply_explore_input(self, session, key, out),
             UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out),
             UiEvent::DialogInput(key) => apply_dialog_input(self, key, out),
             UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out),
@@ -61,23 +59,47 @@ impl UiEventApplier for UiState {
     }
 }
 
-fn apply_explore_input(key: InputKey, out: &mut Vec<GameEvent>) {
-    let event = match key {
-        InputKey::Up => Some(ExploreCommand::Move(crate::data::Direction::Up)),
-        InputKey::Down => Some(ExploreCommand::Move(crate::data::Direction::Down)),
-        InputKey::Left => Some(ExploreCommand::Move(crate::data::Direction::Left)),
-        InputKey::Right => Some(ExploreCommand::Move(crate::data::Direction::Right)),
-        InputKey::Ok => Some(ExploreCommand::Confirm),
-        InputKey::Key1 => Some(ExploreCommand::UseSlot(0)),
-        InputKey::Key2 => Some(ExploreCommand::UseSlot(1)),
-        InputKey::Key3 => Some(ExploreCommand::UseSlot(2)),
-        InputKey::Key0 => Some(ExploreCommand::OpenPauseMenu),
-        InputKey::Back => Some(ExploreCommand::OpenMenu),
-        _ => None,
-    };
-
-    if let Some(command) = event {
-        out.push(GameEvent::ExploreCommand(command));
+fn apply_explore_input(
+    ui: &UiState,
+    session: Option<&WorldState>,
+    key: InputKey,
+    out: &mut Vec<GameEvent>,
+) {
+    match key {
+        InputKey::Up => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
+            crate::data::Direction::Up,
+        ))),
+        InputKey::Down => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
+            crate::data::Direction::Down,
+        ))),
+        InputKey::Left => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
+            crate::data::Direction::Left,
+        ))),
+        InputKey::Right => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
+            crate::data::Direction::Right,
+        ))),
+        InputKey::Ok => {
+            if let Some(s) = session {
+                out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
+                    facing: s.leader.facing,
+                    fallback_action: Some(ui.explore.ok_action),
+                }));
+            }
+        }
+        InputKey::Key1 | InputKey::Key2 | InputKey::Key3 => {
+            let slot = match key {
+                InputKey::Key1 => 0,
+                InputKey::Key2 => 1,
+                InputKey::Key3 => 2,
+                _ => return,
+            };
+            if let Some(action) = ui.explore.key_actions.get(slot).and_then(|a| *a) {
+                out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
+            }
+        }
+        InputKey::Key0 => out.push(GameEvent::Explore(ExploreEvent::EnterPauseMenu)),
+        InputKey::Back => out.push(GameEvent::Explore(ExploreEvent::EnterMenu)),
+        _ => {}
     }
 }
 

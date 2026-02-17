@@ -2,10 +2,12 @@ mod character;
 mod combat;
 mod movement;
 pub(crate) mod world;
+pub(crate) mod world_slot;
 
 pub use character::{CharacterState, TileEvent};
 pub use combat::{CombatState, FieldEnemy, KillReward, SkillEffect};
 pub use movement::{MovementState, MovementTickEvent};
+pub(crate) use world_slot::WorldSlot;
 
 use alloc::format;
 use alloc::string::String;

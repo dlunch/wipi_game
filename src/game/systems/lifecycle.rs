@@ -22,6 +22,7 @@ pub enum LoadingEvent {
 #[derive(Clone, Copy)]
 pub enum LifecycleEvent {
     ResetUi,
+    ContinueSetup,
 }
 
 struct LifecycleResolver;
@@ -54,8 +55,7 @@ impl DomainEventResolver for LifecycleResolver {
             }
             GameEvent::ContinueGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-                Self::setup_continue_events(ctx.data, out);
-                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+                out.push(GameEvent::Lifecycle(LifecycleEvent::ContinueSetup));
             }
             _ => {}
         }
@@ -217,4 +217,8 @@ impl LifecycleResolver {
             Ok(false) | Err(_) => Self::setup_new_game_events(data, out),
         }
     }
+}
+
+pub fn emit_continue_setup_events(data: &GameData, out: &mut Vec<GameEvent>) {
+    LifecycleResolver::setup_continue_events(data, out);
 }
