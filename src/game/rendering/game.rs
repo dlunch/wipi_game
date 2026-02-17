@@ -166,30 +166,26 @@ fn build_explore_render(
         .find(|enemy| enemy.hp > 0)
         .map(|enemy| enemy.data.name.clone());
 
-    let enemies = session
-        .combat
-        .enemies
-        .iter()
-        .map(|enemy| EnemyRender {
+    let mut enemies = Vec::with_capacity(session.combat.enemies.len());
+    for enemy in &session.combat.enemies {
+        enemies.push(EnemyRender {
             x: enemy.x,
             y: enemy.y,
             hp: enemy.hp,
             max_hp: enemy.data.hp,
             hit_flash: enemy.hit_flash,
             dead: enemy.hp <= 0,
-        })
-        .collect();
+        });
+    }
 
-    let skill_effects = session
-        .combat
-        .skill_effects
-        .iter()
-        .map(|effect| SkillEffectRender {
+    let mut skill_effects = Vec::with_capacity(session.combat.skill_effects.len());
+    for effect in &session.combat.skill_effects {
+        skill_effects.push(SkillEffectRender {
             x: effect.x,
             y: effect.y,
             effect_type: effect.effect_type,
-        })
-        .collect();
+        });
+    }
 
     Some(ExploreRender {
         data: Rc::clone(data),
@@ -244,16 +240,15 @@ pub fn build_render_state(
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
+            let mut items = Vec::with_capacity(s.leader.inventory.len());
+            for item in &s.leader.inventory {
+                items.push(InventoryItemRender {
+                    name: item.name.clone(),
+                    kind: item.kind,
+                });
+            }
             RenderState::Inventory(InventoryRender {
-                items: s
-                    .leader
-                    .inventory
-                    .iter()
-                    .map(|item| InventoryItemRender {
-                        name: item.name.clone(),
-                        kind: item.kind,
-                    })
-                    .collect(),
+                items,
                 equipped_weapon: s.leader.equipped_weapon,
                 equipped_armor: s.leader.equipped_armor,
                 equipped_accessory: s.leader.equipped_accessory,
@@ -306,6 +301,20 @@ pub fn build_render_state(
             let Some(shop_state) = ui.shop.state.as_ref() else {
                 return RenderState::Error(String::from("No shop state"));
             };
+            let mut buy_items = Vec::with_capacity(shop_state.items.len());
+            for item in &shop_state.items {
+                buy_items.push(ShopItemRender {
+                    name: item.name.clone(),
+                    price: item.price,
+                });
+            }
+            let mut player_inventory = Vec::with_capacity(s.leader.inventory.len());
+            for item in &s.leader.inventory {
+                player_inventory.push(ShopItemRender {
+                    name: item.name.clone(),
+                    price: item.price / 2,
+                });
+            }
             RenderState::Shop(ShopRender {
                 shop_name: shop_state.shop.name.clone(),
                 mode: ui.shop.mode,
@@ -319,45 +328,30 @@ pub fn build_render_state(
                     },
                     SHOP_VISIBLE_ITEMS,
                 ),
-                buy_items: shop_state
-                    .items
-                    .iter()
-                    .map(|item| ShopItemRender {
-                        name: item.name.clone(),
-                        price: item.price,
-                    })
-                    .collect(),
+                buy_items,
                 player_gold: s.leader.stats.gold,
-                player_inventory: s
-                    .leader
-                    .inventory
-                    .iter()
-                    .map(|item| ShopItemRender {
-                        name: item.name.clone(),
-                        price: item.price / 2,
-                    })
-                    .collect(),
+                player_inventory,
             })
         }
         GameState::QuestLog => {
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            let quests = s
-                .quests
-                .iter()
-                .filter(|quest| !quest.rewarded)
-                .filter_map(|quest| {
-                    data.find_quest(&quest.quest_id)
-                        .map(|quest_data| QuestEntryRender {
-                            name: quest_data.name.clone(),
-                            description: quest_data.description.clone(),
-                            current_count: as_u32(quest.current_count),
-                            target_count: as_u32(quest_data.target_count),
-                            completed: quest.completed,
-                        })
-                })
-                .collect();
+            let mut quests = Vec::with_capacity(s.quests.len());
+            for quest in &s.quests {
+                if quest.rewarded {
+                    continue;
+                }
+                if let Some(quest_data) = data.find_quest(&quest.quest_id) {
+                    quests.push(QuestEntryRender {
+                        name: quest_data.name.clone(),
+                        description: quest_data.description.clone(),
+                        current_count: as_u32(quest.current_count),
+                        target_count: as_u32(quest_data.target_count),
+                        completed: quest.completed,
+                    });
+                }
+            }
             RenderState::QuestLog(QuestLogRender { quests })
         }
         GameState::PauseMenu => RenderState::PauseMenu {

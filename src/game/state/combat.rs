@@ -65,6 +65,12 @@ impl CombatState {
             return Ok(());
         };
         match event {
+            CombatEvent::SyncCounters {
+                update_counter,
+                mp_regen_timer: _,
+            } => {
+                self.update_counter = *update_counter;
+            }
             CombatEvent::SetMapEnemies {
                 enemies,
                 respawn_positions,
@@ -131,11 +137,17 @@ impl CombatState {
             CombatEvent::SetPlayerHitFlash(hit_flash) => {
                 self.player_hit_flash = *hit_flash;
             }
+            CombatEvent::TickSkillEffects => {
+                self.skill_effects.retain_mut(|effect| {
+                    if effect.timer == 0 {
+                        return false;
+                    }
+                    effect.timer -= 1;
+                    effect.timer > 0
+                });
+            }
             CombatEvent::SetSkillEffects(skill_effects) => {
                 self.skill_effects = skill_effects.clone();
-            }
-            CombatEvent::SetUpdateCounter(update_counter) => {
-                self.update_counter = *update_counter;
             }
             CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;
@@ -144,7 +156,6 @@ impl CombatState {
                 self.next_enemy_instance_id = *next_enemy_instance_id;
             }
             CombatEvent::SetSkillCooldowns(_)
-            | CombatEvent::SetMpRegenTimer(_)
             | CombatEvent::RecoverMp(_)
             | CombatEvent::Heal(_)
             | CombatEvent::GrantKillReward { .. }

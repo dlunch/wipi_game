@@ -1,10 +1,12 @@
 use alloc::collections::VecDeque;
 use alloc::format;
 use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::Result;
+use core::mem;
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
@@ -18,6 +20,8 @@ pub struct GameEngine {
     session: Option<SessionState>,
     ui: UiState,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
+    event_queue: VecDeque<GameEvent>,
+    derived_events: Vec<GameEvent>,
 }
 
 impl GameEngine {
@@ -37,6 +41,8 @@ impl GameEngine {
             session: None,
             ui: UiState::default(),
             resolver_buckets,
+            event_queue: VecDeque::with_capacity(128),
+            derived_events: Vec::with_capacity(32),
         }
     }
 
@@ -84,8 +90,13 @@ impl GameEngine {
         out
     }
 
-    fn resolve_with_handlers(&mut self, event: &GameEvent) -> Result<Vec<GameEvent>> {
-        let mut derived = Vec::with_capacity(8);
+    fn resolve_with_handlers(&mut self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
+        out.clear();
+        if matches!(event, GameEvent::UpdateCombat)
+            && let Some(session) = self.session.as_ref()
+        {
+            out.reserve(session.combat.enemies.len() * 4 + 16);
+        }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
             let mut ctx = ResolveContext {
@@ -94,9 +105,9 @@ impl GameEngine {
                 session: self.session.as_ref(),
                 ui: &self.ui,
             };
-            (*resolver).resolve(&mut ctx, event, &mut derived)?;
+            (*resolver).resolve(&mut ctx, event, out)?;
         }
-        Ok(derived)
+        Ok(())
     }
 
     fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
@@ -157,39 +168,46 @@ impl GameEngine {
         if initial_events.is_empty() {
             return;
         }
-
-        let mut queue = VecDeque::with_capacity(64);
+        let mut queue = mem::take(&mut self.event_queue);
+        queue.clear();
         for event in initial_events {
             queue.push_back(event);
         }
+        let mut derived = mem::take(&mut self.derived_events);
+        derived.clear();
         let mut processed = 0usize;
+        let mut error_message: Option<String> = None;
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
             if processed > 256 {
-                self.state = GameState::Error(format!(
+                error_message = Some(format!(
                     "Event queue overflow: processed {} events in one dispatch",
                     processed
                 ));
-                return;
+                break;
             }
 
-            let derived = match self.resolve_with_handlers(&event) {
-                Ok(events) => events,
-                Err(e) => {
-                    self.state = GameState::Error(format!("{e}"));
-                    return;
-                }
-            };
+            if let Err(e) = self.resolve_with_handlers(&event, &mut derived) {
+                error_message = Some(format!("{e}"));
+                break;
+            }
 
             if let Err(e) = self.apply_with_handlers(event) {
-                self.state = GameState::Error(format!("{e}"));
-                return;
+                error_message = Some(format!("{e}"));
+                break;
             }
 
-            for derived_event in derived {
+            for derived_event in derived.drain(..) {
                 queue.push_back(derived_event);
             }
+        }
+
+        self.event_queue = queue;
+        self.derived_events = derived;
+
+        if let Some(message) = error_message {
+            self.state = GameState::Error(message);
         }
     }
 }

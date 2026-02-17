@@ -171,10 +171,16 @@ impl DomainEventResolver for UpdateMovementResolver {
 
         let movement = resolve_world_tick(&s.movement, &s.leader, s, ctx.data());
 
-        out.push(GameEvent::Movement(MovementEvent::Tick(
-            movement.movement_event,
-            movement.tile_event,
-        )));
+        let has_meaningful_movement = movement.movement_event.next_state != s.movement
+            || movement.movement_event.facing.is_some()
+            || movement.movement_event.step.is_some()
+            || movement.tile_event.is_some();
+        if has_meaningful_movement {
+            out.push(GameEvent::Movement(MovementEvent::Tick(
+                movement.movement_event,
+                movement.tile_event,
+            )));
+        }
         if movement.map_changed {
             out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }

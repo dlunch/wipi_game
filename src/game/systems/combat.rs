@@ -41,12 +41,13 @@ pub fn resolve_tick(
     enemy_data: &[Enemy],
     out: &mut Vec<GameEvent>,
 ) {
+    // UpdateCombat tick can emit multiple enemy-related events in one frame.
+    // Reserve upfront to avoid repeated growth reallocations on embedded targets.
+    out.reserve(state.enemies.len() * 4 + 16);
+
     let (player_x, player_y) = player_pos;
     let (skill_cooldowns, mp_regen_timer) = resources;
     let update_counter = state.update_counter.wrapping_add(1);
-    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(
-        update_counter,
-    )));
 
     let player_attack_cooldown = if state.player_attack_cooldown > 0 {
         state.player_attack_cooldown - 1
@@ -70,26 +71,8 @@ pub fn resolve_tick(
         )));
     }
 
-    let skill_effects: Vec<SkillEffect> = state
-        .skill_effects
-        .iter()
-        .filter_map(|effect| {
-            if effect.timer == 0 {
-                None
-            } else {
-                Some(SkillEffect {
-                    x: effect.x,
-                    y: effect.y,
-                    effect_type: effect.effect_type,
-                    timer: effect.timer - 1,
-                })
-            }
-        })
-        .collect();
     if !state.skill_effects.is_empty() {
-        out.push(GameEvent::Combat(CombatEvent::SetSkillEffects(
-            skill_effects,
-        )));
+        out.push(GameEvent::Combat(CombatEvent::TickSkillEffects));
     }
 
     let mut damage_taken = 0;
@@ -176,7 +159,11 @@ pub fn resolve_tick(
         )));
     }
 
-    tick_resource_state(skill_cooldowns, mp_regen_timer, out);
+    let next_mp_regen_timer = tick_resource_state(skill_cooldowns, mp_regen_timer, out);
+    out.push(GameEvent::Combat(CombatEvent::SyncCounters {
+        update_counter,
+        mp_regen_timer: next_mp_regen_timer,
+    }));
     if damage_taken > 0 {
         out.push(GameEvent::Combat(CombatEvent::TakeDamage(damage_taken)));
     }
@@ -186,7 +173,7 @@ fn tick_resource_state(
     skill_cooldowns: [u32; 3],
     mp_regen_timer: u32,
     events: &mut Vec<GameEvent>,
-) {
+) -> u32 {
     let mut next_skill_cooldowns = skill_cooldowns;
     for cooldown in &mut next_skill_cooldowns {
         if *cooldown > 0 {
@@ -205,14 +192,10 @@ fn tick_resource_state(
         next_mp_regen_timer = 0;
         recover_mp = true;
     }
-    if next_mp_regen_timer != mp_regen_timer {
-        events.push(GameEvent::Combat(CombatEvent::SetMpRegenTimer(
-            next_mp_regen_timer,
-        )));
-    }
     if recover_mp {
         events.push(GameEvent::Combat(CombatEvent::RecoverMp(1)));
     }
+    next_mp_regen_timer
 }
 
 struct UpdateCombatResolver;
@@ -246,8 +229,9 @@ impl DomainEventResolver for UpdateCombatResolver {
             matches!(ctx.state, GameState::Explore),
             "Invalid state: expected Explore"
         );
+        let data = ctx.data.as_ref();
         let s = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = ctx.data().find_map(&s.leader.current_map_id) else {
+        let Some(map) = data.find_map(&s.leader.current_map_id) else {
             return Ok(());
         };
         resolve_tick(
@@ -256,7 +240,7 @@ impl DomainEventResolver for UpdateCombatResolver {
             s.leader.total_def(),
             (s.skill_cooldowns, s.mp_regen_timer),
             map,
-            &ctx.data().enemies,
+            &data.enemies,
             out,
         );
         Ok(())
@@ -376,13 +360,14 @@ impl DomainEventResolver for CombatMapSyncResolver {
         ) {
             return Ok(());
         }
+        let data = ctx.data.as_ref();
         let session = ctx.session.ok_or_else(|| anyhow!("No active session"))?;
-        let Some(map) = ctx.data().find_map(&session.leader.current_map_id) else {
+        let Some(map) = data.find_map(&session.leader.current_map_id) else {
             return Ok(());
         };
 
         let (enemies, respawn_positions, next_enemy_instance_id) =
-            build_map_enemies(map, &ctx.data().enemies);
+            build_map_enemies(map, &data.enemies);
         out.push(GameEvent::Combat(CombatEvent::SetMapEnemies {
             enemies,
             respawn_positions,

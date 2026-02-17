@@ -6,6 +6,10 @@ use alloc::vec::Vec;
 
 #[derive(Clone)]
 pub enum CombatEvent {
+    SyncCounters {
+        update_counter: u32,
+        mp_regen_timer: u32,
+    },
     SetMapEnemies {
         enemies: Vec<FieldEnemy>,
         respawn_positions: Vec<(usize, usize, usize)>,
@@ -32,12 +36,11 @@ pub enum CombatEvent {
     },
     SetPlayerAttackCooldown(u32),
     SetPlayerHitFlash(u32),
+    TickSkillEffects,
     SetSkillEffects(Vec<SkillEffect>),
-    SetUpdateCounter(u32),
     SetRespawnTimer(u32),
     SetNextEnemyInstanceId(u32),
     SetSkillCooldowns([u32; 3]),
-    SetMpRegenTimer(u32),
     RecoverMp(i32),
     Heal(i32),
     GrantKillReward {

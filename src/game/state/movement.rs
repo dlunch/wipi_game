@@ -6,7 +6,7 @@ use crate::game::{
     GameEvent, GameEventKind, GameEventSubscriber, GameState, MovementEvent, TransitionEvent,
 };
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct MovementState {
     pub pressed_direction: Option<Direction>,
     pub move_cooldown: u32,

@@ -1,4 +1,6 @@
+use alloc::collections::BTreeMap;
 use alloc::format;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::str;
 
@@ -20,6 +22,11 @@ pub struct GameData {
     pub quests: Vec<Quest>,
     pub shops: Vec<Shop>,
     pub newgame: NewGameConfig,
+    item_index: BTreeMap<String, usize>,
+    map_index: BTreeMap<String, usize>,
+    dialog_index: BTreeMap<String, usize>,
+    quest_index: BTreeMap<String, usize>,
+    shop_index: BTreeMap<String, usize>,
 }
 
 impl GameData {
@@ -30,16 +37,31 @@ impl GameData {
 
     pub fn load_step(&mut self, step: usize) -> Result<bool> {
         match step {
-            0 => self.items = Self::load_resource("data/items.dat", parse_items)?,
+            0 => {
+                self.items = Self::load_resource("data/items.dat", parse_items)?;
+                self.rebuild_item_index();
+            }
             1 => self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?,
-            2 => self.maps = Self::load_resource("data/maps.dat", parse_maps)?,
+            2 => {
+                self.maps = Self::load_resource("data/maps.dat", parse_maps)?;
+                self.rebuild_map_index();
+            }
             3 => {
                 let npc_defs = Self::load_resource("data/npcs.dat", parse_npcs)?;
                 self.npcs = Self::resolve_map_npcs(&self.maps, &npc_defs)?;
             }
-            4 => self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?,
-            5 => self.quests = Self::load_resource("data/quests.dat", parse_quests)?,
-            6 => self.shops = Self::load_resource("data/shops.dat", parse_shops)?,
+            4 => {
+                self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?;
+                self.rebuild_dialog_index();
+            }
+            5 => {
+                self.quests = Self::load_resource("data/quests.dat", parse_quests)?;
+                self.rebuild_quest_index();
+            }
+            6 => {
+                self.shops = Self::load_resource("data/shops.dat", parse_shops)?;
+                self.rebuild_shop_index();
+            }
             7 => self.newgame = Self::load_resource("data/newgame.dat", parse_newgame)?,
             _ => return Ok(true),
         }
@@ -55,23 +77,28 @@ impl GameData {
     }
 
     pub fn find_map(&self, id: &str) -> Option<&Map> {
-        self.maps.iter().find(|m| m.id == id)
+        let idx = *self.map_index.get(id)?;
+        self.maps.get(idx)
     }
 
     pub fn find_item(&self, id: &str) -> Option<&Item> {
-        self.items.iter().find(|i| i.id == id)
+        let idx = *self.item_index.get(id)?;
+        self.items.get(idx)
     }
 
     pub fn find_dialog(&self, id: &str) -> Option<&Dialog> {
-        self.dialogs.iter().find(|d| d.id == id)
+        let idx = *self.dialog_index.get(id)?;
+        self.dialogs.get(idx)
     }
 
     pub fn find_quest(&self, id: &str) -> Option<&Quest> {
-        self.quests.iter().find(|q| q.id == id)
+        let idx = *self.quest_index.get(id)?;
+        self.quests.get(idx)
     }
 
     pub fn find_shop(&self, id: &str) -> Option<&Shop> {
-        self.shops.iter().find(|s| s.id == id)
+        let idx = *self.shop_index.get(id)?;
+        self.shops.get(idx)
     }
 
     pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {
@@ -130,5 +157,40 @@ impl GameData {
         }
 
         Ok(npcs)
+    }
+
+    fn rebuild_item_index(&mut self) {
+        self.item_index.clear();
+        for (idx, item) in self.items.iter().enumerate() {
+            self.item_index.insert(item.id.clone(), idx);
+        }
+    }
+
+    fn rebuild_map_index(&mut self) {
+        self.map_index.clear();
+        for (idx, map) in self.maps.iter().enumerate() {
+            self.map_index.insert(map.id.clone(), idx);
+        }
+    }
+
+    fn rebuild_dialog_index(&mut self) {
+        self.dialog_index.clear();
+        for (idx, dialog) in self.dialogs.iter().enumerate() {
+            self.dialog_index.insert(dialog.id.clone(), idx);
+        }
+    }
+
+    fn rebuild_quest_index(&mut self) {
+        self.quest_index.clear();
+        for (idx, quest) in self.quests.iter().enumerate() {
+            self.quest_index.insert(quest.id.clone(), idx);
+        }
+    }
+
+    fn rebuild_shop_index(&mut self) {
+        self.shop_index.clear();
+        for (idx, shop) in self.shops.iter().enumerate() {
+            self.shop_index.insert(shop.id.clone(), idx);
+        }
     }
 }

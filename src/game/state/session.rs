@@ -129,6 +129,12 @@ impl SessionState {
                 _ => {}
             },
             GameEvent::Combat(combat_event) => match combat_event {
+                CombatEvent::SyncCounters {
+                    update_counter: _,
+                    mp_regen_timer,
+                } => {
+                    self.mp_regen_timer = *mp_regen_timer;
+                }
                 CombatEvent::SetMapEnemies { enemies, .. } => {
                     self.rebuild_enemy_occupancy_from_list(enemies);
                 }
@@ -148,9 +154,6 @@ impl SessionState {
                 }
                 CombatEvent::SetSkillCooldowns(next_skill_cooldowns) => {
                     self.skill_cooldowns = *next_skill_cooldowns;
-                }
-                CombatEvent::SetMpRegenTimer(next_mp_regen_timer) => {
-                    self.mp_regen_timer = *next_mp_regen_timer;
                 }
                 _ => {}
             },
