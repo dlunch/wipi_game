@@ -3,8 +3,8 @@ use alloc::format;
 use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
-    COLOR_BLACK, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
-    draw_text, fill_rect,
+    COLOR_BLACK, COLOR_CYAN, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen,
+    draw_rect, draw_text, fill_rect,
 };
 use crate::game::QuestLogRender;
 
@@ -33,7 +33,16 @@ pub fn draw_quest_log(fb: &mut Framebuffer, state: &QuestLogRender) {
             } else {
                 COLOR_WHITE
             };
-            draw_text(fb, 8, y, &quest.name, color);
+            let prefix = if i == state.selected { ">" } else { " " };
+            draw_text(fb, 8, y, prefix, COLOR_YELLOW);
+
+            let marker = if state.tracked_quest_id.as_deref() == Some(quest.quest_id.as_str()) {
+                "*"
+            } else {
+                " "
+            };
+            draw_text(fb, 14, y, marker, COLOR_CYAN);
+            draw_text(fb, 24, y, &quest.name, color);
 
             let progress_text = format!("{}/{}", quest.current_count, quest.target_count);
             draw_text(fb, screen_w - 40, y, &progress_text, color);
@@ -45,7 +54,7 @@ pub fn draw_quest_log(fb: &mut Framebuffer, state: &QuestLogRender) {
         }
     }
 
-    draw_text(fb, 8, screen_h - 14, "Back:Close", COLOR_GRAY);
+    draw_text(fb, 8, screen_h - 14, "OK:Track  Back:Close", COLOR_GRAY);
 }
 
 fn truncate_by_chars(s: &str, max_chars: usize) -> &str {

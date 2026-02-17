@@ -51,6 +51,7 @@ impl UiEventApplier for UiState {
             UiEvent::PauseMenuInput(key) => apply_pause_menu_input(self, key, out),
             UiEvent::ExploreInput(key) => apply_explore_input(self, session, key, out),
             UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out),
+            UiEvent::QuestLogInput(key) => apply_quest_log_input(self, session, key, out),
             UiEvent::DialogInput(key) => apply_dialog_input(self, key, out),
             UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out),
         };
@@ -178,6 +179,47 @@ fn apply_dialog_input(ui: &UiState, key: InputKey, out: &mut Vec<GameEvent>) {
                     }
                 }
             }
+        }
+        _ => {}
+    }
+}
+
+fn apply_quest_log_input(
+    ui: &mut UiState,
+    session: Option<&WorldState>,
+    key: InputKey,
+    out: &mut Vec<GameEvent>,
+) {
+    let Some(s) = session else {
+        return;
+    };
+
+    let mut active_quest_ids = Vec::with_capacity(s.quests.len());
+    for quest in &s.quests {
+        if !quest.rewarded {
+            active_quest_ids.push(quest.quest_id.clone());
+        }
+    }
+
+    match key {
+        InputKey::Up => {
+            ui.quest_log.selected = step_up(ui.quest_log.selected);
+        }
+        InputKey::Down => {
+            ui.quest_log.selected = step_down(ui.quest_log.selected, active_quest_ids.len());
+        }
+        InputKey::Ok => {
+            let Some(quest_id) = active_quest_ids.get(ui.quest_log.selected).cloned() else {
+                return;
+            };
+            if ui.quest_log.tracked_quest_id.as_deref() == Some(quest_id.as_str()) {
+                ui.quest_log.tracked_quest_id = None;
+            } else {
+                ui.quest_log.tracked_quest_id = Some(quest_id);
+            }
+        }
+        InputKey::Back => {
+            out.push(GameEvent::Transition(TransitionEvent::ToExplore));
         }
         _ => {}
     }

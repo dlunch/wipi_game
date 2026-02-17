@@ -51,6 +51,7 @@ pub struct UiState {
     pub menu: MenuUiState,
     pub pause_menu: PauseMenuUiState,
     pub inventory: InventoryUiState,
+    pub quest_log: QuestLogUiState,
     pub shop: ShopUiState,
     pub dialog: DialogUiState,
 }
@@ -63,6 +64,7 @@ pub enum UiEvent {
     MenuInput(InputKey),
     ExploreInput(InputKey),
     InventoryInput(InputKey),
+    QuestLogInput(InputKey),
     DialogInput(InputKey),
     PauseMenuInput(InputKey),
     ShopInput(InputKey),
@@ -154,6 +156,12 @@ impl Default for PauseMenuUiState {
 #[derive(Debug, Default)]
 pub struct InventoryUiState {
     pub selected: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct QuestLogUiState {
+    pub selected: usize,
+    pub tracked_quest_id: Option<String>,
 }
 
 #[derive(Debug)]

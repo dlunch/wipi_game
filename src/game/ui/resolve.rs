@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use super::state::{
     DialogUiState, ExploreUiState, GameInput, InputKey, InventoryUiState, MenuUiState,
-    PauseMenuUiState, UiEvent, UiState,
+    PauseMenuUiState, QuestLogUiState, UiEvent, UiState,
 };
 use crate::game::{GameState, WorldState};
 
@@ -88,6 +88,19 @@ impl InventoryUiState {
     }
 }
 
+impl QuestLogUiState {
+    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
+        if matches!(
+            key,
+            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
+        ) {
+            Some(UiEvent::QuestLogInput(key))
+        } else {
+            None
+        }
+    }
+}
+
 impl DialogUiState {
     pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
         if matches!(key, InputKey::Ok | InputKey::Back) {
@@ -116,13 +129,14 @@ fn resolve_keydown(
             }
         }
         GameState::Inventory => ui.inventory.event_for_key(key).into_iter().collect(),
-        GameState::Stats | GameState::QuestLog => {
+        GameState::Stats => {
             if matches!(key, InputKey::Back | InputKey::Ok) {
                 vec![UiEvent::OverlayCloseRequested]
             } else {
                 Vec::new()
             }
         }
+        GameState::QuestLog => ui.quest_log.event_for_key(key).into_iter().collect(),
         GameState::Dialog => ui.dialog.event_for_key(key).into_iter().collect(),
         GameState::Shop => {
             let _ = session;

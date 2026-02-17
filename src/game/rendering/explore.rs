@@ -278,10 +278,23 @@ fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_
         draw_text(fb, screen_w - 80, hud_y + 2, enemy_name, COLOR_RED);
     }
 
+    if let Some(quest) = &state.tracked_quest {
+        let progress = format!(
+            "{} {}/{}",
+            quest.name, quest.current_count, quest.target_count
+        );
+        let color = if quest.completed {
+            COLOR_GREEN
+        } else {
+            COLOR_YELLOW
+        };
+        draw_text(fb, 4, hud_y + 12, &progress, color);
+    }
+
     if !state.peaceful {
         draw_skill_bar(
             fb,
-            hud_y + 14,
+            hud_y + 20,
             screen_w,
             state.mp,
             &state.skill_cooldowns,

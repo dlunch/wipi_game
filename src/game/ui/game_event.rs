@@ -21,6 +21,9 @@ impl UiState {
             GameEvent::Transition(crate::game::TransitionEvent::ToInventory) => {
                 self.inventory.selected = 0;
             }
+            GameEvent::Transition(crate::game::TransitionEvent::ToQuestLog) => {
+                self.quest_log.selected = 0;
+            }
             GameEvent::ApplyDialogTransition(transition) => match transition {
                 crate::game::DialogTransition::SetLine(line) => {
                     if let Some(dialog_state) = self.dialog.state.as_mut() {
@@ -44,6 +47,12 @@ impl UiState {
                 self.shop.mode = crate::game::ShopMode::Select;
                 self.shop.selected = 0;
             }
+            GameEvent::World(crate::game::WorldEvent::AddQuestProgress(progress))
+                if progress.rewarded
+                    && self.quest_log.tracked_quest_id.as_deref() == Some(&progress.quest_id) =>
+            {
+                self.quest_log.tracked_quest_id = None;
+            }
             _ => {}
         }
         Ok(())
@@ -57,6 +66,7 @@ impl GameEventSubscriber for UiState {
             GameEventKind::Lifecycle
                 | GameEventKind::Loading
                 | GameEventKind::Transition
+                | GameEventKind::World
                 | GameEventKind::ApplyDialogTransition
                 | GameEventKind::ShopSellSelected
                 | GameEventKind::OpenDialogState

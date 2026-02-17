@@ -68,6 +68,7 @@ pub struct ExploreRender {
     pub max_mp: u32,
     pub level: u32,
     pub active_quest_count: usize,
+    pub tracked_quest: Option<TrackedQuestRender>,
     pub first_live_enemy_name: Option<String>,
     pub opened_treasures: Vec<(String, usize, usize)>,
     pub enemies: Vec<EnemyRender>,
@@ -142,12 +143,22 @@ pub struct ShopItemRender {
 
 pub struct QuestLogRender {
     pub quests: Vec<QuestEntryRender>,
+    pub selected: usize,
+    pub tracked_quest_id: Option<String>,
 }
 
 pub struct QuestEntryRender {
     pub quest_id: String,
     pub name: String,
     pub description: String,
+    pub current_count: u32,
+    pub target_count: u32,
+    pub completed: bool,
+}
+
+pub struct TrackedQuestRender {
+    pub quest_id: String,
+    pub name: String,
     pub current_count: u32,
     pub target_count: u32,
     pub completed: bool,
@@ -345,6 +356,11 @@ fn build_explore_render(
             .iter()
             .filter(|quest| !quest.rewarded && !quest.completed)
             .count(),
+        tracked_quest: build_tracked_quest_render(
+            session,
+            data,
+            ui.quest_log.tracked_quest_id.as_deref(),
+        ),
         first_live_enemy_name,
         opened_treasures: session.opened_treasures.clone(),
         enemies,
@@ -355,6 +371,27 @@ fn build_explore_render(
         peaceful: map.peaceful,
         quest_notice_timer: render_fx.quest_notice_timer,
         anim_tick: render_fx.anim_tick,
+    })
+}
+
+fn build_tracked_quest_render(
+    session: &WorldState,
+    data: &Rc<GameData>,
+    tracked_quest_id: Option<&str>,
+) -> Option<TrackedQuestRender> {
+    let tracked_quest_id = tracked_quest_id?;
+    let progress = session
+        .quests
+        .iter()
+        .find(|quest| quest.quest_id == tracked_quest_id && !quest.rewarded)?;
+    let quest_data = data.find_quest(&progress.quest_id)?;
+
+    Some(TrackedQuestRender {
+        quest_id: progress.quest_id.clone(),
+        name: quest_data.name.clone(),
+        current_count: as_u32(progress.current_count),
+        target_count: as_u32(quest_data.target_count),
+        completed: progress.completed,
     })
 }
 
@@ -412,6 +449,18 @@ impl ExploreRender {
                     .any(|(m, tx, ty)| m == map_id && *tx == *x && *ty == *y)
                 {
                     self.opened_treasures.push((map_id.clone(), *x, *y));
+                }
+            }
+            GameEvent::World(WorldEvent::AddQuestProgress(progress)) => {
+                if let Some(tracked) = self.tracked_quest.as_mut()
+                    && tracked.quest_id == progress.quest_id
+                {
+                    if progress.rewarded {
+                        self.tracked_quest = None;
+                    } else {
+                        tracked.current_count = as_u32(progress.current_count);
+                        tracked.completed = progress.completed;
+                    }
                 }
             }
             GameEvent::Combat(CombatEvent::SetMapEnemies { enemies, .. }) => {
@@ -700,6 +749,16 @@ impl RenderState {
     }
     pub fn apply_ui_patch(&mut self, ui: &UiState, session: Option<&WorldState>) {
         match self {
+            RenderState::Explore(explore) => {
+                let Some(s) = session else {
+                    return;
+                };
+                explore.tracked_quest = build_tracked_quest_render(
+                    s,
+                    &explore.data,
+                    ui.quest_log.tracked_quest_id.as_deref(),
+                );
+            }
             RenderState::Menu {
                 title,
                 items,
@@ -762,6 +821,15 @@ impl RenderState {
                 *current_line = dialog_state.current_line;
                 *current_text = lines.get(*current_line).cloned();
                 *has_next = *current_line + 1 < lines.len();
+            }
+            RenderState::QuestLog(quest_log) => {
+                quest_log.tracked_quest_id = ui.quest_log.tracked_quest_id.clone();
+                if quest_log.quests.is_empty() {
+                    quest_log.selected = 0;
+                    return;
+                }
+                let max = quest_log.quests.len() - 1;
+                quest_log.selected = ui.quest_log.selected.min(max);
             }
             _ => {}
         }
@@ -945,7 +1013,11 @@ fn render_state_from_game_state(
                     });
                 }
             }
-            RenderState::QuestLog(QuestLogRender { quests })
+            RenderState::QuestLog(QuestLogRender {
+                quests,
+                selected: ui.quest_log.selected,
+                tracked_quest_id: ui.quest_log.tracked_quest_id.clone(),
+            })
         }
         GameState::PauseMenu => RenderState::PauseMenu {
             explore: session.and_then(|s| build_explore_render(s, ui, data, render_fx)),
