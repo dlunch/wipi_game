@@ -263,5 +263,6 @@ impl ShopState {
 pub enum ShopMode {
     Buy,
     Sell,
+    ConfirmBuy,
     Select,
 }

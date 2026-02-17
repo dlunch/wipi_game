@@ -25,7 +25,15 @@ pub fn draw_shop(fb: &mut Framebuffer, state: &ShopRender) {
     match state.mode {
         ShopMode::Select => draw_mode_select(fb, state.selected),
         ShopMode::Buy => draw_buy_list(fb, state),
+        ShopMode::ConfirmBuy => {
+            draw_buy_list(fb, state);
+            draw_buy_confirm(fb, state);
+        }
         ShopMode::Sell => draw_sell_list(fb, state),
+    }
+
+    if state.purchase_notice_timer > 0 {
+        draw_purchase_notice(fb);
     }
 
     draw_text(fb, 8, screen_h - 14, "Back:Exit", COLOR_GRAY);
@@ -160,4 +168,36 @@ fn draw_sell_list(fb: &mut Framebuffer, state: &ShopRender) {
             COLOR_WHITE,
         );
     }
+}
+
+fn draw_buy_confirm(fb: &mut Framebuffer, state: &ShopRender) {
+    let Some(item) = state.buy_items.get(state.selected) else {
+        return;
+    };
+
+    let screen_w = fb.width() as i32;
+    let screen_h = fb.height() as i32;
+    let box_w = 150;
+    let box_h = 34;
+    let x = (screen_w - box_w) / 2;
+    let y = screen_h - box_h - 24;
+
+    fill_rect(fb, x, y, box_w, box_h, COLOR_DARK_GRAY);
+    draw_rect(fb, x, y, box_w, box_h, COLOR_WHITE);
+
+    draw_text(fb, x + 8, y + 8, &item.name, COLOR_WHITE);
+    draw_text(fb, x + 8, y + 18, "Buy this item?", COLOR_YELLOW);
+    draw_text(fb, x + box_w - 58, y + 18, "OK/Back", COLOR_GRAY);
+}
+
+fn draw_purchase_notice(fb: &mut Framebuffer) {
+    let screen_w = fb.width() as i32;
+    let box_w = 120;
+    let box_h = 18;
+    let x = (screen_w - box_w) / 2;
+    let y = 8;
+
+    fill_rect(fb, x, y, box_w, box_h, COLOR_DARK_GRAY);
+    draw_rect(fb, x, y, box_w, box_h, COLOR_WHITE);
+    draw_text(fb, x + 10, y + 5, "Purchased!", COLOR_GREEN);
 }

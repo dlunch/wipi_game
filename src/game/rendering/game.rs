@@ -130,6 +130,7 @@ pub struct ShopRender {
     pub buy_items: Vec<ShopItemRender>,
     pub player_gold: i32,
     pub player_inventory: Vec<ShopItemRender>,
+    pub purchase_notice_timer: u32,
 }
 
 pub struct ShopItemRender {
@@ -155,9 +156,11 @@ pub struct RenderFxState {
     player_hit_flash: u32,
     enemy_hit_flashes: Vec<(u32, u32)>,
     quest_notice_timer: u32,
+    shop_purchase_notice_timer: u32,
 }
 
 const QUEST_NOTICE_DURATION: u32 = 90;
+const SHOP_PURCHASE_NOTICE_DURATION: u32 = 45;
 
 impl RenderFxState {
     pub fn tick(&mut self) -> bool {
@@ -177,6 +180,10 @@ impl RenderFxState {
         self.enemy_hit_flashes.retain(|(_, timer)| *timer > 0);
         if self.quest_notice_timer > 0 {
             self.quest_notice_timer -= 1;
+            changed = true;
+        }
+        if self.shop_purchase_notice_timer > 0 {
+            self.shop_purchase_notice_timer -= 1;
             changed = true;
         }
         changed || before != self.enemy_hit_flashes.len()
@@ -239,6 +246,11 @@ impl RenderFxState {
             {
                 let changed = self.quest_notice_timer != QUEST_NOTICE_DURATION;
                 self.quest_notice_timer = QUEST_NOTICE_DURATION;
+                changed
+            }
+            GameEvent::ShopBuyItem(_) if matches!(state, GameState::Shop) => {
+                let changed = self.shop_purchase_notice_timer != SHOP_PURCHASE_NOTICE_DURATION;
+                self.shop_purchase_notice_timer = SHOP_PURCHASE_NOTICE_DURATION;
                 changed
             }
             _ => false,
@@ -718,7 +730,7 @@ impl RenderState {
                 shop.selected = ui.shop.selected;
                 let total = match ui.shop.mode {
                     ShopMode::Select => 2,
-                    ShopMode::Buy => shop_state.items.len(),
+                    ShopMode::Buy | ShopMode::ConfirmBuy => shop_state.items.len(),
                     ShopMode::Sell => s.leader.inventory.len(),
                 };
                 shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
@@ -769,6 +781,9 @@ impl RenderState {
                     }
                 }
                 explore.quest_notice_timer = render_fx.quest_notice_timer;
+            }
+            RenderState::Shop(shop) => {
+                shop.purchase_notice_timer = render_fx.shop_purchase_notice_timer;
             }
             _ => {}
         }
@@ -891,7 +906,7 @@ fn render_state_from_game_state(
                     ui.shop.selected,
                     match ui.shop.mode {
                         ShopMode::Select => 2,
-                        ShopMode::Buy => shop_state.items.len(),
+                        ShopMode::Buy | ShopMode::ConfirmBuy => shop_state.items.len(),
                         ShopMode::Sell => s.leader.inventory.len(),
                     },
                     SHOP_VISIBLE_ITEMS,
@@ -899,6 +914,7 @@ fn render_state_from_game_state(
                 buy_items,
                 player_gold: s.leader.stats.gold,
                 player_inventory,
+                purchase_notice_timer: render_fx.shop_purchase_notice_timer,
             })
         }
         GameState::QuestLog => {

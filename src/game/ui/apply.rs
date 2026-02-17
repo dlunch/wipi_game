@@ -244,10 +244,24 @@ fn apply_shop_input(
             InputKey::Down => {
                 ui.shop.selected = step_down(ui.shop.selected, shop_items_len);
             }
-            InputKey::Ok => apply_shop_buy_selected(ui, session, ui.shop.selected, out),
+            InputKey::Ok => {
+                if shop_items_len > 0 {
+                    ui.shop.mode = ShopMode::ConfirmBuy;
+                }
+            }
             InputKey::Back => {
                 ui.shop.mode = ShopMode::Select;
                 ui.shop.selected = 0;
+            }
+            _ => {}
+        },
+        ShopMode::ConfirmBuy => match key {
+            InputKey::Ok => {
+                apply_shop_buy_selected(ui, session, ui.shop.selected, out);
+                ui.shop.mode = ShopMode::Buy;
+            }
+            InputKey::Back => {
+                ui.shop.mode = ShopMode::Buy;
             }
             _ => {}
         },
