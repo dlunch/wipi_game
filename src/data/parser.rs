@@ -508,17 +508,21 @@ impl MapBuilder {
         ensure!(!self.rows.is_empty(), "map '{}' has no tile rows", self.id);
 
         let height = self.rows.len();
-        let width = self
-            .rows
-            .iter()
-            .map(|r| r.chars().count())
-            .max()
-            .unwrap_or(0);
+        let width = self.rows[0].chars().count();
 
         let mut tiles = vec![Tile::Floor; width * height];
         let mut auto_exits = Vec::new();
 
         for (y, row) in self.rows.iter().enumerate() {
+            let row_width = row.chars().count();
+            ensure!(
+                row_width <= width,
+                "map '{}' row {} is longer than first row ({} > {})",
+                self.id,
+                y,
+                row_width,
+                width
+            );
             for (x, c) in row.chars().enumerate() {
                 let tile = Tile::from_char(c);
                 tiles[y * width + x] = tile;
@@ -724,6 +728,18 @@ P#
         assert_eq!(maps[0].npcs[0].1, 0);
         assert_eq!(maps[0].npcs[0].2, "elder");
         Ok(())
+    }
+
+    #[test]
+    fn parse_maps_rejects_row_longer_than_first_row() {
+        let data = r#"
+@MAP:test:Test
+##
+###
+@END
+"#;
+
+        assert!(parse_maps(data).is_err());
     }
 
     #[test]
