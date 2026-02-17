@@ -14,7 +14,7 @@ pub use effects::apply_effects;
 pub use game_data::GameData;
 pub use game_event::{
     CombatEvent, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent,
-    TransitionEvent, WorldEvent,
+    StatusKind, StatusTarget, TransitionEvent, WorldEvent,
 };
 pub use rendering::{
     ExploreRender, InventoryRender, QuestLogRender, RenderFxState, RenderState, ShopRender,
@@ -22,7 +22,8 @@ pub use rendering::{
 };
 pub(crate) use state::WorldSlot;
 pub use state::{
-    CharacterState, CombatState, GameState, MovementState, MovementTickEvent, TileEvent,
+    CharacterState, CombatState, GameState, MovementState, MovementTickEvent, StatusState,
+    TileEvent,
 };
 pub use systems::{DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, domain_resolvers};
 pub use ui::{

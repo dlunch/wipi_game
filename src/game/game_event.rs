@@ -4,6 +4,19 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[derive(Clone, Copy)]
+pub enum StatusKind {
+    Poison,
+    Stun,
+    ArmorBreak,
+}
+
+#[derive(Clone, Copy)]
+pub enum StatusTarget {
+    Player,
+    Enemy(u32),
+}
+
 #[derive(Clone)]
 pub enum CombatEvent {
     SetUpdateCounter(u32),
@@ -37,6 +50,11 @@ pub enum CombatEvent {
     SetSkillEffects(Vec<SkillEffect>),
     SetRespawnTimer(u32),
     SetNextEnemyInstanceId(u32),
+    SetStatusTimer {
+        target: StatusTarget,
+        kind: StatusKind,
+        timer: u32,
+    },
     SetSkillCooldowns([u32; 3]),
     RecoverMp(i32),
     Heal(i32),
@@ -188,9 +206,6 @@ pub enum WorldEvent {
     AddOpenedTreasure { map_id: String, x: usize, y: usize },
     SetSkillCooldowns([u32; 3]),
     SetMpRegenTimer(u32),
-    SetPoisonTimer(u32),
-    SetStunTimer(u32),
-    SetArmorBreakTimer(u32),
     ResetMovement,
     ResetCombat,
 }

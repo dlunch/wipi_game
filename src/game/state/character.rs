@@ -4,8 +4,10 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Direction, Item, PlayerStats};
+use crate::game::state::StatusState;
 use crate::game::{
-    GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, WorldEvent,
+    GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, StatusTarget,
+    WorldEvent,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +29,7 @@ pub struct CharacterState {
     pub x: usize,
     pub y: usize,
     pub facing: Direction,
+    pub status: StatusState,
 }
 
 impl CharacterState {
@@ -42,6 +45,7 @@ impl CharacterState {
             x: 0,
             y: 0,
             facing: Direction::Down,
+            status: StatusState::default(),
         }
     }
 
@@ -79,7 +83,10 @@ impl CharacterState {
 
 impl GameEventSubscriber for CharacterState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
-        matches!(kind, GameEventKind::World | GameEventKind::Movement)
+        matches!(
+            kind,
+            GameEventKind::World | GameEventKind::Movement | GameEventKind::Combat
+        )
     }
 }
 
@@ -123,11 +130,17 @@ impl CharacterState {
                 | WorldEvent::AddOpenedTreasure { .. }
                 | WorldEvent::SetSkillCooldowns(_)
                 | WorldEvent::SetMpRegenTimer(_)
-                | WorldEvent::SetPoisonTimer(_)
-                | WorldEvent::SetStunTimer(_)
-                | WorldEvent::SetArmorBreakTimer(_)
                 | WorldEvent::ResetMovement
                 | WorldEvent::ResetCombat => {}
+            },
+            GameEvent::Combat(crate::game::CombatEvent::SetStatusTimer {
+                target: StatusTarget::Player,
+                kind,
+                timer,
+            }) => match kind {
+                crate::game::StatusKind::Poison => self.status.poison_timer = *timer,
+                crate::game::StatusKind::Stun => self.status.stun_timer = *timer,
+                crate::game::StatusKind::ArmorBreak => self.status.armor_break_timer = *timer,
             },
             GameEvent::Movement(MovementEvent::Tick(movement_event, _)) => {
                 if let Some((dx, dy)) = movement_event.facing {

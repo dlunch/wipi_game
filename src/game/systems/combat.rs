@@ -9,7 +9,8 @@ use crate::data::{Direction, Enemy, Map, Skill, SkillType};
 use crate::game::state::{CombatState, FieldEnemy, KillReward, SkillEffect};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
+    CombatEvent, GameData, GameEvent, GameEventKind, StatusKind, StatusTarget, TransitionEvent,
+    WorldEvent, WorldState,
 };
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -72,16 +73,20 @@ pub fn resolve_tick(
 
         let mut next_x = enemy.x;
         let mut next_y = enemy.y;
+        let enemy_stunned = enemy.status.stun_timer > 0;
         let mut next_attack_cooldown = if enemy.attack_cooldown > 0 {
             enemy.attack_cooldown - 1
         } else {
             0
         };
 
-        if do_move && enemy.distance_to(player_x, player_y) > 1 {
+        if do_move && !enemy_stunned && enemy.distance_to(player_x, player_y) > 1 {
             (next_x, next_y) = next_enemy_position(enemy, player_x, player_y, map);
         }
-        if enemy_distance(next_x, next_y, player_x, player_y) <= 1 && next_attack_cooldown == 0 {
+        if !enemy_stunned
+            && enemy_distance(next_x, next_y, player_x, player_y) <= 1
+            && next_attack_cooldown == 0
+        {
             let raw_damage = enemy.data.atk;
             next_attack_cooldown = ENEMY_ATTACK_COOLDOWN;
             let actual_damage = raw_damage.saturating_sub(player_def / 2).max(1);
@@ -190,7 +195,7 @@ impl DomainEventResolver for CombatResolver {
                     return Ok(());
                 };
                 let next_counter = s.combat.update_counter.wrapping_add(1);
-                let effective_def = if s.armor_break_timer > 0 {
+                let effective_def = if s.leader.status.armor_break_timer > 0 {
                     s.leader.total_def() / 2
                 } else {
                     s.leader.total_def()
@@ -204,15 +209,16 @@ impl DomainEventResolver for CombatResolver {
                     &data.enemies,
                     out,
                 );
-                resolve_status_timers(s, next_counter, out);
+                resolve_player_status_timers(&s.leader.status, next_counter, out);
+                resolve_enemy_status_timers(&s.combat, next_counter, out);
                 let attacks = attacks_on_player_this_tick(&s.combat, (s.leader.x, s.leader.y), map);
                 if attacks > 0 {
-                    maybe_apply_enemy_statuses(s, next_counter, attacks, out);
+                    maybe_apply_player_statuses(&s.leader.status, next_counter, attacks, out);
                 }
             }
             GameEvent::CombatPlayerAction(action) => {
                 let s = world.ok_or_else(|| anyhow!("No active world"))?;
-                if s.stun_timer > 0 {
+                if s.leader.status.stun_timer > 0 {
                     return Ok(());
                 }
 
@@ -264,11 +270,17 @@ impl DomainEventResolver for CombatResolver {
     }
 }
 
-fn resolve_status_timers(session: &WorldState, next_counter: u32, out: &mut Vec<GameEvent>) {
-    if session.poison_timer > 0 {
-        out.push(GameEvent::World(WorldEvent::SetPoisonTimer(
-            session.poison_timer - 1,
-        )));
+fn resolve_player_status_timers(
+    status: &crate::game::StatusState,
+    next_counter: u32,
+    out: &mut Vec<GameEvent>,
+) {
+    if status.poison_timer > 0 {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::Poison,
+            timer: status.poison_timer - 1,
+        }));
         if next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
             out.push(GameEvent::Combat(CombatEvent::TakeDamage(POISON_DAMAGE)));
             out.push(GameEvent::Combat(CombatEvent::SetPlayerHitFlash(
@@ -276,15 +288,65 @@ fn resolve_status_timers(session: &WorldState, next_counter: u32, out: &mut Vec<
             )));
         }
     }
-    if session.stun_timer > 0 {
-        out.push(GameEvent::World(WorldEvent::SetStunTimer(
-            session.stun_timer - 1,
-        )));
+    if status.stun_timer > 0 {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::Stun,
+            timer: status.stun_timer - 1,
+        }));
     }
-    if session.armor_break_timer > 0 {
-        out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(
-            session.armor_break_timer - 1,
-        )));
+    if status.armor_break_timer > 0 {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::ArmorBreak,
+            timer: status.armor_break_timer - 1,
+        }));
+    }
+}
+
+fn resolve_enemy_status_timers(state: &CombatState, next_counter: u32, out: &mut Vec<GameEvent>) {
+    for enemy in &state.enemies {
+        if enemy.hp <= 0 {
+            continue;
+        }
+        if enemy.status.poison_timer > 0 {
+            out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+                target: StatusTarget::Enemy(enemy.instance_id),
+                kind: StatusKind::Poison,
+                timer: enemy.status.poison_timer - 1,
+            }));
+            if next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
+                let hp = enemy.hp.saturating_sub(POISON_DAMAGE).max(0);
+                out.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
+                    enemy_id: enemy.instance_id,
+                    hp,
+                }));
+                if hp <= 0 {
+                    out.push(GameEvent::Combat(CombatEvent::EnemyDespawn(
+                        enemy.instance_id,
+                    )));
+                    out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+                        enemy_id: enemy.data.id.clone(),
+                        exp: enemy.data.exp,
+                        gold: enemy.data.gold,
+                    }));
+                }
+            }
+        }
+        if enemy.status.stun_timer > 0 {
+            out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+                target: StatusTarget::Enemy(enemy.instance_id),
+                kind: StatusKind::Stun,
+                timer: enemy.status.stun_timer - 1,
+            }));
+        }
+        if enemy.status.armor_break_timer > 0 {
+            out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+                target: StatusTarget::Enemy(enemy.instance_id),
+                kind: StatusKind::ArmorBreak,
+                timer: enemy.status.armor_break_timer - 1,
+            }));
+        }
     }
 }
 
@@ -296,6 +358,9 @@ fn attacks_on_player_this_tick(state: &CombatState, player: (usize, usize), map:
 
     for enemy in &state.enemies {
         if enemy.hp <= 0 {
+            continue;
+        }
+        if enemy.status.stun_timer > 0 {
             continue;
         }
         let mut next_x = enemy.x;
@@ -317,24 +382,32 @@ fn attacks_on_player_this_tick(state: &CombatState, player: (usize, usize), map:
     count
 }
 
-fn maybe_apply_enemy_statuses(
-    session: &WorldState,
+fn maybe_apply_player_statuses(
+    status: &crate::game::StatusState,
     next_counter: u32,
     attacks: usize,
     out: &mut Vec<GameEvent>,
 ) {
-    if session.stun_timer == 0 && status_roll(next_counter, attacks as u32, 31, 18) {
-        out.push(GameEvent::World(WorldEvent::SetStunTimer(STUN_DURATION)));
+    if status.stun_timer == 0 && status_roll(next_counter, attacks as u32, 31, 18) {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::Stun,
+            timer: STUN_DURATION,
+        }));
     }
-    if session.poison_timer == 0 && status_roll(next_counter, attacks as u32, 53, 24) {
-        out.push(GameEvent::World(WorldEvent::SetPoisonTimer(
-            POISON_DURATION,
-        )));
+    if status.poison_timer == 0 && status_roll(next_counter, attacks as u32, 53, 24) {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::Poison,
+            timer: POISON_DURATION,
+        }));
     }
-    if session.armor_break_timer == 0 && status_roll(next_counter, attacks as u32, 79, 20) {
-        out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(
-            ARMOR_BREAK_DURATION,
-        )));
+    if status.armor_break_timer == 0 && status_roll(next_counter, attacks as u32, 79, 20) {
+        out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+            target: StatusTarget::Player,
+            kind: StatusKind::ArmorBreak,
+            timer: ARMOR_BREAK_DURATION,
+        }));
     }
 }
 
@@ -553,7 +626,12 @@ fn resolve_player_attack_action(
 
     for enemy in &state.enemies {
         if enemy.x == tx && enemy.y == ty && enemy.hp > 0 {
-            let damage = player_atk.saturating_sub(enemy.data.def / 2).max(1);
+            let enemy_def = if enemy.status.armor_break_timer > 0 {
+                enemy.data.def / 2
+            } else {
+                enemy.data.def
+            };
+            let damage = player_atk.saturating_sub(enemy_def / 2).max(1);
             let hp = enemy.hp.saturating_sub(damage).max(0);
             out.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
                 enemy_id: enemy.instance_id,
@@ -608,7 +686,15 @@ fn resolve_skill_action(
                     effect_type: SkillType::Ranged,
                     timer: SKILL_EFFECT_DURATION,
                 });
-                if let Some(kill) = damage_enemy_at(state, tx, ty, damage, &mut hp_updates, out) {
+                if let Some(kill) = damage_enemy_at(
+                    state,
+                    tx,
+                    ty,
+                    damage,
+                    &mut hp_updates,
+                    Some((StatusKind::Poison, POISON_DURATION / 2)),
+                    out,
+                ) {
                     kills.push(kill);
                     break;
                 }
@@ -628,7 +714,15 @@ fn resolve_skill_action(
                     effect_type: SkillType::Area,
                     timer: SKILL_EFFECT_DURATION,
                 });
-                if let Some(kill) = damage_enemy_at(state, tx, ty, damage, &mut hp_updates, out) {
+                if let Some(kill) = damage_enemy_at(
+                    state,
+                    tx,
+                    ty,
+                    damage,
+                    &mut hp_updates,
+                    Some((StatusKind::ArmorBreak, ARMOR_BREAK_DURATION / 2)),
+                    out,
+                ) {
                     kills.push(kill);
                 }
             }
@@ -669,6 +763,7 @@ fn damage_enemy_at(
     y: usize,
     damage: i32,
     hp_updates: &mut Vec<(u32, i32)>,
+    status_effect: Option<(StatusKind, u32)>,
     out: &mut Vec<GameEvent>,
 ) -> Option<KillReward> {
     for enemy in &state.enemies {
@@ -680,7 +775,12 @@ fn damage_enemy_at(
             if current_hp <= 0 {
                 return None;
             }
-            let actual_damage = damage.saturating_sub(enemy.data.def / 2).max(1);
+            let enemy_def = if enemy.status.armor_break_timer > 0 {
+                enemy.data.def / 2
+            } else {
+                enemy.data.def
+            };
+            let actual_damage = damage.saturating_sub(enemy_def / 2).max(1);
             let hp = current_hp.saturating_sub(actual_damage).max(0);
             hp_updates.retain(|(id, _)| *id != enemy.instance_id);
             hp_updates.push((enemy.instance_id, hp));
@@ -701,6 +801,20 @@ fn damage_enemy_at(
                     exp: enemy.data.exp,
                     gold: enemy.data.gold,
                 });
+            }
+            if let Some((kind, timer)) = status_effect {
+                let current_timer = match kind {
+                    StatusKind::Poison => enemy.status.poison_timer,
+                    StatusKind::Stun => enemy.status.stun_timer,
+                    StatusKind::ArmorBreak => enemy.status.armor_break_timer,
+                };
+                if current_timer < timer {
+                    out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+                        target: StatusTarget::Enemy(enemy.instance_id),
+                        kind,
+                        timer,
+                    }));
+                }
             }
             return None;
         }

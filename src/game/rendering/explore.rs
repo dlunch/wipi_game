@@ -309,13 +309,13 @@ fn draw_hud(fb: &mut Framebuffer, map_name: &str, state: &ExploreRender, screen_
     }
 
     let mut status = String::new();
-    if state.poison_timer > 0 {
+    if state.player_status.poison_timer > 0 {
         status.push_str("PSN ");
     }
-    if state.stun_timer > 0 {
+    if state.player_status.stun_timer > 0 {
         status.push_str("STN ");
     }
-    if state.armor_break_timer > 0 {
+    if state.player_status.armor_break_timer > 0 {
         status.push_str("BRK ");
     }
     if !status.is_empty() {

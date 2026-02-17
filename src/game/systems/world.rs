@@ -7,8 +7,8 @@ use anyhow::{Result, anyhow};
 use crate::data::{DialogAction, QuestProgress, QuestType};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, MovementEvent, TransitionEvent, WorldEvent,
-    WorldState,
+    CombatEvent, GameData, GameEvent, GameEventKind, MovementEvent, StatusKind, StatusTarget,
+    TransitionEvent, WorldEvent, WorldState,
 };
 
 struct SessionLogicResolver;
@@ -252,9 +252,21 @@ fn resolve_revive_player(data: &GameData, session: &WorldState, out: &mut Vec<Ga
     }
     out.push(GameEvent::World(WorldEvent::ResetMovement));
     out.push(GameEvent::World(WorldEvent::ResetCombat));
-    out.push(GameEvent::World(WorldEvent::SetPoisonTimer(0)));
-    out.push(GameEvent::World(WorldEvent::SetStunTimer(0)));
-    out.push(GameEvent::World(WorldEvent::SetArmorBreakTimer(0)));
+    out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+        target: StatusTarget::Player,
+        kind: StatusKind::Poison,
+        timer: 0,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+        target: StatusTarget::Player,
+        kind: StatusKind::Stun,
+        timer: 0,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetStatusTimer {
+        target: StatusTarget::Player,
+        kind: StatusKind::ArmorBreak,
+        timer: 0,
+    }));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));
     out.push(GameEvent::Transition(TransitionEvent::ToExplore));
 }

@@ -4,7 +4,10 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::data::{Enemy, SkillType};
-use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
+use crate::game::state::StatusState;
+use crate::game::{
+    CombatEvent, GameEvent, GameEventKind, GameEventSubscriber, StatusKind, StatusTarget,
+};
 
 #[derive(Debug, Clone)]
 pub struct KillReward {
@@ -29,6 +32,7 @@ pub struct FieldEnemy {
     pub y: usize,
     pub hp: i32,
     pub attack_cooldown: u32,
+    pub status: StatusState,
 }
 
 impl FieldEnemy {
@@ -41,6 +45,7 @@ impl FieldEnemy {
             y,
             hp,
             attack_cooldown: 0,
+            status: StatusState::default(),
         }
     }
 }
@@ -140,6 +145,27 @@ impl CombatState {
             CombatEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
                 self.next_enemy_instance_id = *next_enemy_instance_id;
             }
+            CombatEvent::SetStatusTimer {
+                target: StatusTarget::Enemy(enemy_id),
+                kind,
+                timer,
+            } => {
+                if let Some(enemy) = self
+                    .enemies
+                    .iter_mut()
+                    .find(|enemy| enemy.instance_id == *enemy_id)
+                {
+                    match kind {
+                        StatusKind::Poison => enemy.status.poison_timer = *timer,
+                        StatusKind::Stun => enemy.status.stun_timer = *timer,
+                        StatusKind::ArmorBreak => enemy.status.armor_break_timer = *timer,
+                    }
+                }
+            }
+            CombatEvent::SetStatusTimer {
+                target: StatusTarget::Player,
+                ..
+            } => {}
         }
         Ok(())
     }

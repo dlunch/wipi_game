@@ -9,7 +9,8 @@ use crate::game::ui::{
     ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
 };
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameState, MovementEvent, SpriteAtlas, WorldEvent, WorldState,
+    CombatEvent, GameData, GameEvent, GameState, MovementEvent, SpriteAtlas, StatusKind,
+    StatusState, StatusTarget, WorldEvent, WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -76,9 +77,7 @@ pub struct ExploreRender {
     pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffectRender>,
     pub skill_cooldowns: [u32; 3],
-    pub poison_timer: u32,
-    pub stun_timer: u32,
-    pub armor_break_timer: u32,
+    pub player_status: StatusState,
     pub key_actions: [Option<ExploreAction>; 3],
     pub peaceful: bool,
     pub quest_notice_timer: u32,
@@ -93,6 +92,7 @@ pub struct EnemyRender {
     pub hp: i32,
     pub max_hp: i32,
     pub attack_cooldown: u32,
+    pub status: StatusState,
     pub hit_flash: u32,
     pub dead: bool,
 }
@@ -330,6 +330,7 @@ fn build_explore_render(
             hp: enemy.hp,
             max_hp: enemy.data.hp,
             attack_cooldown: enemy.attack_cooldown,
+            status: enemy.status,
             hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
             dead: enemy.hp <= 0,
         });
@@ -374,9 +375,7 @@ fn build_explore_render(
         player_hit_flash: render_fx.player_hit_flash,
         skill_effects,
         skill_cooldowns: session.skill_cooldowns,
-        poison_timer: session.poison_timer,
-        stun_timer: session.stun_timer,
-        armor_break_timer: session.armor_break_timer,
+        player_status: session.leader.status,
         key_actions: ui.explore.key_actions,
         peaceful: map.peaceful,
         quest_notice_timer: render_fx.quest_notice_timer,
@@ -505,15 +504,6 @@ impl ExploreRender {
             GameEvent::World(WorldEvent::SetSkillCooldowns(cooldowns)) => {
                 self.skill_cooldowns = *cooldowns;
             }
-            GameEvent::World(WorldEvent::SetPoisonTimer(timer)) => {
-                self.poison_timer = *timer;
-            }
-            GameEvent::World(WorldEvent::SetStunTimer(timer)) => {
-                self.stun_timer = *timer;
-            }
-            GameEvent::World(WorldEvent::SetArmorBreakTimer(timer)) => {
-                self.armor_break_timer = *timer;
-            }
             GameEvent::World(WorldEvent::AddOpenedTreasure { map_id, x, y }) => {
                 if !self
                     .opened_treasures
@@ -547,6 +537,7 @@ impl ExploreRender {
                         hp: enemy.hp,
                         max_hp: enemy.data.hp,
                         attack_cooldown: enemy.attack_cooldown,
+                        status: enemy.status,
                         hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
                         dead: enemy.hp <= 0,
                     });
@@ -562,6 +553,7 @@ impl ExploreRender {
                     hp: enemy.hp,
                     max_hp: enemy.data.hp,
                     attack_cooldown: enemy.attack_cooldown,
+                    status: enemy.status,
                     hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
                     dead: enemy.hp <= 0,
                 });
@@ -596,6 +588,28 @@ impl ExploreRender {
             }
             GameEvent::Combat(CombatEvent::SetPlayerHitFlash(_)) => {
                 self.player_hit_flash = render_fx.player_hit_flash;
+            }
+            GameEvent::Combat(CombatEvent::SetStatusTimer {
+                target: StatusTarget::Player,
+                kind,
+                timer,
+            }) => match kind {
+                StatusKind::Poison => self.player_status.poison_timer = *timer,
+                StatusKind::Stun => self.player_status.stun_timer = *timer,
+                StatusKind::ArmorBreak => self.player_status.armor_break_timer = *timer,
+            },
+            GameEvent::Combat(CombatEvent::SetStatusTimer {
+                target: StatusTarget::Enemy(enemy_id),
+                kind,
+                timer,
+            }) => {
+                if let Some(enemy) = self.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
+                    match kind {
+                        StatusKind::Poison => enemy.status.poison_timer = *timer,
+                        StatusKind::Stun => enemy.status.stun_timer = *timer,
+                        StatusKind::ArmorBreak => enemy.status.armor_break_timer = *timer,
+                    }
+                }
             }
             GameEvent::Combat(CombatEvent::SetSkillEffects(effects)) => {
                 self.skill_effects.clear();
