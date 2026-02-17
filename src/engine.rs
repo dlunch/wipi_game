@@ -162,9 +162,6 @@ impl GameEngine {
     }
 
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<()> {
-        if initial_events.is_empty() {
-            return Ok(());
-        }
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
 

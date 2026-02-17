@@ -86,14 +86,18 @@ fn apply_explore_input(
                 }));
             }
         }
-        InputKey::Key1 | InputKey::Key2 | InputKey::Key3 => {
-            let slot = match key {
-                InputKey::Key1 => 0,
-                InputKey::Key2 => 1,
-                InputKey::Key3 => 2,
-                _ => return,
-            };
-            if let Some(action) = ui.explore.key_actions.get(slot).and_then(|a| *a) {
+        InputKey::Key1 => {
+            if let Some(action) = ui.explore.key_actions.first().and_then(|a| *a) {
+                out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
+            }
+        }
+        InputKey::Key2 => {
+            if let Some(action) = ui.explore.key_actions.get(1).and_then(|a| *a) {
+                out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
+            }
+        }
+        InputKey::Key3 => {
+            if let Some(action) = ui.explore.key_actions.get(2).and_then(|a| *a) {
                 out.push(GameEvent::Explore(ExploreEvent::UseAction(action)));
             }
         }

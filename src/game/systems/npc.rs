@@ -151,9 +151,7 @@ impl DomainEventResolver for NpcResolver {
                     out.push(GameEvent::RestoreHpMp);
                 }
             },
-            _ => {
-                return Ok(());
-            }
+            _ => {}
         }
         Ok(())
     }
