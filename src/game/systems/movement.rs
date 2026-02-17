@@ -198,7 +198,9 @@ mod tests {
     use super::*;
     use crate::data::{Direction, Enemy, Map, Tile};
     use crate::game::state::FieldEnemy;
-    use crate::game::{CharacterState, CombatEvent, GameData, GameEvent, SessionEvent, SessionState};
+    use crate::game::{
+        CharacterState, CombatEvent, GameData, GameEvent, SessionEvent, SessionState,
+    };
 
     fn make_test_map(width: usize, height: usize, tiles: Vec<Tile>) -> Map {
         Map {
@@ -277,7 +279,10 @@ mod tests {
         let mut session = SessionState::empty();
         assert!(
             session
-                .apply_event(data, &GameEvent::Session(SessionEvent::SetPlayerMap(map_id.into())))
+                .apply_event(
+                    data,
+                    &GameEvent::Session(SessionEvent::SetPlayerMap(map_id.into()))
+                )
                 .is_ok()
         );
         session
