@@ -92,7 +92,9 @@ impl GameEngine {
 
     fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
         match self.state {
-            GameState::Loading(_) => vec![GameEvent::UpdateLoading],
+            GameState::Loading(_) => {
+                vec![GameEvent::Loading(crate::game::LoadingEvent::Tick)]
+            }
             GameState::Explore => vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
             _ => Vec::new(),
         }
