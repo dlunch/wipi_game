@@ -161,7 +161,12 @@ impl GameEngine {
             return Ok(());
         }
 
-        if !self.state.requires_session() && !is_session_event {
+        if matches!(
+            event,
+            GameEvent::Transition(crate::game::TransitionEvent::ToMenu)
+                | GameEvent::Transition(crate::game::TransitionEvent::ToMenuFromGameOver)
+        ) && !is_session_event
+        {
             self.session = None;
         }
 
