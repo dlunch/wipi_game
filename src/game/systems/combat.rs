@@ -501,7 +501,6 @@ fn resolve_skill_action(
     let damage = skill.power + player_atk / 2;
 
     match skill.skill_type {
-        SkillType::Attack => {}
         SkillType::Ranged => {
             for dist in 1..=skill.range {
                 let (tx, ty) = facing.apply_distance(player_x, player_y, dist);
@@ -536,7 +535,7 @@ fn resolve_skill_action(
                 }
             }
         }
-        SkillType::Heal => {}
+        SkillType::Attack | SkillType::Heal => {}
     }
 
     let heal_amount = if skill.heal_power > 0 {

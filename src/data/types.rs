@@ -30,8 +30,7 @@ pub struct Item {
 impl Item {
     pub fn atk(&self) -> i32 {
         match self.kind {
-            ItemKind::Weapon => self.param1,
-            ItemKind::Accessory => self.param1,
+            ItemKind::Weapon | ItemKind::Accessory => self.param1,
             _ => 0,
         }
     }
@@ -108,7 +107,6 @@ impl Tile {
     pub fn from_char(c: char) -> Self {
         match c {
             '#' => Tile::Wall,
-            '.' => Tile::Floor,
             'P' => Tile::PlayerStart,
             'H' => Tile::House,
             'D' => Tile::Dungeon,

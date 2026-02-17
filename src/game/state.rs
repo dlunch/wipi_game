@@ -154,10 +154,12 @@ impl GameState {
                 LoadingEvent::Loaded => self.transition_to(GameState::Menu),
                 LoadingEvent::Error(msg) => *self = GameState::Error(msg.clone()),
             },
-            GameEvent::Transition(TransitionEvent::ToExplore) => {
+            GameEvent::Transition(TransitionEvent::ToExplore)
+            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
                 self.transition_to(GameState::Explore)
             }
-            GameEvent::Transition(TransitionEvent::ToMenu) => {
+            GameEvent::Transition(TransitionEvent::ToMenu)
+            | GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
                 self.transition_to(GameState::Menu);
             }
             GameEvent::Transition(TransitionEvent::ToPauseMenu) => {
@@ -173,13 +175,7 @@ impl GameState {
                 self.transition_to(GameState::QuestLog);
             }
             GameEvent::Transition(TransitionEvent::ToGameOver) => {
-                self.transition_to(GameState::GameOver);
-            }
-            GameEvent::Transition(TransitionEvent::ToMenuFromGameOver) => {
-                self.transition_to(GameState::Menu);
-            }
-            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
-                self.transition_to(GameState::Explore)
+                self.transition_to(GameState::GameOver)
             }
             GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => self.transition_to(GameState::Dialog),

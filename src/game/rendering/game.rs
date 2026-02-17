@@ -648,12 +648,12 @@ impl RenderState {
         }
 
         match self {
-            RenderState::Explore(explore) => explore.apply_render_event(event, render_fx),
-            RenderState::Dialog {
+            RenderState::Explore(explore)
+            | RenderState::Dialog {
                 explore: Some(explore),
                 ..
-            } => explore.apply_render_event(event, render_fx),
-            RenderState::PauseMenu {
+            }
+            | RenderState::PauseMenu {
                 explore: Some(explore),
                 ..
             } => explore.apply_render_event(event, render_fx),
@@ -731,18 +731,8 @@ impl RenderState {
 
     pub fn apply_tick(&mut self, render_fx: &RenderFxState) {
         match self {
-            RenderState::Explore(explore) => {
-                if explore.player_hit_flash != render_fx.player_hit_flash {
-                    explore.player_hit_flash = render_fx.player_hit_flash;
-                }
-                for enemy in &mut explore.enemies {
-                    let next = render_fx.enemy_hit_flash(enemy.enemy_id);
-                    if enemy.hit_flash != next {
-                        enemy.hit_flash = next;
-                    }
-                }
-            }
-            RenderState::Dialog {
+            RenderState::Explore(explore)
+            | RenderState::Dialog {
                 explore: Some(explore),
                 ..
             }

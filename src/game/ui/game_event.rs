@@ -36,7 +36,6 @@ impl UiState {
                     self.dialog.state = None;
                 }
             },
-            GameEvent::ShopBuyItem(_) => {}
             GameEvent::ShopSellSelected(index) => {
                 if let Some(s) = session.as_ref() {
                     let len_after = s.leader.inventory.len();

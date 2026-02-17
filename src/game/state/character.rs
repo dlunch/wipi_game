@@ -78,7 +78,6 @@ impl CharacterState {
     pub fn apply_event(&mut self, _data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::World(session_event) => match session_event {
-                WorldEvent::Create => {}
                 WorldEvent::SetPlayerName(name) => {
                     self.name = name.clone();
                 }
@@ -110,7 +109,8 @@ impl CharacterState {
                 WorldEvent::SetEquippedAccessory(index) => {
                     self.equipped_accessory = *index;
                 }
-                WorldEvent::AddQuestProgress(_)
+                WorldEvent::Create
+                | WorldEvent::AddQuestProgress(_)
                 | WorldEvent::AddOpenedTreasure { .. }
                 | WorldEvent::SetSkillCooldowns(_)
                 | WorldEvent::SetMpRegenTimer(_)

@@ -112,11 +112,16 @@ impl CombatState {
                     enemy.attack_cooldown = *cooldown;
                 }
             }
-            CombatEvent::EnemyHitFlashSet { .. } => {}
+            CombatEvent::EnemyHitFlashSet { .. }
+            | CombatEvent::SetPlayerHitFlash(_)
+            | CombatEvent::SetSkillCooldowns(_)
+            | CombatEvent::RecoverMp(_)
+            | CombatEvent::Heal(_)
+            | CombatEvent::GrantKillReward { .. }
+            | CombatEvent::TakeDamage(_) => {}
             CombatEvent::SetPlayerAttackCooldown(cooldown) => {
                 self.player_attack_cooldown = *cooldown;
             }
-            CombatEvent::SetPlayerHitFlash(_) => {}
             CombatEvent::TickSkillEffects => {
                 self.skill_effects.retain_mut(|effect| {
                     if effect.timer == 0 {
@@ -135,11 +140,6 @@ impl CombatState {
             CombatEvent::SetNextEnemyInstanceId(next_enemy_instance_id) => {
                 self.next_enemy_instance_id = *next_enemy_instance_id;
             }
-            CombatEvent::SetSkillCooldowns(_)
-            | CombatEvent::RecoverMp(_)
-            | CombatEvent::Heal(_)
-            | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::TakeDamage(_) => {}
         }
         Ok(())
     }
