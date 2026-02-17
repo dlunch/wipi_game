@@ -12,7 +12,7 @@ use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, SessionState, UiEvent,
     UiEventApplier, UiInputEventResolver, UiState, apply_render_event, apply_render_tick,
-    build_render_state, domain_resolvers,
+    apply_ui_render_patch, build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -102,6 +102,11 @@ impl GameEngine {
         for event in ui_events {
             self.ui
                 .apply_ui_event(self.session.as_ref(), event, &mut out);
+        }
+        if out.is_empty()
+            && !apply_ui_render_patch(&mut self.render_state, &self.ui, self.session.as_ref())
+        {
+            self.render_dirty = true;
         }
         out
     }

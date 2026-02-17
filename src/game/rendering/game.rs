@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use wipi::framebuffer::Framebuffer;
 
-use crate::data::{Direction, ItemKind, SkillType};
+use crate::data::{Direction, Item, ItemKind, SkillType};
 use crate::game::{
     COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatEvent, ExploreAction,
     GameData, GameEvent, GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, MovementEvent,
@@ -28,6 +28,8 @@ pub enum RenderState {
     Dialog {
         explore: Option<ExploreRender>,
         npc_name: String,
+        lines: Vec<String>,
+        current_line: usize,
         current_text: Option<String>,
         has_next: bool,
     },
@@ -129,6 +131,7 @@ pub struct QuestLogRender {
 }
 
 pub struct QuestEntryRender {
+    pub quest_id: String,
     pub name: String,
     pub description: String,
     pub current_count: u32,
@@ -316,6 +319,24 @@ fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
         .map(|enemy| enemy.name.clone());
 }
 
+fn item_to_inventory_render(item: &Item) -> InventoryItemRender {
+    InventoryItemRender {
+        name: item.name.clone(),
+        kind: item.kind,
+    }
+}
+
+fn item_to_shop_render(item: &Item) -> ShopItemRender {
+    ShopItemRender {
+        name: item.name.clone(),
+        price: item.price / 2,
+    }
+}
+
+fn dialog_text_at(lines: &[String], line: usize) -> Option<String> {
+    lines.get(line).cloned()
+}
+
 fn apply_explore_render_event(
     explore: &mut ExploreRender,
     event: &GameEvent,
@@ -469,6 +490,155 @@ pub fn apply_render_event(
     event: &GameEvent,
     render_fx: &RenderFxState,
 ) -> bool {
+    if let GameEvent::Loading(crate::game::LoadingEvent::Advance(step)) = event
+        && let RenderState::Loading { step: render_step } = render_state
+    {
+        if *render_step == *step {
+            return true;
+        }
+        *render_step = *step;
+        return true;
+    }
+
+    if let GameEvent::Session(session_event) = event {
+        match session_event {
+            SessionEvent::SetPlayerInventory(player_inventory) => {
+                if let RenderState::Inventory(inventory) = render_state {
+                    inventory.items.clear();
+                    inventory.items.reserve(player_inventory.len());
+                    for item in player_inventory {
+                        inventory.items.push(item_to_inventory_render(item));
+                    }
+                    if !inventory.items.is_empty() && inventory.selected >= inventory.items.len() {
+                        inventory.selected = inventory.items.len() - 1;
+                    }
+                    inventory.scroll = scroll_for_selection(
+                        inventory.selected,
+                        inventory.items.len(),
+                        INVENTORY_VISIBLE_ITEMS,
+                    );
+                    return true;
+                }
+                if let RenderState::Shop(shop) = render_state {
+                    shop.player_inventory.clear();
+                    shop.player_inventory.reserve(player_inventory.len());
+                    for item in player_inventory {
+                        shop.player_inventory.push(item_to_shop_render(item));
+                    }
+                    return true;
+                }
+            }
+            SessionEvent::AddPlayerItem(item) => {
+                if let RenderState::Inventory(inventory) = render_state {
+                    inventory.items.push(item_to_inventory_render(item));
+                    inventory.scroll = scroll_for_selection(
+                        inventory.selected,
+                        inventory.items.len(),
+                        INVENTORY_VISIBLE_ITEMS,
+                    );
+                    return true;
+                }
+                if let RenderState::Shop(shop) = render_state {
+                    shop.player_inventory.push(item_to_shop_render(item));
+                    return true;
+                }
+            }
+            SessionEvent::SetEquippedWeapon(index) => {
+                if let RenderState::Inventory(inventory) = render_state {
+                    inventory.equipped_weapon = *index;
+                    return true;
+                }
+            }
+            SessionEvent::SetEquippedArmor(index) => {
+                if let RenderState::Inventory(inventory) = render_state {
+                    inventory.equipped_armor = *index;
+                    return true;
+                }
+            }
+            SessionEvent::SetEquippedAccessory(index) => {
+                if let RenderState::Inventory(inventory) = render_state {
+                    inventory.equipped_accessory = *index;
+                    return true;
+                }
+            }
+            SessionEvent::SetPlayerStats(stats) => {
+                if let RenderState::Shop(shop) = render_state {
+                    shop.player_gold = stats.gold;
+                    return true;
+                }
+                if let RenderState::Stats(stats_render) = render_state {
+                    stats_render.hp = as_u32(stats.current_hp);
+                    stats_render.max_hp = as_u32(stats.max_hp);
+                    stats_render.mp = as_u32(stats.current_mp);
+                    stats_render.max_mp = as_u32(stats.max_mp);
+                    stats_render.level = as_u32(stats.level);
+                    stats_render.exp = as_u32(stats.exp);
+                    stats_render.gold = as_u32(stats.gold);
+                    return true;
+                }
+            }
+            SessionEvent::AddQuestProgress(progress) => {
+                if let RenderState::QuestLog(quest_log) = render_state {
+                    if progress.rewarded {
+                        let before = quest_log.quests.len();
+                        quest_log
+                            .quests
+                            .retain(|entry| entry.quest_id != progress.quest_id);
+                        return before != quest_log.quests.len();
+                    }
+
+                    if let Some(entry) = quest_log
+                        .quests
+                        .iter_mut()
+                        .find(|entry| entry.quest_id == progress.quest_id)
+                    {
+                        entry.current_count = as_u32(progress.current_count);
+                        entry.completed = progress.completed;
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let GameEvent::OpenDialogState(dialog_state) = event
+        && let RenderState::Dialog {
+            npc_name,
+            lines,
+            current_line,
+            current_text,
+            has_next,
+            ..
+        } = render_state
+    {
+        *npc_name = dialog_state.npc_name.clone();
+        *lines = dialog_state
+            .lines
+            .iter()
+            .map(|line| line.text.clone())
+            .collect();
+        *current_line = dialog_state.current_line;
+        *current_text = dialog_text_at(lines, *current_line);
+        *has_next = *current_line + 1 < lines.len();
+        return true;
+    }
+
+    if let GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(line)) = event
+        && let RenderState::Dialog {
+            lines,
+            current_line,
+            current_text,
+            has_next,
+            ..
+        } = render_state
+    {
+        *current_line = *line;
+        *current_text = dialog_text_at(lines, *current_line);
+        *has_next = *current_line + 1 < lines.len();
+        return true;
+    }
+
     match render_state {
         RenderState::Explore(explore) => apply_explore_render_event(explore, event, render_fx),
         RenderState::Dialog {
@@ -479,6 +649,84 @@ pub fn apply_render_event(
             explore: Some(explore),
             ..
         } => apply_explore_render_event(explore, event, render_fx),
+        _ => false,
+    }
+}
+
+pub fn apply_ui_render_patch(
+    render_state: &mut RenderState,
+    ui: &UiState,
+    session: Option<&SessionState>,
+) -> bool {
+    match render_state {
+        RenderState::Menu {
+            title,
+            items,
+            selected,
+        } => {
+            *title = ui.menu.state.title;
+            *items = ui.menu.state.items.clone();
+            *selected = ui.menu.selected;
+            true
+        }
+        RenderState::PauseMenu {
+            items, selected, ..
+        } => {
+            *items = ui.pause_menu.state.items.clone();
+            *selected = ui.pause_menu.selected;
+            true
+        }
+        RenderState::Inventory(inventory) => {
+            let Some(s) = session else {
+                return false;
+            };
+            inventory.selected = ui.inventory.selected;
+            inventory.scroll = scroll_for_selection(
+                inventory.selected,
+                s.leader.inventory.len(),
+                INVENTORY_VISIBLE_ITEMS,
+            );
+            true
+        }
+        RenderState::Shop(shop) => {
+            let Some(s) = session else {
+                return false;
+            };
+            let Some(shop_state) = ui.shop.state.as_ref() else {
+                return false;
+            };
+            shop.mode = ui.shop.mode;
+            shop.selected = ui.shop.selected;
+            let total = match ui.shop.mode {
+                ShopMode::Select => 2,
+                ShopMode::Buy => shop_state.items.len(),
+                ShopMode::Sell => s.leader.inventory.len(),
+            };
+            shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
+            true
+        }
+        RenderState::Dialog {
+            npc_name,
+            lines,
+            current_line,
+            current_text,
+            has_next,
+            ..
+        } => {
+            let Some(dialog_state) = ui.dialog.state.as_ref() else {
+                return false;
+            };
+            *npc_name = dialog_state.npc_name.clone();
+            *lines = dialog_state
+                .lines
+                .iter()
+                .map(|line| line.text.clone())
+                .collect();
+            *current_line = dialog_state.current_line;
+            *current_text = dialog_text_at(lines, *current_line);
+            *has_next = *current_line + 1 < lines.len();
+            true
+        }
         _ => false,
     }
 }
@@ -603,6 +851,12 @@ pub fn build_render_state(
             RenderState::Dialog {
                 explore: session.and_then(|s| build_explore_render(s, ui, data, render_fx)),
                 npc_name: dialog_state.npc_name.clone(),
+                lines: dialog_state
+                    .lines
+                    .iter()
+                    .map(|line| line.text.clone())
+                    .collect(),
+                current_line: dialog_state.current_line,
                 current_text,
                 has_next,
             }
@@ -657,6 +911,7 @@ pub fn build_render_state(
                 }
                 if let Some(quest_data) = data.find_quest(&quest.quest_id) {
                     quests.push(QuestEntryRender {
+                        quest_id: quest.quest_id.clone(),
                         name: quest_data.name.clone(),
                         description: quest_data.description.clone(),
                         current_count: as_u32(quest.current_count),
@@ -691,6 +946,8 @@ pub fn render(state: &RenderState, fb: &mut Framebuffer) {
         RenderState::Dialog {
             explore,
             npc_name,
+            lines: _,
+            current_line: _,
             current_text,
             has_next,
         } => {
