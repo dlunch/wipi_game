@@ -67,7 +67,9 @@ impl GameEngine {
         let mut pending = VecDeque::with_capacity(32);
         core::mem::swap(&mut pending, &mut self.pending_inputs);
         while let Some(input) = pending.pop_front() {
-            let ui_events = self.resolve_ui_input_event(input);
+            let ui_events = self
+                .ui
+                .resolve_input(input, &self.state, self.world.as_ref());
             let initial = self.apply_ui_events(ui_events);
             initial_events.extend(initial);
         }
@@ -79,11 +81,6 @@ impl GameEngine {
         if let Err(e) = self.dispatch_game_events(initial_events) {
             self.state = GameState::Error(format!("{e}"));
         }
-    }
-
-    fn resolve_ui_input_event(&mut self, input: GameInput) -> Vec<UiEvent> {
-        self.ui
-            .resolve_input(input, &self.state, self.world.as_ref())
     }
 
     fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
