@@ -10,8 +10,8 @@ mod shop;
 pub use dialog::draw_dialog;
 pub use explore::draw_explore;
 pub use game::{
-    ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender, StatsRender,
-    build_render_state, render,
+    ExploreRender, InventoryRender, QuestLogRender, RenderFxState, RenderState, ShopRender,
+    StatsRender, apply_render_event, apply_render_tick, build_render_state, render,
 };
 pub use inventory::{draw_inventory, draw_stats};
 pub use menu::{draw_menu, draw_pause_menu};

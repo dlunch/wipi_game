@@ -10,8 +10,9 @@ use core::mem;
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderState, ResolveContext, SessionState, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, build_render_state, domain_resolvers,
+    GameState, InputKey, RenderFxState, RenderState, ResolveContext, SessionState, UiEvent,
+    UiEventApplier, UiInputEventResolver, UiState, apply_render_event, apply_render_tick,
+    build_render_state, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -19,6 +20,9 @@ pub struct GameEngine {
     data: Rc<GameData>,
     session: Option<SessionState>,
     ui: UiState,
+    render_fx: RenderFxState,
+    render_state: RenderState,
+    render_dirty: bool,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
     event_queue: VecDeque<GameEvent>,
     derived_events: Vec<GameEvent>,
@@ -40,6 +44,9 @@ impl GameEngine {
             data: Rc::new(GameData::default()),
             session: None,
             ui: UiState::default(),
+            render_fx: RenderFxState::default(),
+            render_state: RenderState::Loading { step: 0 },
+            render_dirty: true,
             resolver_buckets,
             event_queue: VecDeque::with_capacity(128),
             derived_events: Vec::with_capacity(32),
@@ -50,20 +57,29 @@ impl GameEngine {
         let ui_events = self.resolve_ui_input_event(GameInput::KeyDown(key));
         let initial = self.apply_ui_events(ui_events);
         self.dispatch_game_events(initial);
+        self.rebuild_render_state_if_dirty();
     }
 
     pub fn on_keyup(&mut self, key: InputKey) {
         let ui_events = self.resolve_ui_input_event(GameInput::KeyUp(key));
         let initial = self.apply_ui_events(ui_events);
         self.dispatch_game_events(initial);
+        self.rebuild_render_state_if_dirty();
     }
 
-    pub fn tick_and_build_render_state(&mut self) -> RenderState {
+    pub fn tick(&mut self) {
         self.update();
-        build_render_state(&self.state, self.session.as_ref(), &self.ui, &self.data)
+        self.rebuild_render_state_if_dirty();
+    }
+
+    pub fn render_state(&self) -> &RenderState {
+        &self.render_state
     }
 
     fn update(&mut self) {
+        if self.render_fx.tick() && !apply_render_tick(&mut self.render_state, &self.render_fx) {
+            self.render_dirty = true;
+        }
         let initial = self.resolve_tick_game_events();
         self.dispatch_game_events(initial);
     }
@@ -161,6 +177,16 @@ impl GameEngine {
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
             self.ui.apply_game_event(self.session.as_ref(), &event)?;
         }
+
+        if self.render_fx.apply_event(&event)
+            && !apply_render_tick(&mut self.render_state, &self.render_fx)
+        {
+            self.render_dirty = true;
+        }
+
+        if !apply_render_event(&mut self.render_state, &event, &self.render_fx) {
+            self.render_dirty = true;
+        }
         Ok(())
     }
 
@@ -208,6 +234,21 @@ impl GameEngine {
 
         if let Some(message) = error_message {
             self.state = GameState::Error(message);
+            self.render_dirty = true;
         }
+    }
+
+    fn rebuild_render_state_if_dirty(&mut self) {
+        if !self.render_dirty {
+            return;
+        }
+        self.render_state = build_render_state(
+            &self.state,
+            self.session.as_ref(),
+            &self.ui,
+            &self.data,
+            &self.render_fx,
+        );
+        self.render_dirty = false;
     }
 }

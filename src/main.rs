@@ -18,7 +18,7 @@ use wipi::timer::Timer;
 use wipi::wipi_main;
 
 use crate::engine::GameEngine;
-use crate::game::{InputKey, RenderState, render};
+use crate::game::{InputKey, render};
 
 fn map_key(key: KeyCode) -> Option<InputKey> {
     match key {
@@ -44,7 +44,6 @@ fn map_key(key: KeyCode) -> Option<InputKey> {
 
 pub struct RpgGame {
     engine: Rc<RefCell<GameEngine>>,
-    render_state: Rc<RefCell<RenderState>>,
     _timer: Timer,
 }
 
@@ -55,27 +54,21 @@ impl Default for RpgGame {
 }
 
 impl RpgGame {
-    fn tick(engine: &Rc<RefCell<GameEngine>>, render_state: &Rc<RefCell<RenderState>>) {
-        let mut engine = engine.borrow_mut();
-        let rs = engine.tick_and_build_render_state();
-        *render_state.borrow_mut() = rs;
-        drop(engine);
+    fn tick(engine: &Rc<RefCell<GameEngine>>) {
+        engine.borrow_mut().tick();
         repaint(0, 0, 0, 240, 320);
     }
 
     pub fn new() -> Self {
         let engine = Rc::new(RefCell::new(GameEngine::new()));
-        let render_state = Rc::new(RefCell::new(RenderState::Loading { step: 0 }));
 
         let timer_engine = Rc::clone(&engine);
-        let timer_render_state = Rc::clone(&render_state);
         let timer = Timer::periodic(Duration::from_millis(33), move || {
-            Self::tick(&timer_engine, &timer_render_state);
+            Self::tick(&timer_engine);
         });
 
         Self {
             engine,
-            render_state,
             _timer: timer,
         }
     }
@@ -83,9 +76,9 @@ impl RpgGame {
 
 impl App for RpgGame {
     fn on_paint(&mut self) {
-        let render_state = self.render_state.borrow();
+        let engine = self.engine.borrow();
         let mut fb = Framebuffer::screen_framebuffer();
-        render(&render_state, &mut fb);
+        render(engine.render_state(), &mut fb);
     }
 
     fn on_keydown(&mut self, key: KeyCode) {

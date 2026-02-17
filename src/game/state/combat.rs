@@ -29,7 +29,6 @@ pub struct FieldEnemy {
     pub y: usize,
     pub hp: i32,
     pub attack_cooldown: u32,
-    pub hit_flash: u32,
 }
 
 impl FieldEnemy {
@@ -42,7 +41,6 @@ impl FieldEnemy {
             y,
             hp,
             attack_cooldown: 0,
-            hit_flash: 0,
         }
     }
 }
@@ -51,7 +49,6 @@ impl FieldEnemy {
 pub struct CombatState {
     pub enemies: Vec<FieldEnemy>,
     pub player_attack_cooldown: u32,
-    pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffect>,
     pub update_counter: u32,
     pub respawn_timer: u32,
@@ -80,7 +77,6 @@ impl CombatState {
                 self.respawn_positions = respawn_positions.clone();
                 self.respawn_timer = 0;
                 self.player_attack_cooldown = 0;
-                self.player_hit_flash = 0;
                 self.skill_effects.clear();
                 self.update_counter = 0;
                 self.next_enemy_instance_id = (*next_enemy_instance_id).max(1);
@@ -119,24 +115,11 @@ impl CombatState {
                     enemy.attack_cooldown = *cooldown;
                 }
             }
-            CombatEvent::EnemyHitFlashSet {
-                enemy_id,
-                hit_flash,
-            } => {
-                if let Some(enemy) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.instance_id == *enemy_id)
-                {
-                    enemy.hit_flash = *hit_flash;
-                }
-            }
+            CombatEvent::EnemyHitFlashSet { .. } => {}
             CombatEvent::SetPlayerAttackCooldown(cooldown) => {
                 self.player_attack_cooldown = *cooldown;
             }
-            CombatEvent::SetPlayerHitFlash(hit_flash) => {
-                self.player_hit_flash = *hit_flash;
-            }
+            CombatEvent::SetPlayerHitFlash(_) => {}
             CombatEvent::TickSkillEffects => {
                 self.skill_effects.retain_mut(|effect| {
                     if effect.timer == 0 {

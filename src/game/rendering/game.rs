@@ -6,10 +6,11 @@ use wipi::framebuffer::Framebuffer;
 
 use crate::data::{Direction, ItemKind, SkillType};
 use crate::game::{
-    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, ExploreAction, GameData,
-    GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, SessionState, ShopMode,
-    UiState, clear_screen, draw_dialog, draw_explore, draw_inventory, draw_menu, draw_pause_menu,
-    draw_quest_log, draw_rect, draw_shop, draw_stats, draw_text, fill_rect,
+    COLOR_CYAN, COLOR_DARK_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, CombatEvent, ExploreAction,
+    GameData, GameEvent, GameState, INVENTORY_VISIBLE_ITEMS, MenuAction, MovementEvent,
+    SHOP_VISIBLE_ITEMS, SessionEvent, SessionState, ShopMode, UiState, clear_screen, draw_dialog,
+    draw_explore, draw_inventory, draw_menu, draw_pause_menu, draw_quest_log, draw_rect, draw_shop,
+    draw_stats, draw_text, fill_rect,
 };
 
 pub enum RenderState {
@@ -65,6 +66,8 @@ pub struct ExploreRender {
 }
 
 pub struct EnemyRender {
+    pub enemy_id: u32,
+    pub name: String,
     pub x: usize,
     pub y: usize,
     pub hp: i32,
@@ -77,6 +80,7 @@ pub struct SkillEffectRender {
     pub x: usize,
     pub y: usize,
     pub effect_type: SkillType,
+    pub timer: u32,
 }
 
 pub struct InventoryRender {
@@ -132,6 +136,92 @@ pub struct QuestEntryRender {
     pub completed: bool,
 }
 
+#[derive(Default)]
+pub struct RenderFxState {
+    player_hit_flash: u32,
+    enemy_hit_flashes: Vec<(u32, u32)>,
+}
+
+impl RenderFxState {
+    pub fn tick(&mut self) -> bool {
+        let mut changed = false;
+        if self.player_hit_flash > 0 {
+            self.player_hit_flash -= 1;
+            changed = true;
+        }
+
+        for (_, timer) in &mut self.enemy_hit_flashes {
+            if *timer > 0 {
+                *timer -= 1;
+                changed = true;
+            }
+        }
+        let before = self.enemy_hit_flashes.len();
+        self.enemy_hit_flashes.retain(|(_, timer)| *timer > 0);
+        changed || before != self.enemy_hit_flashes.len()
+    }
+
+    pub fn apply_event(&mut self, event: &GameEvent) -> bool {
+        let GameEvent::Combat(combat) = event else {
+            return false;
+        };
+        match combat {
+            CombatEvent::SetPlayerHitFlash(timer) => {
+                if self.player_hit_flash == *timer {
+                    return false;
+                }
+                self.player_hit_flash = *timer;
+                true
+            }
+            CombatEvent::EnemyHitFlashSet {
+                enemy_id,
+                hit_flash,
+            } => {
+                if *hit_flash == 0 {
+                    let before = self.enemy_hit_flashes.len();
+                    self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
+                    return before != self.enemy_hit_flashes.len();
+                }
+
+                if let Some((_, timer)) = self
+                    .enemy_hit_flashes
+                    .iter_mut()
+                    .find(|(id, _)| *id == *enemy_id)
+                {
+                    if *timer == *hit_flash {
+                        return false;
+                    }
+                    *timer = *hit_flash;
+                } else {
+                    self.enemy_hit_flashes.push((*enemy_id, *hit_flash));
+                }
+                true
+            }
+            CombatEvent::EnemyDespawn(enemy_id) => {
+                let before = self.enemy_hit_flashes.len();
+                self.enemy_hit_flashes.retain(|(id, _)| *id != *enemy_id);
+                before != self.enemy_hit_flashes.len()
+            }
+            CombatEvent::SetMapEnemies { .. } => {
+                if self.enemy_hit_flashes.is_empty() && self.player_hit_flash == 0 {
+                    return false;
+                }
+                self.enemy_hit_flashes.clear();
+                self.player_hit_flash = 0;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn enemy_hit_flash(&self, enemy_id: u32) -> u32 {
+        self.enemy_hit_flashes
+            .iter()
+            .find_map(|(id, timer)| (*id == enemy_id).then_some(*timer))
+            .unwrap_or(0)
+    }
+}
+
 fn as_u32(value: i32) -> u32 {
     value.max(0) as u32
 }
@@ -154,6 +244,7 @@ fn build_explore_render(
     session: &SessionState,
     ui: &UiState,
     data: &Rc<GameData>,
+    render_fx: &RenderFxState,
 ) -> Option<ExploreRender> {
     let _party_size = 1 + session.companions.len();
 
@@ -169,11 +260,13 @@ fn build_explore_render(
     let mut enemies = Vec::with_capacity(session.combat.enemies.len());
     for enemy in &session.combat.enemies {
         enemies.push(EnemyRender {
+            enemy_id: enemy.instance_id,
+            name: enemy.data.name.clone(),
             x: enemy.x,
             y: enemy.y,
             hp: enemy.hp,
             max_hp: enemy.data.hp,
-            hit_flash: enemy.hit_flash,
+            hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
             dead: enemy.hp <= 0,
         });
     }
@@ -184,6 +277,7 @@ fn build_explore_render(
             x: effect.x,
             y: effect.y,
             effect_type: effect.effect_type,
+            timer: effect.timer,
         });
     }
 
@@ -206,7 +300,7 @@ fn build_explore_render(
         first_live_enemy_name,
         opened_treasures: session.opened_treasures.clone(),
         enemies,
-        player_hit_flash: session.combat.player_hit_flash,
+        player_hit_flash: render_fx.player_hit_flash,
         skill_effects,
         skill_cooldowns: session.skill_cooldowns,
         key_actions: ui.explore.key_actions,
@@ -214,11 +308,230 @@ fn build_explore_render(
     })
 }
 
+fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
+    explore.first_live_enemy_name = explore
+        .enemies
+        .iter()
+        .find(|enemy| !enemy.dead && enemy.hp > 0)
+        .map(|enemy| enemy.name.clone());
+}
+
+fn apply_explore_render_event(
+    explore: &mut ExploreRender,
+    event: &GameEvent,
+    render_fx: &RenderFxState,
+) -> bool {
+    match event {
+        GameEvent::Movement(MovementEvent::Tick(movement, _)) => {
+            if let Some((dx, dy)) = movement.step {
+                explore.player_x = (explore.player_x as i32 + dx) as usize;
+                explore.player_y = (explore.player_y as i32 + dy) as usize;
+            }
+            if let Some((dx, dy)) = movement.facing {
+                explore.player_facing = match (dx, dy) {
+                    (0, -1) => Direction::Up,
+                    (0, 1) => Direction::Down,
+                    (-1, 0) => Direction::Left,
+                    (1, 0) => Direction::Right,
+                    _ => explore.player_facing,
+                };
+            }
+            true
+        }
+        GameEvent::Session(SessionEvent::SetPlayerMap(map_id)) => {
+            explore.map_id = map_id.clone();
+            true
+        }
+        GameEvent::Session(SessionEvent::SetPlayerPosition { x, y }) => {
+            explore.player_x = *x;
+            explore.player_y = *y;
+            true
+        }
+        GameEvent::Session(SessionEvent::SetPlayerFacing(facing)) => {
+            explore.player_facing = *facing;
+            true
+        }
+        GameEvent::Session(SessionEvent::SetPlayerStats(stats)) => {
+            explore.hp = as_u32(stats.current_hp);
+            explore.max_hp = as_u32(stats.max_hp);
+            explore.mp = as_u32(stats.current_mp);
+            explore.max_mp = as_u32(stats.max_mp);
+            explore.level = as_u32(stats.level);
+            true
+        }
+        GameEvent::Session(SessionEvent::SetSkillCooldowns(cooldowns)) => {
+            explore.skill_cooldowns = *cooldowns;
+            true
+        }
+        GameEvent::Session(SessionEvent::AddOpenedTreasure { map_id, x, y }) => {
+            if !explore
+                .opened_treasures
+                .iter()
+                .any(|(m, tx, ty)| m == map_id && *tx == *x && *ty == *y)
+            {
+                explore.opened_treasures.push((map_id.clone(), *x, *y));
+            }
+            true
+        }
+        GameEvent::Combat(CombatEvent::SetMapEnemies { enemies, .. }) => {
+            explore.enemies.clear();
+            explore.enemies.reserve(enemies.len());
+            for enemy in enemies {
+                explore.enemies.push(EnemyRender {
+                    enemy_id: enemy.instance_id,
+                    name: enemy.data.name.clone(),
+                    x: enemy.x,
+                    y: enemy.y,
+                    hp: enemy.hp,
+                    max_hp: enemy.data.hp,
+                    hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
+                    dead: enemy.hp <= 0,
+                });
+            }
+            refresh_first_live_enemy_name(explore);
+            true
+        }
+        GameEvent::Combat(CombatEvent::EnemySpawn(enemy)) => {
+            explore.enemies.push(EnemyRender {
+                enemy_id: enemy.instance_id,
+                name: enemy.data.name.clone(),
+                x: enemy.x,
+                y: enemy.y,
+                hp: enemy.hp,
+                max_hp: enemy.data.hp,
+                hit_flash: render_fx.enemy_hit_flash(enemy.instance_id),
+                dead: enemy.hp <= 0,
+            });
+            refresh_first_live_enemy_name(explore);
+            true
+        }
+        GameEvent::Combat(CombatEvent::EnemyDespawn(enemy_id)) => {
+            explore.enemies.retain(|enemy| enemy.enemy_id != *enemy_id);
+            refresh_first_live_enemy_name(explore);
+            true
+        }
+        GameEvent::Combat(CombatEvent::EnemyMove { enemy_id, x, y }) => {
+            if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
+                enemy.x = *x;
+                enemy.y = *y;
+                return true;
+            }
+            false
+        }
+        GameEvent::Combat(CombatEvent::EnemyHpSet { enemy_id, hp }) => {
+            if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
+                enemy.hp = *hp;
+                enemy.dead = *hp <= 0;
+                refresh_first_live_enemy_name(explore);
+                return true;
+            }
+            false
+        }
+        GameEvent::Combat(CombatEvent::EnemyHitFlashSet { enemy_id, .. }) => {
+            if let Some(enemy) = explore.enemies.iter_mut().find(|e| e.enemy_id == *enemy_id) {
+                enemy.hit_flash = render_fx.enemy_hit_flash(*enemy_id);
+                return true;
+            }
+            false
+        }
+        GameEvent::Combat(CombatEvent::SetPlayerHitFlash(_)) => {
+            explore.player_hit_flash = render_fx.player_hit_flash;
+            true
+        }
+        GameEvent::Combat(CombatEvent::SetSkillEffects(effects)) => {
+            explore.skill_effects.clear();
+            explore.skill_effects.reserve(effects.len());
+            for effect in effects {
+                explore.skill_effects.push(SkillEffectRender {
+                    x: effect.x,
+                    y: effect.y,
+                    effect_type: effect.effect_type,
+                    timer: effect.timer,
+                });
+            }
+            true
+        }
+        GameEvent::Combat(CombatEvent::TickSkillEffects) => {
+            for effect in &mut explore.skill_effects {
+                if effect.timer > 0 {
+                    effect.timer -= 1;
+                }
+            }
+            explore.skill_effects.retain(|e| e.timer > 0);
+            true
+        }
+        _ => false,
+    }
+}
+
+pub fn apply_render_event(
+    render_state: &mut RenderState,
+    event: &GameEvent,
+    render_fx: &RenderFxState,
+) -> bool {
+    match render_state {
+        RenderState::Explore(explore) => apply_explore_render_event(explore, event, render_fx),
+        RenderState::Dialog {
+            explore: Some(explore),
+            ..
+        } => apply_explore_render_event(explore, event, render_fx),
+        RenderState::PauseMenu {
+            explore: Some(explore),
+            ..
+        } => apply_explore_render_event(explore, event, render_fx),
+        _ => false,
+    }
+}
+
+pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxState) -> bool {
+    match render_state {
+        RenderState::Explore(explore) => {
+            let mut changed = false;
+            if explore.player_hit_flash != render_fx.player_hit_flash {
+                explore.player_hit_flash = render_fx.player_hit_flash;
+                changed = true;
+            }
+            for enemy in &mut explore.enemies {
+                let next = render_fx.enemy_hit_flash(enemy.enemy_id);
+                if enemy.hit_flash != next {
+                    enemy.hit_flash = next;
+                    changed = true;
+                }
+            }
+            changed
+        }
+        RenderState::Dialog {
+            explore: Some(explore),
+            ..
+        }
+        | RenderState::PauseMenu {
+            explore: Some(explore),
+            ..
+        } => {
+            let mut changed = false;
+            if explore.player_hit_flash != render_fx.player_hit_flash {
+                explore.player_hit_flash = render_fx.player_hit_flash;
+                changed = true;
+            }
+            for enemy in &mut explore.enemies {
+                let next = render_fx.enemy_hit_flash(enemy.enemy_id);
+                if enemy.hit_flash != next {
+                    enemy.hit_flash = next;
+                    changed = true;
+                }
+            }
+            changed
+        }
+        _ => false,
+    }
+}
+
 pub fn build_render_state(
     state: &GameState,
     session: Option<&SessionState>,
     ui: &UiState,
     data: &Rc<GameData>,
+    render_fx: &RenderFxState,
 ) -> RenderState {
     match state {
         GameState::Loading(step) => RenderState::Loading { step: *step },
@@ -231,7 +544,7 @@ pub fn build_render_state(
             let Some(s) = session else {
                 return RenderState::NoSession;
             };
-            let Some(explore) = build_explore_render(s, ui, data) else {
+            let Some(explore) = build_explore_render(s, ui, data, render_fx) else {
                 return RenderState::Error(String::from("Map not found"));
             };
             RenderState::Explore(explore)
@@ -288,7 +601,7 @@ pub fn build_render_state(
             let has_next = dialog_state.current_line + 1 < dialog_state.lines.len();
 
             RenderState::Dialog {
-                explore: session.and_then(|s| build_explore_render(s, ui, data)),
+                explore: session.and_then(|s| build_explore_render(s, ui, data, render_fx)),
                 npc_name: dialog_state.npc_name.clone(),
                 current_text,
                 has_next,
@@ -355,7 +668,7 @@ pub fn build_render_state(
             RenderState::QuestLog(QuestLogRender { quests })
         }
         GameState::PauseMenu => RenderState::PauseMenu {
-            explore: session.and_then(|s| build_explore_render(s, ui, data)),
+            explore: session.and_then(|s| build_explore_render(s, ui, data, render_fx)),
             items: ui.pause_menu.state.items.clone(),
             selected: ui.pause_menu.selected,
         },

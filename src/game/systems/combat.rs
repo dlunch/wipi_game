@@ -60,22 +60,12 @@ pub fn resolve_tick(
         )));
     }
 
-    let mut player_hit_flash = if state.player_hit_flash > 0 {
-        state.player_hit_flash - 1
-    } else {
-        0
-    };
-    if player_hit_flash != state.player_hit_flash {
-        out.push(GameEvent::Combat(CombatEvent::SetPlayerHitFlash(
-            player_hit_flash,
-        )));
-    }
-
     if !state.skill_effects.is_empty() {
         out.push(GameEvent::Combat(CombatEvent::TickSkillEffects));
     }
 
     let mut damage_taken = 0;
+    let mut player_hit_flash_started = false;
     let mut occupied_after_tick: Vec<(usize, usize)> = Vec::with_capacity(state.enemies.len());
     let do_move = update_counter.is_multiple_of(ENEMY_MOVE_INTERVAL);
     for enemy in &state.enemies {
@@ -88,11 +78,6 @@ pub fn resolve_tick(
 
         let mut next_x = enemy.x;
         let mut next_y = enemy.y;
-        let next_hit_flash = if enemy.hit_flash > 0 {
-            enemy.hit_flash - 1
-        } else {
-            0
-        };
         let mut next_attack_cooldown = if enemy.attack_cooldown > 0 {
             enemy.attack_cooldown - 1
         } else {
@@ -107,10 +92,10 @@ pub fn resolve_tick(
             next_attack_cooldown = ENEMY_ATTACK_COOLDOWN;
             let actual_damage = (raw_damage - player_def / 2).max(1);
             damage_taken += actual_damage;
-            if player_hit_flash != 10 {
-                player_hit_flash = 10;
+            if !player_hit_flash_started {
+                player_hit_flash_started = true;
                 out.push(GameEvent::Combat(CombatEvent::SetPlayerHitFlash(
-                    player_hit_flash,
+                    HIT_FLASH_DURATION,
                 )));
             }
         }
@@ -120,12 +105,6 @@ pub fn resolve_tick(
                 enemy_id: enemy.instance_id,
                 x: next_x,
                 y: next_y,
-            }));
-        }
-        if next_hit_flash != enemy.hit_flash {
-            out.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
-                enemy_id: enemy.instance_id,
-                hit_flash: next_hit_flash,
             }));
         }
         if next_attack_cooldown != enemy.attack_cooldown {
