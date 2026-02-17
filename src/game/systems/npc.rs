@@ -104,7 +104,7 @@ impl DomainEventResolver for NpcResolver {
 
     fn resolve(
         &self,
-        ctx: &mut ResolveContext<'_>,
+        ctx: &ResolveContext<'_>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {

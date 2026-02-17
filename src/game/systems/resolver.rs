@@ -9,7 +9,7 @@ use crate::game::{
 
 pub struct ResolveContext<'a> {
     pub state: &'a GameState,
-    pub data: &'a mut Rc<GameData>,
+    pub data: &'a Rc<GameData>,
     pub world: Option<&'a WorldState>,
     pub ui: &'a UiState,
 }
@@ -24,7 +24,7 @@ pub trait DomainEventResolver: GameEventSubscriber {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];
     fn resolve(
         &self,
-        ctx: &mut ResolveContext<'_>,
+        ctx: &ResolveContext<'_>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()>;

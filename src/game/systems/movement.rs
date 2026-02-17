@@ -150,7 +150,7 @@ impl DomainEventResolver for UpdateMovementResolver {
 
     fn resolve(
         &self,
-        ctx: &mut ResolveContext<'_>,
+        ctx: &ResolveContext<'_>,
         _event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {

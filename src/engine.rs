@@ -12,7 +12,7 @@ use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
     GameState, InputKey, RenderFxState, RenderState, ResolveContext, UiEvent, UiEventApplier,
     UiInputEventResolver, UiState, WorldState, apply_render_event, apply_render_tick,
-    apply_ui_render_patch, domain_resolvers,
+    apply_ui_render_patch, domain_resolvers, load_step, resolve_loading,
 };
 
 pub struct GameEngine {
@@ -93,9 +93,12 @@ impl GameEngine {
             .resolve_input(input, &self.state, self.world.as_ref())
     }
 
-    fn resolve_tick_game_events(&self) -> Vec<GameEvent> {
+    fn resolve_tick_game_events(&mut self) -> Vec<GameEvent> {
         match self.state {
-            GameState::Loading(_) => vec![GameEvent::UpdateLoading],
+            GameState::Loading(step) => {
+                let load_result = load_step(&mut self.data, step);
+                vec![GameEvent::Loading(resolve_loading(step, load_result))]
+            }
             GameState::Explore => vec![GameEvent::UpdateMovement, GameEvent::UpdateCombat],
             _ => Vec::new(),
         }
@@ -121,13 +124,13 @@ impl GameEngine {
         }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
-            let mut ctx = ResolveContext {
+            let ctx = ResolveContext {
                 state: &self.state,
-                data: &mut self.data,
+                data: &self.data,
                 world: self.world.as_ref(),
                 ui: &self.ui,
             };
-            (*resolver).resolve(&mut ctx, event, out)?;
+            (*resolver).resolve(&ctx, event, out)?;
         }
         Ok(())
     }

@@ -49,7 +49,6 @@ pub enum CombatEvent {
 }
 
 pub enum GameEvent {
-    UpdateLoading,
     UpdateMovement,
     UpdateCombat,
     ExploreCommand(crate::game::ExploreCommand),
@@ -78,7 +77,6 @@ pub enum GameEvent {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GameEventKind {
-    UpdateLoading,
     UpdateMovement,
     UpdateCombat,
     ExploreCommand,
@@ -110,35 +108,34 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 25;
+    pub const COUNT: usize = 24;
 
     pub const fn as_usize(self) -> usize {
         match self {
-            Self::UpdateLoading => 0,
-            Self::UpdateMovement => 1,
-            Self::UpdateCombat => 2,
-            Self::ExploreCommand => 3,
-            Self::StartNewGame => 4,
-            Self::ContinueGame => 5,
-            Self::SaveWorld => 6,
-            Self::UseInventorySelected => 7,
-            Self::World => 8,
-            Self::OpenDialogState => 9,
-            Self::OpenShopById => 10,
-            Self::OpenShopState => 11,
-            Self::RestoreHpMp => 12,
-            Self::ApplyDialogAction => 13,
-            Self::ApplyDialogTransition => 14,
-            Self::ShopBuyItem => 15,
-            Self::ShopSellSelected => 16,
-            Self::CombatPlayerAction => 17,
-            Self::Loading => 18,
-            Self::Movement => 19,
-            Self::Combat => 20,
-            Self::Explore => 21,
-            Self::Lifecycle => 22,
-            Self::Transition => 23,
-            Self::Exit => 24,
+            Self::UpdateMovement => 0,
+            Self::UpdateCombat => 1,
+            Self::ExploreCommand => 2,
+            Self::StartNewGame => 3,
+            Self::ContinueGame => 4,
+            Self::SaveWorld => 5,
+            Self::UseInventorySelected => 6,
+            Self::World => 7,
+            Self::OpenDialogState => 8,
+            Self::OpenShopById => 9,
+            Self::OpenShopState => 10,
+            Self::RestoreHpMp => 11,
+            Self::ApplyDialogAction => 12,
+            Self::ApplyDialogTransition => 13,
+            Self::ShopBuyItem => 14,
+            Self::ShopSellSelected => 15,
+            Self::CombatPlayerAction => 16,
+            Self::Loading => 17,
+            Self::Movement => 18,
+            Self::Combat => 19,
+            Self::Explore => 20,
+            Self::Lifecycle => 21,
+            Self::Transition => 22,
+            Self::Exit => 23,
         }
     }
 }
@@ -146,7 +143,6 @@ impl GameEventKind {
 impl GameEvent {
     pub const fn kind(&self) -> GameEventKind {
         match self {
-            Self::UpdateLoading => GameEventKind::UpdateLoading,
             Self::UpdateMovement => GameEventKind::UpdateMovement,
             Self::UpdateCombat => GameEventKind::UpdateCombat,
             Self::ExploreCommand(_) => GameEventKind::ExploreCommand,

@@ -4,13 +4,13 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::data::Tile;
 use crate::game::systems::resolver::{DomainEventResolver, ResolveContext};
 use crate::game::{
-    CharacterState, DialogState, GameData, GameEvent, GameEventKind, GameState, TransitionEvent,
-    WorldEvent, load_game,
+    CharacterState, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
+    load_game,
 };
 
 #[derive(Clone)]
@@ -53,31 +53,16 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 
 impl DomainEventResolver for LifecycleResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[
-            GameEventKind::UpdateLoading,
-            GameEventKind::StartNewGame,
-            GameEventKind::ContinueGame,
-        ]
+        &[GameEventKind::StartNewGame, GameEventKind::ContinueGame]
     }
 
     fn resolve(
         &self,
-        ctx: &mut ResolveContext<'_>,
+        ctx: &ResolveContext<'_>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         match event {
-            GameEvent::UpdateLoading => {
-                let step = if let GameState::Loading(step) = ctx.state {
-                    *step
-                } else {
-                    return Err(anyhow!("Invalid state: expected Loading"));
-                };
-
-                let load_result = load_step(ctx.data, step);
-
-                out.push(GameEvent::Loading(resolve_loading(step, load_result)));
-            }
             GameEvent::StartNewGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
                 setup_new_game_events(ctx.data(), out);

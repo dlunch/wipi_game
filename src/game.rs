@@ -27,6 +27,7 @@ pub use state::{
 };
 pub use systems::{
     DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, ResolveContext, domain_resolvers,
+    load_step, resolve_loading,
 };
 pub use ui::{
     DialogState, DialogTransition, ExploreAction, ExploreCommand, GameInput,
