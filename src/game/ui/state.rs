@@ -152,37 +152,37 @@ impl UiEventApplier for UiState {
                 TransitionEvent::ReleaseMovementDirection(direction),
             )),
             UiEvent::MenuInput(key) => {
-                for event in self.resolve_menu_input(key) {
+                for event in self.apply_menu_input(key) {
                     out.push(event);
                 }
             }
             UiEvent::PauseMenuInput(key) => {
-                for event in self.resolve_pause_menu_input(key) {
+                for event in self.apply_pause_menu_input(key) {
                     out.push(event);
                 }
             }
             UiEvent::ExploreInput(key) => {
-                for event in self.resolve_explore_input(key) {
+                for event in self.apply_explore_input(key) {
                     out.push(event);
                 }
             }
             UiEvent::InventoryInput(key) => {
-                for event in self.resolve_inventory_input(session, key) {
+                for event in self.apply_inventory_input(session, key) {
                     out.push(event);
                 }
             }
             UiEvent::DialogInput(key) => {
-                for event in self.resolve_dialog_input(key) {
+                for event in self.apply_dialog_input(key) {
                     out.push(event);
                 }
             }
             UiEvent::ShopBuySelected(selected) => {
-                for event in self.resolve_shop_buy_selected(session, selected) {
+                for event in self.apply_shop_buy_selected(session, selected) {
                     out.push(event);
                 }
             }
             UiEvent::ShopSellSelected(selected) => {
-                for event in self.resolve_shop_sell_selected(selected) {
+                for event in self.apply_shop_sell_selected(selected) {
                     out.push(event);
                 }
             }
@@ -192,7 +192,7 @@ impl UiEventApplier for UiState {
 }
 
 impl UiState {
-    fn resolve_explore_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_explore_input(&self, key: InputKey) -> Vec<GameEvent> {
         let event = match key {
             InputKey::Up => Some(ExploreCommand::Move(Direction::Up)),
             InputKey::Down => Some(ExploreCommand::Move(Direction::Down)),
@@ -210,7 +210,7 @@ impl UiState {
         event.map(GameEvent::ExploreCommand).into_iter().collect()
     }
 
-    fn resolve_inventory_input(
+    fn apply_inventory_input(
         &mut self,
         session: Option<&SessionState>,
         key: InputKey,
@@ -244,7 +244,7 @@ impl UiState {
         Vec::new()
     }
 
-    fn resolve_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_dialog_input(&self, key: InputKey) -> Vec<GameEvent> {
         match key {
             InputKey::Back => vec![GameEvent::ApplyDialogTransition(
                 DialogTransition::CloseToExplore,
@@ -287,7 +287,7 @@ impl UiState {
         }
     }
 
-    fn resolve_shop_buy_selected(
+    fn apply_shop_buy_selected(
         &self,
         session: Option<&SessionState>,
         selected: usize,
@@ -310,11 +310,11 @@ impl UiState {
         }
     }
 
-    fn resolve_shop_sell_selected(&self, selected: usize) -> Vec<GameEvent> {
+    fn apply_shop_sell_selected(&self, selected: usize) -> Vec<GameEvent> {
         vec![GameEvent::ShopSellSelected(selected)]
     }
 
-    fn resolve_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
         let selected = self.menu.selected;
         let items = &self.menu.state.items;
 
@@ -359,7 +359,7 @@ impl UiState {
         }
     }
 
-    fn resolve_pause_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
+    fn apply_pause_menu_input(&mut self, key: InputKey) -> Vec<GameEvent> {
         let selected = self.pause_menu.selected;
         let item_count = self.pause_menu.state.items.len();
 
