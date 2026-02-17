@@ -25,70 +25,68 @@ pub enum NpcEvent {
     RestoreStats,
 }
 
-impl WorldState {
-    fn try_interact_npc(&self, data: &GameData, facing: Direction) -> Option<NpcEvent> {
-        let (target_x, target_y) = facing.apply(self.leader.x, self.leader.y);
+fn try_interact_npc(session: &WorldState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
+    let (target_x, target_y) = facing.apply(session.leader.x, session.leader.y);
 
-        let npc = data.find_npc_at(&self.leader.current_map_id, target_x, target_y)?;
+    let npc = data.find_npc_at(&session.leader.current_map_id, target_x, target_y)?;
 
-        match npc.npc_type {
-            NpcType::Healer => {
-                if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-                    let lines = self.filter_dialog_lines(dialog);
-                    if !lines.is_empty() {
-                        return Some(NpcEvent::OpenDialog(DialogSpec {
-                            npc_name: npc.name.clone(),
-                            lines,
-                            restore: true,
-                        }));
-                    }
-                }
-
-                return Some(NpcEvent::RestoreStats);
-            }
-            NpcType::ShopKeeper => {
-                let shop = npc
-                    .shop_id
-                    .as_ref()
-                    .and_then(|sid| data.find_shop(sid))
-                    .or_else(|| data.shops.first())
-                    .cloned();
-
-                if let Some(shop) = shop {
-                    return Some(NpcEvent::OpenShop(shop.id));
+    match npc.npc_type {
+        NpcType::Healer => {
+            if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
+                let lines = filter_dialog_lines(session, dialog);
+                if !lines.is_empty() {
+                    return Some(NpcEvent::OpenDialog(DialogSpec {
+                        npc_name: npc.name.clone(),
+                        lines,
+                        restore: true,
+                    }));
                 }
             }
-            NpcType::QuestGiver | NpcType::Villager => {}
-        }
 
-        if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-            let lines = self.filter_dialog_lines(dialog);
-            if !lines.is_empty() {
-                return Some(NpcEvent::OpenDialog(DialogSpec {
-                    npc_name: npc.name.clone(),
-                    lines,
-                    restore: false,
-                }));
+            return Some(NpcEvent::RestoreStats);
+        }
+        NpcType::ShopKeeper => {
+            let shop = npc
+                .shop_id
+                .as_ref()
+                .and_then(|sid| data.find_shop(sid))
+                .or_else(|| data.shops.first())
+                .cloned();
+
+            if let Some(shop) = shop {
+                return Some(NpcEvent::OpenShop(shop.id));
             }
         }
-
-        None
+        NpcType::QuestGiver | NpcType::Villager => {}
     }
 
-    fn filter_dialog_lines(&self, dialog: &Dialog) -> Vec<DialogLine> {
-        dialog
-            .lines
-            .iter()
-            .filter(|line| match &line.condition {
-                None => true,
-                Some(DialogCondition::HasQuest(id)) => self.has_quest(id),
-                Some(DialogCondition::QuestComplete(id)) => self.is_quest_complete(id),
-                Some(DialogCondition::HasItem(id)) => self.leader.has_item(id),
-                Some(DialogCondition::HasGold(amount)) => self.leader.stats.gold >= *amount,
-            })
-            .cloned()
-            .collect()
+    if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
+        let lines = filter_dialog_lines(session, dialog);
+        if !lines.is_empty() {
+            return Some(NpcEvent::OpenDialog(DialogSpec {
+                npc_name: npc.name.clone(),
+                lines,
+                restore: false,
+            }));
+        }
     }
+
+    None
+}
+
+fn filter_dialog_lines(session: &WorldState, dialog: &Dialog) -> Vec<DialogLine> {
+    dialog
+        .lines
+        .iter()
+        .filter(|line| match &line.condition {
+            None => true,
+            Some(DialogCondition::HasQuest(id)) => session.has_quest(id),
+            Some(DialogCondition::QuestComplete(id)) => session.is_quest_complete(id),
+            Some(DialogCondition::HasItem(id)) => session.leader.has_item(id),
+            Some(DialogCondition::HasGold(amount)) => session.leader.stats.gold >= *amount,
+        })
+        .cloned()
+        .collect()
 }
 
 struct NpcResolver;
@@ -121,7 +119,7 @@ impl DomainEventResolver for NpcResolver {
                 );
                 let s = ctx.world.ok_or_else(|| anyhow!("No active world"))?;
 
-                if let Some(npc_event) = s.try_interact_npc(ctx.data, *facing) {
+                if let Some(npc_event) = try_interact_npc(s, ctx.data, *facing) {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
                     return Ok(());
                 }
@@ -222,7 +220,7 @@ mod tests {
         let session = make_session();
         let data = GameData::default();
 
-        let next_state = session.try_interact_npc(&data, Direction::Right);
+        let next_state = try_interact_npc(&session, &data, Direction::Right);
 
         assert!(next_state.is_none());
     }
@@ -234,7 +232,7 @@ mod tests {
         let dialog = make_dialog(vec!["Hello"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = session.try_interact_npc(&data, Direction::Right);
+        let next_state = try_interact_npc(&session, &data, Direction::Right);
 
         let Some(NpcEvent::OpenDialog(dialog_spec)) = next_state else {
             panic!("expected dialog state");
@@ -254,7 +252,7 @@ mod tests {
         let dialog = make_dialog(vec!["Be healed"]);
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = session.try_interact_npc(&data, Direction::Right);
+        let next_state = try_interact_npc(&session, &data, Direction::Right);
 
         assert_eq!(session.leader.stats.current_hp, before_hp);
         assert_eq!(session.leader.stats.current_mp, before_mp);
@@ -277,7 +275,7 @@ mod tests {
         let dialog = make_dialog(Vec::new());
         let data = make_game_data_with_npc(npc, dialog);
 
-        let next_state = session.try_interact_npc(&data, Direction::Right);
+        let next_state = try_interact_npc(&session, &data, Direction::Right);
 
         assert_eq!(session.leader.stats.current_hp, before_hp);
         assert_eq!(session.leader.stats.current_mp, before_mp);
@@ -292,7 +290,7 @@ mod tests {
         let mut data = make_game_data_with_npc(npc, dialog);
         data.shops = vec![make_shop("s1", Vec::new())];
 
-        let next_state = session.try_interact_npc(&data, Direction::Right);
+        let next_state = try_interact_npc(&session, &data, Direction::Right);
 
         let Some(NpcEvent::OpenShop(shop_id)) = next_state else {
             panic!("expected shop state");
@@ -305,7 +303,7 @@ mod tests {
         let session = make_session();
         let dialog = make_dialog(vec!["A", "B", "C"]);
 
-        let filtered = session.filter_dialog_lines(&dialog);
+        let filtered = filter_dialog_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 3);
     }
@@ -321,7 +319,7 @@ mod tests {
         });
         let dialog = make_dialog(vec!["HAS_QUEST=q1:talk:q1", "HAS_QUEST=q2:talk:q2"]);
 
-        let filtered = session.filter_dialog_lines(&dialog);
+        let filtered = filter_dialog_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "q1");
@@ -341,7 +339,7 @@ mod tests {
             "QUEST_DONE=q2:talk:not done",
         ]);
 
-        let filtered = session.filter_dialog_lines(&dialog);
+        let filtered = filter_dialog_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "done");
@@ -355,7 +353,7 @@ mod tests {
             "HAS_GOLD=100:talk:expensive",
         ]);
 
-        let filtered = session.filter_dialog_lines(&dialog);
+        let filtered = filter_dialog_lines(&session, &dialog);
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].text, "cheap");

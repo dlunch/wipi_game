@@ -66,6 +66,15 @@ impl CharacterState {
     pub fn can_use_skill(&self, cooldowns: &[u32; 3], slot: usize, mp_cost: i32) -> bool {
         slot < 3 && cooldowns[slot] == 0 && self.stats.current_mp >= mp_cost
     }
+
+    pub(crate) fn can_move(&self, map: &crate::data::Map, dx: i32, dy: i32) -> bool {
+        let raw_x = self.x as i32 + dx;
+        let raw_y = self.y as i32 + dy;
+        if raw_x < 0 || raw_y < 0 {
+            return false;
+        }
+        map.get_tile(raw_x as usize, raw_y as usize).is_passable()
+    }
 }
 
 impl GameEventSubscriber for CharacterState {
@@ -128,8 +137,8 @@ impl CharacterState {
                     };
                 }
                 if let Some((dx, dy)) = movement_event.step {
-                    self.x = (self.x as i32 + dx) as usize;
-                    self.y = (self.y as i32 + dy) as usize;
+                    self.x = (self.x as i32 + dx).max(0) as usize;
+                    self.y = (self.y as i32 + dy).max(0) as usize;
                 }
             }
             _ => {}

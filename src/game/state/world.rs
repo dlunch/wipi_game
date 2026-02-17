@@ -247,6 +247,15 @@ impl WorldState {
     }
 }
 
+impl WorldState {
+    pub(crate) fn is_occupied_on_map(&self, map: &crate::data::Map, x: usize, y: usize) -> bool {
+        if x >= map.width || y >= map.height {
+            return true;
+        }
+        self.is_occupied(x, y)
+    }
+}
+
 impl GameEventSubscriber for WorldState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
         matches!(kind, GameEventKind::World | GameEventKind::Combat)

@@ -35,7 +35,11 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 
 impl DomainEventResolver for LifecycleResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::StartNewGame, GameEventKind::ContinueGame]
+        &[
+            GameEventKind::StartNewGame,
+            GameEventKind::ContinueGame,
+            GameEventKind::Lifecycle,
+        ]
     }
 
     fn resolve(
@@ -56,6 +60,10 @@ impl DomainEventResolver for LifecycleResolver {
             GameEvent::ContinueGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ContinueSetup));
+            }
+            GameEvent::Lifecycle(LifecycleEvent::ContinueSetup) => {
+                Self::setup_continue_events(ctx.data, out);
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
         }
@@ -217,8 +225,4 @@ impl LifecycleResolver {
             Ok(false) | Err(_) => Self::setup_new_game_events(data, out),
         }
     }
-}
-
-pub fn emit_continue_setup_events(data: &GameData, out: &mut Vec<GameEvent>) {
-    LifecycleResolver::setup_continue_events(data, out);
 }

@@ -76,7 +76,7 @@ pub fn resolve_tick(
         if enemy_distance(next_x, next_y, player_x, player_y) <= 1 && next_attack_cooldown == 0 {
             let raw_damage = enemy.data.atk;
             next_attack_cooldown = ENEMY_ATTACK_COOLDOWN;
-            let actual_damage = (raw_damage - player_def / 2).max(1);
+            let actual_damage = raw_damage.saturating_sub(player_def / 2).max(1);
             damage_taken += actual_damage;
             if !player_hit_flash_started {
                 player_hit_flash_started = true;
@@ -343,7 +343,7 @@ fn next_enemy_position(
     };
 
     let new_x = if dx != 0 {
-        Some((enemy.x as i32 + dx) as usize)
+        Some((enemy.x as i32 + dx).max(0) as usize)
     } else {
         None
     };
@@ -354,7 +354,7 @@ fn next_enemy_position(
         return (nx, enemy.y);
     }
     let new_y = if dy != 0 {
-        Some((enemy.y as i32 + dy) as usize)
+        Some((enemy.y as i32 + dy).max(0) as usize)
     } else {
         None
     };
@@ -455,8 +455,8 @@ fn resolve_player_attack_action(
 
     for enemy in &state.enemies {
         if enemy.x == tx && enemy.y == ty && enemy.hp > 0 {
-            let damage = (player_atk - enemy.data.def / 2).max(1);
-            let hp = (enemy.hp - damage).max(0);
+            let damage = player_atk.saturating_sub(enemy.data.def / 2).max(1);
+            let hp = enemy.hp.saturating_sub(damage).max(0);
             out.push(GameEvent::Combat(CombatEvent::EnemyHpSet {
                 enemy_id: enemy.instance_id,
                 hp,
@@ -582,8 +582,8 @@ fn damage_enemy_at(
             if current_hp <= 0 {
                 return None;
             }
-            let actual_damage = (damage - enemy.data.def / 2).max(1);
-            let hp = (current_hp - actual_damage).max(0);
+            let actual_damage = damage.saturating_sub(enemy.data.def / 2).max(1);
+            let hp = current_hp.saturating_sub(actual_damage).max(0);
             hp_updates.retain(|(id, _)| *id != enemy.instance_id);
             hp_updates.push((enemy.instance_id, hp));
             out.push(GameEvent::Combat(CombatEvent::EnemyHpSet {

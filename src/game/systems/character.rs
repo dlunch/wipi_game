@@ -36,10 +36,10 @@ impl DomainEventResolver for CharacterMutationResolver {
         let leader = &ctx.world.ok_or_else(|| anyhow!("No active world"))?.leader;
 
         match event {
-            GameEvent::UseInventorySelected(index) => leader.resolve_use_item(*index, out),
-            GameEvent::ShopBuyItem(item) => leader.resolve_shop_buy(item, out),
-            GameEvent::ShopSellSelected(index) => leader.resolve_shop_sell(*index, out),
-            GameEvent::RestoreHpMp => leader.resolve_restore_hp_mp(out),
+            GameEvent::UseInventorySelected(index) => resolve_use_item(leader, *index, out),
+            GameEvent::ShopBuyItem(item) => resolve_shop_buy(leader, item, out),
+            GameEvent::ShopSellSelected(index) => resolve_shop_sell(leader, *index, out),
+            GameEvent::RestoreHpMp => resolve_restore_hp_mp(leader, out),
             GameEvent::ApplyDialogAction(action) => {
                 resolve_dialog_action(ctx, leader, action, out)?
             }
@@ -49,98 +49,100 @@ impl DomainEventResolver for CharacterMutationResolver {
     }
 }
 
-impl CharacterState {
-    fn resolve_use_item(&self, index: usize, out: &mut Vec<GameEvent>) {
-        if index >= self.inventory.len() {
-            return;
+fn resolve_use_item(character: &CharacterState, index: usize, out: &mut Vec<GameEvent>) {
+    if index >= character.inventory.len() {
+        return;
+    }
+
+    let mut stats = character.stats.clone();
+    let mut inventory = character.inventory.clone();
+    let mut equipped_weapon = character.equipped_weapon;
+    let mut equipped_armor = character.equipped_armor;
+    let mut equipped_accessory = character.equipped_accessory;
+
+    let item = &inventory[index];
+    match item.kind {
+        ItemKind::Consumable => {
+            stats.heal(item.hp_restore());
+            inventory.remove(index);
+            fix_equipped_after_remove(&mut equipped_weapon, index);
+            fix_equipped_after_remove(&mut equipped_armor, index);
+            fix_equipped_after_remove(&mut equipped_accessory, index);
         }
-
-        let mut stats = self.stats.clone();
-        let mut inventory = self.inventory.clone();
-        let mut equipped_weapon = self.equipped_weapon;
-        let mut equipped_armor = self.equipped_armor;
-        let mut equipped_accessory = self.equipped_accessory;
-
-        let item = &inventory[index];
-        match item.kind {
-            ItemKind::Consumable => {
-                stats.heal(item.hp_restore());
-                inventory.remove(index);
-                fix_equipped_after_remove(&mut equipped_weapon, index);
-                fix_equipped_after_remove(&mut equipped_armor, index);
-                fix_equipped_after_remove(&mut equipped_accessory, index);
-            }
-            ItemKind::Weapon => {
-                equipped_weapon = Some(index);
-            }
-            ItemKind::Armor => {
-                equipped_armor = Some(index);
-            }
-            ItemKind::Accessory => {
-                equipped_accessory = Some(index);
-            }
+        ItemKind::Weapon => {
+            equipped_weapon = Some(index);
         }
-
-        emit_character_events(
-            stats,
-            inventory,
-            equipped_weapon,
-            equipped_armor,
-            equipped_accessory,
-            out,
-        );
-    }
-
-    fn resolve_shop_buy(&self, item: &Item, out: &mut Vec<GameEvent>) {
-        let mut stats = self.stats.clone();
-        stats.gold = (stats.gold - item.price).max(0);
-
-        let mut inventory = self.inventory.clone();
-        inventory.push(item.clone());
-
-        emit_character_events(
-            stats,
-            inventory,
-            self.equipped_weapon,
-            self.equipped_armor,
-            self.equipped_accessory,
-            out,
-        );
-    }
-
-    fn resolve_shop_sell(&self, index: usize, out: &mut Vec<GameEvent>) {
-        if index >= self.inventory.len() {
-            return;
+        ItemKind::Armor => {
+            equipped_armor = Some(index);
         }
-
-        let mut stats = self.stats.clone();
-        let mut inventory = self.inventory.clone();
-        let sold = inventory.remove(index);
-        stats.gold += sold.price / 2;
-
-        let mut equipped_weapon = self.equipped_weapon;
-        let mut equipped_armor = self.equipped_armor;
-        let mut equipped_accessory = self.equipped_accessory;
-        fix_equipped_after_remove(&mut equipped_weapon, index);
-        fix_equipped_after_remove(&mut equipped_armor, index);
-        fix_equipped_after_remove(&mut equipped_accessory, index);
-
-        emit_character_events(
-            stats,
-            inventory,
-            equipped_weapon,
-            equipped_armor,
-            equipped_accessory,
-            out,
-        );
+        ItemKind::Accessory => {
+            equipped_accessory = Some(index);
+        }
     }
 
-    fn resolve_restore_hp_mp(&self, out: &mut Vec<GameEvent>) {
-        let mut stats = self.stats.clone();
-        stats.current_hp = stats.max_hp;
-        stats.current_mp = stats.max_mp;
-        out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
+    emit_character_events(
+        stats,
+        inventory,
+        equipped_weapon,
+        equipped_armor,
+        equipped_accessory,
+        out,
+    );
+}
+
+fn resolve_shop_buy(character: &CharacterState, item: &Item, out: &mut Vec<GameEvent>) {
+    if character.stats.gold < item.price {
+        return;
     }
+
+    let mut stats = character.stats.clone();
+    stats.gold -= item.price;
+
+    let mut inventory = character.inventory.clone();
+    inventory.push(item.clone());
+
+    emit_character_events(
+        stats,
+        inventory,
+        character.equipped_weapon,
+        character.equipped_armor,
+        character.equipped_accessory,
+        out,
+    );
+}
+
+fn resolve_shop_sell(character: &CharacterState, index: usize, out: &mut Vec<GameEvent>) {
+    if index >= character.inventory.len() {
+        return;
+    }
+
+    let mut stats = character.stats.clone();
+    let mut inventory = character.inventory.clone();
+    let sold = inventory.remove(index);
+    stats.gold += sold.price / 2;
+
+    let mut equipped_weapon = character.equipped_weapon;
+    let mut equipped_armor = character.equipped_armor;
+    let mut equipped_accessory = character.equipped_accessory;
+    fix_equipped_after_remove(&mut equipped_weapon, index);
+    fix_equipped_after_remove(&mut equipped_armor, index);
+    fix_equipped_after_remove(&mut equipped_accessory, index);
+
+    emit_character_events(
+        stats,
+        inventory,
+        equipped_weapon,
+        equipped_armor,
+        equipped_accessory,
+        out,
+    );
+}
+
+fn resolve_restore_hp_mp(character: &CharacterState, out: &mut Vec<GameEvent>) {
+    let mut stats = character.stats.clone();
+    stats.current_hp = stats.max_hp;
+    stats.current_mp = stats.max_mp;
+    out.push(GameEvent::World(WorldEvent::SetPlayerStats(stats)));
 }
 
 fn resolve_dialog_action(

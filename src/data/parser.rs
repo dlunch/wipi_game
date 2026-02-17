@@ -258,7 +258,7 @@ pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
             && !line.starts_with('#')
             && let Some(ref mut builder) = current
         {
-            builder.add_line(line);
+            builder.add_line(line)?;
         }
     }
 
@@ -405,17 +405,17 @@ impl DialogBuilder {
         }
     }
 
-    fn add_line(&mut self, line: &str) {
+    fn add_line(&mut self, line: &str) -> Result<()> {
         let parts: Vec<&str> = line.splitn(3, ':').collect();
 
         let (condition, action, text) = if parts.len() == 3 {
             (
-                Self::parse_condition(parts[0]),
-                Self::parse_action(parts[1]),
+                Self::parse_condition(parts[0])?,
+                Self::parse_action(parts[1])?,
                 parts[2].to_string(),
             )
         } else if parts.len() == 2 {
-            (None, Self::parse_action(parts[0]), parts[1].to_string())
+            (None, Self::parse_action(parts[0])?, parts[1].to_string())
         } else {
             (None, None, line.to_string())
         };
@@ -425,53 +425,63 @@ impl DialogBuilder {
             condition,
             action,
         });
+        Ok(())
     }
 
-    fn parse_condition(s: &str) -> Option<DialogCondition> {
+    fn parse_condition(s: &str) -> Result<Option<DialogCondition>> {
         let parts: Vec<&str> = s.split('=').collect();
         if parts.len() != 2 {
-            return None;
+            return Ok(None);
         }
         match parts[0] {
-            "HAS_QUEST" => Some(DialogCondition::HasQuest(parts[1].to_string())),
-            "QUEST_DONE" => Some(DialogCondition::QuestComplete(parts[1].to_string())),
-            "HAS_ITEM" => Some(DialogCondition::HasItem(parts[1].to_string())),
-            "HAS_GOLD" => parts[1].parse().ok().map(DialogCondition::HasGold),
-            _ => None,
+            "HAS_QUEST" => Ok(Some(DialogCondition::HasQuest(parts[1].to_string()))),
+            "QUEST_DONE" => Ok(Some(DialogCondition::QuestComplete(parts[1].to_string()))),
+            "HAS_ITEM" => Ok(Some(DialogCondition::HasItem(parts[1].to_string()))),
+            "HAS_GOLD" => {
+                let amount = parse_int(parts[1], "HAS_GOLD amount", s)?;
+                Ok(Some(DialogCondition::HasGold(amount)))
+            }
+            _ => Ok(None),
         }
     }
 
-    fn parse_action(s: &str) -> Option<DialogAction> {
+    fn parse_action(s: &str) -> Result<Option<DialogAction>> {
         let parts: Vec<&str> = s.split('=').collect();
         if parts.is_empty() {
-            return None;
+            return Ok(None);
         }
         match parts[0] {
-            "GIVE_QUEST" => parts
+            "GIVE_QUEST" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::GiveQuest(id.to_string())),
-            "COMPLETE_QUEST" => parts
+                .map(|id| DialogAction::GiveQuest(id.to_string()))),
+            "COMPLETE_QUEST" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::CompleteQuest(id.to_string())),
-            "GIVE_ITEM" => parts
+                .map(|id| DialogAction::CompleteQuest(id.to_string()))),
+            "GIVE_ITEM" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::GiveItem(id.to_string())),
-            "TAKE_ITEM" => parts
+                .map(|id| DialogAction::GiveItem(id.to_string()))),
+            "TAKE_ITEM" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::TakeItem(id.to_string())),
-            "GIVE_GOLD" => parts
+                .map(|id| DialogAction::TakeItem(id.to_string()))),
+            "GIVE_GOLD" => {
+                let val = parts
+                    .get(1)
+                    .ok_or_else(|| anyhow!("GIVE_GOLD missing amount in: {s}"))?;
+                let amount = parse_int(val, "GIVE_GOLD amount", s)?;
+                Ok(Some(DialogAction::GiveGold(amount)))
+            }
+            "TAKE_GOLD" => {
+                let val = parts
+                    .get(1)
+                    .ok_or_else(|| anyhow!("TAKE_GOLD missing amount in: {s}"))?;
+                let amount = parse_int(val, "TAKE_GOLD amount", s)?;
+                Ok(Some(DialogAction::TakeGold(amount)))
+            }
+            "OPEN_SHOP" => Ok(parts
                 .get(1)
-                .and_then(|g| g.parse().ok())
-                .map(DialogAction::GiveGold),
-            "TAKE_GOLD" => parts
-                .get(1)
-                .and_then(|g| g.parse().ok())
-                .map(DialogAction::TakeGold),
-            "OPEN_SHOP" => parts
-                .get(1)
-                .map(|id| DialogAction::OpenShop(id.to_string())),
-            "HEAL" => Some(DialogAction::Heal),
-            _ => None,
+                .map(|id| DialogAction::OpenShop(id.to_string()))),
+            "HEAL" => Ok(Some(DialogAction::Heal)),
+            _ => Ok(None),
         }
     }
 

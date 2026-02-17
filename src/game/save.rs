@@ -28,10 +28,13 @@ pub fn load_game(
 ) -> Result<bool> {
     let db = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
         .map_err(|e| anyhow!("failed to open save db: {:?}", e))?;
-    let mut buf = [0u8; 4096];
+    let mut buf = [0u8; 8192];
     let len = db
         .read(&mut buf)
         .map_err(|e| anyhow!("failed to read save db: {:?}", e))?;
+    if len >= buf.len() {
+        return Err(anyhow!("save data too large ({} bytes)", len));
+    }
     let data = str::from_utf8(&buf[..len])?;
     Ok(save_schema::deserialize(
         data,

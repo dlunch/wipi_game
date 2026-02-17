@@ -27,8 +27,8 @@ pub fn resolve_world_tick(
     let map = data.find_map(&player.current_map_id);
     let movement_event = resolve_tick_with_occupancy(state, player, session, map);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
-        let next_x = (player.x as i32 + dx) as usize;
-        let next_y = (player.y as i32 + dy) as usize;
+        let next_x = (player.x as i32 + dx).max(0) as usize;
+        let next_y = (player.y as i32 + dy).max(0) as usize;
         tile_event_for_position(&player.current_map_id, next_x, next_y, data)
     } else {
         None
@@ -82,8 +82,8 @@ fn resolve_tick_with_occupancy(
 
     next_state.move_cooldown = MOVE_COOLDOWN;
     let mut step = None;
-    let new_x = (player.x as i32 + dx) as usize;
-    let new_y = (player.y as i32 + dy) as usize;
+    let new_x = (player.x as i32 + dx).max(0) as usize;
+    let new_y = (player.y as i32 + dy).max(0) as usize;
 
     if player.can_move(map, dx, dy) && !session.is_occupied_on_map(map, new_x, new_y) {
         step = Some((dx, dy));
@@ -93,23 +93,6 @@ fn resolve_tick_with_occupancy(
         next_state,
         facing: Some((dx, dy)),
         step,
-    }
-}
-
-impl WorldState {
-    fn is_occupied_on_map(&self, map: &Map, x: usize, y: usize) -> bool {
-        if x >= map.width || y >= map.height {
-            return true;
-        }
-        self.is_occupied(x, y)
-    }
-}
-
-impl CharacterState {
-    fn can_move(&self, map: &Map, dx: i32, dy: i32) -> bool {
-        let new_x = (self.x as i32 + dx) as usize;
-        let new_y = (self.y as i32 + dy) as usize;
-        map.get_tile(new_x, new_y).is_passable()
     }
 }
 

@@ -6,10 +6,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use super::save::save_game;
-use crate::game::systems::lifecycle::emit_continue_setup_events;
-use crate::game::{
-    GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent, TransitionEvent, WorldState,
-};
+use crate::game::{GameData, GameEvent, GameState, LoadingEvent, WorldState};
 
 pub fn apply_effects(
     state: &GameState,
@@ -48,10 +45,6 @@ pub fn apply_effects(
         GameEvent::SaveWorld => {
             let world = world.ok_or_else(|| anyhow!("No active world"))?;
             save_game(world)?;
-        }
-        GameEvent::Lifecycle(LifecycleEvent::ContinueSetup) => {
-            emit_continue_setup_events(data.as_ref(), &mut out);
-            out.push(GameEvent::Transition(TransitionEvent::ToExplore));
         }
         GameEvent::Exit(code) => {
             wipi::kernel::exit(*code);
