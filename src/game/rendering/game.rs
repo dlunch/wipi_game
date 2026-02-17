@@ -487,9 +487,26 @@ fn apply_explore_render_event(
 
 pub fn apply_render_event(
     render_state: &mut RenderState,
+    state: &GameState,
+    session: Option<&SessionState>,
+    ui: &UiState,
+    data: &Rc<GameData>,
     event: &GameEvent,
     render_fx: &RenderFxState,
 ) -> bool {
+    if matches!(
+        event,
+        GameEvent::Lifecycle(_)
+            | GameEvent::Loading(_)
+            | GameEvent::Transition(_)
+            | GameEvent::OpenDialogState(_)
+            | GameEvent::OpenShopState(_)
+            | GameEvent::ApplyDialogTransition(_)
+    ) {
+        *render_state = render_state_from_game_state(state, session, ui, data, render_fx);
+        return true;
+    }
+
     if let GameEvent::Loading(crate::game::LoadingEvent::Advance(step)) = event
         && let RenderState::Loading { step: render_step } = render_state
     {
@@ -774,7 +791,7 @@ pub fn apply_render_tick(render_state: &mut RenderState, render_fx: &RenderFxSta
     }
 }
 
-pub fn build_render_state(
+fn render_state_from_game_state(
     state: &GameState,
     session: Option<&SessionState>,
     ui: &UiState,
