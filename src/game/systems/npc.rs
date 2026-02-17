@@ -131,7 +131,7 @@ impl DomainEventResolver for NpcResolver {
                     .find_map(&s.leader.current_map_id)
                     .is_some_and(|map| map.peaceful);
                 if !is_peaceful && let Some(action) = fallback_action {
-                    out.push(GameEvent::Explore(ExploreEvent::UseAction(*action)));
+                    out.push(GameEvent::CombatPlayerAction(*action));
                 }
             }
             GameEvent::Explore(ExploreEvent::Npc(npc_event)) => match npc_event {
