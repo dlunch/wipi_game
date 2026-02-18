@@ -40,7 +40,7 @@ fn try_interact_npc(
     match npc.npc_type {
         NpcType::Healer => {
             let dialog = data.find_dialog(&npc.dialog_id)?;
-            let lines = filter_dialog_lines(world, leader_id, dialog);
+            let lines = filter_dialog_lines(world, leader_id, dialog)?;
             if !lines.is_empty() {
                 return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
                     npc_name: npc.name.clone(),
@@ -65,7 +65,7 @@ fn try_interact_npc(
     }
 
     let dialog = data.find_dialog(&npc.dialog_id)?;
-    let lines = filter_dialog_lines(world, leader_id, dialog);
+    let lines = filter_dialog_lines(world, leader_id, dialog)?;
     if !lines.is_empty() {
         return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
             npc_name: npc.name.clone(),
@@ -77,19 +77,25 @@ fn try_interact_npc(
     Ok(None)
 }
 
-fn filter_dialog_lines(world: &WorldState, leader_id: u32, dialog: &Dialog) -> Vec<DialogLine> {
-    dialog
-        .lines
-        .iter()
-        .filter(|line| match &line.condition {
+fn filter_dialog_lines(
+    world: &WorldState,
+    leader_id: u32,
+    dialog: &Dialog,
+) -> Result<Vec<DialogLine>> {
+    let mut out = Vec::with_capacity(dialog.lines.len());
+    for line in &dialog.lines {
+        let include = match &line.condition {
             None => true,
             Some(DialogCondition::HasQuest(id)) => world.has_quest(id),
             Some(DialogCondition::QuestComplete(id)) => world.is_quest_complete(id),
-            Some(DialogCondition::HasItem(id)) => world.has_item(leader_id, id),
-            Some(DialogCondition::HasGold(amount)) => world.gold_amount(leader_id) >= *amount,
-        })
-        .cloned()
-        .collect()
+            Some(DialogCondition::HasItem(id)) => world.has_item(leader_id, id)?,
+            Some(DialogCondition::HasGold(amount)) => world.gold_amount(leader_id)? >= *amount,
+        };
+        if include {
+            out.push(line.clone());
+        }
+    }
+    Ok(out)
 }
 
 struct NpcResolver;

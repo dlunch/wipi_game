@@ -103,7 +103,7 @@ fn resolve_shop_buy(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let item = data.find_item(item_id)?;
-    if world.gold_amount(leader_id) < item.price {
+    if world.gold_amount(leader_id)? < item.price {
         push_soft_error(out, "Not enough gold");
         return Ok(());
     }

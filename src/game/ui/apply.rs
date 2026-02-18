@@ -284,10 +284,17 @@ fn apply_shop_input(
                         .map(|state| state.items.as_slice())
                         .unwrap_or(&[]);
                     if let Some(item) = shop_items.get(ui.shop.selected).cloned() {
-                        if s.gold_amount(leader_id) >= item.price {
-                            out.push(GameEvent::ShopBuyItem(item.id));
-                        } else {
-                            out.push(GameEvent::SoftError(String::from("Not enough gold")));
+                        match s.gold_amount(leader_id) {
+                            Ok(gold) => {
+                                if gold >= item.price {
+                                    out.push(GameEvent::ShopBuyItem(item.id));
+                                } else {
+                                    out.push(GameEvent::SoftError(String::from("Not enough gold")));
+                                }
+                            }
+                            Err(_) => {
+                                out.push(GameEvent::SoftError(String::from("No active world")));
+                            }
                         }
                     } else {
                         out.push(GameEvent::SoftError(String::from("Not enough gold")));

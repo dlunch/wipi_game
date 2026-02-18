@@ -4,6 +4,8 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Direction, ItemKind, NpcType, SkillType, Tile};
 use crate::game::state::{TimedKind, TimedState};
 use crate::game::ui::{
@@ -198,9 +200,9 @@ pub(super) fn skill_cooldowns_from_timed(timed: &TimedState) -> [u32; 3] {
 pub(super) fn interaction_hint_from_world(
     world: &WorldState,
     data: &Rc<GameData>,
-) -> Option<String> {
-    let leader = world.leader_entity().ok()?;
-    let map = data.find_map(&leader.map_id).ok()?;
+) -> Result<Option<String>> {
+    let leader = world.leader_entity()?;
+    let map = data.find_map(&leader.map_id)?;
     let (tx, ty) = leader.facing.apply(leader.x, leader.y);
 
     if let Some(npc) = data.find_npc_at(&leader.map_id, tx, ty) {
@@ -209,16 +211,16 @@ pub(super) fn interaction_hint_from_world(
             NpcType::Healer => "OK: Heal",
             NpcType::QuestGiver | NpcType::Villager => "OK: Talk",
         };
-        return Some(String::from(text));
+        return Ok(Some(String::from(text)));
     }
 
     let text = match map.get_tile(tx, ty) {
         Tile::Treasure => "OK: Open chest",
         Tile::Exit => "Move: Exit",
         Tile::Dungeon => "Move: Enter dungeon",
-        _ => return None,
+        _ => return Ok(None),
     };
-    Some(String::from(text))
+    Ok(Some(String::from(text)))
 }
 
 fn item_name_or_id(item_id: &str, item_name: Option<&str>) -> String {
@@ -242,22 +244,17 @@ impl ExploreRender {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> Option<Self> {
-        let leader_id = world.leader_id().ok()?;
-        let leader = world.leader_entity().ok()?;
-        let leader_combatant = world.combat.combatant(leader_id).ok()?;
-        let map = data.find_map(&leader.map_id).ok()?;
+    ) -> Result<Self> {
+        let leader_id = world.leader_id()?;
+        let leader = world.leader_entity()?;
+        let leader_combatant = world.combat.combatant(leader_id)?;
+        let map = data.find_map(&leader.map_id)?;
 
         let mut enemies = Vec::with_capacity(world.combat.enemies.len());
         let mut enemy_indices = BTreeMap::new();
         for enemy in &world.combat.enemies {
-            let Ok(entity) = world.entity(enemy.entity_id) else {
-                continue;
-            };
-            let name = data
-                .find_enemy(&enemy.source_enemy_id)
-                .map(|enemy_data| enemy_data.name.clone())
-                .unwrap_or_else(|_| enemy.source_enemy_id.clone());
+            let entity = world.entity(enemy.entity_id)?;
+            let name = data.find_enemy(&enemy.source_enemy_id)?.name.clone();
             let enemy_index = enemies.len();
             enemies.push(EnemyRender {
                 enemy_id: enemy.entity_id,
@@ -278,7 +275,7 @@ impl ExploreRender {
             .find(|enemy| enemy.hp > 0)
             .map(|enemy| enemy.name.clone());
 
-        Some(Self {
+        Ok(Self {
             data: Rc::clone(data),
             map_id: leader.map_id.clone(),
             player_x: leader.x,
@@ -299,8 +296,8 @@ impl ExploreRender {
                 world,
                 data,
                 ui.quest_log.tracked_quest_id.as_deref(),
-            ),
-            interaction_hint: interaction_hint_from_world(world, data),
+            )?,
+            interaction_hint: interaction_hint_from_world(world, data)?,
             first_live_enemy_name,
             opened_treasures: world.opened_treasures.clone(),
             enemies,
@@ -366,49 +363,45 @@ impl TrackedQuestRender {
         world: &WorldState,
         data: &Rc<GameData>,
         tracked_quest_id: Option<&str>,
-    ) -> Option<Self> {
-        let tracked_quest_id = tracked_quest_id?;
-        let progress = world
+    ) -> Result<Option<Self>> {
+        let Some(tracked_quest_id) = tracked_quest_id else {
+            return Ok(None);
+        };
+        let Some(progress) = world
             .quests
             .iter()
-            .find(|quest| quest.quest_id == tracked_quest_id && !quest.rewarded)?;
-        let quest_data = data.find_quest(&progress.quest_id).ok()?;
+            .find(|quest| quest.quest_id == tracked_quest_id && !quest.rewarded)
+        else {
+            return Ok(None);
+        };
+        let quest_data = data.find_quest(&progress.quest_id)?;
 
-        Some(Self {
+        Ok(Some(Self {
             name: quest_data.name.clone(),
             current_count: progress.current_count as u32,
             target_count: quest_data.target_count as u32,
             completed: progress.completed,
-        })
+        }))
     }
 }
 
 impl InventoryRender {
-    pub(super) fn from_world(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> Self {
-        let Ok(leader) = world.leader_entity() else {
-            return Self {
-                items: Vec::new(),
-                equipped_weapon: None,
-                equipped_armor: None,
-                equipped_accessory: None,
-                selected: 0,
-                scroll: 0,
-            };
-        };
+    pub(super) fn from_world(
+        world: &WorldState,
+        ui: &UiState,
+        data: &Rc<GameData>,
+    ) -> Result<Self> {
+        let leader = world.leader_entity()?;
 
         let mut items = Vec::with_capacity(leader.inventory.len());
         for stack in &leader.inventory {
-            let item = data.find_item(&stack.item_id).ok();
-            let name = stacked_item_label(
-                &stack.item_id,
-                stack.amount,
-                item.map(|item| item.name.as_str()),
-            );
-            let kind = item.map(|item| item.kind).unwrap_or(ItemKind::Consumable);
+            let item = data.find_item(&stack.item_id)?;
+            let name = stacked_item_label(&stack.item_id, stack.amount, Some(item.name.as_str()));
+            let kind = item.kind;
             items.push(InventoryItemRender { name, kind });
         }
 
-        Self {
+        Ok(Self {
             items,
             equipped_weapon: leader.loadout.weapon,
             equipped_armor: leader.loadout.armor,
@@ -419,17 +412,17 @@ impl InventoryRender {
                 leader.inventory.len(),
                 INVENTORY_VISIBLE_ITEMS,
             ),
-        }
+        })
     }
 }
 
 impl StatsRender {
-    pub(super) fn from_world(world: &WorldState) -> Option<Self> {
-        let leader_id = world.leader_id().ok()?;
-        let leader = world.leader_entity().ok()?;
-        let combatant = world.combat.combatant(leader_id).ok()?;
+    pub(super) fn from_world(world: &WorldState) -> Result<Self> {
+        let leader_id = world.leader_id()?;
+        let leader = world.leader_entity()?;
+        let combatant = world.combat.combatant(leader_id)?;
 
-        Some(Self {
+        Ok(Self {
             hp: combatant.stats.current_hp as u32,
             max_hp: combatant.stats.max_hp as u32,
             mp: combatant.stats.current_mp as u32,
@@ -438,7 +431,7 @@ impl StatsRender {
             atk: combatant.stats.atk as u32,
             def: combatant.stats.def as u32,
             exp: leader.stat.exp as u32,
-            gold: world.gold_amount(leader_id) as u32,
+            gold: world.gold_amount(leader_id)? as u32,
         })
     }
 }
@@ -449,10 +442,14 @@ impl ShopRender {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> Option<Self> {
-        let leader_id = world.leader_id().ok()?;
-        let leader = world.leader_entity().ok()?;
-        let shop_state = ui.shop.state.as_ref()?;
+    ) -> Result<Self> {
+        let leader_id = world.leader_id()?;
+        let leader = world.leader_entity()?;
+        let shop_state = ui
+            .shop
+            .state
+            .as_ref()
+            .ok_or_else(|| anyhow!("No shop state"))?;
 
         let buy_items: Vec<ShopItemRender> = shop_state
             .items
@@ -467,12 +464,9 @@ impl ShopRender {
             if stack.item_id == GOLD_ITEM_ID {
                 continue;
             }
-            let item = data.find_item(&stack.item_id).ok();
-            let (name, sell_price) = if let Some(item) = item {
-                (item.name.clone(), item.price / 2)
-            } else {
-                (item_name_or_id(&stack.item_id, None), 0)
-            };
+            let item = data.find_item(&stack.item_id)?;
+            let name = item.name.clone();
+            let sell_price = item.price / 2;
             for _ in 0..stack.amount.max(0) {
                 player_inventory.push(ShopItemRender {
                     name: name.clone(),
@@ -486,13 +480,13 @@ impl ShopRender {
             ShopMode::Sell | ShopMode::ConfirmSell => player_inventory.len(),
         };
 
-        Some(Self {
+        Ok(Self {
             shop_name: shop_state.shop.name.clone(),
             mode: ui.shop.mode,
             selected: ui.shop.selected,
             scroll: scroll_for_selection(ui.shop.selected, total, SHOP_VISIBLE_ITEMS),
             buy_items,
-            player_gold: world.gold_amount(leader_id),
+            player_gold: world.gold_amount(leader_id)?,
             player_inventory,
             purchase_notice_timer: render_fx.shop_purchase_notice_timer(),
         })
@@ -500,28 +494,31 @@ impl ShopRender {
 }
 
 impl QuestLogRender {
-    pub(super) fn from_world(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> Self {
+    pub(super) fn from_world(
+        world: &WorldState,
+        ui: &UiState,
+        data: &Rc<GameData>,
+    ) -> Result<Self> {
         let mut quests = Vec::with_capacity(world.quests.len());
         for quest in &world.quests {
             if quest.rewarded {
                 continue;
             }
-            if let Ok(quest_data) = data.find_quest(&quest.quest_id) {
-                quests.push(QuestEntryRender {
-                    quest_id: quest.quest_id.clone(),
-                    name: quest_data.name.clone(),
-                    description: quest_data.description.clone(),
-                    current_count: quest.current_count as u32,
-                    target_count: quest_data.target_count as u32,
-                    completed: quest.completed,
-                });
-            }
+            let quest_data = data.find_quest(&quest.quest_id)?;
+            quests.push(QuestEntryRender {
+                quest_id: quest.quest_id.clone(),
+                name: quest_data.name.clone(),
+                description: quest_data.description.clone(),
+                current_count: quest.current_count as u32,
+                target_count: quest_data.target_count as u32,
+                completed: quest.completed,
+            });
         }
 
-        Self {
+        Ok(Self {
             quests,
             selected: ui.quest_log.selected,
             tracked_quest_id: ui.quest_log.tracked_quest_id.clone(),
-        }
+        })
     }
 }

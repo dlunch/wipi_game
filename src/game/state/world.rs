@@ -88,31 +88,25 @@ impl WorldState {
             .any(|(m, tx, ty)| m == map_id && *tx == x && *ty == y)
     }
 
-    pub fn has_item(&self, entity_id: EntityId, item_id: &str) -> bool {
-        self.entity(entity_id)
-            .map(|entity| {
-                entity
-                    .inventory
-                    .iter()
-                    .any(|stack| stack.item_id == item_id && stack.amount > 0)
-            })
-            .unwrap_or(false)
+    pub fn has_item(&self, entity_id: EntityId, item_id: &str) -> Result<bool> {
+        let entity = self.entity(entity_id)?;
+        Ok(entity
+            .inventory
+            .iter()
+            .any(|stack| stack.item_id == item_id && stack.amount > 0))
     }
 
-    pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> i32 {
-        self.entity(entity_id)
-            .map(|entity| {
-                entity
-                    .inventory
-                    .iter()
-                    .find_map(|stack| (stack.item_id == item_id).then_some(stack.amount))
-                    .unwrap_or(0)
-                    .max(0)
-            })
+    pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> Result<i32> {
+        let entity = self.entity(entity_id)?;
+        Ok(entity
+            .inventory
+            .iter()
+            .find_map(|stack| (stack.item_id == item_id).then_some(stack.amount))
             .unwrap_or(0)
+            .max(0))
     }
 
-    pub fn gold_amount(&self, entity_id: EntityId) -> i32 {
+    pub fn gold_amount(&self, entity_id: EntityId) -> Result<i32> {
         self.item_amount(entity_id, GOLD_ITEM_ID)
     }
 

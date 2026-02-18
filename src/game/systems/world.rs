@@ -313,7 +313,7 @@ fn resolve_revive_player(
     if combatant.stats.current_hp > 0 {
         return Ok(());
     }
-    let current_gold = world.gold_amount(leader_id);
+    let current_gold = world.gold_amount(leader_id)?;
     let gold_penalty = (current_gold / 10).max(10);
     out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
