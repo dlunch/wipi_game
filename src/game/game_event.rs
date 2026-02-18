@@ -5,10 +5,8 @@ use crate::data::Direction;
 use crate::game::state::{EntityId, EntityKind, TimedKind};
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub enum CombatEvent {
     SetActive(bool),
-    ClearAllies,
     ClearEnemies,
     RemoveEnemy(EntityId),
     MoveEnemy {
@@ -194,7 +192,6 @@ impl GameEvent {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub enum WorldEvent {
     CreateWorld,
     SetWorldMap(String),
@@ -206,7 +203,6 @@ pub enum WorldEvent {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub enum EntityEvent {
     SetLeaderEntity(EntityId),
     ClearCompanionEntities,
@@ -216,7 +212,6 @@ pub enum EntityEvent {
         kind: EntityKind,
         name: String,
     },
-    RemoveEntity(EntityId),
     SetEntityTransform {
         entity_id: EntityId,
         map_id: Option<String>,

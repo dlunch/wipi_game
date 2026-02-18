@@ -608,7 +608,6 @@ fn patch_explore_combat(
         }
         CombatEvent::SetCombatantAtk { .. } | CombatEvent::SetCombatantDef { .. } => false,
         CombatEvent::SetActive(_)
-        | CombatEvent::ClearAllies
         | CombatEvent::SetUpdateCounter(_)
         | CombatEvent::SetRespawnTimer(_)
         | CombatEvent::GrantKillReward { .. }

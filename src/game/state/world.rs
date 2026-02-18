@@ -303,21 +303,6 @@ impl WorldState {
                 let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
                 self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
-            EntityEvent::RemoveEntity(entity_id) => {
-                let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id);
-                self.entities.remove(*entity_id);
-                self.party.companion_ids.retain(|id| *id != *entity_id);
-                if self.party.leader_id == *entity_id {
-                    self.party.leader_id = 0;
-                }
-                self.combat
-                    .allies
-                    .retain(|ally| ally.entity_id != *entity_id);
-                self.combat
-                    .enemies
-                    .retain(|enemy| enemy.entity_id != *entity_id);
-                self.apply_enemy_occupancy_delta(previous_tile_index, None);
-            }
             EntityEvent::SetEntityTransform {
                 entity_id,
                 map_id,
@@ -490,7 +475,6 @@ impl WorldState {
                 self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
             CombatEvent::SetActive(_)
-            | CombatEvent::ClearAllies
             | CombatEvent::SetCombatantMaxHp { .. }
             | CombatEvent::SetCombatantMaxMp { .. }
             | CombatEvent::SetCombatantCurrentMp { .. }

@@ -129,9 +129,6 @@ impl CombatState {
             CombatEvent::SetActive(active) => {
                 self.active = *active;
             }
-            CombatEvent::ClearAllies => {
-                self.allies.clear();
-            }
             CombatEvent::ClearEnemies => {
                 self.enemies.clear();
             }
