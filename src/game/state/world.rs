@@ -4,13 +4,15 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
+use crate::data::Direction;
 use crate::data::QuestProgress;
 use crate::game::state::{
     AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
     EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
 };
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementState, WorldEvent,
+    CombatEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
+    MovementState, WorldEvent,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -226,13 +228,43 @@ impl WorldState {
                 self.rebuild_npc_occupancy_for_map(data, map_id);
                 self.rebuild_enemy_occupancy();
             }
-            WorldEvent::SetParty(party) => {
-                self.party = party.clone();
+            WorldEvent::SetLeaderEntity(entity_id) => {
+                self.party.leader_id = *entity_id;
                 self.sync_allies_with_party();
             }
-            WorldEvent::UpsertEntity(entity) => {
-                self.entities.upsert(entity.clone());
-                self.sync_combat_entry_for_entity(data, entity.id);
+            WorldEvent::ClearCompanionEntities => {
+                self.party.companion_ids.clear();
+                self.sync_allies_with_party();
+            }
+            WorldEvent::AddCompanionEntity(entity_id) => {
+                if !self.party.companion_ids.contains(entity_id) {
+                    self.party.companion_ids.push(*entity_id);
+                }
+                self.sync_allies_with_party();
+            }
+            WorldEvent::CreateEntity {
+                entity_id,
+                kind,
+                name,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.kind = *kind;
+                    entity.name = name.clone();
+                } else {
+                    self.entities.upsert(EntityState {
+                        id: *entity_id,
+                        kind: *kind,
+                        name: name.clone(),
+                        map_id: String::new(),
+                        x: 0,
+                        y: 0,
+                        facing: Direction::Down,
+                        stat: Default::default(),
+                        inventory: Vec::new(),
+                        loadout: Default::default(),
+                    });
+                }
+                self.sync_combat_entry_for_entity(data, *entity_id);
                 self.sync_allies_with_party();
                 self.rebuild_enemy_occupancy();
             }
@@ -272,22 +304,86 @@ impl WorldState {
                     self.rebuild_enemy_occupancy();
                 }
             }
-            WorldEvent::SetEntityStat { entity_id, stat } => {
+            WorldEvent::SetEntityLevel { entity_id, level } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.stat = *stat;
+                    entity.stat.level = *level;
                 }
             }
-            WorldEvent::SetEntityInventory {
+            WorldEvent::SetEntityExp { entity_id, exp } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat.exp = *exp;
+                }
+            }
+            WorldEvent::SetEntityExpToNext {
                 entity_id,
-                inventory,
+                exp_to_next,
             } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.inventory = inventory.clone();
+                    entity.stat.exp_to_next = *exp_to_next;
                 }
             }
-            WorldEvent::SetEntityLoadout { entity_id, loadout } => {
+            WorldEvent::SetEntityBaseMaxHp {
+                entity_id,
+                base_max_hp,
+            } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.loadout = *loadout;
+                    entity.stat.base_max_hp = *base_max_hp;
+                }
+            }
+            WorldEvent::SetEntityBaseMaxMp {
+                entity_id,
+                base_max_mp,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat.base_max_mp = *base_max_mp;
+                }
+            }
+            WorldEvent::SetEntityBaseAtk {
+                entity_id,
+                base_atk,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat.base_atk = *base_atk;
+                }
+            }
+            WorldEvent::SetEntityBaseDef {
+                entity_id,
+                base_def,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat.base_def = *base_def;
+                }
+            }
+            WorldEvent::AddEntityExp { entity_id, amount } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.stat.add_exp(*amount);
+                }
+            }
+            WorldEvent::ClearEntityInventory { entity_id } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    entity.inventory.clear();
+                    entity.loadout.weapon = None;
+                    entity.loadout.armor = None;
+                    entity.loadout.accessory = None;
+                }
+            }
+            WorldEvent::SetEntityLoadoutSlot {
+                entity_id,
+                slot,
+                index,
+            } => {
+                if let Some(entity) = self.entities.get_mut(*entity_id) {
+                    match slot {
+                        LoadoutSlot::Weapon => {
+                            entity.loadout.weapon = *index;
+                        }
+                        LoadoutSlot::Armor => {
+                            entity.loadout.armor = *index;
+                        }
+                        LoadoutSlot::Accessory => {
+                            entity.loadout.accessory = *index;
+                        }
+                    }
                 }
             }
             WorldEvent::ChangeEntityItem {

@@ -1,12 +1,8 @@
 use alloc::boxed::Box;
 use alloc::string::String;
-use alloc::vec::Vec;
 
 use crate::data::Direction;
-use crate::game::state::{
-    CombatStatsSnapshot, EntityId, EntityStat, EntityState, ItemStack, LoadoutState, PartyState,
-    TimedKind,
-};
+use crate::game::state::{CombatStatsSnapshot, EntityId, EntityKind, TimedKind};
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -178,8 +174,14 @@ impl GameEvent {
 pub enum WorldEvent {
     CreateWorld,
     SetWorldMap(String),
-    SetParty(PartyState),
-    UpsertEntity(EntityState),
+    SetLeaderEntity(EntityId),
+    ClearCompanionEntities,
+    AddCompanionEntity(EntityId),
+    CreateEntity {
+        entity_id: EntityId,
+        kind: EntityKind,
+        name: String,
+    },
     RemoveEntity(EntityId),
     SetEntityTransform {
         entity_id: EntityId,
@@ -187,17 +189,45 @@ pub enum WorldEvent {
         position: Option<(usize, usize)>,
         facing: Option<Direction>,
     },
-    SetEntityStat {
+    SetEntityLevel {
         entity_id: EntityId,
-        stat: EntityStat,
+        level: i32,
     },
-    SetEntityInventory {
+    SetEntityExp {
         entity_id: EntityId,
-        inventory: Vec<ItemStack>,
+        exp: i32,
     },
-    SetEntityLoadout {
+    SetEntityExpToNext {
         entity_id: EntityId,
-        loadout: LoadoutState,
+        exp_to_next: i32,
+    },
+    SetEntityBaseMaxHp {
+        entity_id: EntityId,
+        base_max_hp: i32,
+    },
+    SetEntityBaseMaxMp {
+        entity_id: EntityId,
+        base_max_mp: i32,
+    },
+    SetEntityBaseAtk {
+        entity_id: EntityId,
+        base_atk: i32,
+    },
+    SetEntityBaseDef {
+        entity_id: EntityId,
+        base_def: i32,
+    },
+    AddEntityExp {
+        entity_id: EntityId,
+        amount: i32,
+    },
+    ClearEntityInventory {
+        entity_id: EntityId,
+    },
+    SetEntityLoadoutSlot {
+        entity_id: EntityId,
+        slot: LoadoutSlot,
+        index: Option<usize>,
     },
     ChangeEntityItem {
         entity_id: EntityId,
@@ -212,6 +242,13 @@ pub enum WorldEvent {
     },
     ResetMovement,
     ResetCombat,
+}
+
+#[derive(Clone, Copy)]
+pub enum LoadoutSlot {
+    Weapon,
+    Armor,
+    Accessory,
 }
 
 #[derive(Clone, Copy)]

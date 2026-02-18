@@ -5,9 +5,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::state::{
-    CombatStatsSnapshot, CombatantState, EntityKind, EntityStat, EntityState, TimedKind,
-};
+use crate::game::state::{CombatStatsSnapshot, CombatantState, EntityKind, EntityState, TimedKind};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
@@ -469,27 +467,48 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
 
             let entity_id = next_entity_id;
             next_entity_id = next_entity_id.wrapping_add(1).max(1);
-            let enemy_entity = EntityState {
-                id: entity_id,
+            out.push(GameEvent::World(WorldEvent::CreateEntity {
+                entity_id,
                 kind: EntityKind::Enemy,
                 name: enemy_data.name.clone(),
-                map_id: map.id.clone(),
-                x,
-                y,
-                facing: Direction::Down,
-                stat: EntityStat {
-                    level: 1,
-                    exp: 0,
-                    exp_to_next: 100,
-                    base_max_hp: enemy_data.hp,
-                    base_max_mp: 0,
-                    base_atk: enemy_data.atk,
-                    base_def: enemy_data.def,
-                },
-                inventory: Vec::new(),
-                loadout: Default::default(),
-            };
-            out.push(GameEvent::World(WorldEvent::UpsertEntity(enemy_entity)));
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+                entity_id,
+                map_id: Some(map.id.clone()),
+                position: Some((x, y)),
+                facing: Some(Direction::Down),
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityLevel {
+                entity_id,
+                level: 1,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityExp {
+                entity_id,
+                exp: 0,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityExpToNext {
+                entity_id,
+                exp_to_next: 100,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxHp {
+                entity_id,
+                base_max_hp: enemy_data.hp,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxMp {
+                entity_id,
+                base_max_mp: 0,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityBaseAtk {
+                entity_id,
+                base_atk: enemy_data.atk,
+            }));
+            out.push(GameEvent::World(WorldEvent::SetEntityBaseDef {
+                entity_id,
+                base_def: enemy_data.def,
+            }));
+            out.push(GameEvent::World(WorldEvent::ClearEntityInventory {
+                entity_id,
+            }));
             out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
                 entity_id,
                 stats: CombatStatsSnapshot {

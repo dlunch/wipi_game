@@ -6,7 +6,9 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, ItemKind};
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{CombatEvent, GameData, GameEvent, GameEventKind, WorldEvent, WorldState};
+use crate::game::{
+    CombatEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldEvent, WorldState,
+};
 
 struct CharacterMutationResolver;
 
@@ -80,7 +82,6 @@ fn resolve_use_item(
     let Some(item) = data.find_item(&stack.item_id) else {
         return;
     };
-    let mut loadout = leader.loadout;
     match item.kind {
         ItemKind::Consumable => {
             out.push(GameEvent::Combat(CombatEvent::Heal {
@@ -94,24 +95,24 @@ fn resolve_use_item(
             }));
         }
         ItemKind::Weapon => {
-            loadout.weapon = Some(index);
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
-                loadout,
+                slot: LoadoutSlot::Weapon,
+                index: Some(index),
             }));
         }
         ItemKind::Armor => {
-            loadout.armor = Some(index);
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
-                loadout,
+                slot: LoadoutSlot::Armor,
+                index: Some(index),
             }));
         }
         ItemKind::Accessory => {
-            loadout.accessory = Some(index);
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadout {
+            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
-                loadout,
+                slot: LoadoutSlot::Accessory,
+                index: Some(index),
             }));
         }
     }

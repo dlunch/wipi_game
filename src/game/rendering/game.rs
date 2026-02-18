@@ -158,11 +158,11 @@ impl RenderState {
                 if matches!(
                     event,
                     GameEvent::World(
-                        WorldEvent::SetEntityInventory { .. }
-                            | WorldEvent::SetEntityLoadout { .. }
+                        WorldEvent::ClearEntityInventory { .. }
+                            | WorldEvent::SetEntityLoadoutSlot { .. }
                             | WorldEvent::ChangeEntityItem { .. }
                             | WorldEvent::RemoveEntity(_)
-                            | WorldEvent::UpsertEntity(_)
+                            | WorldEvent::CreateEntity { .. }
                     ) | GameEvent::ShopSellSelected(_)
                         | GameEvent::ShopBuyItem(_)
                         | GameEvent::UseInventorySelected(_)
@@ -232,11 +232,11 @@ impl RenderState {
                 if matches!(
                     event,
                     GameEvent::World(
-                        WorldEvent::SetEntityInventory { .. }
-                            | WorldEvent::SetEntityLoadout { .. }
+                        WorldEvent::ClearEntityInventory { .. }
+                            | WorldEvent::SetEntityLoadoutSlot { .. }
                             | WorldEvent::ChangeEntityItem { .. }
                             | WorldEvent::RemoveEntity(_)
-                            | WorldEvent::UpsertEntity(_)
+                            | WorldEvent::CreateEntity { .. }
                     ) | GameEvent::ShopBuyItem(_)
                         | GameEvent::ShopSellSelected(_)
                         | GameEvent::OpenShopState(_)
@@ -648,16 +648,18 @@ fn apply_event_to_explore_render(
                 }
                 return false;
             }
-            WorldEvent::SetEntityStat { entity_id, .. } => {
+            WorldEvent::SetEntityLevel { entity_id, .. } => {
                 if Some(*entity_id) == leader_id
                     && let Some(leader) = world.leader_entity()
                 {
                     explore.level = leader.stat.level as u32;
                 }
             }
-            WorldEvent::UpsertEntity(entity) => {
-                if matches!(entity.kind, crate::game::EntityKind::Enemy) {
-                    upsert_enemy_render(explore, world, data, render_fx, entity.id);
+            WorldEvent::CreateEntity {
+                entity_id, kind, ..
+            } => {
+                if matches!(kind, crate::game::EntityKind::Enemy) {
+                    upsert_enemy_render(explore, world, data, render_fx, *entity_id);
                     enemy_changed = true;
                 }
             }
@@ -670,10 +672,19 @@ fn apply_event_to_explore_render(
                 explore.enemies.clear();
                 enemy_changed = true;
             }
-            WorldEvent::SetEntityInventory { .. }
-            | WorldEvent::SetEntityLoadout { .. }
+            WorldEvent::ClearEntityInventory { .. }
+            | WorldEvent::SetEntityLoadoutSlot { .. }
+            | WorldEvent::SetEntityExp { .. }
+            | WorldEvent::SetEntityExpToNext { .. }
+            | WorldEvent::SetEntityBaseMaxHp { .. }
+            | WorldEvent::SetEntityBaseMaxMp { .. }
+            | WorldEvent::SetEntityBaseAtk { .. }
+            | WorldEvent::SetEntityBaseDef { .. }
+            | WorldEvent::AddEntityExp { .. }
             | WorldEvent::ChangeEntityItem { .. }
-            | WorldEvent::SetParty(_)
+            | WorldEvent::SetLeaderEntity(_)
+            | WorldEvent::ClearCompanionEntities
+            | WorldEvent::AddCompanionEntity(_)
             | WorldEvent::CreateWorld
             | WorldEvent::ResetMovement => {}
         },

@@ -168,15 +168,9 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
     let Some(leader_id) = leader_id(world) else {
         return;
     };
-    let Some(entity) = world.entity(leader_id) else {
-        return;
-    };
-    let mut next_stat = entity.stat;
-    next_stat.add_exp(quest.reward_exp);
-
-    out.push(GameEvent::World(WorldEvent::SetEntityStat {
+    out.push(GameEvent::World(WorldEvent::AddEntityExp {
         entity_id: leader_id,
-        stat: next_stat,
+        amount: quest.reward_exp,
     }));
     out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
@@ -239,15 +233,9 @@ fn resolve_kill_reward(
     let Some(leader_id) = leader_id(world) else {
         return;
     };
-    let Some(entity) = world.entity(leader_id) else {
-        return;
-    };
-
-    let mut next_stat = entity.stat;
-    next_stat.add_exp(exp);
-    out.push(GameEvent::World(WorldEvent::SetEntityStat {
+    out.push(GameEvent::World(WorldEvent::AddEntityExp {
         entity_id: leader_id,
-        stat: next_stat,
+        amount: exp,
     }));
     out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
