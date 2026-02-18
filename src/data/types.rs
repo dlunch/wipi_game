@@ -476,7 +476,7 @@ mod tests {
             npcs: Vec::new(),
             peaceful: false,
         };
-        assert_eq!(map.find_player_start().unwrap(), (1, 1));
+        assert!(matches!(map.find_player_start(), Ok((1, 1))));
     }
 
     #[test]

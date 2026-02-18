@@ -52,10 +52,12 @@ pub struct TimedState {
 
 impl TimedState {
     pub fn time_left(&self, kind: TimedKind) -> u32 {
-        self.effects
-            .iter()
-            .find_map(|effect| (effect.kind == kind).then_some(effect.time_left))
-            .unwrap_or(0)
+        for effect in &self.effects {
+            if effect.kind == kind {
+                return effect.time_left;
+            }
+        }
+        0
     }
 
     pub fn set(&mut self, kind: TimedKind, time_left: u32) {

@@ -18,7 +18,7 @@ pub fn save_game(session: &WorldState) -> Result<()> {
     Ok(())
 }
 
-pub fn load_game(world: &mut WorldState) -> Result<bool> {
+pub fn load_game(world: &mut WorldState) -> Result<()> {
     let db = Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
         .map_err(|e| anyhow!("failed to open save db: {:?}", e))?;
     let mut buf = [0u8; 8192];
@@ -29,7 +29,7 @@ pub fn load_game(world: &mut WorldState) -> Result<bool> {
         return Err(anyhow!("save data too large ({} bytes)", len));
     }
     let data = str::from_utf8(&buf[..len])?;
-    Ok(save_schema::deserialize(data, world))
+    save_schema::deserialize(data, world)
 }
 
 pub fn has_save_data() -> Result<bool> {

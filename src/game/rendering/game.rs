@@ -3,6 +3,7 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::state::{CombatantState, TimedKind};
@@ -36,10 +37,10 @@ impl RenderState {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> bool {
+    ) -> Result<bool> {
         if !self.matches_state_variant(state) {
-            *self = Self::from_state(state, world, ui, data, render_fx);
-            return true;
+            *self = Self::from_state(state, world, ui, data, render_fx)?;
+            return Ok(true);
         }
 
         match self {
@@ -48,9 +49,9 @@ impl RenderState {
                     && *step != *next_step
                 {
                     *step = *next_step;
-                    return true;
+                    return Ok(true);
                 }
-                false
+                Ok(false)
             }
             RenderState::Menu {
                 title,
@@ -61,9 +62,9 @@ impl RenderState {
                     event,
                     GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(_))
                 ) {
-                    return false;
+                    return Ok(false);
                 }
-                sync_menu_fields(title, items, selected, ui)
+                Ok(sync_menu_fields(title, items, selected, ui))
             }
             RenderState::Explore(explore) => {
                 patch_explore(explore, event, world, ui, data, render_fx, state)
@@ -75,23 +76,22 @@ impl RenderState {
                         | GameEvent::Entity(_)
                         | GameEvent::Transition(_)
                         | GameEvent::OpenShopState(_)
-                ) && let Some(world) = world
-                    && let Ok(next) = InventoryRender::from_world(world, ui, data)
-                {
+                ) {
+                    let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                    let next = InventoryRender::from_world(world, ui, data)?;
                     *inventory = next;
-                    return true;
+                    return Ok(true);
                 }
-                false
+                Ok(false)
             }
             RenderState::Stats(stats) => {
-                if matches!(event, GameEvent::Combat(_) | GameEvent::Entity(_))
-                    && let Some(world) = world
-                    && let Ok(next) = StatsRender::from_world(world)
-                {
+                if matches!(event, GameEvent::Combat(_) | GameEvent::Entity(_)) {
+                    let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                    let next = StatsRender::from_world(world)?;
                     *stats = next;
-                    return true;
+                    return Ok(true);
                 }
-                false
+                Ok(false)
             }
             RenderState::Dialog {
                 explore,
@@ -103,7 +103,7 @@ impl RenderState {
             } => {
                 let mut changed = false;
                 if let Some(explore) = explore.as_mut() {
-                    changed |= patch_explore(explore, event, world, ui, data, render_fx, state);
+                    changed |= patch_explore(explore, event, world, ui, data, render_fx, state)?;
                 }
                 match event {
                     GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(
@@ -150,7 +150,7 @@ impl RenderState {
                     }
                     _ => {}
                 }
-                changed
+                Ok(changed)
             }
             RenderState::Shop(shop) => {
                 if matches!(
@@ -160,41 +160,40 @@ impl RenderState {
                         | GameEvent::Entity(_)
                         | GameEvent::OpenShopState(_)
                         | GameEvent::Transition(_)
-                ) && let Some(world) = world
-                    && let Ok(next) = ShopRender::from_world(world, ui, data, render_fx)
-                {
+                ) {
+                    let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                    let next = ShopRender::from_world(world, ui, data, render_fx)?;
                     *shop = next;
-                    return true;
+                    return Ok(true);
                 }
-                false
+                Ok(false)
             }
             RenderState::QuestLog(quest_log) => {
-                if matches!(event, GameEvent::World(_) | GameEvent::Transition(_))
-                    && let Some(world) = world
-                    && let Ok(next) = QuestLogRender::from_world(world, ui, data)
-                {
+                if matches!(event, GameEvent::World(_) | GameEvent::Transition(_)) {
+                    let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                    let next = QuestLogRender::from_world(world, ui, data)?;
                     *quest_log = next;
-                    return true;
+                    return Ok(true);
                 }
-                false
+                Ok(false)
             }
             RenderState::PauseMenu { explore, .. } => {
                 if let Some(explore) = explore.as_mut() {
                     return patch_explore(explore, event, world, ui, data, render_fx, state);
                 }
-                false
+                Ok(false)
             }
-            RenderState::Dead | RenderState::Error(_) | RenderState::NoSession => false,
+            RenderState::Dead | RenderState::Error(_) => Ok(false),
         }
     }
 
-    pub fn apply_ui_patch(&mut self, ui: &UiState, world: Option<&WorldState>) -> bool {
+    pub fn apply_ui_patch(&mut self, ui: &UiState, world: Option<&WorldState>) -> Result<bool> {
         match self {
             RenderState::Menu {
                 title,
                 items,
                 selected,
-            } => sync_menu_fields(title, items, selected, ui),
+            } => Ok(sync_menu_fields(title, items, selected, ui)),
             RenderState::PauseMenu {
                 items, selected, ..
             } => {
@@ -207,17 +206,11 @@ impl RenderState {
                     *selected = ui.pause_menu.selected;
                     changed = true;
                 }
-                changed
+                Ok(changed)
             }
             RenderState::Inventory(inventory) => {
-                let inventory_len = world
-                    .and_then(|world| {
-                        world
-                            .leader_entity()
-                            .ok()
-                            .map(|leader| leader.inventory.len())
-                    })
-                    .unwrap_or(0);
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                let inventory_len = world.leader_entity()?.inventory.len();
                 let mut changed = false;
                 if inventory.selected != ui.inventory.selected {
                     inventory.selected = ui.inventory.selected;
@@ -232,23 +225,17 @@ impl RenderState {
                     inventory.scroll = next_scroll;
                     changed = true;
                 }
-                changed
+                Ok(changed)
             }
             RenderState::Shop(shop) => {
-                let inventory_len = world
-                    .and_then(|world| {
-                        world
-                            .leader_entity()
-                            .ok()
-                            .map(|leader| leader.inventory.len())
-                    })
-                    .unwrap_or(0);
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                let inventory_len = world.leader_entity()?.inventory.len();
                 let shop_items_len = ui
                     .shop
                     .state
                     .as_ref()
                     .map(|shop_state| shop_state.items.len())
-                    .unwrap_or(0);
+                    .ok_or_else(|| anyhow!("No active shop state"))?;
                 let total = match ui.shop.mode {
                     ShopMode::Select => 2,
                     ShopMode::Buy | ShopMode::ConfirmBuy => shop_items_len,
@@ -268,7 +255,7 @@ impl RenderState {
                     shop.scroll = next_scroll;
                     changed = true;
                 }
-                changed
+                Ok(changed)
             }
             RenderState::QuestLog(quest_log) => {
                 let mut changed = false;
@@ -285,7 +272,7 @@ impl RenderState {
                     quest_log.selected = next_selected;
                     changed = true;
                 }
-                changed
+                Ok(changed)
             }
             RenderState::Dialog {
                 current_line,
@@ -311,12 +298,12 @@ impl RenderState {
                         *has_next = next_has_next;
                         changed = true;
                     }
-                    changed
+                    Ok(changed)
                 } else {
-                    false
+                    Err(anyhow!("No dialog state"))
                 }
             }
-            _ => false,
+            _ => Ok(false),
         }
     }
 
@@ -378,14 +365,11 @@ impl RenderState {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> Self {
-        if let Some(world) = world
-            && let Ok(explore) = ExploreRender::from_world(world, ui, data, render_fx)
-        {
-            RenderState::Explore(explore)
-        } else {
-            RenderState::NoSession
-        }
+    ) -> Result<Self> {
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
+        Ok(RenderState::Explore(ExploreRender::from_world(
+            world, ui, data, render_fx,
+        )?))
     }
 
     fn enter_dialog(
@@ -393,7 +377,7 @@ impl RenderState {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> Self {
+    ) -> Result<Self> {
         if let Some(dialog_state) = ui.dialog.state.as_ref() {
             let lines: Vec<String> = dialog_state
                 .lines
@@ -403,23 +387,20 @@ impl RenderState {
             let current_line = dialog_state.current_line.min(lines.len().saturating_sub(1));
             let current_text = lines.get(current_line).cloned();
             let explore = if let Some(world) = world {
-                let Ok(explore) = ExploreRender::from_world(world, ui, data, render_fx) else {
-                    return RenderState::NoSession;
-                };
-                Some(explore)
+                Some(ExploreRender::from_world(world, ui, data, render_fx)?)
             } else {
                 None
             };
-            return RenderState::Dialog {
+            return Ok(RenderState::Dialog {
                 explore,
                 npc_name: dialog_state.npc_name.clone(),
                 lines,
                 current_line,
                 current_text,
                 has_next: current_line + 1 < dialog_state.lines.len(),
-            };
+            });
         }
-        RenderState::Error(String::from("No dialog state"))
+        Err(anyhow!("No dialog state"))
     }
 
     fn from_state(
@@ -428,86 +409,67 @@ impl RenderState {
         ui: &UiState,
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
-    ) -> Self {
+    ) -> Result<Self> {
         match state {
-            GameState::Loading(step) => RenderState::Loading { step: *step },
-            GameState::Menu => RenderState::Menu {
+            GameState::Loading(step) => Ok(RenderState::Loading { step: *step }),
+            GameState::Menu => Ok(RenderState::Menu {
                 title: ui.menu.state.title,
                 items: ui.menu.state.items.clone(),
                 selected: ui.menu.selected,
-            },
+            }),
             GameState::Explore => Self::enter_explore(world, ui, data, render_fx),
             GameState::Inventory => {
-                if let Some(world) = world
-                    && let Ok(inventory) = InventoryRender::from_world(world, ui, data)
-                {
-                    RenderState::Inventory(inventory)
-                } else {
-                    RenderState::NoSession
-                }
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                Ok(RenderState::Inventory(InventoryRender::from_world(
+                    world, ui, data,
+                )?))
             }
             GameState::Stats => {
-                if let Some(world) = world
-                    && let Ok(stats) = StatsRender::from_world(world)
-                {
-                    RenderState::Stats(stats)
-                } else {
-                    RenderState::NoSession
-                }
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                Ok(RenderState::Stats(StatsRender::from_world(world)?))
             }
             GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
             GameState::Shop => {
-                if let Some(world) = world
-                    && let Ok(shop) = ShopRender::from_world(world, ui, data, render_fx)
-                {
-                    RenderState::Shop(shop)
-                } else {
-                    RenderState::NoSession
-                }
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                Ok(RenderState::Shop(ShopRender::from_world(
+                    world, ui, data, render_fx,
+                )?))
             }
             GameState::QuestLog => {
-                if let Some(world) = world
-                    && let Ok(quest_log) = QuestLogRender::from_world(world, ui, data)
-                {
-                    RenderState::QuestLog(quest_log)
-                } else {
-                    RenderState::NoSession
-                }
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                Ok(RenderState::QuestLog(QuestLogRender::from_world(
+                    world, ui, data,
+                )?))
             }
             GameState::PauseMenu => {
-                let Some(world) = world else {
-                    return RenderState::NoSession;
-                };
-                let Ok(explore) = ExploreRender::from_world(world, ui, data, render_fx) else {
-                    return RenderState::NoSession;
-                };
-                RenderState::PauseMenu {
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                let explore = ExploreRender::from_world(world, ui, data, render_fx)?;
+                Ok(RenderState::PauseMenu {
                     explore: Some(explore),
                     items: ui.pause_menu.state.items.clone(),
                     selected: ui.pause_menu.selected,
-                }
+                })
             }
-            GameState::Dead => RenderState::Dead,
-            GameState::Error(msg) => RenderState::Error(msg.into()),
+            GameState::Dead => Ok(RenderState::Dead),
+            GameState::Error(msg) => Ok(RenderState::Error(msg.into())),
         }
     }
 
     fn matches_state_variant(&self, state: &GameState) -> bool {
-        match (self, state) {
+        matches!(
+            (self, state),
             (RenderState::Loading { .. }, GameState::Loading(_))
-            | (RenderState::Menu { .. }, GameState::Menu)
-            | (RenderState::Explore(_), GameState::Explore)
-            | (RenderState::Inventory(_), GameState::Inventory)
-            | (RenderState::Stats(_), GameState::Stats)
-            | (RenderState::Dialog { .. }, GameState::Dialog)
-            | (RenderState::Shop(_), GameState::Shop)
-            | (RenderState::QuestLog(_), GameState::QuestLog)
-            | (RenderState::PauseMenu { .. }, GameState::PauseMenu)
-            | (RenderState::Dead, GameState::Dead)
-            | (RenderState::Error(_), GameState::Error(_)) => true,
-            (RenderState::NoSession, state) => state.requires_world(),
-            _ => false,
-        }
+                | (RenderState::Menu { .. }, GameState::Menu)
+                | (RenderState::Explore(_), GameState::Explore)
+                | (RenderState::Inventory(_), GameState::Inventory)
+                | (RenderState::Stats(_), GameState::Stats)
+                | (RenderState::Dialog { .. }, GameState::Dialog)
+                | (RenderState::Shop(_), GameState::Shop)
+                | (RenderState::QuestLog(_), GameState::QuestLog)
+                | (RenderState::PauseMenu { .. }, GameState::PauseMenu)
+                | (RenderState::Dead, GameState::Dead)
+                | (RenderState::Error(_), GameState::Error(_))
+        )
     }
 }
 
@@ -519,19 +481,15 @@ fn patch_explore(
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
     state: &GameState,
-) -> bool {
-    let Some(world) = world else {
-        return false;
-    };
+) -> Result<bool> {
+    let world = world.ok_or_else(|| anyhow!("No active world"))?;
 
     match event {
         GameEvent::World(WorldEvent::SetWorldMap(_))
         | GameEvent::Transition(TransitionEvent::MapChanged) => {
-            if let Ok(next) = ExploreRender::from_world(world, ui, data, render_fx) {
-                *explore = next;
-                return true;
-            }
-            false
+            let next = ExploreRender::from_world(world, ui, data, render_fx)?;
+            *explore = next;
+            Ok(true)
         }
         GameEvent::Movement(MovementEvent::Tick(..))
         | GameEvent::Entity(EntityEvent::SetEntityTransform { .. })
@@ -540,12 +498,10 @@ fn patch_explore(
             sync_explore_player(explore, world, ui, data)
         }
         GameEvent::Entity(EntityEvent::SetEntityLevel { entity_id, .. }) => {
-            if let Ok(leader_id) = world.leader_id()
-                && leader_id == *entity_id
-            {
+            if world.leader_id()? == *entity_id {
                 return sync_explore_player(explore, world, ui, data);
             }
-            false
+            Ok(false)
         }
         GameEvent::Combat(combat_event) => {
             patch_explore_combat(explore, combat_event, world, data, render_fx)
@@ -558,7 +514,7 @@ fn patch_explore(
         ) => sync_explore_quest(explore, world, ui, data),
         GameEvent::World(WorldEvent::AddOpenedTreasure { map_id, x, y }) => {
             if *map_id != explore.map_id {
-                return false;
+                return Ok(false);
             }
             if !explore
                 .opened_treasures
@@ -566,12 +522,10 @@ fn patch_explore(
                 .any(|(m, tx, ty)| m == map_id && *tx == *x && *ty == *y)
             {
                 explore.opened_treasures.push((map_id.clone(), *x, *y));
-                if let Ok(hint) = interaction_hint_from_world(world, data) {
-                    explore.interaction_hint = hint;
-                }
-                return true;
+                explore.interaction_hint = interaction_hint_from_world(world, data)?;
+                return Ok(true);
             }
-            false
+            Ok(false)
         }
         GameEvent::ApplyDialogAction(_) | GameEvent::ApplyDialogTransition(_) => {
             if matches!(
@@ -580,9 +534,9 @@ fn patch_explore(
             ) {
                 return sync_explore_quest(explore, world, ui, data);
             }
-            false
+            Ok(false)
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 
@@ -614,41 +568,41 @@ fn patch_explore_combat(
     world: &WorldState,
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
-) -> bool {
-    let leader_id = world.leader_id().ok();
+) -> Result<bool> {
+    let leader_id = world.leader_id()?;
     match event {
         CombatEvent::ClearEnemies => {
             if explore.enemies.is_empty() {
-                return false;
+                return Ok(false);
             }
             explore.enemies.clear();
             explore.enemy_indices.clear();
             explore.first_live_enemy_name = None;
-            true
+            Ok(true)
         }
         CombatEvent::MoveEnemy { entity_id, .. }
         | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
         | CombatEvent::SetCombatantMaxHp { entity_id, .. }
         | CombatEvent::SetCombatantTimed { entity_id, .. }
         | CombatEvent::RemoveEnemy(entity_id) => {
-            if Some(*entity_id) == leader_id {
+            if *entity_id == leader_id {
                 return sync_explore_player_stats(explore, world);
             }
             if let CombatEvent::RemoveEnemy(entity_id) = event {
                 if explore.remove_enemy(*entity_id) {
                     explore.first_live_enemy_name = explore.first_live_enemy_name();
-                    return true;
+                    return Ok(true);
                 }
-                return false;
+                return Ok(false);
             }
             patch_or_insert_enemy(explore, *entity_id, world, data, render_fx)
         }
         CombatEvent::SetCombatantCurrentMp { entity_id, .. }
         | CombatEvent::SetCombatantMaxMp { entity_id, .. } => {
-            if Some(*entity_id) == leader_id {
+            if *entity_id == leader_id {
                 return sync_explore_player_stats(explore, world);
             }
-            false
+            Ok(false)
         }
         CombatEvent::SetCombatantAtk { .. }
         | CombatEvent::SetCombatantDef { .. }
@@ -658,7 +612,7 @@ fn patch_explore_combat(
         | CombatEvent::GrantKillReward { .. }
         | CombatEvent::RecoverMp { .. }
         | CombatEvent::Heal { .. }
-        | CombatEvent::TakeDamage { .. } => false,
+        | CombatEvent::TakeDamage { .. } => Ok(false),
     }
 }
 
@@ -668,26 +622,21 @@ fn patch_or_insert_enemy(
     world: &WorldState,
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
-) -> bool {
+) -> Result<bool> {
     let Some(enemy) = world
         .combat
         .enemies
         .iter()
         .find(|enemy| enemy.entity_id == entity_id)
     else {
-        return explore.remove_enemy(entity_id);
+        return Ok(explore.remove_enemy(entity_id));
     };
-    let Ok(entity) = world.entity(entity_id) else {
-        return explore.remove_enemy(entity_id);
-    };
+    let entity = world.entity(entity_id)?;
     if entity.map_id != explore.map_id {
-        return explore.remove_enemy(entity_id);
+        return Ok(explore.remove_enemy(entity_id));
     }
 
-    let name = data
-        .find_enemy(&enemy.source_enemy_id)
-        .map(|enemy_data| enemy_data.name.clone())
-        .unwrap_or_else(|_| enemy.source_enemy_id.clone());
+    let name = data.find_enemy(&enemy.source_enemy_id)?.name.clone();
     let next = super::render_state::EnemyRender {
         enemy_id: entity_id,
         name,
@@ -739,7 +688,7 @@ fn patch_or_insert_enemy(
     if changed {
         explore.first_live_enemy_name = explore.first_live_enemy_name();
     }
-    changed
+    Ok(changed)
 }
 
 fn sync_explore_player(
@@ -747,16 +696,10 @@ fn sync_explore_player(
     world: &WorldState,
     ui: &UiState,
     data: &Rc<GameData>,
-) -> bool {
-    let Ok(leader_id) = world.leader_id() else {
-        return false;
-    };
-    let Ok(leader) = world.leader_entity() else {
-        return false;
-    };
-    let Ok(combatant) = world.combat.combatant(leader_id) else {
-        return false;
-    };
+) -> Result<bool> {
+    let leader_id = world.leader_id()?;
+    let leader = world.leader_entity()?;
+    let combatant = world.combat.combatant(leader_id)?;
 
     let mut changed = false;
     if explore.map_id != leader.map_id {
@@ -784,10 +727,7 @@ fn sync_explore_player(
         explore.level = leader.stat.level as u32;
         changed = true;
     }
-    let next_peaceful = data
-        .find_map(&leader.map_id)
-        .map(|map| map.peaceful)
-        .unwrap_or(false);
+    let next_peaceful = data.find_map(&leader.map_id)?.peaceful;
     if explore.peaceful != next_peaceful {
         explore.peaceful = next_peaceful;
         changed = true;
@@ -797,25 +737,19 @@ fn sync_explore_player(
         changed = true;
     }
 
-    let Ok(next_hint) = interaction_hint_from_world(world, data) else {
-        return false;
-    };
+    let next_hint = interaction_hint_from_world(world, data)?;
     if explore.interaction_hint != next_hint {
         explore.interaction_hint = next_hint;
         changed = true;
     }
     changed |= sync_explore_combatant_stats(explore, combatant);
-    changed
+    Ok(changed)
 }
 
-fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) -> bool {
-    let Ok(leader_id) = world.leader_id() else {
-        return false;
-    };
-    let Ok(combatant) = world.combat.combatant(leader_id) else {
-        return false;
-    };
-    sync_explore_combatant_stats(explore, combatant)
+fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) -> Result<bool> {
+    let leader_id = world.leader_id()?;
+    let combatant = world.combat.combatant(leader_id)?;
+    Ok(sync_explore_combatant_stats(explore, combatant))
 }
 
 fn sync_explore_combatant_stats(explore: &mut ExploreRender, combatant: &CombatantState) -> bool {
@@ -861,7 +795,7 @@ fn sync_explore_quest(
     world: &WorldState,
     ui: &UiState,
     data: &Rc<GameData>,
-) -> bool {
+) -> Result<bool> {
     let mut changed = false;
     let next_active_count = world
         .quests
@@ -872,11 +806,8 @@ fn sync_explore_quest(
         explore.active_quest_count = next_active_count;
         changed = true;
     }
-    let Ok(next_tracked) =
-        TrackedQuestRender::from_world(world, data, ui.quest_log.tracked_quest_id.as_deref())
-    else {
-        return false;
-    };
+    let next_tracked =
+        TrackedQuestRender::from_world(world, data, ui.quest_log.tracked_quest_id.as_deref())?;
     let tracked_changed = match (&explore.tracked_quest, &next_tracked) {
         (None, None) => false,
         (Some(current), Some(next)) => {
@@ -891,7 +822,7 @@ fn sync_explore_quest(
         explore.tracked_quest = next_tracked;
         changed = true;
     }
-    changed
+    Ok(changed)
 }
 
 pub fn render(
@@ -936,10 +867,6 @@ pub fn render(
         }
         RenderState::Dead => draw_dead(fb),
         RenderState::Error(msg) => draw_error(fb, msg),
-        RenderState::NoSession => {
-            clear_screen(fb);
-            draw_text(fb, 16, 16, "No active session", COLOR_RED);
-        }
     }
 
     if render_fx.soft_error_notice_timer() > 0

@@ -1,6 +1,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
@@ -12,7 +14,7 @@ pub trait UiEventApplier {
         session: Option<&WorldState>,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
-    );
+    ) -> Result<()>;
 }
 
 impl UiEventApplier for UiState {
@@ -21,7 +23,7 @@ impl UiEventApplier for UiState {
         session: Option<&WorldState>,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
-    ) {
+    ) -> Result<()> {
         match event {
             UiEvent::OverlayCloseRequested => {
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore))
@@ -33,12 +35,13 @@ impl UiEventApplier for UiState {
             )),
             UiEvent::MenuInput(key) => apply_menu_input(self, key, out),
             UiEvent::PauseMenuInput(key) => apply_pause_menu_input(self, key, out),
-            UiEvent::ExploreInput(key) => apply_explore_input(self, session, key, out),
-            UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out),
-            UiEvent::QuestLogInput(key) => apply_quest_log_input(self, session, key, out),
+            UiEvent::ExploreInput(key) => apply_explore_input(self, session, key, out)?,
+            UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out)?,
+            UiEvent::QuestLogInput(key) => apply_quest_log_input(self, session, key, out)?,
             UiEvent::DialogInput(key) => apply_dialog_input(self, key, out),
-            UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out),
+            UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out)?,
         };
+        Ok(())
     }
 }
 
@@ -47,29 +50,27 @@ fn apply_explore_input(
     session: Option<&WorldState>,
     key: InputKey,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     if let Some(direction) = key.direction() {
         out.push(GameEvent::Explore(ExploreEvent::MoveDirection(direction)));
-        return;
+        return Ok(());
     }
 
     if let Some(action_index) = explore_action_index(key) {
         if let Some(action) = ui.explore.key_actions.get(action_index).and_then(|a| *a) {
             out.push(GameEvent::CombatPlayerAction(action));
         }
-        return;
+        return Ok(());
     }
 
     match key {
         InputKey::Ok => {
-            if let Some(s) = session
-                && let Ok(leader) = s.leader_entity()
-            {
-                out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
-                    facing: leader.facing,
-                    fallback_action: Some(ui.explore.ok_action),
-                }));
-            }
+            let s = session.ok_or_else(|| anyhow!("No active world"))?;
+            let leader = s.leader_entity()?;
+            out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
+                facing: leader.facing,
+                fallback_action: Some(ui.explore.ok_action),
+            }));
         }
         InputKey::Key0 => out.push(GameEvent::Transition(TransitionEvent::ToPauseMenu)),
         InputKey::Back => {
@@ -78,6 +79,7 @@ fn apply_explore_input(
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn explore_action_index(key: InputKey) -> Option<usize> {
@@ -94,10 +96,8 @@ fn apply_inventory_input(
     session: Option<&WorldState>,
     key: InputKey,
     out: &mut Vec<GameEvent>,
-) {
-    let Some(s) = session else {
-        return;
-    };
+) -> Result<()> {
+    let s = session.ok_or_else(|| anyhow!("No active world"))?;
 
     let selected = ui.inventory.selected;
     match key {
@@ -108,10 +108,7 @@ fn apply_inventory_input(
             }
         }
         InputKey::Down => {
-            let inventory_len = match s.leader_entity() {
-                Ok(leader) => leader.inventory.len(),
-                Err(_) => 0,
-            };
+            let inventory_len = s.leader_entity()?.inventory.len();
             let next = step_down(selected, inventory_len);
             if next != selected {
                 ui.inventory.selected = next;
@@ -125,6 +122,7 @@ fn apply_inventory_input(
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn apply_dialog_input(ui: &UiState, key: InputKey, out: &mut Vec<GameEvent>) {
@@ -173,10 +171,8 @@ fn apply_quest_log_input(
     session: Option<&WorldState>,
     key: InputKey,
     out: &mut Vec<GameEvent>,
-) {
-    let Some(s) = session else {
-        return;
-    };
+) -> Result<()> {
+    let s = session.ok_or_else(|| anyhow!("No active world"))?;
 
     let mut active_quest_ids = Vec::with_capacity(s.quests.len());
     for quest in &s.quests {
@@ -194,7 +190,7 @@ fn apply_quest_log_input(
         }
         InputKey::Ok => {
             let Some(quest_id) = active_quest_ids.get(ui.quest_log.selected).cloned() else {
-                return;
+                return Ok(());
             };
             if ui.quest_log.tracked_quest_id.as_deref() == Some(quest_id.as_str()) {
                 ui.quest_log.tracked_quest_id = None;
@@ -207,6 +203,7 @@ fn apply_quest_log_input(
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn apply_shop_input(
@@ -214,18 +211,13 @@ fn apply_shop_input(
     session: Option<&WorldState>,
     key: InputKey,
     out: &mut Vec<GameEvent>,
-) {
-    let shop_items_len = ui
-        .shop
-        .state
-        .as_ref()
-        .map(|state| state.items.len())
-        .unwrap_or(0);
+) -> Result<()> {
+    let shop_items_len = match ui.shop.state.as_ref() {
+        Some(state) => state.items.len(),
+        None => 0,
+    };
     let inventory_len = match session {
-        Some(s) => match s.leader_entity() {
-            Ok(leader) => leader.inventory.len(),
-            Err(_) => 0,
-        },
+        Some(s) => s.leader_entity()?.inventory.len(),
         None => 0,
     };
 
@@ -268,39 +260,22 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                if let Some(s) = session {
-                    let leader_id = match s.leader_id() {
-                        Ok(leader_id) => leader_id,
-                        Err(_) => {
-                            out.push(GameEvent::SoftError(String::from("No active world")));
-                            ui.shop.mode = ShopMode::Buy;
-                            return;
-                        }
-                    };
-                    let shop_items = ui
-                        .shop
-                        .state
-                        .as_ref()
-                        .map(|state| state.items.as_slice())
-                        .unwrap_or(&[]);
-                    if let Some(item) = shop_items.get(ui.shop.selected).cloned() {
-                        match s.gold_amount(leader_id) {
-                            Ok(gold) => {
-                                if gold >= item.price {
-                                    out.push(GameEvent::ShopBuyItem(item.id));
-                                } else {
-                                    out.push(GameEvent::SoftError(String::from("Not enough gold")));
-                                }
-                            }
-                            Err(_) => {
-                                out.push(GameEvent::SoftError(String::from("No active world")));
-                            }
-                        }
+                let s = session.ok_or_else(|| anyhow!("No active world"))?;
+                let leader_id = s.leader_id()?;
+                let shop_state = ui
+                    .shop
+                    .state
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("No active shop state"))?;
+                if let Some(item) = shop_state.items.get(ui.shop.selected).cloned() {
+                    let gold = s.gold_amount(leader_id)?;
+                    if gold >= item.price {
+                        out.push(GameEvent::ShopBuyItem(item.id));
                     } else {
                         out.push(GameEvent::SoftError(String::from("Not enough gold")));
                     }
                 } else {
-                    out.push(GameEvent::SoftError(String::from("No active world")));
+                    out.push(GameEvent::SoftError(String::from("Not enough gold")));
                 }
                 ui.shop.mode = ShopMode::Buy;
             }
@@ -329,26 +304,13 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                if let Some(s) = session {
-                    match s.leader_entity() {
-                        Ok(leader) => {
-                            if let Some(item) = leader.inventory.get(ui.shop.selected) {
-                                if item.item_id == GOLD_ITEM_ID {
-                                    out.push(GameEvent::SoftError(String::from(
-                                        "Cannot sell gold",
-                                    )));
-                                } else {
-                                    out.push(GameEvent::ShopSellSelected(ui.shop.selected));
-                                }
-                            } else {
-                                out.push(GameEvent::SoftError(String::from(
-                                    "Invalid item selection",
-                                )));
-                            }
-                        }
-                        Err(_) => {
-                            out.push(GameEvent::SoftError(String::from("Invalid item selection")));
-                        }
+                let s = session.ok_or_else(|| anyhow!("No active world"))?;
+                let leader = s.leader_entity()?;
+                if let Some(item) = leader.inventory.get(ui.shop.selected) {
+                    if item.item_id == GOLD_ITEM_ID {
+                        out.push(GameEvent::SoftError(String::from("Cannot sell gold")));
+                    } else {
+                        out.push(GameEvent::ShopSellSelected(ui.shop.selected));
                     }
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
@@ -361,6 +323,7 @@ fn apply_shop_input(
             _ => {}
         },
     }
+    Ok(())
 }
 
 fn apply_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {

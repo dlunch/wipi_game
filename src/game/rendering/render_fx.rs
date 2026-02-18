@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::{Direction, Skill, SkillType};
 use crate::game::state::TimedKind;
 use crate::game::{CombatEvent, GameEvent, GameState, WorldEvent, WorldState};
@@ -80,10 +82,14 @@ impl RenderFxState {
         state: &GameState,
         world: Option<&WorldState>,
         event: &GameEvent,
-    ) -> bool {
-        match event {
+    ) -> Result<bool> {
+        let changed = match event {
             GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) if *amount > 0 => {
-                let leader_id = world.and_then(|w| w.leader_id().ok());
+                let leader_id = if let Some(world) = world {
+                    Some(world.leader_id()?)
+                } else {
+                    None
+                };
                 if Some(*entity_id) == leader_id {
                     let changed = self.player_hit_flash != HIT_FLASH_DURATION;
                     self.player_hit_flash = HIT_FLASH_DURATION;
@@ -96,7 +102,7 @@ impl RenderFxState {
                     {
                         let changed = *timer != HIT_FLASH_DURATION;
                         *timer = HIT_FLASH_DURATION;
-                        return changed;
+                        return Ok(changed);
                     }
                     self.enemy_hit_flashes
                         .push((*entity_id, HIT_FLASH_DURATION));
@@ -113,19 +119,15 @@ impl RenderFxState {
             ) =>
             {
                 if *time_left == 0 {
-                    return false;
+                    return Ok(false);
                 }
-                let Some(world) = world else {
-                    return false;
-                };
-                let Ok(leader_id) = world.leader_id() else {
-                    return false;
-                };
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                let leader_id = world.leader_id()?;
                 if *entity_id != leader_id || !is_skill_cast_cooldown(*slot, *time_left) {
-                    return false;
+                    return Ok(false);
                 }
                 self.skill_effects.clear();
-                push_skill_effects(world, *slot, &mut self.skill_effects);
+                push_skill_effects(world, *slot, &mut self.skill_effects)?;
                 !self.skill_effects.is_empty()
             }
             GameEvent::World(WorldEvent::CreateQuestProgress { .. })
@@ -148,7 +150,8 @@ impl RenderFxState {
                 changed
             }
             _ => false,
-        }
+        };
+        Ok(changed)
     }
 
     pub(super) fn player_hit_flash(&self) -> u32 {
@@ -176,10 +179,12 @@ impl RenderFxState {
     }
 
     pub(super) fn enemy_hit_flash(&self, enemy_id: u32) -> u32 {
-        self.enemy_hit_flashes
-            .iter()
-            .find_map(|(id, timer)| (*id == enemy_id).then_some(*timer))
-            .unwrap_or(0)
+        for (id, timer) in &self.enemy_hit_flashes {
+            if *id == enemy_id {
+                return *timer;
+            }
+        }
+        0
     }
 
     pub(super) fn skill_effect_iter(&self) -> impl Iterator<Item = (usize, usize, SkillType)> + '_ {
@@ -215,10 +220,12 @@ fn push_skill_effect(
     });
 }
 
-fn push_skill_effects(world: &WorldState, slot: u8, out: &mut Vec<SkillEffectInstance>) {
-    let Ok(leader) = world.leader_entity() else {
-        return;
-    };
+fn push_skill_effects(
+    world: &WorldState,
+    slot: u8,
+    out: &mut Vec<SkillEffectInstance>,
+) -> Result<()> {
+    let leader = world.leader_entity()?;
     match slot {
         0 => {
             for dist in 1..=Skill::FIREBALL.range {
@@ -242,4 +249,5 @@ fn push_skill_effects(world: &WorldState, slot: u8, out: &mut Vec<SkillEffectIns
         }
         _ => {}
     }
+    Ok(())
 }

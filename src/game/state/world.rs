@@ -98,12 +98,12 @@ impl WorldState {
 
     pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> Result<i32> {
         let entity = self.entity(entity_id)?;
-        Ok(entity
-            .inventory
-            .iter()
-            .find_map(|stack| (stack.item_id == item_id).then_some(stack.amount))
-            .unwrap_or(0)
-            .max(0))
+        for stack in &entity.inventory {
+            if stack.item_id == item_id {
+                return Ok(stack.amount.max(0));
+            }
+        }
+        Ok(0)
     }
 
     pub fn gold_amount(&self, entity_id: EntityId) -> Result<i32> {
@@ -171,13 +171,7 @@ impl WorldState {
             return true;
         }
         let idx = y * self.occupancy.width + x;
-        self.occupancy.npc_tiles.get(idx).copied().unwrap_or(false)
-            || self
-                .occupancy
-                .enemy_tiles
-                .get(idx)
-                .copied()
-                .unwrap_or(false)
+        self.occupancy.npc_tiles[idx] || self.occupancy.enemy_tiles[idx]
     }
 
     pub(crate) fn is_occupied_on_map(&self, map: &crate::data::Map, x: usize, y: usize) -> bool {
@@ -432,7 +426,7 @@ impl WorldState {
             current_hp,
         } = event
         {
-            let was_alive = self.enemy_alive(*entity_id).unwrap_or(false);
+            let was_alive = self.enemy_alive(*entity_id)?;
             was_alive != (*current_hp > 0)
         } else {
             false
@@ -520,12 +514,13 @@ impl WorldState {
         Ok(Some(entity.y * self.occupancy.width + entity.x))
     }
 
-    fn enemy_alive(&self, entity_id: EntityId) -> Option<bool> {
+    fn enemy_alive(&self, entity_id: EntityId) -> Result<bool> {
         self.combat
             .enemies
             .iter()
             .find(|enemy| enemy.entity_id == entity_id)
             .map(|enemy| enemy.combatant.stats.current_hp > 0)
+            .ok_or_else(|| anyhow!("Enemy not found for entity_id={}", entity_id))
     }
 
     fn apply_enemy_occupancy_delta(
@@ -618,7 +613,7 @@ impl WorldState {
             .retain(|ally| party_ids.contains(&ally.entity_id));
 
         for entity_id in party_ids {
-            if self.entities.get(entity_id).map(|_| true).unwrap_or(false)
+            if self.entities.get(entity_id).is_ok()
                 && self
                     .combat
                     .allies
@@ -637,16 +632,15 @@ impl WorldState {
         let entity = self.entities.get(entity_id)?;
 
         if matches!(entity.kind, EntityKind::Enemy) {
-            let source_enemy_id = data
-                .find_enemy(&entity.name)
-                .map(|_| entity.name.clone())
-                .unwrap_or_else(|_| {
-                    data.enemies
-                        .iter()
-                        .find(|enemy| enemy.name == entity.name)
-                        .map(|enemy| enemy.id.clone())
-                        .unwrap_or_else(|| entity.name.clone())
-                });
+            let source_enemy_id = if data.find_enemy(&entity.name).is_ok() {
+                entity.name.clone()
+            } else {
+                data.enemies
+                    .iter()
+                    .find(|enemy| enemy.name == entity.name)
+                    .map(|enemy| enemy.id.clone())
+                    .ok_or_else(|| anyhow!("Enemy data not found for entity '{}'", entity.name))?
+            };
 
             if let Some(enemy) = self
                 .combat

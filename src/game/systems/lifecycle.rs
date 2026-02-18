@@ -140,26 +140,13 @@ impl LifecycleResolver {
 
     fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
         let mut world = WorldState::empty();
-        match load_game(&mut world) {
-            Ok(true) => {
-                let leader = match world.leader_entity() {
-                    Ok(leader) => leader,
-                    Err(_) => {
-                        Self::setup_new_game_events(data, out)?;
-                        return Ok(());
-                    }
-                };
-                if data.find_map(&leader.map_id).is_err() {
-                    Self::setup_new_game_events(data, out)?;
-                    return Ok(());
-                }
-                emit_world_snapshot(&world, out);
-                out.push(GameEvent::Transition(TransitionEvent::MapChanged));
-            }
-            Ok(false) | Err(_) => {
-                Self::setup_new_game_events(data, out)?;
-            }
-        }
+        load_game(&mut world)?;
+
+        let leader = world.leader_entity()?;
+        data.find_map(&leader.map_id)?;
+
+        emit_world_snapshot(&world, out);
+        out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         Ok(())
     }
 }

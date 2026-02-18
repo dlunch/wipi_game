@@ -44,7 +44,6 @@ pub enum RenderState {
     },
     Dead,
     Error(String),
-    NoSession,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -224,9 +223,11 @@ pub(super) fn interaction_hint_from_world(
 }
 
 fn item_name_or_id(item_id: &str, item_name: Option<&str>) -> String {
-    item_name
-        .map(String::from)
-        .unwrap_or_else(|| String::from(item_id))
+    if let Some(item_name) = item_name {
+        String::from(item_name)
+    } else {
+        String::from(item_id)
+    }
 }
 
 fn stacked_item_label(item_id: &str, amount: i32, item_name: Option<&str>) -> String {

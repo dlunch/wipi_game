@@ -2,6 +2,8 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow, ensure};
+
 use super::WorldState;
 use crate::data::Direction;
 use crate::game::state::{
@@ -130,10 +132,9 @@ fn push_combatant_line(
     }
 }
 
-pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
-    if data.trim().is_empty() {
-        return false;
-    }
+pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
+    ensure!(!data.trim().is_empty(), "empty save data");
+
     let mut version = 0u32;
     let mut parsed_world_map = String::new();
     let mut parsed_party = PartyState::default();
@@ -147,144 +148,166 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
     let mut parsed_update_counter = 0u32;
     let mut parsed_respawn_timer = 0u32;
 
-    for line in data.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    for (line_no, line) in data
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .enumerate()
+    {
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.is_empty() {
-            continue;
-        }
+        ensure!(
+            !parts.is_empty(),
+            "invalid save line {}: empty record",
+            line_no + 1
+        );
+
         match parts[0] {
-            "VERSION" if parts.len() >= 2 => {
-                version = parts[1].parse().unwrap_or(0);
+            "VERSION" => {
+                ensure!(parts.len() >= 2, "VERSION line is malformed");
+                version = parse_value(parts[1], "VERSION")?;
             }
-            "WORLD_MAP" if parts.len() >= 2 => parsed_world_map = parts[1].into(),
-            "PARTY" if parts.len() >= 3 => {
-                parsed_party.leader_id = parts[1].parse().unwrap_or(0);
-                parsed_party.companion_ids = parse_u32_list(parts[2]);
+            "WORLD_MAP" => {
+                ensure!(parts.len() >= 2, "WORLD_MAP line is malformed");
+                parsed_world_map = parts[1].into();
             }
-            "COMBAT" if parts.len() >= 4 => {
-                parsed_combat_active = parts[1] == "1";
-                parsed_update_counter = parts[2].parse().unwrap_or(0);
-                parsed_respawn_timer = parts[3].parse().unwrap_or(0);
+            "PARTY" => {
+                ensure!(parts.len() >= 3, "PARTY line is malformed");
+                parsed_party.leader_id = parse_value(parts[1], "PARTY.leader_id")?;
+                parsed_party.companion_ids = parse_u32_list(parts[2])?;
             }
-            "ENTITY" if parts.len() >= 15 => {
+            "COMBAT" => {
+                ensure!(parts.len() >= 4, "COMBAT line is malformed");
+                parsed_combat_active = parse_flag(parts[1], "COMBAT.active")?;
+                parsed_update_counter = parse_value(parts[2], "COMBAT.update_counter")?;
+                parsed_respawn_timer = parse_value(parts[3], "COMBAT.respawn_timer")?;
+            }
+            "ENTITY" => {
+                ensure!(parts.len() >= 15, "ENTITY line is malformed");
                 parsed_entities.push(EntityState {
-                    id: parts[1].parse().unwrap_or(0),
-                    kind: parse_entity_kind(parts[2]),
+                    id: parse_value(parts[1], "ENTITY.id")?,
+                    kind: parse_entity_kind(parts[2])?,
                     name: parts[3].into(),
                     map_id: parts[4].into(),
-                    x: parts[5].parse().unwrap_or(0),
-                    y: parts[6].parse().unwrap_or(0),
-                    facing: parse_direction(parts[7]),
+                    x: parse_value(parts[5], "ENTITY.x")?,
+                    y: parse_value(parts[6], "ENTITY.y")?,
+                    facing: parse_direction(parts[7])?,
                     stat: crate::game::EntityStat {
-                        level: parts[8].parse().unwrap_or(1).max(1),
-                        exp: parts[9].parse().unwrap_or(0).max(0),
-                        exp_to_next: parts[10].parse().unwrap_or(100).max(1),
-                        base_max_hp: parts[11].parse().unwrap_or(80).max(1),
-                        base_max_mp: parts[12].parse().unwrap_or(30).max(0),
-                        base_atk: parts[13].parse().unwrap_or(12).max(0),
-                        base_def: parts[14].parse().unwrap_or(8).max(0),
+                        level: parse_value::<i32>(parts[8], "ENTITY.level")?.max(1),
+                        exp: parse_value::<i32>(parts[9], "ENTITY.exp")?.max(0),
+                        exp_to_next: parse_value::<i32>(parts[10], "ENTITY.exp_to_next")?.max(1),
+                        base_max_hp: parse_value::<i32>(parts[11], "ENTITY.base_max_hp")?.max(1),
+                        base_max_mp: parse_value::<i32>(parts[12], "ENTITY.base_max_mp")?.max(0),
+                        base_atk: parse_value::<i32>(parts[13], "ENTITY.base_atk")?.max(0),
+                        base_def: parse_value::<i32>(parts[14], "ENTITY.base_def")?.max(0),
                     },
                     inventory: Vec::new(),
                     loadout: LoadoutState::default(),
                 });
             }
-            "LOADOUT" if parts.len() >= 5 => {
-                let entity_id = parts[1].parse().unwrap_or(0);
-                if let Some(entity) = parsed_entities
+            "LOADOUT" => {
+                ensure!(parts.len() >= 5, "LOADOUT line is malformed");
+                let entity_id = parse_value(parts[1], "LOADOUT.entity_id")?;
+                let entity = parsed_entities
                     .iter_mut()
                     .find(|entity| entity.id == entity_id)
-                {
-                    entity.loadout = LoadoutState {
-                        weapon: parse_opt_usize(parts[2]),
-                        armor: parse_opt_usize(parts[3]),
-                        accessory: parse_opt_usize(parts[4]),
-                    };
-                }
+                    .ok_or_else(|| anyhow!("LOADOUT target entity not found: {}", entity_id))?;
+                entity.loadout = LoadoutState {
+                    weapon: parse_opt_usize(parts[2])?,
+                    armor: parse_opt_usize(parts[3])?,
+                    accessory: parse_opt_usize(parts[4])?,
+                };
             }
-            "ITEM" if parts.len() >= 4 => {
-                let entity_id = parts[1].parse().unwrap_or(0);
-                if let Some(entity) = parsed_entities
+            "ITEM" => {
+                ensure!(parts.len() >= 4, "ITEM line is malformed");
+                let entity_id = parse_value(parts[1], "ITEM.entity_id")?;
+                let entity = parsed_entities
                     .iter_mut()
                     .find(|entity| entity.id == entity_id)
-                {
-                    entity.inventory.push(ItemStack {
-                        item_id: parts[2].into(),
-                        amount: parts[3].parse().unwrap_or(0).max(0),
-                    });
-                }
+                    .ok_or_else(|| anyhow!("ITEM target entity not found: {}", entity_id))?;
+                entity.inventory.push(ItemStack {
+                    item_id: parts[2].into(),
+                    amount: parse_value::<i32>(parts[3], "ITEM.amount")?.max(0),
+                });
             }
-            "ALLY" if parts.len() >= 8 => {
-                let entity_id = parts[1].parse().unwrap_or(0);
+            "ALLY" => {
+                ensure!(parts.len() >= 8, "ALLY line is malformed");
+                let entity_id = parse_value(parts[1], "ALLY.entity_id")?;
                 parsed_allies.push(AllyCombatantState {
                     entity_id,
                     combatant: CombatantState {
                         stats: CombatStatsSnapshot {
-                            max_hp: parts[2].parse().unwrap_or(80).max(1),
-                            current_hp: parts[3].parse().unwrap_or(80).max(0),
-                            max_mp: parts[4].parse().unwrap_or(30).max(0),
-                            current_mp: parts[5].parse().unwrap_or(30).max(0),
-                            atk: parts[6].parse().unwrap_or(12).max(0),
-                            def: parts[7].parse().unwrap_or(8).max(0),
+                            max_hp: parse_value::<i32>(parts[2], "ALLY.max_hp")?.max(1),
+                            current_hp: parse_value::<i32>(parts[3], "ALLY.current_hp")?.max(0),
+                            max_mp: parse_value::<i32>(parts[4], "ALLY.max_mp")?.max(0),
+                            current_mp: parse_value::<i32>(parts[5], "ALLY.current_mp")?.max(0),
+                            atk: parse_value::<i32>(parts[6], "ALLY.atk")?.max(0),
+                            def: parse_value::<i32>(parts[7], "ALLY.def")?.max(0),
                         },
                         timed: TimedState::default(),
                     },
                 });
             }
-            "ENEMY" if parts.len() >= 3 => {
+            "ENEMY" => {
+                ensure!(parts.len() >= 3, "ENEMY line is malformed");
                 parsed_enemies.push(EnemyCombatantState {
-                    entity_id: parts[1].parse().unwrap_or(0),
+                    entity_id: parse_value(parts[1], "ENEMY.entity_id")?,
                     source_enemy_id: parts[2].into(),
                     combatant: CombatantState::default(),
                 });
             }
-            "ENEMY_STATS" if parts.len() >= 8 => {
-                let entity_id = parts[1].parse().unwrap_or(0);
-                if let Some(enemy) = parsed_enemies
+            "ENEMY_STATS" => {
+                ensure!(parts.len() >= 8, "ENEMY_STATS line is malformed");
+                let entity_id = parse_value(parts[1], "ENEMY_STATS.entity_id")?;
+                let enemy = parsed_enemies
                     .iter_mut()
                     .find(|enemy| enemy.entity_id == entity_id)
-                {
-                    enemy.combatant.stats = CombatStatsSnapshot {
-                        max_hp: parts[2].parse().unwrap_or(1).max(1),
-                        current_hp: parts[3].parse().unwrap_or(0).max(0),
-                        max_mp: parts[4].parse().unwrap_or(0).max(0),
-                        current_mp: parts[5].parse().unwrap_or(0).max(0),
-                        atk: parts[6].parse().unwrap_or(0).max(0),
-                        def: parts[7].parse().unwrap_or(0).max(0),
-                    };
-                }
+                    .ok_or_else(|| anyhow!("ENEMY_STATS target enemy not found: {}", entity_id))?;
+                enemy.combatant.stats = CombatStatsSnapshot {
+                    max_hp: parse_value::<i32>(parts[2], "ENEMY_STATS.max_hp")?.max(1),
+                    current_hp: parse_value::<i32>(parts[3], "ENEMY_STATS.current_hp")?.max(0),
+                    max_mp: parse_value::<i32>(parts[4], "ENEMY_STATS.max_mp")?.max(0),
+                    current_mp: parse_value::<i32>(parts[5], "ENEMY_STATS.current_mp")?.max(0),
+                    atk: parse_value::<i32>(parts[6], "ENEMY_STATS.atk")?.max(0),
+                    def: parse_value::<i32>(parts[7], "ENEMY_STATS.def")?.max(0),
+                };
             }
-            "TIMED" if parts.len() >= 4 => {
-                let entity_id = parts[1].parse().unwrap_or(0);
+            "TIMED" => {
+                ensure!(parts.len() >= 4, "TIMED line is malformed");
+                let entity_id = parse_value(parts[1], "TIMED.entity_id")?;
                 parsed_timed.push((
                     entity_id,
                     TimedEffect {
-                        kind: parse_timed_kind(parts[2]),
-                        time_left: parts[3].parse().unwrap_or(0),
+                        kind: parse_timed_kind(parts[2])?,
+                        time_left: parse_value(parts[3], "TIMED.time_left")?,
                     },
                 ));
             }
-            "QUEST" if parts.len() >= 5 => {
+            "QUEST" => {
+                ensure!(parts.len() >= 5, "QUEST line is malformed");
                 parsed_quests.push(crate::data::QuestProgress {
                     quest_id: parts[1].into(),
-                    current_count: parts[2].parse().unwrap_or(0),
-                    completed: parts[3] == "1",
-                    rewarded: parts[4] == "1",
+                    current_count: parse_value(parts[2], "QUEST.current_count")?,
+                    completed: parse_flag(parts[3], "QUEST.completed")?,
+                    rewarded: parse_flag(parts[4], "QUEST.rewarded")?,
                 });
             }
-            "TREASURE" if parts.len() >= 4 => {
+            "TREASURE" => {
+                ensure!(parts.len() >= 4, "TREASURE line is malformed");
                 parsed_treasures.push((
                     parts[1].into(),
-                    parts[2].parse().unwrap_or(0),
-                    parts[3].parse().unwrap_or(0),
+                    parse_value(parts[2], "TREASURE.x")?,
+                    parse_value(parts[3], "TREASURE.y")?,
                 ));
             }
-            _ => {}
+            record => return Err(anyhow!("unknown save record type: {}", record)),
         }
     }
 
-    if version != SAVE_VERSION {
-        return false;
-    }
+    ensure!(
+        version == SAVE_VERSION,
+        "unsupported save version: {}",
+        version
+    );
 
     for (entity_id, effect) in parsed_timed {
         if let Some(ally) = parsed_allies
@@ -299,14 +322,17 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
             .find(|enemy| enemy.entity_id == entity_id)
         {
             enemy.combatant.timed.effects.push(effect);
+            continue;
         }
+        return Err(anyhow!(
+            "TIMED target combatant not found for entity_id={}",
+            entity_id
+        ));
     }
 
     let next_entity_id = parsed_entities
         .iter()
-        .map(|entity| entity.id)
-        .max()
-        .unwrap_or(0)
+        .fold(0u32, |acc, entity| acc.max(entity.id))
         .wrapping_add(1)
         .max(1);
 
@@ -333,7 +359,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
         },
     };
 
-    true
+    Ok(())
 }
 
 fn format_args_to_string(parts: &[&str]) -> String {
@@ -356,12 +382,13 @@ fn entity_kind_code(kind: EntityKind) -> &'static str {
     }
 }
 
-fn parse_entity_kind(code: &str) -> EntityKind {
+fn parse_entity_kind(code: &str) -> Result<EntityKind> {
     match code {
-        "C" => EntityKind::Companion,
-        "E" => EntityKind::Enemy,
-        "N" => EntityKind::Npc,
-        _ => EntityKind::Player,
+        "P" => Ok(EntityKind::Player),
+        "C" => Ok(EntityKind::Companion),
+        "E" => Ok(EntityKind::Enemy),
+        "N" => Ok(EntityKind::Npc),
+        _ => Err(anyhow!("invalid ENTITY kind code: {}", code)),
     }
 }
 
@@ -374,12 +401,13 @@ fn direction_code(direction: Direction) -> &'static str {
     }
 }
 
-fn parse_direction(code: &str) -> Direction {
+fn parse_direction(code: &str) -> Result<Direction> {
     match code {
-        "U" => Direction::Up,
-        "L" => Direction::Left,
-        "R" => Direction::Right,
-        _ => Direction::Down,
+        "U" => Ok(Direction::Up),
+        "D" => Ok(Direction::Down),
+        "L" => Ok(Direction::Left),
+        "R" => Ok(Direction::Right),
+        _ => Err(anyhow!("invalid facing direction code: {}", code)),
     }
 }
 
@@ -394,31 +422,35 @@ fn timed_kind_code(kind: TimedKind) -> String {
     }
 }
 
-fn parse_timed_kind(code: &str) -> TimedKind {
-    if let Some(slot) = code
-        .strip_prefix("SKILL:")
-        .map(|value| value.parse::<u8>().unwrap_or(0))
-    {
-        return TimedKind::SkillCooldown(slot);
+fn parse_timed_kind(code: &str) -> Result<TimedKind> {
+    if let Some(raw_slot) = code.strip_prefix("SKILL:") {
+        let slot = parse_value(raw_slot, "TIMED.skill_slot")?;
+        return Ok(TimedKind::SkillCooldown(slot));
     }
     match code {
-        "STUN" => TimedKind::Stun,
-        "BREAK" => TimedKind::ArmorBreak,
-        "ATK_CD" => TimedKind::AttackCooldown,
-        "MP_REGEN" => TimedKind::MpRegenTick,
-        _ => TimedKind::Poison,
+        "POISON" => Ok(TimedKind::Poison),
+        "STUN" => Ok(TimedKind::Stun),
+        "BREAK" => Ok(TimedKind::ArmorBreak),
+        "ATK_CD" => Ok(TimedKind::AttackCooldown),
+        "MP_REGEN" => Ok(TimedKind::MpRegenTick),
+        _ => Err(anyhow!("invalid timed kind code: {}", code)),
     }
 }
 
 fn opt_usize(value: Option<usize>) -> String {
-    value
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| String::from("-1"))
+    if let Some(value) = value {
+        value.to_string()
+    } else {
+        String::from("-1")
+    }
 }
 
-fn parse_opt_usize(value: &str) -> Option<usize> {
-    let v = value.parse::<i32>().unwrap_or(-1);
-    if v >= 0 { Some(v as usize) } else { None }
+fn parse_opt_usize(value: &str) -> Result<Option<usize>> {
+    let v = parse_value::<i32>(value, "LOADOUT.index")?;
+    if v < 0 {
+        return Ok(None);
+    }
+    Ok(Some(v as usize))
 }
 
 fn join_u32(values: &[u32]) -> String {
@@ -432,11 +464,29 @@ fn join_u32(values: &[u32]) -> String {
     out
 }
 
-fn parse_u32_list(raw: &str) -> Vec<u32> {
+fn parse_u32_list(raw: &str) -> Result<Vec<u32>> {
     if raw.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    raw.split(',')
-        .map(|value| value.parse::<u32>().unwrap_or(0))
-        .collect()
+    let mut out = Vec::new();
+    for value in raw.split(',') {
+        out.push(parse_value(value, "PARTY.companion_id")?);
+    }
+    Ok(out)
+}
+
+fn parse_flag(raw: &str, field: &str) -> Result<bool> {
+    match raw {
+        "0" => Ok(false),
+        "1" => Ok(true),
+        _ => Err(anyhow!("invalid {} flag value: {}", field, raw)),
+    }
+}
+
+fn parse_value<T>(raw: &str, field: &str) -> Result<T>
+where
+    T: core::str::FromStr,
+{
+    raw.parse::<T>()
+        .map_err(|_| anyhow!("invalid {} value: {}", field, raw))
 }
