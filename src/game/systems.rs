@@ -1,5 +1,6 @@
 pub mod character;
 pub mod combat;
+mod emit;
 pub mod lifecycle;
 pub mod movement;
 pub mod npc;

@@ -10,7 +10,7 @@ mod systems;
 mod ui;
 mod world;
 
-pub use effects::apply_effects;
+pub use effects::{DomainEventEffect, domain_effects};
 pub use game_data::GameData;
 pub use game_event::{
     CombatEvent, EntityEvent, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber,

@@ -22,9 +22,7 @@ impl WorldSlot {
     pub fn apply_event(&mut self, event: &GameEvent) {
         match event {
             GameEvent::World(WorldEvent::CreateWorld) => {
-                if let Some(world) = self.active.as_mut() {
-                    world.reset();
-                } else {
+                if self.active.is_none() {
                     self.active = Some(WorldState::empty());
                 }
             }

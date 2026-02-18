@@ -7,9 +7,10 @@ use alloc::vec::Vec;
 use anyhow::{Error, Result, ensure};
 
 use crate::game::{
-    DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderFxState, RenderState, SpriteAtlas, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
+    DomainEventEffect, DomainEventResolver, GameData, GameEvent, GameEventKind,
+    GameEventSubscriber, GameInput, GameState, InputKey, RenderFxState, RenderState, SpriteAtlas,
+    UiEvent, UiEventApplier, UiInputEventResolver, UiState, WorldSlot, domain_effects,
+    domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -21,17 +22,26 @@ pub struct GameEngine {
     render_fx: RenderFxState,
     render_state: RenderState,
     resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>>,
+    effect_buckets: Vec<Vec<&'static dyn DomainEventEffect>>,
     pending_inputs: VecDeque<GameInput>,
 }
 
 impl GameEngine {
     pub fn new() -> Self {
         let resolvers = domain_resolvers();
+        let effects = domain_effects();
         let mut resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>> =
+            vec![Vec::new(); GameEventKind::COUNT];
+        let mut effect_buckets: Vec<Vec<&'static dyn DomainEventEffect>> =
             vec![Vec::new(); GameEventKind::COUNT];
         for resolver in resolvers {
             for kind in resolver.subscribed_kinds() {
                 resolver_buckets[kind.as_usize()].push(resolver);
+            }
+        }
+        for effect in effects {
+            for kind in effect.subscribed_kinds() {
+                effect_buckets[kind.as_usize()].push(effect);
             }
         }
 
@@ -44,6 +54,7 @@ impl GameEngine {
             render_fx: RenderFxState::default(),
             render_state: RenderState::Loading { step: 0 },
             resolver_buckets,
+            effect_buckets,
             pending_inputs: VecDeque::with_capacity(32),
         }
     }
@@ -154,13 +165,16 @@ impl GameEngine {
 
         while let Some(event) = queue.pop_front() {
             self.resolve_with_handlers(&event, &mut derived)?;
-            apply_effects(
-                &self.state,
-                &mut self.data,
-                self.world.as_ref(),
-                &event,
-                &mut derived,
-            )?;
+            let effect_bucket = &self.effect_buckets[event.kind().as_usize()];
+            for effect in effect_bucket {
+                effect.apply(
+                    &self.state,
+                    &mut self.data,
+                    self.world.as_ref(),
+                    &event,
+                    &mut derived,
+                )?;
+            }
 
             needs_repaint |= self.apply_and_patch_event(&event)?;
 

@@ -6,6 +6,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::state::{CombatStatsSnapshot, CombatantState, EntityKind, EntityState, TimedKind};
+use crate::game::systems::emit::emit_combat_stats;
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldState,
@@ -512,43 +513,4 @@ fn tile_index(x: usize, y: usize, width: usize) -> usize {
 
 fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {
     x.abs_diff(px) + y.abs_diff(py)
-}
-
-fn emit_combat_stats(entity_id: u32, stats: &CombatStatsSnapshot, out: &mut Vec<GameEvent>) {
-    let default_stats = CombatStatsSnapshot::default();
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxHp {
-        entity_id,
-        max_hp: stats.max_hp,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxMp {
-        entity_id,
-        max_mp: stats.max_mp,
-    }));
-
-    let base_hp = default_stats.current_hp.min(stats.max_hp).max(0);
-    let hp_delta = stats.current_hp - base_hp;
-    if hp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
-            entity_id,
-            delta: hp_delta,
-        }));
-    }
-
-    let base_mp = default_stats.current_mp.min(stats.max_mp).max(0);
-    let mp_delta = stats.current_mp - base_mp;
-    if mp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
-            entity_id,
-            delta: mp_delta,
-        }));
-    }
-
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
-        entity_id,
-        atk: stats.atk,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantDef {
-        entity_id,
-        def: stats.def,
-    }));
 }
