@@ -29,12 +29,8 @@ fn try_interact_npc(
     data: &GameData,
     facing: Direction,
 ) -> Result<Option<NpcEvent>> {
-    let Some(leader) = world.leader_entity() else {
-        return Ok(None);
-    };
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(None);
-    };
+    let leader = world.leader_entity()?;
+    let leader_id = world.leader_id()?;
     let (target_x, target_y) = facing.apply(leader.x, leader.y);
 
     let Some(npc) = data.find_npc_at(&leader.map_id, target_x, target_y) else {
@@ -122,9 +118,7 @@ impl DomainEventResolver for NpcResolver {
                 fallback_action,
             }) => {
                 let world = world.ok_or_else(|| anyhow!("No active world"))?;
-                let leader = world
-                    .leader_entity()
-                    .ok_or_else(|| anyhow!("No leader entity"))?;
+                let leader = world.leader_entity()?;
 
                 if let Some(npc_event) = try_interact_npc(world, data, *facing)? {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));

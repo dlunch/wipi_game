@@ -63,7 +63,7 @@ fn apply_explore_input(
     match key {
         InputKey::Ok => {
             if let Some(s) = session
-                && let Some(leader) = s.leader_entity()
+                && let Ok(leader) = s.leader_entity()
             {
                 out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
                     facing: leader.facing,
@@ -110,6 +110,7 @@ fn apply_inventory_input(
         InputKey::Down => {
             let inventory_len = s
                 .leader_entity()
+                .ok()
                 .map(|leader| leader.inventory.len())
                 .unwrap_or(0);
             let next = step_down(selected, inventory_len);
@@ -222,7 +223,7 @@ fn apply_shop_input(
         .map(|state| state.items.len())
         .unwrap_or(0);
     let inventory_len = session
-        .and_then(|s| s.leader_entity().map(|leader| leader.inventory.len()))
+        .and_then(|s| s.leader_entity().ok().map(|leader| leader.inventory.len()))
         .unwrap_or(0);
 
     match ui.shop.mode {
@@ -265,7 +266,7 @@ fn apply_shop_input(
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
                 if let Some(s) = session
-                    && let Some(leader_id) = s.leader_id()
+                    && let Ok(leader_id) = s.leader_id()
                 {
                     let shop_items = ui
                         .shop
@@ -311,7 +312,7 @@ fn apply_shop_input(
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
                 if let Some(s) = session
-                    && let Some(leader) = s.leader_entity()
+                    && let Ok(leader) = s.leader_entity()
                     && let Some(item) = leader.inventory.get(ui.shop.selected)
                 {
                     if item.item_id == GOLD_ITEM_ID {

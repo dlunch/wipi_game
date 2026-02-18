@@ -2,7 +2,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::data::Direction;
 use crate::data::QuestProgress;
@@ -49,14 +49,19 @@ impl WorldState {
         }
     }
 
-    pub fn leader_id(&self) -> Option<EntityId> {
+    pub fn leader_id(&self) -> Result<EntityId> {
         let leader_id = self.party.leader_id;
-        (leader_id != 0).then_some(leader_id)
+        if leader_id == 0 {
+            return Err(anyhow!("Leader entity is not set"));
+        }
+        Ok(leader_id)
     }
 
-    pub fn leader_entity(&self) -> Option<&EntityState> {
-        self.leader_id()
-            .and_then(|leader_id| self.entities.get(leader_id))
+    pub fn leader_entity(&self) -> Result<&EntityState> {
+        let leader_id = self.leader_id()?;
+        self.entities
+            .get(leader_id)
+            .ok_or_else(|| anyhow!("Leader entity not found: {}", leader_id))
     }
 
     pub fn entity(&self, entity_id: EntityId) -> Option<&EntityState> {
@@ -197,9 +202,12 @@ impl WorldState {
                 self.movement.apply_event(event)?;
                 if let GameEvent::Movement(crate::game::MovementEvent::Tick(movement_event, _)) =
                     event
-                    && let Some(leader_id) = self.leader_id()
-                    && let Some(leader) = self.entities.get_mut(leader_id)
                 {
+                    let leader_id = self.leader_id()?;
+                    let leader = self
+                        .entities
+                        .get_mut(leader_id)
+                        .ok_or_else(|| anyhow!("Leader entity not found: {}", leader_id))?;
                     if let Some((dx, dy)) = movement_event.facing {
                         leader.facing = match (dx, dy) {
                             (0, -1) => crate::data::Direction::Up,

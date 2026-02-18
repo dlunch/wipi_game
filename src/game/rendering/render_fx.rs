@@ -83,7 +83,7 @@ impl RenderFxState {
     ) -> bool {
         match event {
             GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) if *amount > 0 => {
-                let leader_id = world.and_then(|w| w.leader_id());
+                let leader_id = world.and_then(|w| w.leader_id().ok());
                 if Some(*entity_id) == leader_id {
                     let changed = self.player_hit_flash != HIT_FLASH_DURATION;
                     self.player_hit_flash = HIT_FLASH_DURATION;
@@ -118,7 +118,7 @@ impl RenderFxState {
                 let Some(world) = world else {
                     return false;
                 };
-                let Some(leader_id) = world.leader_id() else {
+                let Ok(leader_id) = world.leader_id() else {
                     return false;
                 };
                 if *entity_id != leader_id || !is_skill_cast_cooldown(*slot, *time_left) {
@@ -216,7 +216,7 @@ fn push_skill_effect(
 }
 
 fn push_skill_effects(world: &WorldState, slot: u8, out: &mut Vec<SkillEffectInstance>) {
-    let Some(leader) = world.leader_entity() else {
+    let Ok(leader) = world.leader_entity() else {
         return;
     };
     match slot {

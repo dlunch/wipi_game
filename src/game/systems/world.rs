@@ -78,9 +78,7 @@ fn resolve_tile_event(
     tile_event: &TileEvent,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let Some(leader) = world.leader_entity() else {
-        return Ok(());
-    };
+    let leader = world.leader_entity()?;
 
     let (next_x, next_y) = if let Some((dx, dy)) = step {
         (
@@ -102,9 +100,8 @@ fn resolve_tile_event(
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(item_id) = data.newgame.treasure_item.as_deref()
-                && let Some(leader_id) = world.leader_id()
-            {
+            if let Some(item_id) = data.newgame.treasure_item.as_deref() {
+                let leader_id = world.leader_id()?;
                 let _ = data.find_item(item_id)?;
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
@@ -118,9 +115,7 @@ fn resolve_tile_event(
                 return Ok(());
             }
             let map = data.find_map(target)?;
-            let Some(leader_id) = world.leader_id() else {
-                return Ok(());
-            };
+            let leader_id = world.leader_id()?;
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
             out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
             out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
@@ -159,9 +154,7 @@ fn resolve_complete_quest(
     }
 
     let quest = data.find_quest(id)?;
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
         amount: quest.reward_exp,
@@ -233,9 +226,7 @@ fn resolve_kill_reward(
     gold: i32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
         amount: exp,
@@ -285,7 +276,7 @@ fn resolve_take_damage(
         current_hp: stats.current_hp,
     }));
     if stats.current_hp <= 0 {
-        if Some(entity_id) == world.leader_id() {
+        if world.leader_id().ok() == Some(entity_id) {
             out.push(GameEvent::Transition(TransitionEvent::ToDead));
         } else if let Some(enemy) = world
             .combat
@@ -310,9 +301,7 @@ fn resolve_revive_player(
     world: &WorldState,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
     let Some(combatant) = world.combat.combatant(leader_id) else {
         return Ok(());
     };

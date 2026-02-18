@@ -72,12 +72,8 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     if !world.combat.active {
         return Ok(());
     }
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
-    let Some(leader_entity) = world.leader_entity() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
+    let leader_entity = world.leader_entity()?;
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
         return Ok(());
     };
@@ -239,12 +235,8 @@ fn resolve_player_action(
     action: &crate::game::ExploreAction,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
-    let Some(leader_entity) = world.leader_entity() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
+    let leader_entity = world.leader_entity()?;
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
         return Ok(());
     };
@@ -274,7 +266,15 @@ fn resolve_player_action(
             entity_id: leader_id,
             amount: -skill.mp_cost,
         }));
-        resolve_skill_action(data, world, leader_entity, leader_combatant, skill, out)?;
+        resolve_skill_action(
+            data,
+            world,
+            leader_id,
+            leader_entity,
+            leader_combatant,
+            skill,
+            out,
+        )?;
     } else {
         if leader_combatant.timed.time_left(TimedKind::AttackCooldown) > 0 {
             return Ok(());
@@ -294,6 +294,7 @@ fn resolve_player_action(
 fn resolve_skill_action(
     data: &GameData,
     world: &WorldState,
+    leader_id: u32,
     leader: &EntityState,
     leader_combatant: &CombatantState,
     skill: &Skill,
@@ -337,12 +338,10 @@ fn resolve_skill_action(
             }
         }
         SkillType::Heal => {
-            if let Some(leader_id) = world.leader_id() {
-                out.push(GameEvent::Combat(CombatEvent::Heal {
-                    entity_id: leader_id,
-                    amount: skill.heal_power.max(0),
-                }));
-            }
+            out.push(GameEvent::Combat(CombatEvent::Heal {
+                entity_id: leader_id,
+                amount: skill.heal_power.max(0),
+            }));
         }
     }
     Ok(())
@@ -410,12 +409,8 @@ fn resolve_map_changed(
         out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
     }
 
-    let Some(leader_id) = world.leader_id() else {
-        return Ok(());
-    };
-    let Some(leader_entity) = world.leader_entity() else {
-        return Ok(());
-    };
+    let leader_id = world.leader_id()?;
+    let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
 
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {

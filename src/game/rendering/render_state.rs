@@ -199,7 +199,7 @@ pub(super) fn interaction_hint_from_world(
     world: &WorldState,
     data: &Rc<GameData>,
 ) -> Option<String> {
-    let leader = world.leader_entity()?;
+    let leader = world.leader_entity().ok()?;
     let map = data.find_map(&leader.map_id).ok()?;
     let (tx, ty) = leader.facing.apply(leader.x, leader.y);
 
@@ -243,8 +243,8 @@ impl ExploreRender {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Option<Self> {
-        let leader_id = world.leader_id()?;
-        let leader = world.leader_entity()?;
+        let leader_id = world.leader_id().ok()?;
+        let leader = world.leader_entity().ok()?;
         let leader_combatant = world.combat.combatant(leader_id)?;
         let map = data.find_map(&leader.map_id).ok()?;
 
@@ -385,7 +385,7 @@ impl TrackedQuestRender {
 
 impl InventoryRender {
     pub(super) fn from_world(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> Self {
-        let Some(leader) = world.leader_entity() else {
+        let Ok(leader) = world.leader_entity() else {
             return Self {
                 items: Vec::new(),
                 equipped_weapon: None,
@@ -425,8 +425,8 @@ impl InventoryRender {
 
 impl StatsRender {
     pub(super) fn from_world(world: &WorldState) -> Option<Self> {
-        let leader_id = world.leader_id()?;
-        let leader = world.leader_entity()?;
+        let leader_id = world.leader_id().ok()?;
+        let leader = world.leader_entity().ok()?;
         let combatant = world.combat.combatant(leader_id)?;
 
         Some(Self {
@@ -450,8 +450,8 @@ impl ShopRender {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Option<Self> {
-        let leader_id = world.leader_id()?;
-        let leader = world.leader_entity()?;
+        let leader_id = world.leader_id().ok()?;
+        let leader = world.leader_entity().ok()?;
         let shop_state = ui.shop.state.as_ref()?;
 
         let buy_items: Vec<ShopItemRender> = shop_state

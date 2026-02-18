@@ -142,9 +142,12 @@ impl LifecycleResolver {
         let mut world = WorldState::empty();
         match load_game(&mut world) {
             Ok(true) => {
-                let Some(leader) = world.leader_entity() else {
-                    Self::setup_new_game_events(data, out)?;
-                    return Ok(());
+                let leader = match world.leader_entity() {
+                    Ok(leader) => leader,
+                    Err(_) => {
+                        Self::setup_new_game_events(data, out)?;
+                        return Ok(());
+                    }
                 };
                 if data.find_map(&leader.map_id).is_err() {
                     Self::setup_new_game_events(data, out)?;

@@ -38,9 +38,7 @@ impl DomainEventResolver for CharacterMutationResolver {
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
-        let leader_id = world
-            .leader_id()
-            .ok_or_else(|| anyhow!("No leader entity"))?;
+        let leader_id = world.leader_id()?;
         let leader = world
             .entity(leader_id)
             .ok_or_else(|| anyhow!("Leader entity not found"))?;

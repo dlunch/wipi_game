@@ -209,7 +209,12 @@ impl RenderState {
             }
             RenderState::Inventory(inventory) => {
                 let inventory_len = world
-                    .and_then(|world| world.leader_entity().map(|leader| leader.inventory.len()))
+                    .and_then(|world| {
+                        world
+                            .leader_entity()
+                            .ok()
+                            .map(|leader| leader.inventory.len())
+                    })
                     .unwrap_or(0);
                 let mut changed = false;
                 if inventory.selected != ui.inventory.selected {
@@ -229,7 +234,12 @@ impl RenderState {
             }
             RenderState::Shop(shop) => {
                 let inventory_len = world
-                    .and_then(|world| world.leader_entity().map(|leader| leader.inventory.len()))
+                    .and_then(|world| {
+                        world
+                            .leader_entity()
+                            .ok()
+                            .map(|leader| leader.inventory.len())
+                    })
                     .unwrap_or(0);
                 let shop_items_len = ui
                     .shop
@@ -493,7 +503,7 @@ fn patch_explore(
             sync_explore_player(explore, world, ui, data)
         }
         GameEvent::Entity(EntityEvent::SetEntityLevel { entity_id, .. }) => {
-            if Some(*entity_id) == world.leader_id() {
+            if world.leader_id().ok() == Some(*entity_id) {
                 return sync_explore_player(explore, world, ui, data);
             }
             false
@@ -564,7 +574,7 @@ fn patch_explore_combat(
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
 ) -> bool {
-    let leader_id = world.leader_id();
+    let leader_id = world.leader_id().ok();
     match event {
         CombatEvent::ClearEnemies => {
             if explore.enemies.is_empty() {
@@ -697,10 +707,10 @@ fn sync_explore_player(
     ui: &UiState,
     data: &Rc<GameData>,
 ) -> bool {
-    let Some(leader_id) = world.leader_id() else {
+    let Ok(leader_id) = world.leader_id() else {
         return false;
     };
-    let Some(leader) = world.leader_entity() else {
+    let Ok(leader) = world.leader_entity() else {
         return false;
     };
     let Some(combatant) = world.combat.combatant(leader_id) else {
@@ -756,7 +766,7 @@ fn sync_explore_player(
 }
 
 fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) -> bool {
-    let Some(leader_id) = world.leader_id() else {
+    let Ok(leader_id) = world.leader_id() else {
         return false;
     };
     let Some(combatant) = world.combat.combatant(leader_id) else {

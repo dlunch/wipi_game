@@ -134,9 +134,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
-        let leader = world
-            .leader_entity()
-            .ok_or_else(|| anyhow!("No leader entity"))?;
+        let leader = world.leader_entity()?;
 
         let (movement_event, tile_event) =
             resolve_world_tick(&world.movement, leader, world, data)?;
