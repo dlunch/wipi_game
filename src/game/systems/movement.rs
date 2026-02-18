@@ -15,17 +15,12 @@ use crate::game::{
 
 const MOVE_COOLDOWN: u32 = 2;
 
-pub struct MovementUpdateResult {
-    pub movement_event: MovementTickEvent,
-    pub tile_event: Option<TileEvent>,
-}
-
 pub fn resolve_world_tick(
     state: &MovementState,
     leader: &EntityState,
     world: &WorldState,
     data: &GameData,
-) -> MovementUpdateResult {
+) -> (MovementTickEvent, Option<TileEvent>) {
     let map = data.find_map(&leader.map_id);
     let movement_event = resolve_tick_with_occupancy(state, leader, world, map);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
@@ -36,10 +31,7 @@ pub fn resolve_world_tick(
         None
     };
 
-    MovementUpdateResult {
-        movement_event,
-        tile_event,
-    }
+    (movement_event, tile_event)
 }
 
 fn can_move(entity: &EntityState, map: &Map, dx: i32, dy: i32) -> bool {
@@ -158,16 +150,16 @@ impl DomainEventResolver for UpdateMovementResolver {
             .leader_entity()
             .ok_or_else(|| anyhow!("No leader entity"))?;
 
-        let movement = resolve_world_tick(&world.movement, leader, world, data);
+        let (movement_event, tile_event) = resolve_world_tick(&world.movement, leader, world, data);
 
-        let has_meaningful_movement = movement.movement_event.next_state != world.movement
-            || movement.movement_event.facing.is_some()
-            || movement.movement_event.step.is_some()
-            || movement.tile_event.is_some();
+        let has_meaningful_movement = movement_event.next_state != world.movement
+            || movement_event.facing.is_some()
+            || movement_event.step.is_some()
+            || tile_event.is_some();
         if has_meaningful_movement {
             out.push(GameEvent::Movement(MovementEvent::Tick(
-                movement.movement_event,
-                movement.tile_event,
+                movement_event,
+                tile_event,
             )));
         }
         Ok(())

@@ -457,14 +457,12 @@ impl ShopRender {
             if stack.item_id == GOLD_ITEM_ID {
                 continue;
             }
-            let name = data
-                .find_item(&stack.item_id)
-                .map(|item| item.name.clone())
-                .unwrap_or_else(|| stack.item_id.clone());
-            let sell_price = data
-                .find_item(&stack.item_id)
-                .map(|item| item.price / 2)
-                .unwrap_or(0);
+            let item = data.find_item(&stack.item_id);
+            let (name, sell_price) = if let Some(item) = item {
+                (item.name.clone(), item.price / 2)
+            } else {
+                (stack.item_id.clone(), 0)
+            };
             for _ in 0..stack.amount.max(0) {
                 player_inventory.push(ShopItemRender {
                     name: name.clone(),

@@ -56,7 +56,7 @@ impl DomainEventResolver for CharacterMutationResolver {
             }
             GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out),
             GameEvent::ApplyDialogAction(action) => {
-                resolve_dialog_action(world, leader_id, action, out)?
+                resolve_dialog_action(world, leader_id, action, out)
             }
             _ => {}
         }
@@ -191,7 +191,7 @@ fn resolve_dialog_action(
     entity_id: u32,
     action: &DialogAction,
     out: &mut Vec<GameEvent>,
-) -> Result<()> {
+) {
     match action {
         DialogAction::GiveItem(id) => {
             out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
@@ -225,5 +225,4 @@ fn resolve_dialog_action(
         DialogAction::GiveQuest(_) | DialogAction::CompleteQuest(_) | DialogAction::OpenShop(_) => {
         }
     }
-    Ok(())
 }
