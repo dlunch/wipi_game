@@ -134,13 +134,6 @@ impl RenderFxState {
         }
     }
 
-    fn enemy_hit_flash_internal(&self, enemy_id: u32) -> u32 {
-        self.enemy_hit_flashes
-            .iter()
-            .find_map(|(id, timer)| (*id == enemy_id).then_some(*timer))
-            .unwrap_or(0)
-    }
-
     pub(super) fn player_hit_flash(&self) -> u32 {
         self.player_hit_flash
     }
@@ -157,12 +150,11 @@ impl RenderFxState {
         self.anim_tick
     }
 
-    pub(super) fn enemy_hit_flash_value(&self, enemy_id: u32) -> u32 {
-        self.enemy_hit_flash_internal(enemy_id)
-    }
-
     pub(super) fn enemy_hit_flash(&self, enemy_id: u32) -> u32 {
-        self.enemy_hit_flash_value(enemy_id)
+        self.enemy_hit_flashes
+            .iter()
+            .find_map(|(id, timer)| (*id == enemy_id).then_some(*timer))
+            .unwrap_or(0)
     }
 
     pub(super) fn skill_effect_iter(&self) -> impl Iterator<Item = (usize, usize, SkillType)> + '_ {

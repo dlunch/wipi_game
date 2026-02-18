@@ -57,18 +57,6 @@ impl GameEngine {
     }
 
     pub fn tick(&mut self) -> bool {
-        self.update()
-    }
-
-    pub fn render_state(&self) -> &RenderState {
-        &self.render_state
-    }
-
-    pub fn sprite_atlas(&self) -> &SpriteAtlas {
-        &self.sprites
-    }
-
-    fn update(&mut self) -> bool {
         let mut needs_repaint = false;
         let mut initial_events = Vec::with_capacity(16);
         while let Some(input) = self.pending_inputs.pop_front() {
@@ -106,6 +94,14 @@ impl GameEngine {
         }
 
         needs_repaint
+    }
+
+    pub fn render_state(&self) -> &RenderState {
+        &self.render_state
+    }
+
+    pub fn sprite_atlas(&self) -> &SpriteAtlas {
+        &self.sprites
     }
 
     fn resolve_tick_game_events(&self, out: &mut Vec<GameEvent>) {
