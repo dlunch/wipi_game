@@ -390,18 +390,6 @@ impl RenderState {
         }
     }
 
-    fn enter_loading(step: usize) -> Self {
-        RenderState::Loading { step }
-    }
-
-    fn enter_menu(ui: &UiState) -> Self {
-        RenderState::Menu {
-            title: ui.menu.state.title,
-            items: ui.menu.state.items.clone(),
-            selected: ui.menu.selected,
-        }
-    }
-
     fn enter_explore(
         world: Option<&WorldState>,
         ui: &UiState,
@@ -410,20 +398,6 @@ impl RenderState {
     ) -> Self {
         match world.and_then(|world| ExploreRender::from_world(world, ui, data, render_fx)) {
             Some(explore) => RenderState::Explore(explore),
-            None => RenderState::NoSession,
-        }
-    }
-
-    fn enter_inventory(world: Option<&WorldState>, ui: &UiState, data: &Rc<GameData>) -> Self {
-        match world {
-            Some(world) => RenderState::Inventory(InventoryRender::from_world(world, ui, data)),
-            None => RenderState::NoSession,
-        }
-    }
-
-    fn enter_stats(world: Option<&WorldState>) -> Self {
-        match world.and_then(StatsRender::from_world) {
-            Some(stats) => RenderState::Stats(stats),
             None => RenderState::NoSession,
         }
     }
@@ -455,46 +429,6 @@ impl RenderState {
         RenderState::Error(String::from("No dialog state"))
     }
 
-    fn enter_shop(
-        world: Option<&WorldState>,
-        ui: &UiState,
-        data: &Rc<GameData>,
-        render_fx: &RenderFxState,
-    ) -> Self {
-        match world.and_then(|world| ShopRender::from_world(world, ui, data, render_fx)) {
-            Some(shop) => RenderState::Shop(shop),
-            None => RenderState::NoSession,
-        }
-    }
-
-    fn enter_quest_log(world: Option<&WorldState>, ui: &UiState, data: &Rc<GameData>) -> Self {
-        match world {
-            Some(world) => RenderState::QuestLog(QuestLogRender::from_world(world, ui, data)),
-            None => RenderState::NoSession,
-        }
-    }
-
-    fn enter_pause_menu(
-        world: Option<&WorldState>,
-        ui: &UiState,
-        data: &Rc<GameData>,
-        render_fx: &RenderFxState,
-    ) -> Self {
-        RenderState::PauseMenu {
-            explore: world.and_then(|world| ExploreRender::from_world(world, ui, data, render_fx)),
-            items: ui.pause_menu.state.items.clone(),
-            selected: ui.pause_menu.selected,
-        }
-    }
-
-    fn enter_dead() -> Self {
-        RenderState::Dead
-    }
-
-    fn enter_error(msg: &str) -> Self {
-        RenderState::Error(msg.into())
-    }
-
     fn from_state(
         state: &GameState,
         world: Option<&WorldState>,
@@ -503,17 +437,40 @@ impl RenderState {
         render_fx: &RenderFxState,
     ) -> Self {
         match state {
-            GameState::Loading(step) => Self::enter_loading(*step),
-            GameState::Menu => Self::enter_menu(ui),
+            GameState::Loading(step) => RenderState::Loading { step: *step },
+            GameState::Menu => RenderState::Menu {
+                title: ui.menu.state.title,
+                items: ui.menu.state.items.clone(),
+                selected: ui.menu.selected,
+            },
             GameState::Explore => Self::enter_explore(world, ui, data, render_fx),
-            GameState::Inventory => Self::enter_inventory(world, ui, data),
-            GameState::Stats => Self::enter_stats(world),
+            GameState::Inventory => match world {
+                Some(world) => RenderState::Inventory(InventoryRender::from_world(world, ui, data)),
+                None => RenderState::NoSession,
+            },
+            GameState::Stats => match world.and_then(StatsRender::from_world) {
+                Some(stats) => RenderState::Stats(stats),
+                None => RenderState::NoSession,
+            },
             GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
-            GameState::Shop => Self::enter_shop(world, ui, data, render_fx),
-            GameState::QuestLog => Self::enter_quest_log(world, ui, data),
-            GameState::PauseMenu => Self::enter_pause_menu(world, ui, data, render_fx),
-            GameState::Dead => Self::enter_dead(),
-            GameState::Error(msg) => Self::enter_error(msg),
+            GameState::Shop => {
+                match world.and_then(|world| ShopRender::from_world(world, ui, data, render_fx)) {
+                    Some(shop) => RenderState::Shop(shop),
+                    None => RenderState::NoSession,
+                }
+            }
+            GameState::QuestLog => match world {
+                Some(world) => RenderState::QuestLog(QuestLogRender::from_world(world, ui, data)),
+                None => RenderState::NoSession,
+            },
+            GameState::PauseMenu => RenderState::PauseMenu {
+                explore: world
+                    .and_then(|world| ExploreRender::from_world(world, ui, data, render_fx)),
+                items: ui.pause_menu.state.items.clone(),
+                selected: ui.pause_menu.selected,
+            },
+            GameState::Dead => RenderState::Dead,
+            GameState::Error(msg) => RenderState::Error(msg.into()),
         }
     }
 

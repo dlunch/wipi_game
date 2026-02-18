@@ -71,10 +71,6 @@ impl DomainEventResolver for WorldLogicResolver {
     }
 }
 
-fn leader_id(world: &WorldState) -> Option<u32> {
-    world.leader_id()
-}
-
 fn resolve_tile_event(
     data: &GameData,
     world: &WorldState,
@@ -107,7 +103,7 @@ fn resolve_tile_event(
                 y: next_y,
             }));
             if let Some(item_id) = data.newgame.treasure_item.as_deref()
-                && let Some(leader_id) = leader_id(world)
+                && let Some(leader_id) = world.leader_id()
             {
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
@@ -123,7 +119,7 @@ fn resolve_tile_event(
             let Some(map) = data.find_map(target) else {
                 return;
             };
-            let Some(leader_id) = leader_id(world) else {
+            let Some(leader_id) = world.leader_id() else {
                 return;
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
@@ -160,7 +156,7 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
     let Some(quest) = data.find_quest(id) else {
         return;
     };
-    let Some(leader_id) = leader_id(world) else {
+    let Some(leader_id) = world.leader_id() else {
         return;
     };
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
@@ -233,7 +229,7 @@ fn resolve_kill_reward(
     gold: i32,
     out: &mut Vec<GameEvent>,
 ) {
-    let Some(leader_id) = leader_id(world) else {
+    let Some(leader_id) = world.leader_id() else {
         return;
     };
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
