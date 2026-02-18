@@ -3,10 +3,10 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, ItemKind};
-use crate::game::systems::resolver::{DomainEventResolver, require_world};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldState,
 };
@@ -37,7 +37,7 @@ impl DomainEventResolver for CharacterMutationResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let world = require_world(world)?;
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         let leader_id = world.leader_id()?;
         let leader = world.entity(leader_id)?;
 

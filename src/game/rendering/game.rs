@@ -27,45 +27,6 @@ use super::renderer::{
     COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text, fill_rect,
 };
 use super::shop::draw_shop;
-use crate::game::world::require_world;
-
-fn build_explore_render(
-    world: Option<&WorldState>,
-    ui: &UiState,
-    data: &Rc<GameData>,
-    render_fx: &RenderFxState,
-) -> Result<ExploreRender> {
-    ExploreRender::from_world(require_world(world)?, ui, data, render_fx)
-}
-
-fn build_inventory_render(
-    world: Option<&WorldState>,
-    ui: &UiState,
-    data: &Rc<GameData>,
-) -> Result<InventoryRender> {
-    InventoryRender::from_world(require_world(world)?, ui, data)
-}
-
-fn build_stats_render(world: Option<&WorldState>) -> Result<StatsRender> {
-    StatsRender::from_world(require_world(world)?)
-}
-
-fn build_shop_render(
-    world: Option<&WorldState>,
-    ui: &UiState,
-    data: &Rc<GameData>,
-    render_fx: &RenderFxState,
-) -> Result<ShopRender> {
-    ShopRender::from_world(require_world(world)?, ui, data, render_fx)
-}
-
-fn build_quest_log_render(
-    world: Option<&WorldState>,
-    ui: &UiState,
-    data: &Rc<GameData>,
-) -> Result<QuestLogRender> {
-    QuestLogRender::from_world(require_world(world)?, ui, data)
-}
 
 struct DialogRenderFields {
     explore: Option<ExploreRender>,
@@ -164,7 +125,11 @@ impl RenderState {
                         | GameEvent::Transition(_)
                         | GameEvent::OpenShopState(_)
                 ) {
-                    let next = build_inventory_render(world, ui, data)?;
+                    let next = InventoryRender::from_world(
+                        world.ok_or_else(|| anyhow!("No active world"))?,
+                        ui,
+                        data,
+                    )?;
                     *inventory = next;
                     return Ok(true);
                 }
@@ -172,7 +137,8 @@ impl RenderState {
             }
             RenderState::Stats(stats) => {
                 if matches!(event, GameEvent::Combat(_) | GameEvent::Entity(_)) {
-                    let next = build_stats_render(world)?;
+                    let next =
+                        StatsRender::from_world(world.ok_or_else(|| anyhow!("No active world"))?)?;
                     *stats = next;
                     return Ok(true);
                 }
@@ -225,7 +191,12 @@ impl RenderState {
                         | GameEvent::OpenShopState(_)
                         | GameEvent::Transition(_)
                 ) {
-                    let next = build_shop_render(world, ui, data, render_fx)?;
+                    let next = ShopRender::from_world(
+                        world.ok_or_else(|| anyhow!("No active world"))?,
+                        ui,
+                        data,
+                        render_fx,
+                    )?;
                     *shop = next;
                     return Ok(true);
                 }
@@ -233,7 +204,11 @@ impl RenderState {
             }
             RenderState::QuestLog(quest_log) => {
                 if matches!(event, GameEvent::World(_) | GameEvent::Transition(_)) {
-                    let next = build_quest_log_render(world, ui, data)?;
+                    let next = QuestLogRender::from_world(
+                        world.ok_or_else(|| anyhow!("No active world"))?,
+                        ui,
+                        data,
+                    )?;
                     *quest_log = next;
                     return Ok(true);
                 }
@@ -290,7 +265,7 @@ impl RenderState {
                 Ok(changed)
             }
             RenderState::Inventory(inventory) => {
-                let world = require_world(world)?;
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 let inventory_len = world.leader_entity()?.inventory.len();
                 let mut changed = false;
                 if inventory.selected != ui.inventory.selected {
@@ -309,7 +284,7 @@ impl RenderState {
                 Ok(changed)
             }
             RenderState::Shop(shop) => {
-                let world = require_world(world)?;
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 let inventory_len = world.leader_entity()?.inventory.len();
                 let shop_items_len = ui
                     .shop
@@ -441,17 +416,6 @@ impl RenderState {
         }
     }
 
-    fn enter_explore(
-        world: Option<&WorldState>,
-        ui: &UiState,
-        data: &Rc<GameData>,
-        render_fx: &RenderFxState,
-    ) -> Result<Self> {
-        Ok(RenderState::Explore(build_explore_render(
-            world, ui, data, render_fx,
-        )?))
-    }
-
     fn enter_dialog(
         world: Option<&WorldState>,
         ui: &UiState,
@@ -483,20 +447,39 @@ impl RenderState {
                 items: ui.menu.state.items.clone(),
                 selected: ui.menu.selected,
             }),
-            GameState::Explore => Self::enter_explore(world, ui, data, render_fx),
-            GameState::Inventory => Ok(RenderState::Inventory(build_inventory_render(
-                world, ui, data,
+            GameState::Explore => Ok(RenderState::Explore(ExploreRender::from_world(
+                world.ok_or_else(|| anyhow!("No active world"))?,
+                ui,
+                data,
+                render_fx,
             )?)),
-            GameState::Stats => Ok(RenderState::Stats(build_stats_render(world)?)),
+            GameState::Inventory => Ok(RenderState::Inventory(InventoryRender::from_world(
+                world.ok_or_else(|| anyhow!("No active world"))?,
+                ui,
+                data,
+            )?)),
+            GameState::Stats => Ok(RenderState::Stats(StatsRender::from_world(
+                world.ok_or_else(|| anyhow!("No active world"))?,
+            )?)),
             GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
-            GameState::Shop => Ok(RenderState::Shop(build_shop_render(
-                world, ui, data, render_fx,
+            GameState::Shop => Ok(RenderState::Shop(ShopRender::from_world(
+                world.ok_or_else(|| anyhow!("No active world"))?,
+                ui,
+                data,
+                render_fx,
             )?)),
-            GameState::QuestLog => Ok(RenderState::QuestLog(build_quest_log_render(
-                world, ui, data,
+            GameState::QuestLog => Ok(RenderState::QuestLog(QuestLogRender::from_world(
+                world.ok_or_else(|| anyhow!("No active world"))?,
+                ui,
+                data,
             )?)),
             GameState::PauseMenu => {
-                let explore = build_explore_render(world, ui, data, render_fx)?;
+                let explore = ExploreRender::from_world(
+                    world.ok_or_else(|| anyhow!("No active world"))?,
+                    ui,
+                    data,
+                    render_fx,
+                )?;
                 Ok(RenderState::PauseMenu {
                     explore: Some(explore),
                     items: ui.pause_menu.state.items.clone(),
@@ -551,7 +534,7 @@ fn patch_explore(
     render_fx: &RenderFxState,
     state: &GameState,
 ) -> Result<bool> {
-    let world = require_world(world)?;
+    let world = world.ok_or_else(|| anyhow!("No active world"))?;
 
     match event {
         GameEvent::World(WorldEvent::SetWorldMap(_))

@@ -24,7 +24,3 @@ impl<T: DomainEventResolver + ?Sized> GameEventSubscriber for T {
             .any(|subscribed| subscribed == kind)
     }
 }
-
-pub fn require_world(world: Option<&WorldState>) -> Result<&WorldState> {
-    crate::game::world::require_world(world)
-}

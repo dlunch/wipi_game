@@ -36,10 +36,6 @@ pub struct WorldState {
     pub occupancy: OccupancyState,
 }
 
-pub fn require_world(world: Option<&WorldState>) -> Result<&WorldState> {
-    world.ok_or_else(|| anyhow!("No active world"))
-}
-
 impl WorldState {
     pub fn empty() -> Self {
         Self {

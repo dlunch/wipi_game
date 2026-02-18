@@ -2,11 +2,11 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::state::{CombatStatsSnapshot, CombatantState, EntityKind, EntityState, TimedKind};
-use crate::game::systems::resolver::{DomainEventResolver, require_world};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldState,
 };
@@ -53,7 +53,7 @@ impl DomainEventResolver for CombatResolver {
             return Ok(());
         }
 
-        let world = require_world(world)?;
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
             GameEvent::UpdateCombat => resolve_tick(data, world, out)?,
             GameEvent::CombatPlayerAction(action) => {

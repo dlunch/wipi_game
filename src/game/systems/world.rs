@@ -2,11 +2,11 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, QuestType};
 use crate::game::state::{GOLD_ITEM_ID, TimedKind};
-use crate::game::systems::resolver::{DomainEventResolver, require_world};
+use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, MovementEvent, TileEvent,
     TransitionEvent, WorldEvent, WorldState,
@@ -37,7 +37,7 @@ impl DomainEventResolver for WorldLogicResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let world = require_world(world)?;
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement, Some(tile_event))) => {
                 resolve_tile_event(data, world, movement.step, tile_event, out)?;

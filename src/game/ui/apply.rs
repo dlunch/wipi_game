@@ -6,7 +6,6 @@ use anyhow::{Result, anyhow};
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
-use crate::game::world::require_world;
 use crate::game::{ExploreEvent, GOLD_ITEM_ID, GameEvent, TransitionEvent, WorldState};
 
 pub trait UiEventApplier {
@@ -66,7 +65,7 @@ fn apply_explore_input(
 
     match key {
         InputKey::Ok => {
-            let s = require_world(session)?;
+            let s = session.ok_or_else(|| anyhow!("No active world"))?;
             let leader = s.leader_entity()?;
             out.push(GameEvent::Explore(ExploreEvent::TryNpcInteract {
                 facing: leader.facing,
@@ -98,7 +97,7 @@ fn apply_inventory_input(
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let s = require_world(session)?;
+    let s = session.ok_or_else(|| anyhow!("No active world"))?;
 
     let selected = ui.inventory.selected;
     match key {
@@ -165,7 +164,7 @@ fn apply_quest_log_input(
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let s = require_world(session)?;
+    let s = session.ok_or_else(|| anyhow!("No active world"))?;
 
     let mut active_quest_ids = Vec::with_capacity(s.quests.len());
     for quest in &s.quests {
@@ -208,7 +207,7 @@ fn apply_shop_input(
         .state
         .as_ref()
         .ok_or_else(|| anyhow!("No active shop state"))?;
-    let session = require_world(session)?;
+    let session = session.ok_or_else(|| anyhow!("No active world"))?;
     let shop_items_len = shop_state.items.len();
     let inventory_len = session.leader_entity()?.inventory.len();
 
