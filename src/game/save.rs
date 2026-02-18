@@ -33,7 +33,5 @@ pub fn load_game(world: &mut WorldState) -> Result<()> {
 }
 
 pub fn has_save_data() -> Result<bool> {
-    Database::open(SAVE_DB_NAME, OpenMode::ReadOnly)
-        .map(|_| true)
-        .map_err(|e| anyhow!("failed to open save db: {:?}", e))
+    Ok(Database::open(SAVE_DB_NAME, OpenMode::ReadOnly).is_ok())
 }
