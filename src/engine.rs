@@ -171,7 +171,9 @@ impl GameEngine {
 
             needs_repaint |= self.apply_and_patch_event(&event)?;
 
-            queue.extend(derived.drain(..));
+            while let Some(derived_event) = derived.pop() {
+                queue.push_front(derived_event);
+            }
         }
 
         Ok(needs_repaint)
