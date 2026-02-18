@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Skill, SkillType};
 use crate::game::state::TimedKind;
-use crate::game::{CombatEvent, GameEvent, GameState, WorldEvent, WorldState};
+use crate::game::{CombatEvent, EntityEvent, GameEvent, GameState, WorldEvent, WorldState};
 
 #[derive(Default)]
 pub struct RenderFxState {
@@ -84,9 +84,7 @@ impl RenderFxState {
         event: &GameEvent,
     ) -> Result<bool> {
         let changed = match event {
-            GameEvent::Combat(CombatEvent::ChangeCombatantHp { entity_id, delta })
-                if *delta < 0 =>
-            {
+            GameEvent::Entity(EntityEvent::ChangeEntityHp { entity_id, delta }) if *delta < 0 => {
                 let leader_id = if let Some(world) = world {
                     Some(world.leader_id()?)
                 } else {

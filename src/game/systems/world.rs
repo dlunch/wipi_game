@@ -25,6 +25,7 @@ impl DomainEventResolver for WorldLogicResolver {
         &[
             GameEventKind::Movement,
             GameEventKind::ApplyDialogAction,
+            GameEventKind::Entity,
             GameEventKind::Combat,
             GameEventKind::RevivePlayer,
         ]
@@ -48,8 +49,12 @@ impl DomainEventResolver for WorldLogicResolver {
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
                 resolve_complete_quest(data, world, id, out)?;
             }
-            GameEvent::Combat(CombatEvent::ChangeCombatantHp { entity_id, delta }) => {
-                resolve_combatant_hp_change(data, world, *entity_id, *delta, out)?;
+            GameEvent::Entity(EntityEvent::ChangeEntityHp { entity_id, delta }) => {
+                resolve_entity_hp_change(data, world, *entity_id, *delta, out)?;
+            }
+            GameEvent::Entity(EntityEvent::SetEntityCurrentHp { entity_id, value }) => {
+                let current_hp = world.entity(*entity_id)?.current_hp;
+                resolve_entity_hp_change(data, world, *entity_id, *value - current_hp, out)?;
             }
             GameEvent::Combat(CombatEvent::GrantKillReward {
                 enemy_id,
@@ -207,7 +212,7 @@ fn resolve_kill_reward(
     Ok(())
 }
 
-fn resolve_combatant_hp_change(
+fn resolve_entity_hp_change(
     data: &GameData,
     world: &WorldState,
     entity_id: u32,
@@ -217,9 +222,9 @@ fn resolve_combatant_hp_change(
     if delta >= 0 {
         return Ok(());
     }
-    let combatant = world.combat.combatant(entity_id)?;
-    let next_hp = (combatant.stats.current_hp + delta).max(0);
-    if next_hp > 0 || combatant.stats.current_hp <= 0 {
+    let entity = world.entity(entity_id)?;
+    let next_hp = (entity.current_hp + delta).max(0);
+    if next_hp > 0 || entity.current_hp <= 0 {
         return Ok(());
     }
 
@@ -250,9 +255,9 @@ fn resolve_revive_player(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let leader_id = world.leader_id()?;
-    let combatant = world.combat.combatant(leader_id)?;
+    let leader = world.entity(leader_id)?;
 
-    if combatant.stats.current_hp > 0 {
+    if leader.current_hp > 0 {
         return Ok(());
     }
     let current_gold = world.gold_amount(leader_id)?;
@@ -263,18 +268,18 @@ fn resolve_revive_player(
         delta: -gold_penalty,
     }));
 
-    let target_hp = (combatant.stats.max_hp / 2).max(1);
-    let target_mp = (combatant.stats.max_mp / 2).max(0);
-    let hp_delta = target_hp - combatant.stats.current_hp;
-    let mp_delta = target_mp - combatant.stats.current_mp;
+    let target_hp = (leader.stat.base_max_hp / 2).max(1);
+    let target_mp = (leader.stat.base_max_mp / 2).max(0);
+    let hp_delta = target_hp - leader.current_hp;
+    let mp_delta = target_mp - leader.current_mp;
     if hp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
             entity_id: leader_id,
             delta: hp_delta,
         }));
     }
     if mp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
             entity_id: leader_id,
             delta: mp_delta,
         }));

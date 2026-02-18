@@ -5,8 +5,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::state::{CombatStatsSnapshot, CombatantState, EntityKind, EntityState, TimedKind};
-use crate::game::systems::emit::emit_combat_stats;
+use crate::game::state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldState,
@@ -67,13 +66,14 @@ impl DomainEventResolver for CombatResolver {
 fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -> Result<()> {
     let leader_id = world.leader_id()?;
     let leader_combatant = world.combat.combatant(leader_id)?;
+    let leader_entity = world.leader_entity()?;
     let next_tick = world.tick_counter.wrapping_add(1);
-    tick_mp_regen(leader_id, leader_combatant, next_tick, out);
+    tick_mp_regen(leader_id, leader_entity, leader_combatant, next_tick, out);
     if !world.combat.active {
         return Ok(());
     }
-    let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
+    let (_, leader_def) = combat_attack_def(data, leader_entity)?;
 
     tick_combatant_effects(leader_id, leader_combatant, next_tick, out);
 
@@ -86,7 +86,8 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
 
     let mut total_player_damage = 0;
     for enemy in &world.combat.enemies {
-        if enemy.combatant.stats.current_hp <= 0 {
+        let enemy_entity = world.entity(enemy.entity_id)?;
+        if enemy_entity.current_hp <= 0 {
             out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
             continue;
         }
@@ -99,7 +100,6 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             .timed
             .time_left(TimedKind::AttackCooldown, next_tick);
 
-        let enemy_entity = world.entity(enemy.entity_id)?;
         let mut next_x = enemy_entity.x;
         let mut next_y = enemy_entity.y;
 
@@ -131,16 +131,16 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
         if !enemy_stunned
             && enemy_distance(next_x, next_y, leader_entity.x, leader_entity.y) <= 1
             && attack_cooldown == 0
-            && leader_combatant.stats.current_hp > 0
+            && leader_entity.current_hp > 0
         {
             let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
             let effective_def = if leader_combatant
                 .timed
                 .is_active(TimedKind::ArmorBreak, next_tick)
             {
-                leader_combatant.stats.def / 2
+                leader_def / 2
             } else {
-                leader_combatant.stats.def
+                leader_def
             };
             let damage = enemy_data.atk.saturating_sub(effective_def / 2).max(1);
             total_player_damage += damage;
@@ -153,7 +153,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     }
 
     if total_player_damage > 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
             entity_id: leader_id,
             delta: -total_player_damage,
         }));
@@ -163,16 +163,17 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
 
 fn tick_mp_regen(
     entity_id: u32,
+    entity: &EntityState,
     combatant: &CombatantState,
     next_tick: u32,
     out: &mut Vec<GameEvent>,
 ) {
-    if combatant.stats.current_hp <= 0 {
+    if entity.current_hp <= 0 {
         return;
     }
 
     if !combatant.timed.is_active(TimedKind::MpRegenTick, next_tick) {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
             entity_id,
             delta: 1,
         }));
@@ -193,7 +194,7 @@ fn tick_combatant_effects(
     if combatant.timed.is_active(TimedKind::Poison, next_tick)
         && next_tick.is_multiple_of(STATUS_TICK_INTERVAL)
     {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
             entity_id,
             delta: -POISON_DAMAGE,
         }));
@@ -209,8 +210,9 @@ fn resolve_player_action(
     let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
     let leader_combatant = world.combat.combatant(leader_id)?;
+    let (leader_atk, _) = combat_attack_def(data, leader_entity)?;
     let current_tick = world.tick_counter;
-    if leader_combatant.stats.current_hp <= 0
+    if leader_entity.current_hp <= 0
         || leader_combatant
             .timed
             .is_active(TimedKind::Stun, current_tick)
@@ -225,7 +227,7 @@ fn resolve_player_action(
         {
             return Ok(());
         }
-        if leader_combatant.stats.current_mp < skill.mp_cost {
+        if leader_entity.current_mp < skill.mp_cost {
             return Ok(());
         }
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
@@ -233,7 +235,7 @@ fn resolve_player_action(
             kind: TimedKind::SkillCooldown(slot as u8),
             end_tick: current_tick.wrapping_add(skill.cooldown),
         }));
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
             entity_id: leader_id,
             delta: -skill.mp_cost,
         }));
@@ -242,7 +244,7 @@ fn resolve_player_action(
             world,
             leader_id,
             leader_entity,
-            leader_combatant,
+            leader_atk,
             skill,
             out,
         )?;
@@ -254,8 +256,7 @@ fn resolve_player_action(
             return Ok(());
         }
         let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
-        let _ =
-            damage_enemy_at_position(data, world, tx, ty, leader_combatant.stats.atk, None, out)?;
+        let _ = damage_enemy_at_position(data, world, tx, ty, leader_atk, None, out)?;
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::AttackCooldown,
@@ -270,11 +271,11 @@ fn resolve_skill_action(
     world: &WorldState,
     leader_id: u32,
     leader: &EntityState,
-    leader_combatant: &CombatantState,
+    leader_atk: i32,
     skill: &Skill,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let base_damage = skill.power + leader_combatant.stats.atk / 2;
+    let base_damage = skill.power + leader_atk / 2;
     match skill.skill_type {
         SkillType::Ranged => {
             for dist in 1..=skill.range {
@@ -312,7 +313,7 @@ fn resolve_skill_action(
             }
         }
         SkillType::Heal => {
-            out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
                 entity_id: leader_id,
                 delta: skill.heal_power.max(0),
             }));
@@ -336,25 +337,24 @@ fn damage_enemy_at_position(
         if entity.x != x || entity.y != y {
             continue;
         }
-        let mut next_stats = enemy.combatant.stats;
         let effective_def = if enemy
             .combatant
             .timed
             .is_active(TimedKind::ArmorBreak, current_tick)
         {
-            next_stats.def / 2
+            entity.stat.base_def / 2
         } else {
-            next_stats.def
+            entity.stat.base_def
         };
         let damage = raw_damage.saturating_sub(effective_def / 2).max(1);
-        next_stats.current_hp = next_stats.current_hp.saturating_sub(damage).max(0);
+        let next_hp = entity.current_hp.saturating_sub(damage).max(0);
 
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
             entity_id: enemy.entity_id,
             delta: -damage,
         }));
 
-        if next_stats.current_hp <= 0 {
+        if next_hp <= 0 {
             return Ok(true);
         }
 
@@ -447,18 +447,17 @@ fn resolve_map_changed(
                 entity_id,
                 base_def: enemy_data.def,
             }));
+            out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentHp {
+                entity_id,
+                value: enemy_data.hp,
+            }));
+            out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentMp {
+                entity_id,
+                value: 0,
+            }));
             out.push(GameEvent::Entity(EntityEvent::ClearEntityInventory {
                 entity_id,
             }));
-            let stats = CombatStatsSnapshot {
-                max_hp: enemy_data.hp,
-                current_hp: enemy_data.hp,
-                max_mp: 0,
-                current_mp: 0,
-                atk: enemy_data.atk,
-                def: enemy_data.def,
-            };
-            emit_combat_stats(entity_id, &stats, out);
         }
     }
 

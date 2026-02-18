@@ -93,12 +93,15 @@ pub struct EntityState {
     pub y: usize,
     pub facing: Direction,
     pub stat: EntityStat,
+    pub current_hp: i32,
+    pub current_mp: i32,
     pub inventory: Vec<ItemStack>,
     pub loadout: LoadoutState,
 }
 
 impl EntityState {
     pub fn new_player(id: EntityId, name: String, map_id: String) -> Self {
+        let stat = EntityStat::default();
         Self {
             id,
             kind: EntityKind::Player,
@@ -107,7 +110,9 @@ impl EntityState {
             x: 0,
             y: 0,
             facing: Direction::Down,
-            stat: EntityStat::default(),
+            current_hp: stat.base_max_hp,
+            current_mp: stat.base_max_mp,
+            stat,
             inventory: Vec::new(),
             loadout: LoadoutState::default(),
         }

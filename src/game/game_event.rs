@@ -13,30 +13,6 @@ pub enum CombatEvent {
         x: usize,
         y: usize,
     },
-    SetCombatantMaxHp {
-        entity_id: EntityId,
-        max_hp: i32,
-    },
-    ChangeCombatantHp {
-        entity_id: EntityId,
-        delta: i32,
-    },
-    SetCombatantMaxMp {
-        entity_id: EntityId,
-        max_mp: i32,
-    },
-    ChangeCombatantMp {
-        entity_id: EntityId,
-        delta: i32,
-    },
-    SetCombatantAtk {
-        entity_id: EntityId,
-        atk: i32,
-    },
-    SetCombatantDef {
-        entity_id: EntityId,
-        def: i32,
-    },
     SetCombatantTimed {
         entity_id: EntityId,
         kind: TimedKind,
@@ -233,6 +209,22 @@ pub enum EntityEvent {
     SetEntityBaseDef {
         entity_id: EntityId,
         base_def: i32,
+    },
+    SetEntityCurrentHp {
+        entity_id: EntityId,
+        value: i32,
+    },
+    ChangeEntityHp {
+        entity_id: EntityId,
+        delta: i32,
+    },
+    SetEntityCurrentMp {
+        entity_id: EntityId,
+        value: i32,
+    },
+    ChangeEntityMp {
+        entity_id: EntityId,
+        delta: i32,
     },
     AddEntityExp {
         entity_id: EntityId,

@@ -7,29 +7,6 @@ use crate::game::state::EntityId;
 use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CombatStatsSnapshot {
-    pub max_hp: i32,
-    pub current_hp: i32,
-    pub max_mp: i32,
-    pub current_mp: i32,
-    pub atk: i32,
-    pub def: i32,
-}
-
-impl Default for CombatStatsSnapshot {
-    fn default() -> Self {
-        Self {
-            max_hp: 80,
-            current_hp: 80,
-            max_mp: 30,
-            current_mp: 30,
-            atk: 12,
-            def: 8,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimedKind {
     Poison,
     Stun,
@@ -84,7 +61,6 @@ impl TimedState {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct CombatantState {
-    pub stats: CombatStatsSnapshot,
     pub timed: TimedState,
 }
 
@@ -156,34 +132,6 @@ impl CombatState {
             }
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
-            }
-            CombatEvent::SetCombatantMaxHp { entity_id, max_hp } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.max_hp = *max_hp;
-                combatant.stats.current_hp = combatant.stats.current_hp.min(*max_hp).max(0);
-            }
-            CombatEvent::ChangeCombatantHp { entity_id, delta } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                let next_hp = combatant.stats.current_hp + *delta;
-                combatant.stats.current_hp = next_hp.min(combatant.stats.max_hp).max(0);
-            }
-            CombatEvent::SetCombatantMaxMp { entity_id, max_mp } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.max_mp = *max_mp;
-                combatant.stats.current_mp = combatant.stats.current_mp.min(*max_mp).max(0);
-            }
-            CombatEvent::ChangeCombatantMp { entity_id, delta } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                let next_mp = combatant.stats.current_mp + *delta;
-                combatant.stats.current_mp = next_mp.min(combatant.stats.max_mp).max(0);
-            }
-            CombatEvent::SetCombatantAtk { entity_id, atk } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.atk = *atk;
-            }
-            CombatEvent::SetCombatantDef { entity_id, def } => {
-                let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.def = *def;
             }
             CombatEvent::SetCombatantTimed {
                 entity_id,

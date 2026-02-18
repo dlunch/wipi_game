@@ -7,9 +7,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, ItemKind};
 use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldState,
-};
+use crate::game::{EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldState};
 
 struct CharacterMutationResolver;
 
@@ -87,7 +85,7 @@ fn resolve_use_item(
         return Ok(());
     }
 
-    out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
         entity_id: leader_id,
         delta: item.hp_restore(),
     }));
@@ -154,17 +152,17 @@ fn resolve_restore_hp_mp(
     entity_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let combatant = world.combat.combatant(entity_id)?;
-    let hp_delta = combatant.stats.max_hp - combatant.stats.current_hp;
-    let mp_delta = combatant.stats.max_mp - combatant.stats.current_mp;
+    let entity = world.entity(entity_id)?;
+    let hp_delta = entity.stat.base_max_hp - entity.current_hp;
+    let mp_delta = entity.stat.base_max_mp - entity.current_mp;
     if hp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
             entity_id,
             delta: hp_delta,
         }));
     }
     if mp_delta != 0 {
-        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
             entity_id,
             delta: mp_delta,
         }));

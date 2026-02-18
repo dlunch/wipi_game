@@ -8,7 +8,7 @@ use crate::data::Direction;
 use crate::data::QuestProgress;
 use crate::game::state::{
     AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
-    EntityState, EntityStore, GOLD_ITEM_ID, PartyState, combat_attack_def,
+    EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
 };
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
@@ -284,7 +284,6 @@ impl WorldState {
     }
 
     fn apply_entity_event(&mut self, data: &GameData, event: &EntityEvent) -> Result<()> {
-        let mut sync_stats_for: Option<EntityId> = None;
         match event {
             EntityEvent::SetLeaderEntity(entity_id) => {
                 self.party.leader_id = *entity_id;
@@ -303,6 +302,7 @@ impl WorldState {
                 kind,
                 name,
             } => {
+                let stat = EntityStat::default();
                 ensure!(
                     !self.entities.contains(*entity_id),
                     "Entity already exists: {}",
@@ -316,7 +316,9 @@ impl WorldState {
                     x: 0,
                     y: 0,
                     facing: Direction::Down,
-                    stat: Default::default(),
+                    current_hp: stat.base_max_hp,
+                    current_mp: stat.base_max_mp,
+                    stat,
                     inventory: Vec::new(),
                     loadout: Default::default(),
                 });
@@ -383,12 +385,12 @@ impl WorldState {
                     }
                     _ => {}
                 }
-                sync_stats_for = Some(*entity_id);
+                entity.current_hp = entity.current_hp.clamp(0, entity.stat.base_max_hp.max(0));
+                entity.current_mp = entity.current_mp.clamp(0, entity.stat.base_max_mp.max(0));
             }
             EntityEvent::AddEntityExp { entity_id, amount } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.add_exp(*amount);
-                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::ClearEntityInventory { entity_id } => {
                 let entity = self.entities.get_mut(*entity_id)?;
@@ -396,7 +398,6 @@ impl WorldState {
                 entity.loadout.weapon = None;
                 entity.loadout.armor = None;
                 entity.loadout.accessory = None;
-                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::SetEntityLoadoutSlot {
                 entity_id,
@@ -415,7 +416,6 @@ impl WorldState {
                         entity.loadout.accessory = *index;
                     }
                 }
-                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::ChangeEntityItem {
                 entity_id,
@@ -427,11 +427,29 @@ impl WorldState {
                 } else if *delta < 0 {
                     self.remove_item_amount(*entity_id, item_id, -*delta)?;
                 }
-                sync_stats_for = Some(*entity_id);
             }
-        }
-        if let Some(entity_id) = sync_stats_for {
-            self.sync_combat_stats_for_entity(data, entity_id)?;
+            EntityEvent::SetEntityCurrentHp { entity_id, value } => {
+                let entity = self.entities.get_mut(*entity_id)?;
+                let max_hp = entity.stat.base_max_hp.max(0);
+                entity.current_hp = (*value).clamp(0, max_hp);
+            }
+            EntityEvent::ChangeEntityHp { entity_id, delta } => {
+                let entity = self.entities.get_mut(*entity_id)?;
+                let max_hp = entity.stat.base_max_hp.max(0);
+                let next_hp = entity.current_hp + *delta;
+                entity.current_hp = next_hp.clamp(0, max_hp);
+            }
+            EntityEvent::SetEntityCurrentMp { entity_id, value } => {
+                let entity = self.entities.get_mut(*entity_id)?;
+                let max_mp = entity.stat.base_max_mp.max(0);
+                entity.current_mp = (*value).clamp(0, max_mp);
+            }
+            EntityEvent::ChangeEntityMp { entity_id, delta } => {
+                let entity = self.entities.get_mut(*entity_id)?;
+                let max_mp = entity.stat.base_max_mp.max(0);
+                let next_mp = entity.current_mp + *delta;
+                entity.current_mp = next_mp.clamp(0, max_mp);
+            }
         }
         Ok(())
     }
@@ -465,15 +483,9 @@ impl WorldState {
                 self.clear_enemy_occupancy();
             }
             CombatEvent::SetActive(_)
-            | CombatEvent::SetCombatantMaxHp { .. }
-            | CombatEvent::SetCombatantMaxMp { .. }
-            | CombatEvent::ChangeCombatantMp { .. }
-            | CombatEvent::SetCombatantAtk { .. }
-            | CombatEvent::SetCombatantDef { .. }
             | CombatEvent::SetCombatantTimed { .. }
             | CombatEvent::SetRespawnTimer(_)
-            | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::ChangeCombatantHp { .. } => {}
+            | CombatEvent::GrantKillReward { .. } => {}
         }
         Ok(())
     }
@@ -481,12 +493,6 @@ impl WorldState {
     fn should_ignore_stale_enemy_combat_event(&self, event: &CombatEvent) -> bool {
         let Some(entity_id) = (match event {
             CombatEvent::MoveEnemy { entity_id, .. }
-            | CombatEvent::SetCombatantMaxHp { entity_id, .. }
-            | CombatEvent::ChangeCombatantHp { entity_id, .. }
-            | CombatEvent::SetCombatantMaxMp { entity_id, .. }
-            | CombatEvent::ChangeCombatantMp { entity_id, .. }
-            | CombatEvent::SetCombatantAtk { entity_id, .. }
-            | CombatEvent::SetCombatantDef { entity_id, .. }
             | CombatEvent::SetCombatantTimed { entity_id, .. } => Some(*entity_id),
             CombatEvent::RemoveEnemy(entity_id) => Some(*entity_id),
             CombatEvent::SetActive(_)
@@ -599,10 +605,10 @@ impl WorldState {
             return Ok(());
         }
         for enemy in &self.combat.enemies {
-            if enemy.combatant.stats.current_hp <= 0 {
+            let entity = self.entities.get(enemy.entity_id)?;
+            if entity.current_hp <= 0 {
                 continue;
             }
-            let entity = self.entities.get(enemy.entity_id)?;
             if entity.map_id != self.occupancy.map_id {
                 continue;
             }
@@ -680,23 +686,6 @@ impl WorldState {
         Ok(())
     }
 
-    fn sync_combat_stats_for_entity(&mut self, data: &GameData, entity_id: EntityId) -> Result<()> {
-        let entity = self.entities.get(entity_id)?;
-        let combatant = self.combat.combatant_mut(entity_id)?;
-
-        let max_hp = entity.stat.base_max_hp.max(0);
-        let max_mp = entity.stat.base_max_mp.max(0);
-        combatant.stats.max_hp = max_hp;
-        combatant.stats.max_mp = max_mp;
-        combatant.stats.current_hp = combatant.stats.current_hp.min(max_hp).max(0);
-        combatant.stats.current_mp = combatant.stats.current_mp.min(max_mp).max(0);
-
-        let (atk, def) = combat_attack_def(data, entity)?;
-        combatant.stats.atk = atk;
-        combatant.stats.def = def;
-        Ok(())
-    }
-
     fn ensure_quest_progress(&mut self, quest_id: &str) -> &mut QuestProgress {
         if let Some(index) = self
             .quests
@@ -758,7 +747,7 @@ mod tests {
     use super::{OccupancyState, WorldState};
 
     #[test]
-    fn add_entity_exp_syncs_combat_snapshot() -> Result<()> {
+    fn add_entity_exp_keeps_runtime_resources_on_entity() -> Result<()> {
         let data = GameData::default();
         let mut world = WorldState::empty();
 
@@ -784,12 +773,9 @@ mod tests {
         let combatant = world.combat.combatant(1)?;
 
         assert_eq!(entity.stat.level, 2);
-        assert_eq!(combatant.stats.max_hp, entity.stat.base_max_hp);
-        assert_eq!(combatant.stats.max_mp, entity.stat.base_max_mp);
-        assert_eq!(combatant.stats.atk, entity.stat.base_atk);
-        assert_eq!(combatant.stats.def, entity.stat.base_def);
-        assert_eq!(combatant.stats.current_hp, 80);
-        assert_eq!(combatant.stats.current_mp, 30);
+        assert_eq!(entity.current_hp, 80);
+        assert_eq!(entity.current_mp, 30);
+        assert!(combatant.timed.effects.is_empty());
         Ok(())
     }
 
@@ -878,6 +864,8 @@ mod tests {
             y: 1,
             facing: Direction::Down,
             stat: Default::default(),
+            current_hp: 80,
+            current_mp: 0,
             inventory: Vec::<ItemStack>::new(),
             loadout: Default::default(),
         });
@@ -891,7 +879,7 @@ mod tests {
 
         world.apply_event(
             &data,
-            &GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            &GameEvent::Entity(EntityEvent::ChangeEntityHp {
                 entity_id: 10,
                 delta: -75,
             }),
@@ -900,7 +888,7 @@ mod tests {
 
         world.apply_event(
             &data,
-            &GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            &GameEvent::Entity(EntityEvent::ChangeEntityHp {
                 entity_id: 10,
                 delta: -5,
             }),
@@ -935,6 +923,8 @@ mod tests {
             y: 1,
             facing: Direction::Down,
             stat: Default::default(),
+            current_hp: 80,
+            current_mp: 0,
             inventory: Vec::<ItemStack>::new(),
             loadout: Default::default(),
         });

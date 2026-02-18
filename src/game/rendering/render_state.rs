@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, ItemKind, NpcType, SkillType, Tile};
-use crate::game::state::{TimedKind, TimedState};
+use crate::game::state::{TimedKind, TimedState, combat_attack_def};
 use crate::game::ui::{
     ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
 };
@@ -262,14 +262,14 @@ impl ExploreRender {
                 name,
                 x: entity.x,
                 y: entity.y,
-                hp: enemy.combatant.stats.current_hp,
-                max_hp: enemy.combatant.stats.max_hp,
+                hp: entity.current_hp,
+                max_hp: entity.stat.base_max_hp,
                 attack_cooldown: enemy
                     .combatant
                     .timed
                     .time_left(TimedKind::AttackCooldown, world.tick_counter),
                 hit_flash: render_fx.enemy_hit_flash(enemy.entity_id),
-                dead: enemy.combatant.stats.current_hp <= 0,
+                dead: entity.current_hp <= 0,
             });
             enemy_indices.insert(enemy.entity_id, enemy_index);
         }
@@ -286,10 +286,10 @@ impl ExploreRender {
             player_y: leader.y,
             player_facing: leader.facing,
             player_moving: world.movement.pressed_direction.is_some(),
-            hp: leader_combatant.stats.current_hp as u32,
-            max_hp: leader_combatant.stats.max_hp as u32,
-            mp: leader_combatant.stats.current_mp as u32,
-            max_mp: leader_combatant.stats.max_mp as u32,
+            hp: leader.current_hp as u32,
+            max_hp: leader.stat.base_max_hp as u32,
+            mp: leader.current_mp as u32,
+            max_mp: leader.stat.base_max_mp as u32,
             level: leader.stat.level as u32,
             active_quest_count: world
                 .quests
@@ -424,19 +424,19 @@ impl InventoryRender {
 }
 
 impl StatsRender {
-    pub(super) fn from_world(world: &WorldState) -> Result<Self> {
+    pub(super) fn from_world(world: &WorldState, data: &Rc<GameData>) -> Result<Self> {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
-        let combatant = world.combat.combatant(leader_id)?;
+        let (atk, def) = combat_attack_def(data, leader)?;
 
         Ok(Self {
-            hp: combatant.stats.current_hp as u32,
-            max_hp: combatant.stats.max_hp as u32,
-            mp: combatant.stats.current_mp as u32,
-            max_mp: combatant.stats.max_mp as u32,
+            hp: leader.current_hp as u32,
+            max_hp: leader.stat.base_max_hp as u32,
+            mp: leader.current_mp as u32,
+            max_mp: leader.stat.base_max_mp as u32,
             level: leader.stat.level as u32,
-            atk: combatant.stats.atk as u32,
-            def: combatant.stats.def as u32,
+            atk: atk as u32,
+            def: def as u32,
             exp: leader.stat.exp as u32,
             gold: world.gold_amount(leader_id)? as u32,
         })

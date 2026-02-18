@@ -138,8 +138,10 @@ impl RenderState {
             }
             RenderState::Stats(stats) => {
                 if matches!(event, GameEvent::Combat(_) | GameEvent::Entity(_)) {
-                    let next =
-                        StatsRender::from_world(world.ok_or_else(|| anyhow!("No active world"))?)?;
+                    let next = StatsRender::from_world(
+                        world.ok_or_else(|| anyhow!("No active world"))?,
+                        data,
+                    )?;
                     *stats = next;
                     return Ok(true);
                 }
@@ -461,6 +463,7 @@ impl RenderState {
             )?)),
             GameState::Stats => Ok(RenderState::Stats(StatsRender::from_world(
                 world.ok_or_else(|| anyhow!("No active world"))?,
+                data,
             )?)),
             GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
             GameState::Shop => Ok(RenderState::Shop(ShopRender::from_world(
@@ -545,16 +548,12 @@ fn patch_explore(
             Ok(true)
         }
         GameEvent::Movement(MovementEvent::Tick(..))
-        | GameEvent::Entity(EntityEvent::SetEntityTransform { .. })
         | GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
         | GameEvent::Explore(crate::game::ExploreEvent::MoveDirection(_)) => {
             sync_explore_player(explore, world, ui, data)
         }
-        GameEvent::Entity(EntityEvent::SetEntityLevel { entity_id, .. }) => {
-            if world.leader_id()? == *entity_id {
-                return sync_explore_player(explore, world, ui, data);
-            }
-            Ok(false)
+        GameEvent::Entity(entity_event) => {
+            patch_explore_entity(explore, entity_event, world, ui, data, render_fx)
         }
         GameEvent::Combat(combat_event) => {
             patch_explore_combat(explore, combat_event, world, data, render_fx)
@@ -615,6 +614,80 @@ fn sync_menu_fields(
     changed
 }
 
+fn patch_explore_entity(
+    explore: &mut ExploreRender,
+    event: &EntityEvent,
+    world: &WorldState,
+    ui: &UiState,
+    data: &Rc<GameData>,
+    render_fx: &RenderFxState,
+) -> Result<bool> {
+    let leader_id = world.leader_id()?;
+    match event {
+        EntityEvent::SetEntityLevel { entity_id, .. }
+        | EntityEvent::SetEntityExp { entity_id, .. }
+        | EntityEvent::SetEntityExpToNext { entity_id, .. }
+        | EntityEvent::SetEntityBaseMaxHp { entity_id, .. }
+        | EntityEvent::SetEntityBaseMaxMp { entity_id, .. }
+        | EntityEvent::SetEntityBaseAtk { entity_id, .. }
+        | EntityEvent::SetEntityBaseDef { entity_id, .. }
+        | EntityEvent::SetEntityCurrentHp { entity_id, .. }
+        | EntityEvent::ChangeEntityHp { entity_id, .. }
+        | EntityEvent::SetEntityCurrentMp { entity_id, .. }
+        | EntityEvent::ChangeEntityMp { entity_id, .. }
+        | EntityEvent::SetEntityLoadoutSlot { entity_id, .. }
+        | EntityEvent::ChangeEntityItem { entity_id, .. }
+        | EntityEvent::ClearEntityInventory { entity_id } => {
+            if *entity_id == leader_id {
+                return sync_explore_player(explore, world, ui, data);
+            }
+            if world
+                .combat
+                .enemies
+                .iter()
+                .any(|enemy| enemy.entity_id == *entity_id)
+            {
+                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
+            }
+            Ok(false)
+        }
+        EntityEvent::SetEntityTransform { entity_id, .. } => {
+            if *entity_id == leader_id {
+                return sync_explore_player(explore, world, ui, data);
+            }
+            if world
+                .combat
+                .enemies
+                .iter()
+                .any(|enemy| enemy.entity_id == *entity_id)
+            {
+                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
+            }
+            Ok(false)
+        }
+        EntityEvent::CreateEntity { entity_id, .. } => {
+            if world
+                .combat
+                .enemies
+                .iter()
+                .any(|enemy| enemy.entity_id == *entity_id)
+            {
+                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
+            }
+            Ok(false)
+        }
+        EntityEvent::SetLeaderEntity(_)
+        | EntityEvent::ClearCompanionEntities
+        | EntityEvent::AddCompanionEntity(_) => Ok(false),
+        EntityEvent::AddEntityExp { entity_id, .. } => {
+            if *entity_id == leader_id {
+                return sync_explore_player(explore, world, ui, data);
+            }
+            Ok(false)
+        }
+    }
+}
+
 fn patch_explore_combat(
     explore: &mut ExploreRender,
     event: &CombatEvent,
@@ -634,8 +707,6 @@ fn patch_explore_combat(
             Ok(true)
         }
         CombatEvent::MoveEnemy { entity_id, .. }
-        | CombatEvent::ChangeCombatantHp { entity_id, .. }
-        | CombatEvent::SetCombatantMaxHp { entity_id, .. }
         | CombatEvent::SetCombatantTimed { entity_id, .. }
         | CombatEvent::RemoveEnemy(entity_id) => {
             if *entity_id == leader_id {
@@ -650,16 +721,7 @@ fn patch_explore_combat(
             }
             patch_or_insert_enemy(explore, *entity_id, world, data, render_fx)
         }
-        CombatEvent::ChangeCombatantMp { entity_id, .. }
-        | CombatEvent::SetCombatantMaxMp { entity_id, .. } => {
-            if *entity_id == leader_id {
-                return sync_explore_player_stats(explore, world);
-            }
-            Ok(false)
-        }
-        CombatEvent::SetCombatantAtk { .. }
-        | CombatEvent::SetCombatantDef { .. }
-        | CombatEvent::SetActive(_)
+        CombatEvent::SetActive(_)
         | CombatEvent::SetRespawnTimer(_)
         | CombatEvent::GrantKillReward { .. } => Ok(false),
     }
@@ -691,14 +753,14 @@ fn patch_or_insert_enemy(
         name,
         x: entity.x,
         y: entity.y,
-        hp: enemy.combatant.stats.current_hp,
-        max_hp: enemy.combatant.stats.max_hp,
+        hp: entity.current_hp,
+        max_hp: entity.stat.base_max_hp,
         attack_cooldown: enemy
             .combatant
             .timed
             .time_left(TimedKind::AttackCooldown, world.tick_counter),
         hit_flash: render_fx.enemy_hit_flash(entity_id),
-        dead: enemy.combatant.stats.current_hp <= 0,
+        dead: entity.current_hp <= 0,
     };
 
     let changed = if let Some(existing) = explore.enemy_mut(entity_id) {
@@ -794,15 +856,17 @@ fn sync_explore_player(
         explore.interaction_hint = next_hint;
         changed = true;
     }
-    changed |= sync_explore_combatant_stats(explore, combatant, world.tick_counter);
+    changed |= sync_explore_combatant_stats(explore, leader, combatant, world.tick_counter);
     Ok(changed)
 }
 
 fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) -> Result<bool> {
     let leader_id = world.leader_id()?;
+    let leader = world.leader_entity()?;
     let combatant = world.combat.combatant(leader_id)?;
     Ok(sync_explore_combatant_stats(
         explore,
+        leader,
         combatant,
         world.tick_counter,
     ))
@@ -810,14 +874,15 @@ fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) ->
 
 fn sync_explore_combatant_stats(
     explore: &mut ExploreRender,
+    entity: &crate::game::EntityState,
     combatant: &CombatantState,
     current_tick: u32,
 ) -> bool {
     let mut changed = false;
-    let next_hp = combatant.stats.current_hp as u32;
-    let next_max_hp = combatant.stats.max_hp as u32;
-    let next_mp = combatant.stats.current_mp as u32;
-    let next_max_mp = combatant.stats.max_mp as u32;
+    let next_hp = entity.current_hp as u32;
+    let next_max_hp = entity.stat.base_max_hp as u32;
+    let next_mp = entity.current_mp as u32;
+    let next_max_mp = entity.stat.base_max_mp as u32;
     if explore.hp != next_hp {
         explore.hp = next_hp;
         changed = true;

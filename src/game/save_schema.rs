@@ -7,9 +7,8 @@ use anyhow::{Result, anyhow, ensure};
 use super::WorldState;
 use crate::data::Direction;
 use crate::game::state::{
-    AllyCombatantState, CombatState, CombatStatsSnapshot, CombatantState, EnemyCombatantState,
-    EntityKind, EntityState, ItemStack, LoadoutState, PartyState, TimedEffect, TimedKind,
-    TimedState,
+    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityKind, EntityState,
+    ItemStack, LoadoutState, PartyState, TimedEffect, TimedKind, TimedState,
 };
 
 const SAVE_VERSION: u32 = 2;
@@ -48,6 +47,8 @@ pub fn serialize(world: &WorldState) -> String {
             &entity.stat.base_max_mp.to_string(),
             &entity.stat.base_atk.to_string(),
             &entity.stat.base_def.to_string(),
+            &entity.current_hp.to_string(),
+            &entity.current_mp.to_string(),
         ]));
         lines.push(format_args_to_string(&[
             "LOADOUT",
@@ -67,7 +68,11 @@ pub fn serialize(world: &WorldState) -> String {
     }
 
     for ally in &world.combat.allies {
-        push_combatant_line("ALLY", ally.entity_id, &ally.combatant, &mut lines);
+        lines.push(format_args_to_string(&[
+            "ALLY",
+            &ally.entity_id.to_string(),
+        ]));
+        push_timed_lines(ally.entity_id, &ally.combatant, &mut lines);
     }
     for enemy in &world.combat.enemies {
         lines.push(format_args_to_string(&[
@@ -75,7 +80,7 @@ pub fn serialize(world: &WorldState) -> String {
             &enemy.entity_id.to_string(),
             &enemy.source_enemy_id,
         ]));
-        push_combatant_line("ENEMY_STATS", enemy.entity_id, &enemy.combatant, &mut lines);
+        push_timed_lines(enemy.entity_id, &enemy.combatant, &mut lines);
     }
 
     for quest in &world.quests {
@@ -105,23 +110,7 @@ pub fn serialize(world: &WorldState) -> String {
     result
 }
 
-fn push_combatant_line(
-    prefix: &str,
-    entity_id: u32,
-    combatant: &CombatantState,
-    lines: &mut Vec<String>,
-) {
-    let stats = combatant.stats;
-    lines.push(format_args_to_string(&[
-        prefix,
-        &entity_id.to_string(),
-        &stats.max_hp.to_string(),
-        &stats.current_hp.to_string(),
-        &stats.max_mp.to_string(),
-        &stats.current_mp.to_string(),
-        &stats.atk.to_string(),
-        &stats.def.to_string(),
-    ]));
+fn push_timed_lines(entity_id: u32, combatant: &CombatantState, lines: &mut Vec<String>) {
     for effect in &combatant.timed.effects {
         lines.push(format_args_to_string(&[
             "TIMED",
@@ -182,7 +171,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                 parsed_respawn_timer = parse_value(parts[3], "COMBAT.respawn_timer")?;
             }
             "ENTITY" => {
-                ensure!(parts.len() >= 15, "ENTITY line is malformed");
+                ensure!(parts.len() >= 17, "ENTITY line is malformed");
                 parsed_entities.push(EntityState {
                     id: parse_value(parts[1], "ENTITY.id")?,
                     kind: parse_entity_kind(parts[2])?,
@@ -200,6 +189,8 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                         base_atk: parse_value::<i32>(parts[13], "ENTITY.base_atk")?.max(0),
                         base_def: parse_value::<i32>(parts[14], "ENTITY.base_def")?.max(0),
                     },
+                    current_hp: parse_value::<i32>(parts[15], "ENTITY.current_hp")?.max(0),
+                    current_mp: parse_value::<i32>(parts[16], "ENTITY.current_mp")?.max(0),
                     inventory: Vec::new(),
                     loadout: LoadoutState::default(),
                 });
@@ -230,19 +221,11 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                 });
             }
             "ALLY" => {
-                ensure!(parts.len() >= 8, "ALLY line is malformed");
+                ensure!(parts.len() >= 2, "ALLY line is malformed");
                 let entity_id = parse_value(parts[1], "ALLY.entity_id")?;
                 parsed_allies.push(AllyCombatantState {
                     entity_id,
                     combatant: CombatantState {
-                        stats: CombatStatsSnapshot {
-                            max_hp: parse_value::<i32>(parts[2], "ALLY.max_hp")?.max(1),
-                            current_hp: parse_value::<i32>(parts[3], "ALLY.current_hp")?.max(0),
-                            max_mp: parse_value::<i32>(parts[4], "ALLY.max_mp")?.max(0),
-                            current_mp: parse_value::<i32>(parts[5], "ALLY.current_mp")?.max(0),
-                            atk: parse_value::<i32>(parts[6], "ALLY.atk")?.max(0),
-                            def: parse_value::<i32>(parts[7], "ALLY.def")?.max(0),
-                        },
                         timed: TimedState::default(),
                     },
                 });
@@ -254,22 +237,6 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                     source_enemy_id: parts[2].into(),
                     combatant: CombatantState::default(),
                 });
-            }
-            "ENEMY_STATS" => {
-                ensure!(parts.len() >= 8, "ENEMY_STATS line is malformed");
-                let entity_id = parse_value(parts[1], "ENEMY_STATS.entity_id")?;
-                let enemy = parsed_enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.entity_id == entity_id)
-                    .ok_or_else(|| anyhow!("ENEMY_STATS target enemy not found: {}", entity_id))?;
-                enemy.combatant.stats = CombatStatsSnapshot {
-                    max_hp: parse_value::<i32>(parts[2], "ENEMY_STATS.max_hp")?.max(1),
-                    current_hp: parse_value::<i32>(parts[3], "ENEMY_STATS.current_hp")?.max(0),
-                    max_mp: parse_value::<i32>(parts[4], "ENEMY_STATS.max_mp")?.max(0),
-                    current_mp: parse_value::<i32>(parts[5], "ENEMY_STATS.current_mp")?.max(0),
-                    atk: parse_value::<i32>(parts[6], "ENEMY_STATS.atk")?.max(0),
-                    def: parse_value::<i32>(parts[7], "ENEMY_STATS.def")?.max(0),
-                };
             }
             "TIMED" => {
                 ensure!(parts.len() >= 4, "TIMED line is malformed");

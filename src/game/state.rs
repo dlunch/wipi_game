@@ -6,8 +6,8 @@ pub(crate) mod world;
 pub(crate) mod world_slot;
 
 pub use combat::{
-    AllyCombatantState, CombatState, CombatStatsSnapshot, CombatantState, EnemyCombatantState,
-    TimedEffect, TimedKind, TimedState,
+    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, TimedEffect, TimedKind,
+    TimedState,
 };
 pub use entity::combat_attack_def;
 pub use entity::{

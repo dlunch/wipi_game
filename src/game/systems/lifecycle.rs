@@ -6,11 +6,8 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::save::load_game;
-use crate::game::state::{
-    CombatStatsSnapshot, EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind,
-    combat_attack_def,
-};
-use crate::game::systems::emit::{emit_combat_stats, emit_entity_snapshot, emit_timed_effects};
+use crate::game::state::{EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind};
+use crate::game::systems::emit::{emit_entity_snapshot, emit_timed_effects};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
     CombatEvent, DialogState, EntityEvent, GameData, GameEvent, GameEventKind, MovementEvent,
@@ -120,7 +117,8 @@ impl LifecycleResolver {
         leader.x = x;
         leader.y = y;
 
-        let leader_stats = snapshot_for_entity(data, &leader)?;
+        leader.current_hp = leader.stat.base_max_hp;
+        leader.current_mp = leader.stat.base_max_mp;
 
         out.push(GameEvent::World(WorldEvent::CreateWorld));
         out.push(GameEvent::World(WorldEvent::SetWorldMap(
@@ -130,7 +128,6 @@ impl LifecycleResolver {
         out.push(GameEvent::Entity(EntityEvent::ClearCompanionEntities));
         emit_entity_snapshot(&leader, out);
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
-        emit_combat_stats(leader_id, &leader_stats, out);
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::MpRegenTick,
@@ -168,19 +165,6 @@ impl LifecycleResolver {
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         Ok(())
     }
-}
-
-fn snapshot_for_entity(data: &GameData, entity: &EntityState) -> Result<CombatStatsSnapshot> {
-    let (atk, def) = combat_attack_def(data, entity)?;
-
-    Ok(CombatStatsSnapshot {
-        max_hp: entity.stat.base_max_hp,
-        current_hp: entity.stat.base_max_hp,
-        max_mp: entity.stat.base_max_mp,
-        current_mp: entity.stat.base_max_mp,
-        atk,
-        def,
-    })
 }
 
 fn push_stack(inventory: &mut Vec<ItemStack>, item_id: &str, amount: i32) -> usize {
@@ -236,11 +220,9 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         world.combat.active,
     )));
     for ally in &world.combat.allies {
-        emit_combat_stats(ally.entity_id, &ally.combatant.stats, out);
         emit_timed_effects(ally.entity_id, &ally.combatant.timed.effects, out);
     }
     for enemy in &world.combat.enemies {
-        emit_combat_stats(enemy.entity_id, &enemy.combatant.stats, out);
         emit_timed_effects(enemy.entity_id, &enemy.combatant.timed.effects, out);
     }
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(
