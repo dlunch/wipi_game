@@ -246,21 +246,10 @@ fn resolve_kill_reward(
             && quest.quest_type == QuestType::Kill
             && quest.target_id == enemy_id
         {
-            let mut next = progress.clone();
-            next.current_count = (next.current_count + 1).min(quest.target_count);
-            if next.current_count >= quest.target_count {
-                next.completed = true;
-            }
-            out.push(GameEvent::World(WorldEvent::SetQuestCurrentCount {
-                quest_id: next.quest_id.clone(),
-                current_count: next.current_count,
+            out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
+                quest_id: progress.quest_id.clone(),
+                delta: 1,
             }));
-            if next.completed {
-                out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
-                    quest_id: next.quest_id,
-                    completed: true,
-                }));
-            }
         }
     }
 }
@@ -355,8 +344,12 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
             facing: None,
         }));
     }
-    out.push(GameEvent::World(WorldEvent::ResetMovement));
-    out.push(GameEvent::World(WorldEvent::ResetCombat));
+    out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
+    out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
+    out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
+    out.push(GameEvent::Combat(CombatEvent::SetActive(false)));
+    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
+    out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::Poison,
@@ -370,6 +363,23 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::ArmorBreak,
+        time_left: 0,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+        entity_id: leader_id,
+        kind: TimedKind::AttackCooldown,
+        time_left: 0,
+    }));
+    for slot in 0..3u8 {
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id: leader_id,
+            kind: TimedKind::SkillCooldown(slot),
+            time_left: 0,
+        }));
+    }
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+        entity_id: leader_id,
+        kind: TimedKind::MpRegenTick,
         time_left: 0,
     }));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));

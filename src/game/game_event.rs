@@ -257,9 +257,9 @@ pub enum WorldEvent {
     CreateQuestProgress {
         quest_id: String,
     },
-    SetQuestCurrentCount {
+    ChangeQuestCurrentCount {
         quest_id: String,
-        current_count: i32,
+        delta: i32,
     },
     SetQuestCompleted {
         quest_id: String,
@@ -274,8 +274,6 @@ pub enum WorldEvent {
         x: usize,
         y: usize,
     },
-    ResetMovement,
-    ResetCombat,
 }
 
 #[derive(Clone, Copy)]
@@ -318,4 +316,6 @@ pub enum ExploreEvent {
 #[derive(Clone)]
 pub enum MovementEvent {
     Tick(crate::game::MovementTickEvent, Option<TileEvent>),
+    ClearPressedDirections,
+    SetMoveCooldown(u32),
 }

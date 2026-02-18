@@ -613,7 +613,7 @@ fn apply_event_to_explore_render(
                 }
             }
             WorldEvent::CreateQuestProgress { .. }
-            | WorldEvent::SetQuestCurrentCount { .. }
+            | WorldEvent::ChangeQuestCurrentCount { .. }
             | WorldEvent::SetQuestCompleted { .. }
             | WorldEvent::SetQuestRewarded { .. } => {
                 explore.active_quest_count = world
@@ -676,10 +676,6 @@ fn apply_event_to_explore_render(
                 explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
                 enemy_changed = before != explore.enemies.len();
             }
-            WorldEvent::ResetCombat => {
-                explore.enemies.clear();
-                enemy_changed = true;
-            }
             WorldEvent::ClearEntityInventory { .. }
             | WorldEvent::SetEntityLoadoutSlot { .. }
             | WorldEvent::SetEntityExp { .. }
@@ -693,8 +689,7 @@ fn apply_event_to_explore_render(
             | WorldEvent::SetLeaderEntity(_)
             | WorldEvent::ClearCompanionEntities
             | WorldEvent::AddCompanionEntity(_)
-            | WorldEvent::CreateWorld
-            | WorldEvent::ResetMovement => {}
+            | WorldEvent::CreateWorld => {}
         },
         _ => {}
     }
@@ -713,7 +708,7 @@ fn is_quest_world_event(event: &GameEvent) -> bool {
         event,
         GameEvent::World(
             WorldEvent::CreateQuestProgress { .. }
-                | WorldEvent::SetQuestCurrentCount { .. }
+                | WorldEvent::ChangeQuestCurrentCount { .. }
                 | WorldEvent::SetQuestCompleted { .. }
                 | WorldEvent::SetQuestRewarded { .. }
         )

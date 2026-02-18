@@ -11,8 +11,8 @@ use crate::game::state::{
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, DialogState, GameData, GameEvent, GameEventKind, LoadoutSlot, TransitionEvent,
-    WorldEvent, WorldState,
+    CombatEvent, DialogState, GameData, GameEvent, GameEventKind, LoadoutSlot, MovementEvent,
+    TransitionEvent, WorldEvent, WorldState,
 };
 
 #[derive(Clone)]
@@ -131,7 +131,8 @@ impl LifecycleResolver {
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
         emit_combat_stats(leader_id, &leader_stats, out);
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
-        out.push(GameEvent::World(WorldEvent::ResetMovement));
+        out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
+        out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
     }
 
@@ -228,9 +229,9 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
             quest_id: quest.quest_id.clone(),
         }));
-        out.push(GameEvent::World(WorldEvent::SetQuestCurrentCount {
+        out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
             quest_id: quest.quest_id.clone(),
-            current_count: quest.current_count,
+            delta: quest.current_count,
         }));
         out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
             quest_id: quest.quest_id.clone(),
@@ -265,7 +266,10 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(
         world.combat.respawn_timer,
     )));
-    out.push(GameEvent::World(WorldEvent::ResetMovement));
+    out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
+    out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(
+        world.movement.move_cooldown,
+    )));
 }
 
 fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Vec<GameEvent>) {

@@ -366,6 +366,7 @@ impl WorldState {
                     entity.loadout.armor = None;
                     entity.loadout.accessory = None;
                 }
+                self.sync_combat_offense_for_entity(data, *entity_id);
             }
             WorldEvent::SetEntityLoadoutSlot {
                 entity_id,
@@ -385,6 +386,7 @@ impl WorldState {
                         }
                     }
                 }
+                self.sync_combat_offense_for_entity(data, *entity_id);
             }
             WorldEvent::ChangeEntityItem {
                 entity_id,
@@ -396,15 +398,20 @@ impl WorldState {
                 } else if *delta < 0 {
                     self.remove_item_amount(*entity_id, item_id, -*delta);
                 }
+                self.sync_combat_offense_for_entity(data, *entity_id);
             }
             WorldEvent::CreateQuestProgress { quest_id } => {
                 self.ensure_quest_progress(quest_id);
             }
-            WorldEvent::SetQuestCurrentCount {
-                quest_id,
-                current_count,
-            } => {
-                self.ensure_quest_progress(quest_id).current_count = *current_count;
+            WorldEvent::ChangeQuestCurrentCount { quest_id, delta } => {
+                let progress = self.ensure_quest_progress(quest_id);
+                progress.current_count = (progress.current_count + *delta).max(0);
+                if let Some(quest) = data.find_quest(quest_id) {
+                    progress.current_count = progress.current_count.min(quest.target_count.max(0));
+                    if progress.current_count >= quest.target_count {
+                        progress.completed = true;
+                    }
+                }
             }
             WorldEvent::SetQuestCompleted {
                 quest_id,
@@ -419,13 +426,6 @@ impl WorldState {
                 if !self.is_treasure_opened(map_id, *x, *y) {
                     self.opened_treasures.push((map_id.clone(), *x, *y));
                 }
-            }
-            WorldEvent::ResetMovement => {
-                self.movement = MovementState::default();
-            }
-            WorldEvent::ResetCombat => {
-                self.combat = CombatState::default();
-                self.clear_enemy_occupancy();
             }
         }
     }
@@ -444,18 +444,27 @@ impl WorldState {
                 self.entities.remove(*entity_id);
                 self.rebuild_enemy_occupancy();
             }
-            CombatEvent::ClearEnemies
+            CombatEvent::ClearEnemies => {
+                self.rebuild_enemy_occupancy();
+            }
+            CombatEvent::SetCombatantCurrentHp { entity_id, .. } => {
+                if self
+                    .combat
+                    .enemies
+                    .iter()
+                    .any(|enemy| enemy.entity_id == *entity_id)
+                {
+                    self.rebuild_enemy_occupancy();
+                }
+            }
+            CombatEvent::SetActive(_)
+            | CombatEvent::ClearAllies
             | CombatEvent::SetCombatantMaxHp { .. }
-            | CombatEvent::SetCombatantCurrentHp { .. }
             | CombatEvent::SetCombatantMaxMp { .. }
             | CombatEvent::SetCombatantCurrentMp { .. }
             | CombatEvent::SetCombatantAtk { .. }
             | CombatEvent::SetCombatantDef { .. }
-            | CombatEvent::SetCombatantTimed { .. } => {
-                self.rebuild_enemy_occupancy();
-            }
-            CombatEvent::SetActive(_)
-            | CombatEvent::ClearAllies
+            | CombatEvent::SetCombatantTimed { .. }
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. }
@@ -570,6 +579,41 @@ impl WorldState {
                 });
             }
         }
+    }
+
+    fn sync_combat_offense_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
+        let Some(entity) = self.entities.get(entity_id) else {
+            return;
+        };
+        let Some(combatant) = self.combat.combatant_mut(entity_id) else {
+            return;
+        };
+
+        let mut atk = entity.stat.base_atk;
+        let mut def = entity.stat.base_def;
+
+        if let Some(index) = entity.loadout.weapon
+            && let Some(stack) = entity.inventory.get(index)
+            && let Some(item) = data.find_item(&stack.item_id)
+        {
+            atk += item.atk();
+        }
+        if let Some(index) = entity.loadout.armor
+            && let Some(stack) = entity.inventory.get(index)
+            && let Some(item) = data.find_item(&stack.item_id)
+        {
+            def += item.def();
+        }
+        if let Some(index) = entity.loadout.accessory
+            && let Some(stack) = entity.inventory.get(index)
+            && let Some(item) = data.find_item(&stack.item_id)
+        {
+            atk += item.atk();
+            def += item.def();
+        }
+
+        combatant.stats.atk = atk;
+        combatant.stats.def = def;
     }
 
     fn ensure_quest_progress(&mut self, quest_id: &str) -> &mut QuestProgress {

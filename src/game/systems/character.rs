@@ -46,17 +46,17 @@ impl DomainEventResolver for CharacterMutationResolver {
 
         match event {
             GameEvent::UseInventorySelected(index) => {
-                resolve_use_item(data, world, leader_id, leader, *index, out)
+                resolve_use_item(data, leader_id, leader, *index, out)
             }
             GameEvent::ShopBuyItem(item_id) => {
                 resolve_shop_buy(data, world, leader_id, item_id, out)
             }
             GameEvent::ShopSellSelected(index) => {
-                resolve_shop_sell(data, world, leader_id, leader, *index, out)
+                resolve_shop_sell(data, leader_id, leader, *index, out)
             }
             GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out),
             GameEvent::ApplyDialogAction(action) => {
-                resolve_dialog_action(data, world, leader_id, action, out)?
+                resolve_dialog_action(world, leader_id, action, out)?
             }
             _ => {}
         }
@@ -66,7 +66,6 @@ impl DomainEventResolver for CharacterMutationResolver {
 
 fn resolve_use_item(
     data: &GameData,
-    world: &WorldState,
     leader_id: u32,
     leader: &crate::game::EntityState,
     index: usize,
@@ -116,7 +115,6 @@ fn resolve_use_item(
             }));
         }
     }
-    sync_leader_combat_stats(data, world, leader_id, out);
 }
 
 fn resolve_shop_buy(
@@ -147,7 +145,6 @@ fn resolve_shop_buy(
 
 fn resolve_shop_sell(
     data: &GameData,
-    world: &WorldState,
     leader_id: u32,
     leader: &crate::game::EntityState,
     index: usize,
@@ -173,7 +170,6 @@ fn resolve_shop_sell(
         item_id: crate::game::GOLD_ITEM_ID.into(),
         delta: (item.price / 2).max(0),
     }));
-    sync_leader_combat_stats(data, world, leader_id, out);
 }
 
 fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameEvent>) {
@@ -191,7 +187,6 @@ fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameE
 }
 
 fn resolve_dialog_action(
-    data: &GameData,
     world: &WorldState,
     entity_id: u32,
     action: &DialogAction,
@@ -204,7 +199,6 @@ fn resolve_dialog_action(
                 item_id: id.clone(),
                 delta: 1,
             }));
-            sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::TakeItem(id) => {
             out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
@@ -212,7 +206,6 @@ fn resolve_dialog_action(
                 item_id: id.clone(),
                 delta: -1,
             }));
-            sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::GiveGold(amount) => {
             out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
@@ -233,47 +226,4 @@ fn resolve_dialog_action(
         }
     }
     Ok(())
-}
-
-fn sync_leader_combat_stats(
-    data: &GameData,
-    world: &WorldState,
-    entity_id: u32,
-    out: &mut Vec<GameEvent>,
-) {
-    let Some(entity) = world.entity(entity_id) else {
-        return;
-    };
-    if world.combat.combatant(entity_id).is_none() {
-        return;
-    }
-    let mut atk = entity.stat.base_atk;
-    let mut def = entity.stat.base_def;
-    if let Some(index) = entity.loadout.weapon
-        && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
-    {
-        atk += item.atk();
-    }
-    if let Some(index) = entity.loadout.armor
-        && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
-    {
-        def += item.def();
-    }
-    if let Some(index) = entity.loadout.accessory
-        && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
-    {
-        atk += item.atk();
-        def += item.def();
-    }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
-        entity_id,
-        atk,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantDef {
-        entity_id,
-        def,
-    }));
 }

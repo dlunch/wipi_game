@@ -52,6 +52,15 @@ impl MovementState {
                 let _ = tile_event;
                 self.apply_tick(*movement_event);
             }
+            GameEvent::Movement(MovementEvent::ClearPressedDirections) => {
+                self.pressed_direction = None;
+                self.pressed_mask = 0;
+                self.press_len = 0;
+                self.press_order = [u8::MAX; 4];
+            }
+            GameEvent::Movement(MovementEvent::SetMoveCooldown(cooldown)) => {
+                self.move_cooldown = *cooldown;
+            }
             GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(direction)) => {
                 self.on_direction_released(*direction);
             }
