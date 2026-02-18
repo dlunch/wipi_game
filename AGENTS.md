@@ -27,75 +27,21 @@ cargo fmt
 ./release.sh
 ```
 
-## Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Run specific test
-cargo test test_name
-
-# Run tests in specific module
-cargo test module_name::
-```
-
-Note: Tests run in simulation mode with std library available.
-Manual gameplay testing: `cargo run` (in wipi repo with this as dependency).
-
 ## Project Structure
 
 ```
 src/
-├── main.rs              # Entry point + WIPI App glue (timer/input/render wiring)
-├── engine.rs            # GameEngine orchestration (input queue + game event queue + render cache)
-├── data.rs              # Re-exports from data module
-├── data/
-│   ├── types.rs         # Data structures (Item, Enemy, Map, Quest, Skill, etc.)
-│   └── parser.rs        # Text file parsers for .dat resources
-├── game.rs              # Re-exports from game module (state, systems, rendering, ui)
+├── main.rs              # App entry/WIPI glue
+├── engine.rs            # Runtime orchestration (input->event queue->apply->render)
+├── data/                # Data model + parser
 └── game/
-    ├── game_event.rs    # GameEvent and domain sub-events
-    ├── state.rs         # GameState enum + state module re-exports
-    ├── state/
-    │   ├── game_state.rs# GameState transitions/subscriber logic
-    │   ├── character.rs # CharacterState + tile events + character mutations
-    │   ├── combat.rs    # CombatState + combat actions/events + combat mutations
-    │   ├── movement.rs  # MovementState + movement tick event + movement mutations
-    │   ├── world.rs     # WorldState domain state + occupancy caches
-    │   └── world_slot.rs# Optional active world holder
-    ├── world.rs         # Re-export for state/world.rs
-    ├── ui.rs            # UI module re-exports
-    ├── ui/
-    │   ├── state.rs     # UiState + UiEvent data types
-    │   ├── resolve.rs   # Input -> UiEvent mapping
-    │   ├── apply.rs     # UiEvent -> GameEvent mapping
-    │   └── game_event.rs# UiState apply_game_event bridge for GameEvent
-    ├── systems.rs       # Re-exports from systems sub-modules
-    ├── systems/
-    │   ├── resolver.rs  # ResolveContext + DomainEventResolver trait
-    │   ├── loading.rs   # Loading tick resolution/helpers
-    │   ├── lifecycle.rs # Loading/new-game/continue-game resolution/helpers
-    │   ├── movement.rs  # Movement resolve_tick + resolve_world_tick
-    │   ├── combat.rs    # Combat resolve_tick + respawn/resource resolution
-    │   ├── explore.rs   # Explore command resolution
-    │   ├── shop.rs      # Shop command resolution
-    │   ├── world.rs     # World-related command resolution
-    │   ├── character.rs # Character-related command resolution
-    │   └── npc.rs       # NPC interaction resolution
-    ├── rendering.rs     # Re-exports from rendering sub-modules
-    ├── rendering/
-    │   ├── renderer.rs  # Color constants, drawing primitives (text, rect, fill)
-    │   ├── game.rs      # Main render dispatch + RenderState/RenderFxState
-    │   ├── sprites.rs   # Atlas metadata parsing + animated sprite frame selection
-    │   ├── dialog.rs    # Dialog box rendering
-    │   ├── explore.rs   # Map/entity/HUD rendering
-    │   ├── inventory.rs # Inventory & stats UI
-    │   ├── menu.rs      # Main menu & pause menu
-    │   ├── quest.rs     # Quest log UI
-    │   └── shop.rs      # Shop UI
-    ├── game_data.rs     # Resource loading, data queries
-    └── save.rs          # Save/load system
+    ├── game_event.rs    # Core runtime event types
+    ├── state/           # Persistent domain state + apply logic
+    ├── systems/         # Stateless resolver logic (derive events)
+    ├── ui/              # UI state + input resolve/apply
+    ├── rendering/       # Render state + draw modules + sprite atlas
+    ├── game_data.rs     # Loaded game data access
+    └── save.rs          # Save/load
 resources/
 ├── data/                # Game data files (.dat)
 └── images/              # Image assets
@@ -105,18 +51,25 @@ resources/
 
 The codebase follows an **event queue + resolve systems + apply + rendering** pattern:
 
-- **State** (`state/`): Core state types and domain mutations (`GameState`, `CharacterState`, `CombatState`, `MovementState`, `WorldState`).
-- **UI State** (`ui/state.rs`): UI-only interaction state + `UiEvent` mapping/apply.
-- **Systems** (`systems/`): Stateless `GameEvent` resolution only. Prefer `resolve_*` naming.
-- **Runtime Engine** (`engine.rs`): Cross-system orchestration (`GameEvent queue -> resolve -> apply -> enqueue`) with overflow guard.
-- **Rendering** (`rendering/`): RenderState-based drawing + incremental patch helpers (`apply_render_event`, `apply_tick`, `apply_ui_patch`) + sprite atlas frame selection.
-- **App** (`main.rs`): Entry glue only (WIPI `App` trait hooks, timer, repaint).
+- **State** (`state/`): Owns data and only applies events (mutation sink).
+- **Systems** (`systems/`): Read-only over current state/data, derive additional `GameEvent`s.
+- **UI** (`ui/`): `Input -> UiEvent -> GameEvent` conversion, no direct world mutation.
+- **Engine** (`engine.rs`): Only orchestrates queue order and subscribers.
+- **Rendering** (`rendering/`): Consumes state/render-fx to produce frames.
+- **App** (`main.rs`): Platform hook glue only.
 
 Input flow: `keydown/keyup -> pending input queue -> UiEvent resolve/apply -> GameEvent dispatch -> resolve/apply loop -> render patch or rebuild`
 
 Update flow (timer tick): `process pending inputs -> render fx tick (includes animation tick) -> UpdateLoading/UpdateMovement/UpdateCombat events -> resolve/apply -> render patch or rebuild`.
 
-Architecture rule: systems must not orchestrate other systems. Cross-system orchestration belongs in `engine.rs` event queue handlers.
+Mandatory architecture rules:
+- Resolve must not mutate state directly.
+- Only Apply mutates state.
+- Systems must not orchestrate by calling other systems/states directly.
+- Cross-system ordering must be controlled only in the `engine.rs` event queue.
+- Keep a strict boundary between UI events and Game events.
+- Prefer field/delta events over whole-state snapshot replacement when possible.
+- Propagate errors upward with `anyhow::Result`; the engine handles state transition to `GameState::Error`.
 
 ## Code Style Guidelines
 
@@ -155,30 +108,9 @@ let Some(map) = self.current_map() else {
 - Test functions should return `Result<()>` and use `?` instead of `unwrap()`
 - Error case tests use `assert!(result.is_err())` directly
 
-### Pattern Matching
-- Use `if let ... && let ...` for chained conditions (Rust nightly feature)
-- Prefer `matches!()` for simple boolean checks
-
-```rust
-// Good
-if let Some(quest) = data.find_quest(&id)
-    && quest.quest_type == QuestType::Kill
-{
-    // ...
-}
-
-// Good
-if matches!(self.state, GameState::Explore) { ... }
-```
-
 ### Memory & Allocation
 - **NO standard library** - use `alloc::` for String, Vec, etc.
 - Clone sparingly - prefer references where possible
-
-### Struct Design
-- Implement `Default` trait when struct has sensible defaults
-- Use `#[derive(Debug, Clone)]` for data types
-- Add `Copy` only for small enums/structs
 
 ### Comments
 - **Avoid unnecessary comments** - code should be self-explanatory
@@ -192,11 +124,6 @@ if matches!(self.state, GameState::Explore) { ... }
 - Module files (`game.rs`, `data.rs`, `state.rs`, etc.) should primarily contain `mod` and `pub use`
 - Prefer methods for state/session mutation and functions for stateless system resolution
 - Sprite assets should be atlas-based (`images/atlas.png` + `images/atlas.meta`), with rectangle fallback when atlas/meta is missing.
-
-### Functions
-- Keep functions small and focused
-- Use descriptive names over comments
-- Prefer `resolve`/`resolve_*` emitting events (`out: &mut Vec<GameEvent>`) and separate state/session apply methods for mutation
 
 ## Key Constraints
 
