@@ -282,6 +282,7 @@ impl WorldState {
                 kind,
                 name,
             } => {
+                let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id);
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.kind = *kind;
                     entity.name = name.clone();
@@ -301,9 +302,11 @@ impl WorldState {
                 }
                 self.sync_combat_entry_for_entity(data, *entity_id);
                 self.sync_allies_with_party();
-                self.rebuild_enemy_occupancy();
+                let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
+                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
             }
             EntityEvent::RemoveEntity(entity_id) => {
+                let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id);
                 self.entities.remove(*entity_id);
                 self.party.companion_ids.retain(|id| *id != *entity_id);
                 if self.party.leader_id == *entity_id {
@@ -315,7 +318,7 @@ impl WorldState {
                 self.combat
                     .enemies
                     .retain(|enemy| enemy.entity_id != *entity_id);
-                self.rebuild_enemy_occupancy();
+                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, None);
             }
             EntityEvent::SetEntityTransform {
                 entity_id,
@@ -323,6 +326,7 @@ impl WorldState {
                 position,
                 facing,
             } => {
+                let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id);
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     if let Some(map_id) = map_id {
                         entity.map_id = map_id.clone();
@@ -336,7 +340,12 @@ impl WorldState {
                     }
                 }
                 if map_id.is_some() || position.is_some() {
-                    self.rebuild_enemy_occupancy();
+                    let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
+                    self.apply_enemy_occupancy_delta(
+                        *entity_id,
+                        previous_tile_index,
+                        next_tile_index,
+                    );
                 }
             }
             EntityEvent::SetEntityLevel { entity_id, level } => {
@@ -444,13 +453,10 @@ impl WorldState {
     }
 
     fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
-        let enemy_was_alive = match event {
-            CombatEvent::SetCombatantCurrentHp { entity_id, .. } => self
-                .combat
-                .enemies
-                .iter()
-                .find(|enemy| enemy.entity_id == *entity_id)
-                .map(|enemy| enemy.combatant.stats.current_hp > 0),
+        let previous_tile_index = match event {
+            CombatEvent::MoveEnemy { entity_id, .. }
+            | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
+            | CombatEvent::RemoveEnemy(entity_id) => self.enemy_tile_index_for_entity(*entity_id),
             _ => None,
         };
 
@@ -461,34 +467,19 @@ impl WorldState {
                     enemy_entity.x = *x;
                     enemy_entity.y = *y;
                 }
-                self.rebuild_enemy_occupancy();
+                let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
+                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
             }
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.entities.remove(*entity_id);
-                self.rebuild_enemy_occupancy();
+                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, None);
             }
             CombatEvent::ClearEnemies => {
-                self.rebuild_enemy_occupancy();
+                self.clear_enemy_occupancy();
             }
             CombatEvent::SetCombatantCurrentHp { entity_id, .. } => {
-                if let Some(was_alive) = enemy_was_alive {
-                    let is_alive = self
-                        .combat
-                        .enemies
-                        .iter()
-                        .find(|enemy| enemy.entity_id == *entity_id)
-                        .is_some_and(|enemy| enemy.combatant.stats.current_hp > 0);
-                    if was_alive != is_alive {
-                        self.rebuild_enemy_occupancy();
-                    }
-                } else if self
-                    .combat
-                    .enemies
-                    .iter()
-                    .any(|enemy| enemy.entity_id == *entity_id)
-                {
-                    self.rebuild_enemy_occupancy();
-                }
+                let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
+                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
             }
             CombatEvent::SetActive(_)
             | CombatEvent::ClearAllies
@@ -511,6 +502,81 @@ impl WorldState {
     fn clear_enemy_occupancy(&mut self) {
         for occupied in &mut self.occupancy.enemy_tiles {
             *occupied = false;
+        }
+    }
+
+    fn enemy_tile_index_for_entity(&self, entity_id: EntityId) -> Option<usize> {
+        if self.occupancy.width == 0 || self.occupancy.height == 0 {
+            return None;
+        }
+        let enemy = self
+            .combat
+            .enemies
+            .iter()
+            .find(|enemy| enemy.entity_id == entity_id)?;
+        if enemy.combatant.stats.current_hp <= 0 {
+            return None;
+        }
+        let entity = self.entities.get(entity_id)?;
+        if entity.map_id != self.occupancy.map_id {
+            return None;
+        }
+        if entity.x >= self.occupancy.width || entity.y >= self.occupancy.height {
+            return None;
+        }
+        Some(entity.y * self.occupancy.width + entity.x)
+    }
+
+    fn has_other_alive_enemy_on_tile(
+        &self,
+        tile_index: usize,
+        excluded_entity_id: EntityId,
+    ) -> bool {
+        if self.occupancy.width == 0 || self.occupancy.height == 0 {
+            return false;
+        }
+        for enemy in &self.combat.enemies {
+            if enemy.entity_id == excluded_entity_id || enemy.combatant.stats.current_hp <= 0 {
+                continue;
+            }
+            let Some(entity) = self.entities.get(enemy.entity_id) else {
+                continue;
+            };
+            if entity.map_id != self.occupancy.map_id {
+                continue;
+            }
+            if entity.x >= self.occupancy.width || entity.y >= self.occupancy.height {
+                continue;
+            }
+            let index = entity.y * self.occupancy.width + entity.x;
+            if index == tile_index {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn apply_enemy_occupancy_delta(
+        &mut self,
+        entity_id: EntityId,
+        previous_tile_index: Option<usize>,
+        next_tile_index: Option<usize>,
+    ) {
+        if previous_tile_index == next_tile_index {
+            return;
+        }
+
+        if let Some(previous_tile_index) = previous_tile_index
+            && previous_tile_index < self.occupancy.enemy_tiles.len()
+            && !self.has_other_alive_enemy_on_tile(previous_tile_index, entity_id)
+        {
+            self.occupancy.enemy_tiles[previous_tile_index] = false;
+        }
+
+        if let Some(next_tile_index) = next_tile_index
+            && next_tile_index < self.occupancy.enemy_tiles.len()
+        {
+            self.occupancy.enemy_tiles[next_tile_index] = true;
         }
     }
 
