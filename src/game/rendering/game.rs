@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use wipi::framebuffer::Framebuffer;
 
 use crate::game::state::{CombatantState, TimedKind};
-use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
+use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent,
     MovementEvent, SpriteAtlas, TransitionEvent, WorldEvent, WorldState,
@@ -63,21 +63,7 @@ impl RenderState {
                 ) {
                     return false;
                 }
-
-                let mut changed = false;
-                if *title != ui.menu.state.title {
-                    *title = ui.menu.state.title;
-                    changed = true;
-                }
-                if *items != ui.menu.state.items {
-                    *items = ui.menu.state.items.clone();
-                    changed = true;
-                }
-                if *selected != ui.menu.selected {
-                    *selected = ui.menu.selected;
-                    changed = true;
-                }
-                changed
+                sync_menu_fields(title, items, selected, ui)
             }
             RenderState::Explore(explore) => {
                 patch_explore(explore, event, world, ui, data, render_fx, state)
@@ -206,22 +192,7 @@ impl RenderState {
                 title,
                 items,
                 selected,
-            } => {
-                let mut changed = false;
-                if *title != ui.menu.state.title {
-                    *title = ui.menu.state.title;
-                    changed = true;
-                }
-                if *items != ui.menu.state.items {
-                    *items = ui.menu.state.items.clone();
-                    changed = true;
-                }
-                if *selected != ui.menu.selected {
-                    *selected = ui.menu.selected;
-                    changed = true;
-                }
-                changed
-            }
+            } => sync_menu_fields(title, items, selected, ui),
             RenderState::PauseMenu {
                 items, selected, ..
             } => {
@@ -562,6 +533,28 @@ fn patch_explore(
         }
         _ => false,
     }
+}
+
+fn sync_menu_fields(
+    title: &mut &'static str,
+    items: &mut Vec<(&'static str, MenuAction)>,
+    selected: &mut usize,
+    ui: &UiState,
+) -> bool {
+    let mut changed = false;
+    if *title != ui.menu.state.title {
+        *title = ui.menu.state.title;
+        changed = true;
+    }
+    if *items != ui.menu.state.items {
+        *items = ui.menu.state.items.clone();
+        changed = true;
+    }
+    if *selected != ui.menu.selected {
+        *selected = ui.menu.selected;
+        changed = true;
+    }
+    changed
 }
 
 fn patch_explore_combat(

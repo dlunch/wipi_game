@@ -226,21 +226,13 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         emit_entity_snapshot(entity, out);
     }
     for quest in &world.quests {
-        out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
-            quest_id: quest.quest_id.clone(),
-        }));
-        out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-            quest_id: quest.quest_id.clone(),
-            delta: quest.current_count,
-        }));
-        out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
-            quest_id: quest.quest_id.clone(),
-            completed: quest.completed,
-        }));
-        out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
-            quest_id: quest.quest_id.clone(),
-            rewarded: quest.rewarded,
-        }));
+        emit_quest_snapshot(
+            &quest.quest_id,
+            quest.current_count,
+            quest.completed,
+            quest.rewarded,
+            out,
+        );
     }
     for (map_id, x, y) in &world.opened_treasures {
         out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
@@ -270,6 +262,31 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(
         world.movement.move_cooldown,
     )));
+}
+
+fn emit_quest_snapshot(
+    quest_id: &str,
+    current_count: i32,
+    completed: bool,
+    rewarded: bool,
+    out: &mut Vec<GameEvent>,
+) {
+    let quest_id = String::from(quest_id);
+    out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
+        quest_id: quest_id.clone(),
+    }));
+    out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
+        quest_id: quest_id.clone(),
+        delta: current_count,
+    }));
+    out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
+        quest_id: quest_id.clone(),
+        completed,
+    }));
+    out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
+        quest_id,
+        rewarded,
+    }));
 }
 
 fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Vec<GameEvent>) {

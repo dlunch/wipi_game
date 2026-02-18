@@ -1,4 +1,5 @@
 use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -101,28 +102,18 @@ fn resolve_tick_with_occupancy(
 
 fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) -> Option<TileEvent> {
     let map = data.find_map(map_id)?;
-    let tile = map.get_tile(x, y);
-
-    match tile {
+    match map.get_tile(x, y) {
         Tile::Treasure => Some(TileEvent::Treasure),
-        Tile::Exit => {
-            for (ex, ey, target) in &map.exits {
-                if *ex == x && *ey == y {
-                    return Some(TileEvent::MapExit(target.clone()));
-                }
-            }
-            None
-        }
-        Tile::Dungeon => {
-            for (dx, dy, target) in &map.dungeons {
-                if *dx == x && *dy == y {
-                    return Some(TileEvent::DungeonEntrance(target.clone()));
-                }
-            }
-            None
-        }
+        Tile::Exit => find_tile_target(&map.exits, x, y).map(TileEvent::MapExit),
+        Tile::Dungeon => find_tile_target(&map.dungeons, x, y).map(TileEvent::DungeonEntrance),
         _ => None,
     }
+}
+
+fn find_tile_target(tiles: &[(usize, usize, String)], x: usize, y: usize) -> Option<String> {
+    tiles
+        .iter()
+        .find_map(|(tx, ty, target)| (*tx == x && *ty == y).then(|| target.clone()))
 }
 
 struct UpdateMovementResolver;
