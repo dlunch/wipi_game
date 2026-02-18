@@ -71,11 +71,8 @@ impl RenderFxState {
                     true
                 }
             }
-            GameEvent::World(WorldEvent::AddQuestProgress(progress))
-                if matches!(state, GameState::Explore | GameState::Dialog)
-                    && progress.current_count == 0
-                    && !progress.completed
-                    && !progress.rewarded =>
+            GameEvent::World(WorldEvent::CreateQuestProgress { .. })
+                if matches!(state, GameState::Explore | GameState::Dialog) =>
             {
                 let changed = self.quest_notice_timer != QUEST_NOTICE_DURATION;
                 self.quest_notice_timer = QUEST_NOTICE_DURATION;

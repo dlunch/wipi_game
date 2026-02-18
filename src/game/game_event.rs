@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::data::Direction;
-use crate::game::state::{CombatStatsSnapshot, EntityId, EntityKind, TimedKind};
+use crate::game::state::{EntityId, EntityKind, TimedKind};
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -16,9 +16,29 @@ pub enum CombatEvent {
         x: usize,
         y: usize,
     },
-    SetCombatantStats {
+    SetCombatantMaxHp {
         entity_id: EntityId,
-        stats: CombatStatsSnapshot,
+        max_hp: i32,
+    },
+    SetCombatantCurrentHp {
+        entity_id: EntityId,
+        current_hp: i32,
+    },
+    SetCombatantMaxMp {
+        entity_id: EntityId,
+        max_mp: i32,
+    },
+    SetCombatantCurrentMp {
+        entity_id: EntityId,
+        current_mp: i32,
+    },
+    SetCombatantAtk {
+        entity_id: EntityId,
+        atk: i32,
+    },
+    SetCombatantDef {
+        entity_id: EntityId,
+        def: i32,
     },
     SetCombatantTimed {
         entity_id: EntityId,
@@ -234,7 +254,21 @@ pub enum WorldEvent {
         item_id: String,
         delta: i32,
     },
-    AddQuestProgress(crate::data::QuestProgress),
+    CreateQuestProgress {
+        quest_id: String,
+    },
+    SetQuestCurrentCount {
+        quest_id: String,
+        current_count: i32,
+    },
+    SetQuestCompleted {
+        quest_id: String,
+        completed: bool,
+    },
+    SetQuestRewarded {
+        quest_id: String,
+        rewarded: bool,
+    },
     AddOpenedTreasure {
         map_id: String,
         x: usize,

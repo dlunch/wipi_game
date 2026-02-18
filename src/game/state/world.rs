@@ -397,16 +397,23 @@ impl WorldState {
                     self.remove_item_amount(*entity_id, item_id, -*delta);
                 }
             }
-            WorldEvent::AddQuestProgress(progress) => {
-                if let Some(existing) = self
-                    .quests
-                    .iter_mut()
-                    .find(|quest| quest.quest_id == progress.quest_id)
-                {
-                    *existing = progress.clone();
-                } else {
-                    self.quests.push(progress.clone());
-                }
+            WorldEvent::CreateQuestProgress { quest_id } => {
+                self.ensure_quest_progress(quest_id);
+            }
+            WorldEvent::SetQuestCurrentCount {
+                quest_id,
+                current_count,
+            } => {
+                self.ensure_quest_progress(quest_id).current_count = *current_count;
+            }
+            WorldEvent::SetQuestCompleted {
+                quest_id,
+                completed,
+            } => {
+                self.ensure_quest_progress(quest_id).completed = *completed;
+            }
+            WorldEvent::SetQuestRewarded { quest_id, rewarded } => {
+                self.ensure_quest_progress(quest_id).rewarded = *rewarded;
             }
             WorldEvent::AddOpenedTreasure { map_id, x, y } => {
                 if !self.is_treasure_opened(map_id, *x, *y) {
@@ -438,7 +445,12 @@ impl WorldState {
                 self.rebuild_enemy_occupancy();
             }
             CombatEvent::ClearEnemies
-            | CombatEvent::SetCombatantStats { .. }
+            | CombatEvent::SetCombatantMaxHp { .. }
+            | CombatEvent::SetCombatantCurrentHp { .. }
+            | CombatEvent::SetCombatantMaxMp { .. }
+            | CombatEvent::SetCombatantCurrentMp { .. }
+            | CombatEvent::SetCombatantAtk { .. }
+            | CombatEvent::SetCombatantDef { .. }
             | CombatEvent::SetCombatantTimed { .. } => {
                 self.rebuild_enemy_occupancy();
             }
@@ -557,6 +569,25 @@ impl WorldState {
                     combatant: CombatantState::default(),
                 });
             }
+        }
+    }
+
+    fn ensure_quest_progress(&mut self, quest_id: &str) -> &mut QuestProgress {
+        if let Some(index) = self
+            .quests
+            .iter()
+            .position(|quest| quest.quest_id == quest_id)
+        {
+            &mut self.quests[index]
+        } else {
+            self.quests.push(QuestProgress {
+                quest_id: quest_id.into(),
+                current_count: 0,
+                completed: false,
+                rewarded: false,
+            });
+            let index = self.quests.len() - 1;
+            &mut self.quests[index]
         }
     }
 }

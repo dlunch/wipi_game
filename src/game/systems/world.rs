@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{DialogAction, QuestProgress, QuestType};
+use crate::data::{DialogAction, QuestType};
 use crate::game::state::{GOLD_ITEM_ID, TimedKind};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
@@ -143,14 +143,9 @@ fn resolve_give_quest(world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
     if world.quests.iter().any(|quest| quest.quest_id == id) {
         return;
     }
-    out.push(GameEvent::World(WorldEvent::AddQuestProgress(
-        QuestProgress {
-            quest_id: id.into(),
-            current_count: 0,
-            completed: false,
-            rewarded: false,
-        },
-    )));
+    out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
+        quest_id: id.into(),
+    }));
 }
 
 fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
@@ -185,10 +180,10 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
         }));
     }
 
-    if let Some(mut progress) = world.quests.iter().find(|q| q.quest_id == id).cloned() {
-        progress.rewarded = true;
-        out.push(GameEvent::World(WorldEvent::AddQuestProgress(progress)));
-    }
+    out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
+        quest_id: id.into(),
+        rewarded: true,
+    }));
 }
 
 fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<GameEvent>) {
@@ -201,9 +196,9 @@ fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut
     } else if amount < 0 {
         stats.current_mp = (stats.current_mp + amount).max(0);
     }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
         entity_id,
-        stats,
+        current_mp: stats.current_mp,
     }));
 }
 
@@ -216,9 +211,9 @@ fn resolve_heal(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<G
     };
     let mut stats = combatant.stats;
     stats.current_hp = (stats.current_hp + amount).min(stats.max_hp);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
-        stats,
+        current_hp: stats.current_hp,
     }));
 }
 
@@ -256,7 +251,16 @@ fn resolve_kill_reward(
             if next.current_count >= quest.target_count {
                 next.completed = true;
             }
-            out.push(GameEvent::World(WorldEvent::AddQuestProgress(next)));
+            out.push(GameEvent::World(WorldEvent::SetQuestCurrentCount {
+                quest_id: next.quest_id.clone(),
+                current_count: next.current_count,
+            }));
+            if next.completed {
+                out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
+                    quest_id: next.quest_id,
+                    completed: true,
+                }));
+            }
         }
     }
 }
@@ -276,9 +280,9 @@ fn resolve_take_damage(
     };
     let mut stats = combatant.stats;
     stats.current_hp = (stats.current_hp - amount).max(0);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
-        stats,
+        current_hp: stats.current_hp,
     }));
     if stats.current_hp <= 0 {
         if Some(entity_id) == world.leader_id() {
@@ -322,9 +326,13 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     let mut revived_stats = combatant.stats;
     revived_stats.current_hp = (revived_stats.max_hp / 2).max(1);
     revived_stats.current_mp = (revived_stats.max_mp / 2).max(0);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id: leader_id,
-        stats: revived_stats,
+        current_hp: revived_stats.current_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
+        entity_id: leader_id,
+        current_mp: revived_stats.current_mp,
     }));
 
     let village_map_id = data.newgame.start_map.clone();

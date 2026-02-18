@@ -260,7 +260,7 @@ impl RenderState {
                 } else {
                     quest_log.selected = ui.quest_log.selected.min(quest_log.quests.len() - 1);
                 }
-                if matches!(event, GameEvent::World(WorldEvent::AddQuestProgress(_))) {
+                if is_quest_world_event(event) {
                     if let Some(world) = world {
                         *quest_log = QuestLogRender::from_world(world, ui, data);
                     } else {
@@ -571,7 +571,12 @@ fn apply_event_to_explore_render(
                     enemy_changed = true;
                 }
             }
-            CombatEvent::SetCombatantStats { entity_id, .. } => {
+            CombatEvent::SetCombatantMaxHp { entity_id, .. }
+            | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
+            | CombatEvent::SetCombatantMaxMp { entity_id, .. }
+            | CombatEvent::SetCombatantCurrentMp { entity_id, .. }
+            | CombatEvent::SetCombatantAtk { entity_id, .. }
+            | CombatEvent::SetCombatantDef { entity_id, .. } => {
                 if Some(*entity_id) != leader_id {
                     upsert_enemy_render(explore, world, data, render_fx, *entity_id);
                     enemy_changed = true;
@@ -607,7 +612,10 @@ fn apply_event_to_explore_render(
                     explore.opened_treasures.push((map_id.clone(), *x, *y));
                 }
             }
-            WorldEvent::AddQuestProgress(_) => {
+            WorldEvent::CreateQuestProgress { .. }
+            | WorldEvent::SetQuestCurrentCount { .. }
+            | WorldEvent::SetQuestCompleted { .. }
+            | WorldEvent::SetQuestRewarded { .. } => {
                 explore.active_quest_count = world
                     .quests
                     .iter()
@@ -698,6 +706,18 @@ fn apply_event_to_explore_render(
         refresh_first_live_enemy_name(explore);
     }
     true
+}
+
+fn is_quest_world_event(event: &GameEvent) -> bool {
+    matches!(
+        event,
+        GameEvent::World(
+            WorldEvent::CreateQuestProgress { .. }
+                | WorldEvent::SetQuestCurrentCount { .. }
+                | WorldEvent::SetQuestCompleted { .. }
+                | WorldEvent::SetQuestRewarded { .. }
+        )
+    )
 }
 
 pub fn render(state: &RenderState, sprites: &SpriteAtlas, fb: &mut Framebuffer) {

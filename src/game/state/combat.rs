@@ -138,9 +138,40 @@ impl CombatState {
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
             }
-            CombatEvent::SetCombatantStats { entity_id, stats } => {
+            CombatEvent::SetCombatantMaxHp { entity_id, max_hp } => {
                 if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats = *stats;
+                    combatant.stats.max_hp = *max_hp;
+                }
+            }
+            CombatEvent::SetCombatantCurrentHp {
+                entity_id,
+                current_hp,
+            } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats.current_hp = *current_hp;
+                }
+            }
+            CombatEvent::SetCombatantMaxMp { entity_id, max_mp } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats.max_mp = *max_mp;
+                }
+            }
+            CombatEvent::SetCombatantCurrentMp {
+                entity_id,
+                current_mp,
+            } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats.current_mp = *current_mp;
+                }
+            }
+            CombatEvent::SetCombatantAtk { entity_id, atk } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats.atk = *atk;
+                }
+            }
+            CombatEvent::SetCombatantDef { entity_id, def } => {
+                if let Some(combatant) = self.combatant_mut(*entity_id) {
+                    combatant.stats.def = *def;
                 }
             }
             CombatEvent::SetCombatantTimed {

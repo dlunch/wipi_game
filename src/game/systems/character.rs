@@ -180,12 +180,13 @@ fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameE
     let Some(combatant) = world.combat.combatant(entity_id) else {
         return;
     };
-    let mut stats = combatant.stats;
-    stats.current_hp = stats.max_hp;
-    stats.current_mp = stats.max_mp;
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
-        stats,
+        current_hp: combatant.stats.max_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
+        entity_id,
+        current_mp: combatant.stats.max_mp,
     }));
 }
 
@@ -243,10 +244,9 @@ fn sync_leader_combat_stats(
     let Some(entity) = world.entity(entity_id) else {
         return;
     };
-    let Some(combatant) = world.combat.combatant(entity_id) else {
+    if world.combat.combatant(entity_id).is_none() {
         return;
-    };
-    let mut stats = combatant.stats;
+    }
     let mut atk = entity.stat.base_atk;
     let mut def = entity.stat.base_def;
     if let Some(index) = entity.loadout.weapon
@@ -268,10 +268,12 @@ fn sync_leader_combat_stats(
         atk += item.atk();
         def += item.def();
     }
-    stats.atk = atk;
-    stats.def = def;
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
         entity_id,
-        stats,
+        atk,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantDef {
+        entity_id,
+        def,
     }));
 }

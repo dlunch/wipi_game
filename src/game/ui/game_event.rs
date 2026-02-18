@@ -47,9 +47,8 @@ impl UiState {
                 self.shop.mode = crate::game::ShopMode::Select;
                 self.shop.selected = 0;
             }
-            GameEvent::World(crate::game::WorldEvent::AddQuestProgress(progress))
-                if progress.rewarded
-                    && self.quest_log.tracked_quest_id.as_deref() == Some(&progress.quest_id) =>
+            GameEvent::World(crate::game::WorldEvent::SetQuestRewarded { quest_id, rewarded })
+                if *rewarded && self.quest_log.tracked_quest_id.as_deref() == Some(quest_id) =>
             {
                 self.quest_log.tracked_quest_id = None;
             }

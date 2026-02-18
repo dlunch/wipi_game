@@ -372,9 +372,9 @@ fn damage_enemy_at_position(
         let damage = raw_damage.saturating_sub(effective_def / 2).max(1);
         next_stats.current_hp = next_stats.current_hp.saturating_sub(damage).max(0);
 
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
             entity_id: enemy.entity_id,
-            stats: next_stats,
+            current_hp: next_stats.current_hp,
         }));
         if let Some((kind, duration)) = timed_effect
             && enemy.combatant.timed.time_left(kind) < duration
@@ -423,10 +423,7 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
     else {
         return;
     };
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-        entity_id: leader_id,
-        stats: leader_stats,
-    }));
+    emit_combat_stats(leader_id, &leader_stats, out);
     if let Some(leader_timed) = world
         .combat
         .combatant(leader_id)
@@ -509,17 +506,15 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
             out.push(GameEvent::World(WorldEvent::ClearEntityInventory {
                 entity_id,
             }));
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-                entity_id,
-                stats: CombatStatsSnapshot {
-                    max_hp: enemy_data.hp,
-                    current_hp: enemy_data.hp,
-                    max_mp: 0,
-                    current_mp: 0,
-                    atk: enemy_data.atk,
-                    def: enemy_data.def,
-                },
-            }));
+            let stats = CombatStatsSnapshot {
+                max_hp: enemy_data.hp,
+                current_hp: enemy_data.hp,
+                max_mp: 0,
+                current_mp: 0,
+                atk: enemy_data.atk,
+                def: enemy_data.def,
+            };
+            emit_combat_stats(entity_id, &stats, out);
         }
     }
 
@@ -568,4 +563,31 @@ fn next_enemy_position_towards(
 
 fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {
     x.abs_diff(px) + y.abs_diff(py)
+}
+
+fn emit_combat_stats(entity_id: u32, stats: &CombatStatsSnapshot, out: &mut Vec<GameEvent>) {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxHp {
+        entity_id,
+        max_hp: stats.max_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+        entity_id,
+        current_hp: stats.current_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxMp {
+        entity_id,
+        max_mp: stats.max_mp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
+        entity_id,
+        current_mp: stats.current_mp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
+        entity_id,
+        atk: stats.atk,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantDef {
+        entity_id,
+        def: stats.def,
+    }));
 }

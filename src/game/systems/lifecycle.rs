@@ -129,10 +129,7 @@ impl LifecycleResolver {
         out.push(GameEvent::World(WorldEvent::ClearCompanionEntities));
         emit_entity_snapshot(&leader, out);
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-            entity_id: leader_id,
-            stats: leader_stats,
-        }));
+        emit_combat_stats(leader_id, &leader_stats, out);
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::World(WorldEvent::ResetMovement));
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
@@ -228,9 +225,21 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         emit_entity_snapshot(entity, out);
     }
     for quest in &world.quests {
-        out.push(GameEvent::World(WorldEvent::AddQuestProgress(
-            quest.clone(),
-        )));
+        out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
+            quest_id: quest.quest_id.clone(),
+        }));
+        out.push(GameEvent::World(WorldEvent::SetQuestCurrentCount {
+            quest_id: quest.quest_id.clone(),
+            current_count: quest.current_count,
+        }));
+        out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
+            quest_id: quest.quest_id.clone(),
+            completed: quest.completed,
+        }));
+        out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
+            quest_id: quest.quest_id.clone(),
+            rewarded: quest.rewarded,
+        }));
     }
     for (map_id, x, y) in &world.opened_treasures {
         out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
@@ -243,17 +252,11 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         world.combat.active,
     )));
     for ally in &world.combat.allies {
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-            entity_id: ally.entity_id,
-            stats: ally.combatant.stats,
-        }));
+        emit_combat_stats(ally.entity_id, &ally.combatant.stats, out);
         emit_timed_effects(ally.entity_id, &ally.combatant.timed.effects, out);
     }
     for enemy in &world.combat.enemies {
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-            entity_id: enemy.entity_id,
-            stats: enemy.combatant.stats,
-        }));
+        emit_combat_stats(enemy.entity_id, &enemy.combatant.stats, out);
         emit_timed_effects(enemy.entity_id, &enemy.combatant.timed.effects, out);
     }
     out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(
@@ -273,6 +276,33 @@ fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Ve
             time_left: effect.time_left,
         }));
     }
+}
+
+fn emit_combat_stats(entity_id: EntityId, stats: &CombatStatsSnapshot, out: &mut Vec<GameEvent>) {
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxHp {
+        entity_id,
+        max_hp: stats.max_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+        entity_id,
+        current_hp: stats.current_hp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxMp {
+        entity_id,
+        max_mp: stats.max_mp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
+        entity_id,
+        current_mp: stats.current_mp,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
+        entity_id,
+        atk: stats.atk,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantDef {
+        entity_id,
+        def: stats.def,
+    }));
 }
 
 fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
