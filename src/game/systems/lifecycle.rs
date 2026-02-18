@@ -291,22 +291,31 @@ fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Ve
 }
 
 fn emit_combat_stats(entity_id: EntityId, stats: &CombatStatsSnapshot, out: &mut Vec<GameEvent>) {
+    let default_stats = CombatStatsSnapshot::default();
     out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxHp {
         entity_id,
         max_hp: stats.max_hp,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id,
-        current_hp: stats.current_hp,
     }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxMp {
         entity_id,
         max_mp: stats.max_mp,
     }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
-        entity_id,
-        current_mp: stats.current_mp,
-    }));
+    let base_hp = default_stats.current_hp.min(stats.max_hp).max(0);
+    let hp_delta = stats.current_hp - base_hp;
+    if hp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id,
+            delta: hp_delta,
+        }));
+    }
+    let base_mp = default_stats.current_mp.min(stats.max_mp).max(0);
+    let mp_delta = stats.current_mp - base_mp;
+    if mp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+            entity_id,
+            delta: mp_delta,
+        }));
+    }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
         entity_id,
         atk: stats.atk,

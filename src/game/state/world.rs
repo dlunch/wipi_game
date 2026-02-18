@@ -461,17 +461,14 @@ impl WorldState {
             CombatEvent::SetActive(_)
             | CombatEvent::SetCombatantMaxHp { .. }
             | CombatEvent::SetCombatantMaxMp { .. }
-            | CombatEvent::SetCombatantCurrentMp { .. }
+            | CombatEvent::ChangeCombatantMp { .. }
             | CombatEvent::SetCombatantAtk { .. }
             | CombatEvent::SetCombatantDef { .. }
             | CombatEvent::SetCombatantTimed { .. }
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::RecoverMp { .. }
-            | CombatEvent::Heal { .. }
-            | CombatEvent::TakeDamage { .. }
-            | CombatEvent::SetCombatantCurrentHp { .. } => {}
+            | CombatEvent::ChangeCombatantHp { .. } => {}
         }
         Ok(())
     }
@@ -480,9 +477,9 @@ impl WorldState {
         let Some(entity_id) = (match event {
             CombatEvent::MoveEnemy { entity_id, .. }
             | CombatEvent::SetCombatantMaxHp { entity_id, .. }
-            | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
+            | CombatEvent::ChangeCombatantHp { entity_id, .. }
             | CombatEvent::SetCombatantMaxMp { entity_id, .. }
-            | CombatEvent::SetCombatantCurrentMp { entity_id, .. }
+            | CombatEvent::ChangeCombatantMp { entity_id, .. }
             | CombatEvent::SetCombatantAtk { entity_id, .. }
             | CombatEvent::SetCombatantDef { entity_id, .. }
             | CombatEvent::SetCombatantTimed { entity_id, .. } => Some(*entity_id),
@@ -491,10 +488,7 @@ impl WorldState {
             | CombatEvent::ClearEnemies
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
-            | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::RecoverMp { .. }
-            | CombatEvent::Heal { .. }
-            | CombatEvent::TakeDamage { .. } => None,
+            | CombatEvent::GrantKillReward { .. } => None,
         }) else {
             return false;
         };
@@ -893,18 +887,18 @@ mod tests {
 
         world.apply_event(
             &data,
-            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+            &GameEvent::Combat(CombatEvent::ChangeCombatantHp {
                 entity_id: 10,
-                current_hp: 5,
+                delta: -75,
             }),
         )?;
         assert!(world.is_occupied(1, 1));
 
         world.apply_event(
             &data,
-            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+            &GameEvent::Combat(CombatEvent::ChangeCombatantHp {
                 entity_id: 10,
-                current_hp: 0,
+                delta: -5,
             }),
         )?;
         assert!(world.is_occupied(1, 1));

@@ -17,17 +17,17 @@ pub enum CombatEvent {
         entity_id: EntityId,
         max_hp: i32,
     },
-    SetCombatantCurrentHp {
+    ChangeCombatantHp {
         entity_id: EntityId,
-        current_hp: i32,
+        delta: i32,
     },
     SetCombatantMaxMp {
         entity_id: EntityId,
         max_mp: i32,
     },
-    SetCombatantCurrentMp {
+    ChangeCombatantMp {
         entity_id: EntityId,
-        current_mp: i32,
+        delta: i32,
     },
     SetCombatantAtk {
         entity_id: EntityId,
@@ -48,18 +48,6 @@ pub enum CombatEvent {
         enemy_id: String,
         exp: i32,
         gold: i32,
-    },
-    RecoverMp {
-        entity_id: EntityId,
-        amount: i32,
-    },
-    Heal {
-        entity_id: EntityId,
-        amount: i32,
-    },
-    TakeDamage {
-        entity_id: EntityId,
-        amount: i32,
     },
 }
 

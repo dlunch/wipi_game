@@ -150,24 +150,22 @@ impl CombatState {
             CombatEvent::SetCombatantMaxHp { entity_id, max_hp } => {
                 let combatant = self.combatant_mut(*entity_id)?;
                 combatant.stats.max_hp = *max_hp;
+                combatant.stats.current_hp = combatant.stats.current_hp.min(*max_hp).max(0);
             }
-            CombatEvent::SetCombatantCurrentHp {
-                entity_id,
-                current_hp,
-            } => {
+            CombatEvent::ChangeCombatantHp { entity_id, delta } => {
                 let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.current_hp = *current_hp;
+                let next_hp = combatant.stats.current_hp + *delta;
+                combatant.stats.current_hp = next_hp.min(combatant.stats.max_hp).max(0);
             }
             CombatEvent::SetCombatantMaxMp { entity_id, max_mp } => {
                 let combatant = self.combatant_mut(*entity_id)?;
                 combatant.stats.max_mp = *max_mp;
+                combatant.stats.current_mp = combatant.stats.current_mp.min(*max_mp).max(0);
             }
-            CombatEvent::SetCombatantCurrentMp {
-                entity_id,
-                current_mp,
-            } => {
+            CombatEvent::ChangeCombatantMp { entity_id, delta } => {
                 let combatant = self.combatant_mut(*entity_id)?;
-                combatant.stats.current_mp = *current_mp;
+                let next_mp = combatant.stats.current_mp + *delta;
+                combatant.stats.current_mp = next_mp.min(combatant.stats.max_mp).max(0);
             }
             CombatEvent::SetCombatantAtk { entity_id, atk } => {
                 let combatant = self.combatant_mut(*entity_id)?;
@@ -191,11 +189,7 @@ impl CombatState {
             CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;
             }
-            CombatEvent::MoveEnemy { .. }
-            | CombatEvent::GrantKillReward { .. }
-            | CombatEvent::RecoverMp { .. }
-            | CombatEvent::Heal { .. }
-            | CombatEvent::TakeDamage { .. } => {}
+            CombatEvent::MoveEnemy { .. } | CombatEvent::GrantKillReward { .. } => {}
         }
         Ok(())
     }

@@ -163,9 +163,9 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     }
 
     if total_player_damage > 0 {
-        out.push(GameEvent::Combat(CombatEvent::TakeDamage {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
             entity_id: leader_id,
-            amount: total_player_damage,
+            delta: -total_player_damage,
         }));
     }
     Ok(())
@@ -178,9 +178,9 @@ fn tick_mp_regen(entity_id: u32, combatant: &CombatantState, out: &mut Vec<GameE
 
     let time_left = combatant.timed.time_left(TimedKind::MpRegenTick);
     let next = if time_left <= 1 {
-        out.push(GameEvent::Combat(CombatEvent::RecoverMp {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
             entity_id,
-            amount: 1,
+            delta: 1,
         }));
         MP_REGEN_INTERVAL
     } else {
@@ -210,9 +210,9 @@ fn tick_combatant_timed(
                     time_left: next,
                 }));
                 if effect.time_left > 0 && next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
-                    out.push(GameEvent::Combat(CombatEvent::TakeDamage {
+                    out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
                         entity_id,
-                        amount: POISON_DAMAGE,
+                        delta: -POISON_DAMAGE,
                     }));
                 }
             }
@@ -264,9 +264,9 @@ fn resolve_player_action(
             kind: TimedKind::SkillCooldown(slot as u8),
             time_left: skill.cooldown,
         }));
-        out.push(GameEvent::Combat(CombatEvent::RecoverMp {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
             entity_id: leader_id,
-            amount: -skill.mp_cost,
+            delta: -skill.mp_cost,
         }));
         resolve_skill_action(
             data,
@@ -340,9 +340,9 @@ fn resolve_skill_action(
             }
         }
         SkillType::Heal => {
-            out.push(GameEvent::Combat(CombatEvent::Heal {
+            out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
                 entity_id: leader_id,
-                amount: skill.heal_power.max(0),
+                delta: skill.heal_power.max(0),
             }));
         }
     }
@@ -350,7 +350,7 @@ fn resolve_skill_action(
 }
 
 fn damage_enemy_at_position(
-    data: &GameData,
+    _data: &GameData,
     world: &WorldState,
     x: usize,
     y: usize,
@@ -372,28 +372,23 @@ fn damage_enemy_at_position(
         let damage = raw_damage.saturating_sub(effective_def / 2).max(1);
         next_stats.current_hp = next_stats.current_hp.saturating_sub(damage).max(0);
 
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id: enemy.entity_id,
+            delta: -damage,
+        }));
+
         if next_stats.current_hp <= 0 {
-            out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
-            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
-            out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                enemy_id: enemy_data.id.clone(),
-                exp: enemy_data.exp,
-                gold: enemy_data.gold,
-            }));
-        } else {
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+            return Ok(true);
+        }
+
+        if let Some((kind, duration)) = timed_effect
+            && enemy.combatant.timed.time_left(kind) < duration
+        {
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id: enemy.entity_id,
-                current_hp: next_stats.current_hp,
+                kind,
+                time_left: duration,
             }));
-            if let Some((kind, duration)) = timed_effect
-                && enemy.combatant.timed.time_left(kind) < duration
-            {
-                out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                    entity_id: enemy.entity_id,
-                    kind,
-                    time_left: duration,
-                }));
-            }
         }
         return Ok(true);
     }
@@ -409,19 +404,8 @@ fn resolve_map_changed(
         out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
     }
 
-    let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
-
-    let leader_combatant = world.combat.combatant(leader_id)?;
-    emit_combat_stats(leader_id, &leader_combatant.stats, out);
-    for effect in &leader_combatant.timed.effects {
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-            entity_id: leader_id,
-            kind: effect.kind,
-            time_left: effect.time_left,
-        }));
-    }
 
     let mut enemy_templates: Vec<&Enemy> = Vec::with_capacity(map.encounters.len());
     for (enemy_id, _) in &map.encounters {
@@ -555,22 +539,34 @@ fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {
 }
 
 fn emit_combat_stats(entity_id: u32, stats: &CombatStatsSnapshot, out: &mut Vec<GameEvent>) {
+    let default_stats = CombatStatsSnapshot::default();
     out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxHp {
         entity_id,
         max_hp: stats.max_hp,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id,
-        current_hp: stats.current_hp,
     }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantMaxMp {
         entity_id,
         max_mp: stats.max_mp,
     }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
-        entity_id,
-        current_mp: stats.current_mp,
-    }));
+
+    let base_hp = default_stats.current_hp.min(stats.max_hp).max(0);
+    let hp_delta = stats.current_hp - base_hp;
+    if hp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id,
+            delta: hp_delta,
+        }));
+    }
+
+    let base_mp = default_stats.current_mp.min(stats.max_mp).max(0);
+    let mp_delta = stats.current_mp - base_mp;
+    if mp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+            entity_id,
+            delta: mp_delta,
+        }));
+    }
+
     out.push(GameEvent::Combat(CombatEvent::SetCombatantAtk {
         entity_id,
         atk: stats.atk,

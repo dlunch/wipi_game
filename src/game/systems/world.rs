@@ -48,20 +48,14 @@ impl DomainEventResolver for WorldLogicResolver {
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
                 resolve_complete_quest(data, world, id, out)?;
             }
-            GameEvent::Combat(CombatEvent::RecoverMp { entity_id, amount }) => {
-                resolve_recover_mp(world, *entity_id, *amount, out)?;
-            }
-            GameEvent::Combat(CombatEvent::Heal { entity_id, amount }) => {
-                resolve_heal(world, *entity_id, *amount, out)?
+            GameEvent::Combat(CombatEvent::ChangeCombatantHp { entity_id, delta }) => {
+                resolve_combatant_hp_change(data, world, *entity_id, *delta, out)?;
             }
             GameEvent::Combat(CombatEvent::GrantKillReward {
                 enemy_id,
                 exp,
                 gold,
             }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out)?,
-            GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) => {
-                resolve_take_damage(data, world, *entity_id, *amount, out)?;
-            }
             GameEvent::RevivePlayer => {
                 resolve_revive_player(data, world, out)?;
             }
@@ -179,53 +173,6 @@ fn resolve_complete_quest(
     Ok(())
 }
 
-fn resolve_recover_mp(
-    world: &WorldState,
-    entity_id: u32,
-    amount: i32,
-    out: &mut Vec<GameEvent>,
-) -> Result<()> {
-    let combatant = world.combat.combatant(entity_id)?;
-    let mut stats = combatant.stats;
-    let previous_mp = stats.current_mp;
-    if amount > 0 {
-        stats.current_mp = (stats.current_mp + amount).min(stats.max_mp);
-    } else if amount < 0 {
-        stats.current_mp = (stats.current_mp + amount).max(0);
-    }
-    if stats.current_mp == previous_mp {
-        return Ok(());
-    }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
-        entity_id,
-        current_mp: stats.current_mp,
-    }));
-    Ok(())
-}
-
-fn resolve_heal(
-    world: &WorldState,
-    entity_id: u32,
-    amount: i32,
-    out: &mut Vec<GameEvent>,
-) -> Result<()> {
-    if amount <= 0 {
-        return Ok(());
-    }
-    let combatant = world.combat.combatant(entity_id)?;
-    let mut stats = combatant.stats;
-    let previous_hp = stats.current_hp;
-    stats.current_hp = (stats.current_hp + amount).min(stats.max_hp);
-    if stats.current_hp == previous_hp {
-        return Ok(());
-    }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id,
-        current_hp: stats.current_hp,
-    }));
-    Ok(())
-}
-
 fn resolve_kill_reward(
     data: &GameData,
     world: &WorldState,
@@ -260,29 +207,24 @@ fn resolve_kill_reward(
     Ok(())
 }
 
-fn resolve_take_damage(
+fn resolve_combatant_hp_change(
     data: &GameData,
     world: &WorldState,
     entity_id: u32,
-    amount: i32,
+    delta: i32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    if amount <= 0 {
+    if delta >= 0 {
         return Ok(());
     }
     let combatant = world.combat.combatant(entity_id)?;
-    let mut stats = combatant.stats;
-    let previous_hp = stats.current_hp;
-    stats.current_hp = (stats.current_hp - amount).max(0);
-    if stats.current_hp == previous_hp {
+    let next_hp = (combatant.stats.current_hp + delta).max(0);
+    if next_hp > 0 || combatant.stats.current_hp <= 0 {
         return Ok(());
     }
-    if stats.current_hp <= 0 {
+
+    if next_hp <= 0 {
         if world.leader_id()? == entity_id {
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-                entity_id,
-                current_hp: stats.current_hp,
-            }));
             out.push(GameEvent::Transition(TransitionEvent::ToDead));
         } else if let Some(enemy) = world
             .combat
@@ -298,11 +240,6 @@ fn resolve_take_damage(
                 gold: enemy_data.gold,
             }));
         }
-    } else {
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-            entity_id,
-            current_hp: stats.current_hp,
-        }));
     }
     Ok(())
 }
@@ -326,17 +263,22 @@ fn resolve_revive_player(
         delta: -gold_penalty,
     }));
 
-    let mut revived_stats = combatant.stats;
-    revived_stats.current_hp = (revived_stats.max_hp / 2).max(1);
-    revived_stats.current_mp = (revived_stats.max_mp / 2).max(0);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id: leader_id,
-        current_hp: revived_stats.current_hp,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
-        entity_id: leader_id,
-        current_mp: revived_stats.current_mp,
-    }));
+    let target_hp = (combatant.stats.max_hp / 2).max(1);
+    let target_mp = (combatant.stats.max_mp / 2).max(0);
+    let hp_delta = target_hp - combatant.stats.current_hp;
+    let mp_delta = target_mp - combatant.stats.current_mp;
+    if hp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id: leader_id,
+            delta: hp_delta,
+        }));
+    }
+    if mp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+            entity_id: leader_id,
+            delta: mp_delta,
+        }));
+    }
 
     let village_map_id = data.newgame.start_map.clone();
     out.push(GameEvent::World(WorldEvent::SetWorldMap(

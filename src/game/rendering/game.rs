@@ -634,7 +634,7 @@ fn patch_explore_combat(
             Ok(true)
         }
         CombatEvent::MoveEnemy { entity_id, .. }
-        | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
+        | CombatEvent::ChangeCombatantHp { entity_id, .. }
         | CombatEvent::SetCombatantMaxHp { entity_id, .. }
         | CombatEvent::SetCombatantTimed { entity_id, .. }
         | CombatEvent::RemoveEnemy(entity_id) => {
@@ -650,7 +650,7 @@ fn patch_explore_combat(
             }
             patch_or_insert_enemy(explore, *entity_id, world, data, render_fx)
         }
-        CombatEvent::SetCombatantCurrentMp { entity_id, .. }
+        CombatEvent::ChangeCombatantMp { entity_id, .. }
         | CombatEvent::SetCombatantMaxMp { entity_id, .. } => {
             if *entity_id == leader_id {
                 return sync_explore_player_stats(explore, world);
@@ -662,10 +662,7 @@ fn patch_explore_combat(
         | CombatEvent::SetActive(_)
         | CombatEvent::SetUpdateCounter(_)
         | CombatEvent::SetRespawnTimer(_)
-        | CombatEvent::GrantKillReward { .. }
-        | CombatEvent::RecoverMp { .. }
-        | CombatEvent::Heal { .. }
-        | CombatEvent::TakeDamage { .. } => Ok(false),
+        | CombatEvent::GrantKillReward { .. } => Ok(false),
     }
 }
 

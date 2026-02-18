@@ -87,9 +87,9 @@ fn resolve_use_item(
         return Ok(());
     }
 
-    out.push(GameEvent::Combat(CombatEvent::Heal {
+    out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
         entity_id: leader_id,
-        amount: item.hp_restore(),
+        delta: item.hp_restore(),
     }));
     push_item_delta(out, leader_id, stack.item_id.clone(), -1);
     Ok(())
@@ -155,14 +155,20 @@ fn resolve_restore_hp_mp(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let combatant = world.combat.combatant(entity_id)?;
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id,
-        current_hp: combatant.stats.max_hp,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
-        entity_id,
-        current_mp: combatant.stats.max_mp,
-    }));
+    let hp_delta = combatant.stats.max_hp - combatant.stats.current_hp;
+    let mp_delta = combatant.stats.max_mp - combatant.stats.current_mp;
+    if hp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id,
+            delta: hp_delta,
+        }));
+    }
+    if mp_delta != 0 {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
+            entity_id,
+            delta: mp_delta,
+        }));
+    }
     Ok(())
 }
 

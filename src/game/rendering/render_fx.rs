@@ -84,7 +84,9 @@ impl RenderFxState {
         event: &GameEvent,
     ) -> Result<bool> {
         let changed = match event {
-            GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) if *amount > 0 => {
+            GameEvent::Combat(CombatEvent::ChangeCombatantHp { entity_id, delta })
+                if *delta < 0 =>
+            {
                 let leader_id = if let Some(world) = world {
                     Some(world.leader_id()?)
                 } else {
