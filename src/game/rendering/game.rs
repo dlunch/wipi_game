@@ -28,30 +28,6 @@ use super::renderer::{
 use super::shop::draw_shop;
 
 impl RenderState {
-    pub fn on_state_changed(
-        &mut self,
-        state: &GameState,
-        world: Option<&WorldState>,
-        ui: &UiState,
-        data: &Rc<GameData>,
-        render_fx: &RenderFxState,
-    ) -> bool {
-        *self = match state {
-            GameState::Loading(step) => Self::enter_loading(*step),
-            GameState::Menu => Self::enter_menu(ui),
-            GameState::Explore => Self::enter_explore(world, ui, data, render_fx),
-            GameState::Inventory => Self::enter_inventory(world, ui, data),
-            GameState::Stats => Self::enter_stats(world),
-            GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
-            GameState::Shop => Self::enter_shop(world, ui, data, render_fx),
-            GameState::QuestLog => Self::enter_quest_log(world, ui, data),
-            GameState::PauseMenu => Self::enter_pause_menu(world, ui, data, render_fx),
-            GameState::Dead => Self::enter_dead(),
-            GameState::Error(msg) => Self::enter_error(msg),
-        };
-        true
-    }
-
     pub fn apply_game_event_patch(
         &mut self,
         event: &GameEvent,
@@ -61,6 +37,10 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> bool {
+        if self.apply_state_transition_event(event, state, world, ui, data, render_fx) {
+            return true;
+        }
+
         match self {
             RenderState::Loading { step } => {
                 if let GameEvent::Loading(LoadingEvent::Advance(next_step)) = event
@@ -513,6 +493,80 @@ impl RenderState {
     fn enter_error(msg: &str) -> Self {
         RenderState::Error(msg.into())
     }
+
+    fn from_state(
+        state: &GameState,
+        world: Option<&WorldState>,
+        ui: &UiState,
+        data: &Rc<GameData>,
+        render_fx: &RenderFxState,
+    ) -> Self {
+        match state {
+            GameState::Loading(step) => Self::enter_loading(*step),
+            GameState::Menu => Self::enter_menu(ui),
+            GameState::Explore => Self::enter_explore(world, ui, data, render_fx),
+            GameState::Inventory => Self::enter_inventory(world, ui, data),
+            GameState::Stats => Self::enter_stats(world),
+            GameState::Dialog => Self::enter_dialog(world, ui, data, render_fx),
+            GameState::Shop => Self::enter_shop(world, ui, data, render_fx),
+            GameState::QuestLog => Self::enter_quest_log(world, ui, data),
+            GameState::PauseMenu => Self::enter_pause_menu(world, ui, data, render_fx),
+            GameState::Dead => Self::enter_dead(),
+            GameState::Error(msg) => Self::enter_error(msg),
+        }
+    }
+
+    fn apply_state_transition_event(
+        &mut self,
+        event: &GameEvent,
+        state: &GameState,
+        world: Option<&WorldState>,
+        ui: &UiState,
+        data: &Rc<GameData>,
+        render_fx: &RenderFxState,
+    ) -> bool {
+        if !is_state_transition_event(event) {
+            return false;
+        }
+
+        if self.matches_state_variant(state) {
+            return false;
+        }
+
+        *self = Self::from_state(state, world, ui, data, render_fx);
+        true
+    }
+
+    fn matches_state_variant(&self, state: &GameState) -> bool {
+        match (self, state) {
+            (RenderState::Loading { .. }, GameState::Loading(_))
+            | (RenderState::Menu { .. }, GameState::Menu)
+            | (RenderState::Explore(_), GameState::Explore)
+            | (RenderState::Inventory(_), GameState::Inventory)
+            | (RenderState::Stats(_), GameState::Stats)
+            | (RenderState::Dialog { .. }, GameState::Dialog)
+            | (RenderState::Shop(_), GameState::Shop)
+            | (RenderState::QuestLog(_), GameState::QuestLog)
+            | (RenderState::PauseMenu { .. }, GameState::PauseMenu)
+            | (RenderState::Dead, GameState::Dead)
+            | (RenderState::Error(_), GameState::Error(_)) => true,
+            (RenderState::NoSession, state) => state.requires_world(),
+            _ => false,
+        }
+    }
+}
+
+fn is_state_transition_event(event: &GameEvent) -> bool {
+    matches!(
+        event,
+        GameEvent::Loading(LoadingEvent::Advance(_))
+            | GameEvent::Loading(LoadingEvent::Loaded)
+            | GameEvent::Loading(LoadingEvent::Error(_))
+            | GameEvent::Transition(_)
+            | GameEvent::ApplyDialogTransition(_)
+            | GameEvent::OpenDialogState(_)
+            | GameEvent::OpenShopState(_)
+    )
 }
 
 fn patch_explore(
