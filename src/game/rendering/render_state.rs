@@ -245,13 +245,13 @@ impl ExploreRender {
     ) -> Option<Self> {
         let leader_id = world.leader_id().ok()?;
         let leader = world.leader_entity().ok()?;
-        let leader_combatant = world.combat.combatant(leader_id)?;
+        let leader_combatant = world.combat.combatant(leader_id).ok()?;
         let map = data.find_map(&leader.map_id).ok()?;
 
         let mut enemies = Vec::with_capacity(world.combat.enemies.len());
         let mut enemy_indices = BTreeMap::new();
         for enemy in &world.combat.enemies {
-            let Some(entity) = world.entity(enemy.entity_id) else {
+            let Ok(entity) = world.entity(enemy.entity_id) else {
                 continue;
             };
             let name = data
@@ -427,7 +427,7 @@ impl StatsRender {
     pub(super) fn from_world(world: &WorldState) -> Option<Self> {
         let leader_id = world.leader_id().ok()?;
         let leader = world.leader_entity().ok()?;
-        let combatant = world.combat.combatant(leader_id)?;
+        let combatant = world.combat.combatant(leader_id).ok()?;
 
         Some(Self {
             hp: combatant.stats.current_hp as u32,

@@ -49,10 +49,10 @@ impl DomainEventResolver for WorldLogicResolver {
                 resolve_complete_quest(data, world, id, out)?;
             }
             GameEvent::Combat(CombatEvent::RecoverMp { entity_id, amount }) => {
-                resolve_recover_mp(world, *entity_id, *amount, out);
+                resolve_recover_mp(world, *entity_id, *amount, out)?;
             }
             GameEvent::Combat(CombatEvent::Heal { entity_id, amount }) => {
-                resolve_heal(world, *entity_id, *amount, out)
+                resolve_heal(world, *entity_id, *amount, out)?
             }
             GameEvent::Combat(CombatEvent::GrantKillReward {
                 enemy_id,
@@ -116,7 +116,7 @@ fn resolve_tile_event(
             }
             let map = data.find_map(target)?;
             let leader_id = world.leader_id()?;
-            let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
+            let (x, y) = map.find_player_start()?;
             out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
             out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id: leader_id,
@@ -179,10 +179,13 @@ fn resolve_complete_quest(
     Ok(())
 }
 
-fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<GameEvent>) {
-    let Some(combatant) = world.combat.combatant(entity_id) else {
-        return;
-    };
+fn resolve_recover_mp(
+    world: &WorldState,
+    entity_id: u32,
+    amount: i32,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
+    let combatant = world.combat.combatant(entity_id)?;
     let mut stats = combatant.stats;
     let previous_mp = stats.current_mp;
     if amount > 0 {
@@ -191,31 +194,36 @@ fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut
         stats.current_mp = (stats.current_mp + amount).max(0);
     }
     if stats.current_mp == previous_mp {
-        return;
+        return Ok(());
     }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
         entity_id,
         current_mp: stats.current_mp,
     }));
+    Ok(())
 }
 
-fn resolve_heal(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<GameEvent>) {
+fn resolve_heal(
+    world: &WorldState,
+    entity_id: u32,
+    amount: i32,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     if amount <= 0 {
-        return;
+        return Ok(());
     }
-    let Some(combatant) = world.combat.combatant(entity_id) else {
-        return;
-    };
+    let combatant = world.combat.combatant(entity_id)?;
     let mut stats = combatant.stats;
     let previous_hp = stats.current_hp;
     stats.current_hp = (stats.current_hp + amount).min(stats.max_hp);
     if stats.current_hp == previous_hp {
-        return;
+        return Ok(());
     }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
         current_hp: stats.current_hp,
     }));
+    Ok(())
 }
 
 fn resolve_kill_reward(
@@ -262,9 +270,7 @@ fn resolve_take_damage(
     if amount <= 0 {
         return Ok(());
     }
-    let Some(combatant) = world.combat.combatant(entity_id) else {
-        return Ok(());
-    };
+    let combatant = world.combat.combatant(entity_id)?;
     let mut stats = combatant.stats;
     let previous_hp = stats.current_hp;
     stats.current_hp = (stats.current_hp - amount).max(0);
@@ -276,7 +282,7 @@ fn resolve_take_damage(
         current_hp: stats.current_hp,
     }));
     if stats.current_hp <= 0 {
-        if world.leader_id().ok() == Some(entity_id) {
+        if world.leader_id()? == entity_id {
             out.push(GameEvent::Transition(TransitionEvent::ToDead));
         } else if let Some(enemy) = world
             .combat
@@ -302,9 +308,8 @@ fn resolve_revive_player(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let leader_id = world.leader_id()?;
-    let Some(combatant) = world.combat.combatant(leader_id) else {
-        return Ok(());
-    };
+    let combatant = world.combat.combatant(leader_id)?;
+
     if combatant.stats.current_hp > 0 {
         return Ok(());
     }
@@ -332,11 +337,7 @@ fn resolve_revive_player(
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         village_map_id.clone(),
     )));
-    let village_position = Some(
-        data.find_map(&village_map_id)?
-            .find_player_start()
-            .unwrap_or((0, 0)),
-    );
+    let village_position = Some(data.find_map(&village_map_id)?.find_player_start()?);
     out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: leader_id,
         map_id: Some(village_map_id),

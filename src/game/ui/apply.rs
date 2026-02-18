@@ -108,11 +108,10 @@ fn apply_inventory_input(
             }
         }
         InputKey::Down => {
-            let inventory_len = s
-                .leader_entity()
-                .ok()
-                .map(|leader| leader.inventory.len())
-                .unwrap_or(0);
+            let inventory_len = match s.leader_entity() {
+                Ok(leader) => leader.inventory.len(),
+                Err(_) => 0,
+            };
             let next = step_down(selected, inventory_len);
             if next != selected {
                 ui.inventory.selected = next;
@@ -222,9 +221,13 @@ fn apply_shop_input(
         .as_ref()
         .map(|state| state.items.len())
         .unwrap_or(0);
-    let inventory_len = session
-        .and_then(|s| s.leader_entity().ok().map(|leader| leader.inventory.len()))
-        .unwrap_or(0);
+    let inventory_len = match session {
+        Some(s) => match s.leader_entity() {
+            Ok(leader) => leader.inventory.len(),
+            Err(_) => 0,
+        },
+        None => 0,
+    };
 
     match ui.shop.mode {
         ShopMode::Select => match key {
@@ -265,19 +268,27 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                if let Some(s) = session
-                    && let Ok(leader_id) = s.leader_id()
-                {
+                if let Some(s) = session {
+                    let leader_id = match s.leader_id() {
+                        Ok(leader_id) => leader_id,
+                        Err(_) => {
+                            out.push(GameEvent::SoftError(String::from("No active world")));
+                            ui.shop.mode = ShopMode::Buy;
+                            return;
+                        }
+                    };
                     let shop_items = ui
                         .shop
                         .state
                         .as_ref()
                         .map(|state| state.items.as_slice())
                         .unwrap_or(&[]);
-                    if let Some(item) = shop_items.get(ui.shop.selected).cloned()
-                        && s.gold_amount(leader_id) >= item.price
-                    {
-                        out.push(GameEvent::ShopBuyItem(item.id));
+                    if let Some(item) = shop_items.get(ui.shop.selected).cloned() {
+                        if s.gold_amount(leader_id) >= item.price {
+                            out.push(GameEvent::ShopBuyItem(item.id));
+                        } else {
+                            out.push(GameEvent::SoftError(String::from("Not enough gold")));
+                        }
                     } else {
                         out.push(GameEvent::SoftError(String::from("Not enough gold")));
                     }
@@ -311,14 +322,26 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                if let Some(s) = session
-                    && let Ok(leader) = s.leader_entity()
-                    && let Some(item) = leader.inventory.get(ui.shop.selected)
-                {
-                    if item.item_id == GOLD_ITEM_ID {
-                        out.push(GameEvent::SoftError(String::from("Cannot sell gold")));
-                    } else {
-                        out.push(GameEvent::ShopSellSelected(ui.shop.selected));
+                if let Some(s) = session {
+                    match s.leader_entity() {
+                        Ok(leader) => {
+                            if let Some(item) = leader.inventory.get(ui.shop.selected) {
+                                if item.item_id == GOLD_ITEM_ID {
+                                    out.push(GameEvent::SoftError(String::from(
+                                        "Cannot sell gold",
+                                    )));
+                                } else {
+                                    out.push(GameEvent::ShopSellSelected(ui.shop.selected));
+                                }
+                            } else {
+                                out.push(GameEvent::SoftError(String::from(
+                                    "Invalid item selection",
+                                )));
+                            }
+                        }
+                        Err(_) => {
+                            out.push(GameEvent::SoftError(String::from("Invalid item selection")));
+                        }
                     }
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));

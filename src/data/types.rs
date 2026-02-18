@@ -1,6 +1,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 /// 아이템 종류
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemKind {
@@ -164,15 +166,15 @@ impl Map {
         self.tiles[y * self.width + x]
     }
 
-    pub fn find_player_start(&self) -> Option<(usize, usize)> {
+    pub fn find_player_start(&self) -> Result<(usize, usize)> {
         for y in 0..self.height {
             for x in 0..self.width {
                 if self.get_tile(x, y) == Tile::PlayerStart {
-                    return Some((x, y));
+                    return Ok((x, y));
                 }
             }
         }
-        None
+        Err(anyhow!("Player start tile not found in map '{}'", self.id))
     }
 }
 
@@ -474,7 +476,7 @@ mod tests {
             npcs: Vec::new(),
             peaceful: false,
         };
-        assert_eq!(map.find_player_start(), Some((1, 1)));
+        assert_eq!(map.find_player_start().unwrap(), (1, 1));
     }
 
     #[test]
@@ -491,6 +493,6 @@ mod tests {
             npcs: Vec::new(),
             peaceful: false,
         };
-        assert_eq!(map.find_player_start(), None);
+        assert!(map.find_player_start().is_err());
     }
 }

@@ -115,7 +115,7 @@ impl LifecycleResolver {
         }
 
         let map = data.find_map(&config.start_map)?;
-        let (x, y) = map.find_player_start().unwrap_or((leader.x, leader.y));
+        let (x, y) = map.find_player_start()?;
         leader.map_id = map.id.clone();
         leader.x = x;
         leader.y = y;

@@ -40,7 +40,7 @@ pub fn apply_effects(
             let loading = match load_result {
                 Ok(true) => {
                     out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
-                        has_save_data(),
+                        has_save_data()?,
                     )));
                     LoadingEvent::Loaded
                 }
@@ -58,7 +58,7 @@ pub fn apply_effects(
         }
         GameEvent::Transition(TransitionEvent::ToMenu) => {
             out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
-                has_save_data(),
+                has_save_data()?,
             )));
         }
         GameEvent::Exit(code) => {

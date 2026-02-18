@@ -39,9 +39,7 @@ impl DomainEventResolver for CharacterMutationResolver {
     ) -> Result<()> {
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
         let leader_id = world.leader_id()?;
-        let leader = world
-            .entity(leader_id)
-            .ok_or_else(|| anyhow!("Leader entity not found"))?;
+        let leader = world.entity(leader_id)?;
 
         match event {
             GameEvent::UseInventorySelected(index) => {
@@ -53,9 +51,9 @@ impl DomainEventResolver for CharacterMutationResolver {
             GameEvent::ShopSellSelected(index) => {
                 resolve_shop_sell(data, leader_id, leader, *index, out)?
             }
-            GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out),
+            GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out)?,
             GameEvent::ApplyDialogAction(action) => {
-                resolve_dialog_action(world, leader_id, action, out)
+                resolve_dialog_action(world, leader_id, action, out)?
             }
             _ => {}
         }
@@ -151,10 +149,12 @@ fn resolve_shop_sell(
     Ok(())
 }
 
-fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameEvent>) {
-    let Some(combatant) = world.combat.combatant(entity_id) else {
-        return;
-    };
+fn resolve_restore_hp_mp(
+    world: &WorldState,
+    entity_id: u32,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
+    let combatant = world.combat.combatant(entity_id)?;
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
         current_hp: combatant.stats.max_hp,
@@ -163,6 +163,7 @@ fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameE
         entity_id,
         current_mp: combatant.stats.max_mp,
     }));
+    Ok(())
 }
 
 fn resolve_dialog_action(
@@ -170,7 +171,7 @@ fn resolve_dialog_action(
     entity_id: u32,
     action: &DialogAction,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     match action {
         DialogAction::GiveItem(id) => {
             push_item_delta(out, entity_id, id.clone(), 1);
@@ -184,10 +185,11 @@ fn resolve_dialog_action(
         DialogAction::TakeGold(amount) => {
             push_item_delta(out, entity_id, crate::game::GOLD_ITEM_ID, -(*amount).max(0));
         }
-        DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out),
+        DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out)?,
         DialogAction::GiveQuest(_) | DialogAction::CompleteQuest(_) | DialogAction::OpenShop(_) => {
         }
     }
+    Ok(())
 }
 
 fn push_item_delta(

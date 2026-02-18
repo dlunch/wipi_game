@@ -74,9 +74,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     }
     let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
-    let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return Ok(());
-    };
+    let leader_combatant = world.combat.combatant(leader_id)?;
     let map = data.find_map(&leader_entity.map_id)?;
 
     let next_counter = world.combat.update_counter.wrapping_add(1);
@@ -89,9 +87,8 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     let mut occupied_tiles = Vec::with_capacity(world.combat.enemies.len() + 1);
     occupied_tiles.push(tile_index(leader_entity.x, leader_entity.y, map.width));
     for enemy in &world.combat.enemies {
-        if let Some(entity) = world.entity(enemy.entity_id) {
-            occupied_tiles.push(tile_index(entity.x, entity.y, map.width));
-        }
+        let entity = world.entity(enemy.entity_id)?;
+        occupied_tiles.push(tile_index(entity.x, entity.y, map.width));
     }
 
     let mut total_player_damage = 0;
@@ -114,9 +111,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             }));
         }
 
-        let Some(enemy_entity) = world.entity(enemy.entity_id) else {
-            continue;
-        };
+        let enemy_entity = world.entity(enemy.entity_id)?;
         let mut next_x = enemy_entity.x;
         let mut next_y = enemy_entity.y;
 
@@ -237,9 +232,7 @@ fn resolve_player_action(
 ) -> Result<()> {
     let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
-    let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return Ok(());
-    };
+    let leader_combatant = world.combat.combatant(leader_id)?;
     if leader_combatant.stats.current_hp <= 0
         || leader_combatant.timed.time_left(TimedKind::Stun) > 0
     {
@@ -357,9 +350,7 @@ fn damage_enemy_at_position(
     out: &mut Vec<GameEvent>,
 ) -> Result<bool> {
     for enemy in &world.combat.enemies {
-        let Some(entity) = world.entity(enemy.entity_id) else {
-            continue;
-        };
+        let entity = world.entity(enemy.entity_id)?;
         if entity.x != x || entity.y != y {
             continue;
         }
@@ -413,9 +404,7 @@ fn resolve_map_changed(
     let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
 
-    let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return Ok(());
-    };
+    let leader_combatant = world.combat.combatant(leader_id)?;
     emit_combat_stats(leader_id, &leader_combatant.stats, out);
     for effect in &leader_combatant.timed.effects {
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {

@@ -2,6 +2,8 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use anyhow::{Result, anyhow};
+
 use crate::data::Direction;
 
 pub type EntityId = u32;
@@ -159,14 +161,26 @@ impl EntityStore {
         }
     }
 
-    pub fn get(&self, entity_id: EntityId) -> Option<&EntityState> {
-        let index = self.index_by_id.get(&entity_id).copied()?;
-        self.list.get(index)
+    pub fn get(&self, entity_id: EntityId) -> Result<&EntityState> {
+        let index = self
+            .index_by_id
+            .get(&entity_id)
+            .copied()
+            .ok_or_else(|| anyhow!("Entity id not found: {}", entity_id))?;
+        self.list
+            .get(index)
+            .ok_or_else(|| anyhow!("Entity index out of bounds: {}", index))
     }
 
-    pub fn get_mut(&mut self, entity_id: EntityId) -> Option<&mut EntityState> {
-        let index = self.index_by_id.get(&entity_id).copied()?;
-        self.list.get_mut(index)
+    pub fn get_mut(&mut self, entity_id: EntityId) -> Result<&mut EntityState> {
+        let index = self
+            .index_by_id
+            .get(&entity_id)
+            .copied()
+            .ok_or_else(|| anyhow!("Entity id not found: {}", entity_id))?;
+        self.list
+            .get_mut(index)
+            .ok_or_else(|| anyhow!("Entity index out of bounds: {}", index))
     }
 
     pub fn remove(&mut self, entity_id: EntityId) {

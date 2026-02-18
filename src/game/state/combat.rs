@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::game::state::EntityId;
 use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
@@ -97,7 +97,7 @@ pub struct CombatState {
 }
 
 impl CombatState {
-    pub fn combatant(&self, entity_id: EntityId) -> Option<&CombatantState> {
+    pub fn combatant(&self, entity_id: EntityId) -> Result<&CombatantState> {
         self.allies
             .iter()
             .find_map(|ally| (ally.entity_id == entity_id).then_some(&ally.combatant))
@@ -106,19 +106,21 @@ impl CombatState {
                     .iter()
                     .find_map(|enemy| (enemy.entity_id == entity_id).then_some(&enemy.combatant))
             })
+            .ok_or_else(|| anyhow!("Combatant not found: {}", entity_id))
     }
 
-    pub fn combatant_mut(&mut self, entity_id: EntityId) -> Option<&mut CombatantState> {
+    pub fn combatant_mut(&mut self, entity_id: EntityId) -> Result<&mut CombatantState> {
         if let Some(ally) = self
             .allies
             .iter_mut()
             .find(|ally| ally.entity_id == entity_id)
         {
-            return Some(&mut ally.combatant);
+            return Ok(&mut ally.combatant);
         }
         self.enemies
             .iter_mut()
             .find_map(|enemy| (enemy.entity_id == entity_id).then_some(&mut enemy.combatant))
+            .ok_or_else(|| anyhow!("Combatant not found: {}", entity_id))
     }
 
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
@@ -136,49 +138,42 @@ impl CombatState {
                 self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
             }
             CombatEvent::SetCombatantMaxHp { entity_id, max_hp } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.max_hp = *max_hp;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.max_hp = *max_hp;
             }
             CombatEvent::SetCombatantCurrentHp {
                 entity_id,
                 current_hp,
             } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.current_hp = *current_hp;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.current_hp = *current_hp;
             }
             CombatEvent::SetCombatantMaxMp { entity_id, max_mp } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.max_mp = *max_mp;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.max_mp = *max_mp;
             }
             CombatEvent::SetCombatantCurrentMp {
                 entity_id,
                 current_mp,
             } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.current_mp = *current_mp;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.current_mp = *current_mp;
             }
             CombatEvent::SetCombatantAtk { entity_id, atk } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.atk = *atk;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.atk = *atk;
             }
             CombatEvent::SetCombatantDef { entity_id, def } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.stats.def = *def;
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.stats.def = *def;
             }
             CombatEvent::SetCombatantTimed {
                 entity_id,
                 kind,
                 time_left,
             } => {
-                if let Some(combatant) = self.combatant_mut(*entity_id) {
-                    combatant.timed.set(*kind, *time_left);
-                }
+                let combatant = self.combatant_mut(*entity_id)?;
+                combatant.timed.set(*kind, *time_left);
             }
             CombatEvent::SetUpdateCounter(update_counter) => {
                 self.update_counter = *update_counter;

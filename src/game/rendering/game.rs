@@ -636,7 +636,7 @@ fn patch_or_insert_enemy(
     else {
         return explore.remove_enemy(entity_id);
     };
-    let Some(entity) = world.entity(entity_id) else {
+    let Ok(entity) = world.entity(entity_id) else {
         return explore.remove_enemy(entity_id);
     };
     if entity.map_id != explore.map_id {
@@ -713,7 +713,7 @@ fn sync_explore_player(
     let Ok(leader) = world.leader_entity() else {
         return false;
     };
-    let Some(combatant) = world.combat.combatant(leader_id) else {
+    let Ok(combatant) = world.combat.combatant(leader_id) else {
         return false;
     };
 
@@ -769,7 +769,7 @@ fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) ->
     let Ok(leader_id) = world.leader_id() else {
         return false;
     };
-    let Some(combatant) = world.combat.combatant(leader_id) else {
+    let Ok(combatant) = world.combat.combatant(leader_id) else {
         return false;
     };
     sync_explore_combatant_stats(explore, combatant)
