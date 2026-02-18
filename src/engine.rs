@@ -119,14 +119,14 @@ impl GameEngine {
 
     fn apply_engine_error(&mut self, error_message: String) -> bool {
         let error_event = GameEvent::Loading(LoadingEvent::Error(error_message));
-        let previous_state = self.state.stamp();
+        let previous_state = core::mem::discriminant(&self.state);
         let render_fx_changed = match self.apply_with_handlers(&error_event) {
             Ok(changed) => changed,
             Err(_) => return false,
         };
 
         let mut needs_repaint = false;
-        if self.state.stamp() != previous_state {
+        if core::mem::discriminant(&self.state) != previous_state {
             needs_repaint |= self.render_state.on_state_changed(
                 &self.state,
                 self.world.as_ref(),
@@ -207,10 +207,10 @@ impl GameEngine {
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
-            let previous_state = self.state.stamp();
+            let previous_state = core::mem::discriminant(&self.state);
             let render_fx_changed = self.apply_with_handlers(&event)?;
 
-            if self.state.stamp() != previous_state {
+            if core::mem::discriminant(&self.state) != previous_state {
                 needs_repaint |= self.render_state.on_state_changed(
                     &self.state,
                     self.world.as_ref(),

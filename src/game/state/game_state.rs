@@ -35,13 +35,6 @@ enum GameStateKind {
     Error,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct GameStateStamp {
-    kind: GameStateKind,
-    loading_step: usize,
-    error_hash: u64,
-}
-
 impl GameState {
     fn kind(&self) -> GameStateKind {
         match self {
@@ -132,35 +125,6 @@ impl GameState {
             GameStateKind::Error => false,
         }
     }
-
-    pub(crate) fn stamp(&self) -> GameStateStamp {
-        match self {
-            GameState::Loading(step) => GameStateStamp {
-                kind: self.kind(),
-                loading_step: *step,
-                error_hash: 0,
-            },
-            GameState::Error(msg) => GameStateStamp {
-                kind: self.kind(),
-                loading_step: 0,
-                error_hash: hash_error_message(msg),
-            },
-            _ => GameStateStamp {
-                kind: self.kind(),
-                loading_step: 0,
-                error_hash: 0,
-            },
-        }
-    }
-}
-
-fn hash_error_message(message: &str) -> u64 {
-    message
-        .as_bytes()
-        .iter()
-        .fold(0xcbf29ce484222325_u64, |hash, byte| {
-            (hash ^ (*byte as u64)).wrapping_mul(0x100000001b3)
-        })
 }
 
 impl GameEventSubscriber for GameState {
