@@ -13,8 +13,8 @@ mod world;
 pub use effects::apply_effects;
 pub use game_data::GameData;
 pub use game_event::{
-    CombatEvent, CombatSpawnKind, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber,
-    MovementEvent, TileEvent, TransitionEvent, WorldEvent,
+    CombatEvent, ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent,
+    TileEvent, TransitionEvent, WorldEvent,
 };
 pub use rendering::{
     ExploreRender, InventoryRender, QuestLogRender, RenderFxState, RenderState, ShopRender,

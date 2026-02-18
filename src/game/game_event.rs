@@ -14,10 +14,6 @@ pub enum CombatEvent {
     SetActive(bool),
     ClearAllies,
     ClearEnemies,
-    SpawnEntity {
-        entity_id: EntityId,
-        kind: CombatSpawnKind,
-    },
     RemoveEnemy(EntityId),
     MoveEnemy {
         entity_id: EntityId,
@@ -52,12 +48,6 @@ pub enum CombatEvent {
         entity_id: EntityId,
         amount: i32,
     },
-}
-
-#[derive(Clone)]
-pub enum CombatSpawnKind {
-    Ally,
-    Enemy { source_enemy_id: String },
 }
 
 pub enum GameEvent {

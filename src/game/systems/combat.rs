@@ -10,8 +10,7 @@ use crate::game::state::{
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
-    WorldState,
+    CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
 };
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -426,11 +425,6 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
     else {
         return;
     };
-    out.push(GameEvent::Combat(CombatEvent::ClearAllies));
-    out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
-        entity_id: leader_id,
-        kind: CombatSpawnKind::Ally,
-    }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
         entity_id: leader_id,
         stats: leader_stats,
@@ -496,12 +490,6 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
                 loadout: Default::default(),
             };
             out.push(GameEvent::World(WorldEvent::UpsertEntity(enemy_entity)));
-            out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
-                entity_id,
-                kind: CombatSpawnKind::Enemy {
-                    source_enemy_id: enemy_data.id.clone(),
-                },
-            }));
             out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
                 entity_id,
                 stats: CombatStatsSnapshot {

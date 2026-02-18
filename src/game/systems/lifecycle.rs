@@ -12,8 +12,8 @@ use crate::game::state::{
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, CombatSpawnKind, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent,
-    WorldEvent, WorldState,
+    CombatEvent, DialogState, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
+    WorldState,
 };
 
 #[derive(Clone)]
@@ -141,11 +141,6 @@ impl LifecycleResolver {
             inventory: leader.inventory.clone(),
         }));
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
-        out.push(GameEvent::Combat(CombatEvent::ClearAllies));
-        out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
-            entity_id: leader_id,
-            kind: CombatSpawnKind::Ally,
-        }));
         out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
             entity_id: leader_id,
             stats: leader_stats,
@@ -251,26 +246,14 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::Combat(CombatEvent::SetActive(
         world.combat.active,
     )));
-    out.push(GameEvent::Combat(CombatEvent::ClearAllies));
     for ally in &world.combat.allies {
-        out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
-            entity_id: ally.entity_id,
-            kind: CombatSpawnKind::Ally,
-        }));
         out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
             entity_id: ally.entity_id,
             stats: ally.combatant.stats,
         }));
         emit_timed_effects(ally.entity_id, &ally.combatant.timed.effects, out);
     }
-    out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
     for enemy in &world.combat.enemies {
-        out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
-            entity_id: enemy.entity_id,
-            kind: CombatSpawnKind::Enemy {
-                source_enemy_id: enemy.source_enemy_id.clone(),
-            },
-        }));
         out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
             entity_id: enemy.entity_id,
             stats: enemy.combatant.stats,

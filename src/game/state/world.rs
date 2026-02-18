@@ -6,11 +6,11 @@ use anyhow::Result;
 
 use crate::data::QuestProgress;
 use crate::game::state::{
-    CombatState, EntityId, EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
+    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
+    EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
 };
 use crate::game::{
-    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameEventKind, GameEventSubscriber,
-    MovementState, WorldEvent,
+    CombatEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementState, WorldEvent,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -228,9 +228,12 @@ impl WorldState {
             }
             WorldEvent::SetParty(party) => {
                 self.party = party.clone();
+                self.sync_allies_with_party();
             }
             WorldEvent::UpsertEntity(entity) => {
                 self.entities.upsert(entity.clone());
+                self.sync_combat_entry_for_entity(data, entity.id);
+                self.sync_allies_with_party();
                 self.rebuild_enemy_occupancy();
             }
             WorldEvent::RemoveEntity(entity_id) => {
@@ -332,21 +335,13 @@ impl WorldState {
                 self.entities.remove(*entity_id);
                 self.rebuild_enemy_occupancy();
             }
-            CombatEvent::SpawnEntity {
-                kind: CombatSpawnKind::Enemy { .. },
-                ..
-            }
-            | CombatEvent::ClearEnemies
+            CombatEvent::ClearEnemies
             | CombatEvent::SetCombatantStats { .. }
             | CombatEvent::SetCombatantTimed { .. } => {
                 self.rebuild_enemy_occupancy();
             }
             CombatEvent::SetActive(_)
             | CombatEvent::ClearAllies
-            | CombatEvent::SpawnEntity {
-                kind: CombatSpawnKind::Ally,
-                ..
-            }
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. }
@@ -399,6 +394,66 @@ impl WorldState {
             }
             if entity.x < self.occupancy.width && entity.y < self.occupancy.height {
                 self.occupancy.enemy_tiles[entity.y * self.occupancy.width + entity.x] = true;
+            }
+        }
+    }
+
+    fn sync_allies_with_party(&mut self) {
+        let mut party_ids: Vec<EntityId> = Vec::with_capacity(1 + self.party.companion_ids.len());
+        if self.party.leader_id != 0 {
+            party_ids.push(self.party.leader_id);
+        }
+        party_ids.extend(self.party.companion_ids.iter().copied());
+
+        self.combat
+            .allies
+            .retain(|ally| party_ids.contains(&ally.entity_id));
+
+        for entity_id in party_ids {
+            if self.entities.get(entity_id).is_some()
+                && self
+                    .combat
+                    .allies
+                    .iter()
+                    .all(|ally| ally.entity_id != entity_id)
+            {
+                self.combat.allies.push(AllyCombatantState {
+                    entity_id,
+                    combatant: CombatantState::default(),
+                });
+            }
+        }
+    }
+
+    fn sync_combat_entry_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
+        let Some(entity) = self.entities.get(entity_id) else {
+            return;
+        };
+
+        if matches!(entity.kind, EntityKind::Enemy) {
+            let source_enemy_id = if data.find_enemy(&entity.name).is_some() {
+                entity.name.clone()
+            } else {
+                data.enemies
+                    .iter()
+                    .find(|enemy| enemy.name == entity.name)
+                    .map(|enemy| enemy.id.clone())
+                    .unwrap_or_else(|| entity.name.clone())
+            };
+
+            if let Some(enemy) = self
+                .combat
+                .enemies
+                .iter_mut()
+                .find(|enemy| enemy.entity_id == entity_id)
+            {
+                enemy.source_enemy_id = source_enemy_id;
+            } else {
+                self.combat.enemies.push(EnemyCombatantState {
+                    entity_id,
+                    source_enemy_id,
+                    combatant: CombatantState::default(),
+                });
             }
         }
     }

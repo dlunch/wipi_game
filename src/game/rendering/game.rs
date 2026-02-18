@@ -7,8 +7,7 @@ use wipi::framebuffer::Framebuffer;
 use crate::game::state::TimedKind;
 use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
-    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent,
-    WorldState,
+    CombatEvent, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent, WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -597,18 +596,6 @@ fn apply_event_to_explore_render(
                 explore.enemies.clear();
                 enemy_changed = true;
             }
-            CombatEvent::SpawnEntity {
-                entity_id,
-                kind: CombatSpawnKind::Enemy { .. },
-            } => {
-                upsert_enemy_render(explore, world, data, render_fx, *entity_id);
-                enemy_changed = true;
-            }
-            CombatEvent::SpawnEntity {
-                kind: CombatSpawnKind::Ally,
-                ..
-            } => {}
-
             _ => {}
         },
         GameEvent::World(world_event) => match world_event {
@@ -657,6 +644,12 @@ fn apply_event_to_explore_render(
                     explore.level = leader.stat.level as u32;
                 }
             }
+            WorldEvent::UpsertEntity(entity) => {
+                if matches!(entity.kind, crate::game::EntityKind::Enemy) {
+                    upsert_enemy_render(explore, world, data, render_fx, entity.id);
+                    enemy_changed = true;
+                }
+            }
             WorldEvent::RemoveEntity(entity_id) => {
                 let before = explore.enemies.len();
                 explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
@@ -666,8 +659,7 @@ fn apply_event_to_explore_render(
                 explore.enemies.clear();
                 enemy_changed = true;
             }
-            WorldEvent::UpsertEntity(_)
-            | WorldEvent::SetEntityInventory { .. }
+            WorldEvent::SetEntityInventory { .. }
             | WorldEvent::SetEntityLoadout { .. }
             | WorldEvent::AddEntityItem { .. }
             | WorldEvent::RemoveEntityItem { .. }
