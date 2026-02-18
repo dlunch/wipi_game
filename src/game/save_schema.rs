@@ -358,7 +358,6 @@ fn entity_kind_code(kind: EntityKind) -> &'static str {
 
 fn parse_entity_kind(code: &str) -> EntityKind {
     match code {
-        "P" => EntityKind::Player,
         "C" => EntityKind::Companion,
         "E" => EntityKind::Enemy,
         "N" => EntityKind::Npc,
@@ -378,7 +377,6 @@ fn direction_code(direction: Direction) -> &'static str {
 fn parse_direction(code: &str) -> Direction {
     match code {
         "U" => Direction::Up,
-        "D" => Direction::Down,
         "L" => Direction::Left,
         "R" => Direction::Right,
         _ => Direction::Down,
@@ -404,7 +402,6 @@ fn parse_timed_kind(code: &str) -> TimedKind {
         return TimedKind::SkillCooldown(slot);
     }
     match code {
-        "POISON" => TimedKind::Poison,
         "STUN" => TimedKind::Stun,
         "BREAK" => TimedKind::ArmorBreak,
         "ATK_CD" => TimedKind::AttackCooldown,

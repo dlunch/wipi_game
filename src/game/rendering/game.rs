@@ -606,8 +606,9 @@ fn patch_explore_combat(
             }
             false
         }
-        CombatEvent::SetCombatantAtk { .. } | CombatEvent::SetCombatantDef { .. } => false,
-        CombatEvent::SetActive(_)
+        CombatEvent::SetCombatantAtk { .. }
+        | CombatEvent::SetCombatantDef { .. }
+        | CombatEvent::SetActive(_)
         | CombatEvent::SetUpdateCounter(_)
         | CombatEvent::SetRespawnTimer(_)
         | CombatEvent::GrantKillReward { .. }

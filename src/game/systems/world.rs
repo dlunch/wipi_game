@@ -336,22 +336,15 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         village_map_id.clone(),
     )));
-    if let Some(village_map) = data.find_map(&village_map_id) {
-        let (x, y) = village_map.find_player_start().unwrap_or((0, 0));
-        out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
-            entity_id: leader_id,
-            map_id: Some(village_map_id.clone()),
-            position: Some((x, y)),
-            facing: None,
-        }));
-    } else {
-        out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
-            entity_id: leader_id,
-            map_id: Some(village_map_id.clone()),
-            position: None,
-            facing: None,
-        }));
-    }
+    let village_position = data
+        .find_map(&village_map_id)
+        .map(|village_map| village_map.find_player_start().unwrap_or((0, 0)));
+    out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
+        entity_id: leader_id,
+        map_id: Some(village_map_id),
+        position: village_position,
+        facing: None,
+    }));
     out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
     out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
     out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
