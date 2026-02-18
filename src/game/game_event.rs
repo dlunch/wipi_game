@@ -31,14 +31,6 @@ pub enum CombatEvent {
     },
     SetUpdateCounter(u32),
     SetRespawnTimer(u32),
-    EnemyHitFlashSet {
-        entity_id: EntityId,
-        hit_flash: u32,
-    },
-    SetEntityHitFlash {
-        entity_id: EntityId,
-        timer: u32,
-    },
     GrantKillReward {
         enemy_id: String,
         exp: i32,

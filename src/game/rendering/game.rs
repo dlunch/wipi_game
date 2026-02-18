@@ -182,6 +182,7 @@ pub struct RenderFxState {
     anim_tick: u32,
 }
 
+const HIT_FLASH_DURATION: u32 = 10;
 const QUEST_NOTICE_DURATION: u32 = 90;
 const SHOP_PURCHASE_NOTICE_DURATION: u32 = 45;
 
@@ -213,33 +214,33 @@ impl RenderFxState {
         changed || before != self.enemy_hit_flashes.len()
     }
 
-    pub fn apply_event(&mut self, state: &GameState, event: &GameEvent) -> bool {
+    pub fn apply_event(
+        &mut self,
+        state: &GameState,
+        world: Option<&WorldState>,
+        event: &GameEvent,
+    ) -> bool {
         match event {
-            GameEvent::Combat(CombatEvent::SetEntityHitFlash { entity_id, timer }) => {
-                let _ = entity_id;
-                if self.player_hit_flash == *timer {
-                    return false;
-                }
-                self.player_hit_flash = *timer;
-                true
-            }
-            GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
-                entity_id,
-                hit_flash,
-            }) => {
-                if let Some((_, timer)) = self
-                    .enemy_hit_flashes
-                    .iter_mut()
-                    .find(|(id, _)| *id == *entity_id)
-                {
-                    if *timer == *hit_flash {
-                        return false;
+            GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) if *amount > 0 => {
+                let leader_id = world.and_then(|w| w.leader_id());
+                if Some(*entity_id) == leader_id {
+                    let changed = self.player_hit_flash != HIT_FLASH_DURATION;
+                    self.player_hit_flash = HIT_FLASH_DURATION;
+                    changed
+                } else {
+                    if let Some((_, timer)) = self
+                        .enemy_hit_flashes
+                        .iter_mut()
+                        .find(|(id, _)| *id == *entity_id)
+                    {
+                        let changed = *timer != HIT_FLASH_DURATION;
+                        *timer = HIT_FLASH_DURATION;
+                        return changed;
                     }
-                    *timer = *hit_flash;
-                    return true;
+                    self.enemy_hit_flashes
+                        .push((*entity_id, HIT_FLASH_DURATION));
+                    true
                 }
-                self.enemy_hit_flashes.push((*entity_id, *hit_flash));
-                true
             }
             GameEvent::World(WorldEvent::AddQuestProgress(progress))
                 if matches!(state, GameState::Explore | GameState::Dialog)
@@ -995,6 +996,9 @@ fn sync_explore_runtime(
     explore.skill_cooldowns = skill_cooldowns_from_timed(&leader_combatant.timed);
     explore.key_actions = ui.explore.key_actions;
     explore.player_hit_flash = render_fx.player_hit_flash;
+    for enemy in &mut explore.enemies {
+        enemy.hit_flash = render_fx.enemy_hit_flash(enemy.enemy_id);
+    }
     explore.quest_notice_timer = render_fx.quest_notice_timer;
     explore.anim_tick = render_fx.anim_tick;
     true
@@ -1132,18 +1136,7 @@ fn apply_event_to_explore_render(
                 }
                 return false;
             }
-            CombatEvent::EnemyHitFlashSet {
-                entity_id,
-                hit_flash,
-            } => {
-                if let Some(enemy) = explore
-                    .enemies
-                    .iter_mut()
-                    .find(|enemy| enemy.enemy_id == *entity_id)
-                {
-                    enemy.hit_flash = *hit_flash;
-                }
-            }
+
             _ => {}
         },
         GameEvent::World(world_event) => match world_event {

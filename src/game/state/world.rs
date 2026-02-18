@@ -340,8 +340,6 @@ impl WorldState {
             | CombatEvent::SetAllies(_)
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
-            | CombatEvent::EnemyHitFlashSet { .. }
-            | CombatEvent::SetEntityHitFlash { .. }
             | CombatEvent::GrantKillReward { .. }
             | CombatEvent::RecoverMp { .. }
             | CombatEvent::Heal { .. }

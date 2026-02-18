@@ -171,10 +171,6 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
                 kind: TimedKind::AttackCooldown,
                 time_left: ENEMY_ATTACK_COOLDOWN,
             }));
-            out.push(GameEvent::Combat(CombatEvent::SetEntityHitFlash {
-                entity_id: leader_id,
-                timer: 10,
-            }));
         }
     }
 
@@ -383,11 +379,6 @@ fn damage_enemy_at_position(
             entity_id: enemy.entity_id,
             stats: next_stats,
         }));
-        out.push(GameEvent::Combat(CombatEvent::EnemyHitFlashSet {
-            entity_id: enemy.entity_id,
-            hit_flash: 10,
-        }));
-
         if let Some((kind, duration)) = timed_effect
             && enemy.combatant.timed.time_left(kind) < duration
         {

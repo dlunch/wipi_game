@@ -159,8 +159,6 @@ impl CombatState {
                 self.respawn_timer = *respawn_timer;
             }
             CombatEvent::MoveEnemy { .. }
-            | CombatEvent::EnemyHitFlashSet { .. }
-            | CombatEvent::SetEntityHitFlash { .. }
             | CombatEvent::GrantKillReward { .. }
             | CombatEvent::RecoverMp { .. }
             | CombatEvent::Heal { .. }
