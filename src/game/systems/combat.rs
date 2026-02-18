@@ -417,26 +417,16 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
         return;
     };
 
-    let Some(leader_stats) = world
-        .combat
-        .combatant(leader_id)
-        .map(|combatant| combatant.stats)
-    else {
+    let Some(leader_combatant) = world.combat.combatant(leader_id) else {
         return;
     };
-    emit_combat_stats(leader_id, &leader_stats, out);
-    if let Some(leader_timed) = world
-        .combat
-        .combatant(leader_id)
-        .map(|combatant| combatant.timed.clone())
-    {
-        for effect in leader_timed.effects {
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                entity_id: leader_id,
-                kind: effect.kind,
-                time_left: effect.time_left,
-            }));
-        }
+    emit_combat_stats(leader_id, &leader_combatant.stats, out);
+    for effect in &leader_combatant.timed.effects {
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id: leader_id,
+            kind: effect.kind,
+            time_left: effect.time_left,
+        }));
     }
 
     let enemy_templates: Vec<&Enemy> = map

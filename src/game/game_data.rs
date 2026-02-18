@@ -76,46 +76,53 @@ impl GameData {
         parser(text).with_context(|| format!("failed to parse '{}'", path))
     }
 
-    pub fn find_map(&self, id: &str) -> Option<&Map> {
-        if let Some(idx) = self.map_index.get(id).copied() {
-            return self.maps.get(idx);
+    fn find_indexed<'a, T>(
+        items: &'a [T],
+        index: &BTreeMap<String, usize>,
+        id: &str,
+        id_of: fn(&T) -> &str,
+    ) -> Option<&'a T> {
+        index
+            .get(id)
+            .and_then(|idx| items.get(*idx))
+            .or_else(|| items.iter().find(|item| id_of(item) == id))
+    }
+
+    fn rebuild_index<T>(index: &mut BTreeMap<String, usize>, items: &[T], id_of: fn(&T) -> &str) {
+        index.clear();
+        for (idx, item) in items.iter().enumerate() {
+            index.insert(String::from(id_of(item)), idx);
         }
-        self.maps.iter().find(|map| map.id == id)
+    }
+
+    pub fn find_map(&self, id: &str) -> Option<&Map> {
+        Self::find_indexed(&self.maps, &self.map_index, id, |map| map.id.as_str())
     }
 
     pub fn find_item(&self, id: &str) -> Option<&Item> {
-        if let Some(idx) = self.item_index.get(id).copied() {
-            return self.items.get(idx);
-        }
-        self.items.iter().find(|item| item.id == id)
+        Self::find_indexed(&self.items, &self.item_index, id, |item| item.id.as_str())
     }
 
     pub fn find_enemy(&self, id: &str) -> Option<&Enemy> {
-        if let Some(idx) = self.enemy_index.get(id).copied() {
-            return self.enemies.get(idx);
-        }
-        self.enemies.iter().find(|enemy| enemy.id == id)
+        Self::find_indexed(&self.enemies, &self.enemy_index, id, |enemy| {
+            enemy.id.as_str()
+        })
     }
 
     pub fn find_dialog(&self, id: &str) -> Option<&Dialog> {
-        if let Some(idx) = self.dialog_index.get(id).copied() {
-            return self.dialogs.get(idx);
-        }
-        self.dialogs.iter().find(|dialog| dialog.id == id)
+        Self::find_indexed(&self.dialogs, &self.dialog_index, id, |dialog| {
+            dialog.id.as_str()
+        })
     }
 
     pub fn find_quest(&self, id: &str) -> Option<&Quest> {
-        if let Some(idx) = self.quest_index.get(id).copied() {
-            return self.quests.get(idx);
-        }
-        self.quests.iter().find(|quest| quest.id == id)
+        Self::find_indexed(&self.quests, &self.quest_index, id, |quest| {
+            quest.id.as_str()
+        })
     }
 
     pub fn find_shop(&self, id: &str) -> Option<&Shop> {
-        if let Some(idx) = self.shop_index.get(id).copied() {
-            return self.shops.get(idx);
-        }
-        self.shops.iter().find(|shop| shop.id == id)
+        Self::find_indexed(&self.shops, &self.shop_index, id, |shop| shop.id.as_str())
     }
 
     pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {
@@ -188,44 +195,32 @@ impl GameData {
     }
 
     fn rebuild_item_index(&mut self) {
-        self.item_index.clear();
-        for (idx, item) in self.items.iter().enumerate() {
-            self.item_index.insert(item.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.item_index, &self.items, |item| item.id.as_str());
     }
 
     fn rebuild_enemy_index(&mut self) {
-        self.enemy_index.clear();
-        for (idx, enemy) in self.enemies.iter().enumerate() {
-            self.enemy_index.insert(enemy.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.enemy_index, &self.enemies, |enemy| {
+            enemy.id.as_str()
+        });
     }
 
     fn rebuild_map_index(&mut self) {
-        self.map_index.clear();
-        for (idx, map) in self.maps.iter().enumerate() {
-            self.map_index.insert(map.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.map_index, &self.maps, |map| map.id.as_str());
     }
 
     fn rebuild_dialog_index(&mut self) {
-        self.dialog_index.clear();
-        for (idx, dialog) in self.dialogs.iter().enumerate() {
-            self.dialog_index.insert(dialog.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.dialog_index, &self.dialogs, |dialog| {
+            dialog.id.as_str()
+        });
     }
 
     fn rebuild_quest_index(&mut self) {
-        self.quest_index.clear();
-        for (idx, quest) in self.quests.iter().enumerate() {
-            self.quest_index.insert(quest.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.quest_index, &self.quests, |quest| {
+            quest.id.as_str()
+        });
     }
 
     fn rebuild_shop_index(&mut self) {
-        self.shop_index.clear();
-        for (idx, shop) in self.shops.iter().enumerate() {
-            self.shop_index.insert(shop.id.clone(), idx);
-        }
+        Self::rebuild_index(&mut self.shop_index, &self.shops, |shop| shop.id.as_str());
     }
 }

@@ -1,11 +1,35 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use super::state::{
-    DialogUiState, ExploreUiState, GameInput, InputKey, InventoryUiState, MenuUiState,
-    PauseMenuUiState, QuestLogUiState, UiEvent, UiState,
-};
+use super::state::{GameInput, InputKey, UiEvent, UiState};
 use crate::game::{GameState, WorldState};
+
+const EXPLORE_KEYS: [InputKey; 10] = [
+    InputKey::Up,
+    InputKey::Down,
+    InputKey::Left,
+    InputKey::Right,
+    InputKey::Ok,
+    InputKey::Key0,
+    InputKey::Key1,
+    InputKey::Key2,
+    InputKey::Key3,
+    InputKey::Back,
+];
+const MENU_KEYS: [InputKey; 3] = [InputKey::Up, InputKey::Down, InputKey::Ok];
+const PAUSE_MENU_KEYS: [InputKey; 5] = [
+    InputKey::Up,
+    InputKey::Down,
+    InputKey::Ok,
+    InputKey::Back,
+    InputKey::Key0,
+];
+const INVENTORY_KEYS: [InputKey; 4] = [InputKey::Up, InputKey::Down, InputKey::Ok, InputKey::Back];
+const QUEST_LOG_KEYS: [InputKey; 4] = [InputKey::Up, InputKey::Down, InputKey::Ok, InputKey::Back];
+const DIALOG_KEYS: [InputKey; 2] = [InputKey::Ok, InputKey::Back];
+const SHOP_KEYS: [InputKey; 4] = [InputKey::Up, InputKey::Down, InputKey::Ok, InputKey::Back];
+const OVERLAY_CLOSE_KEYS: [InputKey; 2] = [InputKey::Back, InputKey::Ok];
+const OK_KEY: [InputKey; 1] = [InputKey::Ok];
 
 pub trait UiInputEventResolver {
     fn resolve_input(
@@ -24,149 +48,70 @@ impl UiInputEventResolver for UiState {
         session: Option<&WorldState>,
     ) -> Vec<UiEvent> {
         match input {
-            GameInput::KeyDown(key) => resolve_keydown(key, game_state, self, session),
+            GameInput::KeyDown(key) => resolve_keydown(key, game_state),
             GameInput::KeyUp(key) => resolve_keyup(key, game_state, session),
         }
     }
 }
 
-impl ExploreUiState {
-    pub fn events_for_key(&self, key: InputKey) -> Vec<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up
-                | InputKey::Down
-                | InputKey::Left
-                | InputKey::Right
-                | InputKey::Ok
-                | InputKey::Key0
-                | InputKey::Key1
-                | InputKey::Key2
-                | InputKey::Key3
-                | InputKey::Back
-        ) {
-            vec![UiEvent::ExploreInput(key)]
-        } else {
-            Vec::new()
-        }
-    }
-}
-
-impl MenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(key, InputKey::Up | InputKey::Down | InputKey::Ok) {
-            Some(UiEvent::MenuInput(key))
-        } else {
-            None
-        }
-    }
-}
-
-impl PauseMenuUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back | InputKey::Key0
-        ) {
-            Some(UiEvent::PauseMenuInput(key))
-        } else {
-            None
-        }
-    }
-}
-
-impl InventoryUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
-        ) {
-            Some(UiEvent::InventoryInput(key))
-        } else {
-            None
-        }
-    }
-}
-
-impl QuestLogUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(
-            key,
-            InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
-        ) {
-            Some(UiEvent::QuestLogInput(key))
-        } else {
-            None
-        }
-    }
-}
-
-impl DialogUiState {
-    pub fn event_for_key(&self, key: InputKey) -> Option<UiEvent> {
-        if matches!(key, InputKey::Ok | InputKey::Back) {
-            Some(UiEvent::DialogInput(key))
-        } else {
-            None
-        }
-    }
-}
-
-fn resolve_keydown(
+fn key_event_if_allowed(
     key: InputKey,
-    game_state: &GameState,
-    ui: &mut UiState,
-    session: Option<&WorldState>,
-) -> Vec<UiEvent> {
+    allowed: &[InputKey],
+    map: fn(InputKey) -> UiEvent,
+) -> Option<UiEvent> {
+    allowed.contains(&key).then(|| map(key))
+}
+
+fn fixed_event_if_allowed(key: InputKey, allowed: &[InputKey], event: UiEvent) -> Option<UiEvent> {
+    allowed.contains(&key).then_some(event)
+}
+
+fn resolve_keydown(key: InputKey, game_state: &GameState) -> Vec<UiEvent> {
     match game_state {
         GameState::Loading(_) => Vec::new(),
-        GameState::Menu => ui.menu.event_for_key(key).into_iter().collect(),
-        GameState::Explore => ui.explore.events_for_key(key),
-        GameState::Dead => {
-            if matches!(key, InputKey::Ok) {
-                vec![UiEvent::ReviveRequested]
-            } else {
-                Vec::new()
-            }
-        }
-        GameState::Inventory => ui.inventory.event_for_key(key).into_iter().collect(),
+        GameState::Menu => key_event_if_allowed(key, &MENU_KEYS, UiEvent::MenuInput)
+            .into_iter()
+            .collect(),
+        GameState::Explore => key_event_if_allowed(key, &EXPLORE_KEYS, UiEvent::ExploreInput)
+            .into_iter()
+            .collect(),
+        GameState::Dead => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ReviveRequested)
+            .into_iter()
+            .collect(),
+        GameState::Inventory => key_event_if_allowed(key, &INVENTORY_KEYS, UiEvent::InventoryInput)
+            .into_iter()
+            .collect(),
         GameState::Stats => {
-            if matches!(key, InputKey::Back | InputKey::Ok) {
-                vec![UiEvent::OverlayCloseRequested]
-            } else {
-                Vec::new()
-            }
+            fixed_event_if_allowed(key, &OVERLAY_CLOSE_KEYS, UiEvent::OverlayCloseRequested)
+                .into_iter()
+                .collect()
         }
-        GameState::QuestLog => ui.quest_log.event_for_key(key).into_iter().collect(),
-        GameState::Dialog => ui.dialog.event_for_key(key).into_iter().collect(),
-        GameState::Shop => {
-            let _ = session;
-            if matches!(
-                key,
-                InputKey::Up | InputKey::Down | InputKey::Ok | InputKey::Back
-            ) {
-                vec![UiEvent::ShopInput(key)]
-            } else {
-                Vec::new()
-            }
+        GameState::QuestLog => key_event_if_allowed(key, &QUEST_LOG_KEYS, UiEvent::QuestLogInput)
+            .into_iter()
+            .collect(),
+        GameState::Dialog => key_event_if_allowed(key, &DIALOG_KEYS, UiEvent::DialogInput)
+            .into_iter()
+            .collect(),
+        GameState::Shop => key_event_if_allowed(key, &SHOP_KEYS, UiEvent::ShopInput)
+            .into_iter()
+            .collect(),
+        GameState::PauseMenu => {
+            key_event_if_allowed(key, &PAUSE_MENU_KEYS, UiEvent::PauseMenuInput)
+                .into_iter()
+                .collect()
         }
-        GameState::PauseMenu => ui.pause_menu.event_for_key(key).into_iter().collect(),
-        GameState::Error(_) => {
-            if matches!(key, InputKey::Ok) {
-                vec![UiEvent::ErrorConfirmRequested]
-            } else {
-                Vec::new()
-            }
-        }
+        GameState::Error(_) => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ErrorConfirmRequested)
+            .into_iter()
+            .collect(),
     }
 }
 
 fn resolve_keyup(
     key: InputKey,
     game_state: &GameState,
-    session: Option<&WorldState>,
+    _session: Option<&WorldState>,
 ) -> Vec<UiEvent> {
     if matches!(game_state, GameState::Explore)
-        && session.is_some()
         && let Some(direction) = key.direction()
     {
         vec![UiEvent::MovementKeyReleased(direction)]
@@ -177,15 +122,11 @@ fn resolve_keyup(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DialogUiState, ExploreUiState, InputKey, InventoryUiState, MenuUiState, PauseMenuUiState,
-        UiEvent,
-    };
+    use super::{GameState, InputKey, UiEvent, resolve_keydown};
 
     #[test]
     fn explore_ui_maps_ok_to_npc_interact_with_fallback_action() {
-        let ui = ExploreUiState::default();
-        let events = ui.events_for_key(InputKey::Ok);
+        let events = resolve_keydown(InputKey::Ok, &GameState::Explore);
         assert!(matches!(
             events.as_slice(),
             [UiEvent::ExploreInput(InputKey::Ok)]
@@ -194,69 +135,61 @@ mod tests {
 
     #[test]
     fn menu_ui_maps_up_down_ok_keys() {
-        let ui = MenuUiState::default();
-
         assert!(matches!(
-            ui.event_for_key(InputKey::Up),
-            Some(UiEvent::MenuInput(InputKey::Up))
+            resolve_keydown(InputKey::Up, &GameState::Menu).as_slice(),
+            [UiEvent::MenuInput(InputKey::Up)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Down),
-            Some(UiEvent::MenuInput(InputKey::Down))
+            resolve_keydown(InputKey::Down, &GameState::Menu).as_slice(),
+            [UiEvent::MenuInput(InputKey::Down)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::MenuInput(InputKey::Ok))
+            resolve_keydown(InputKey::Ok, &GameState::Menu).as_slice(),
+            [UiEvent::MenuInput(InputKey::Ok)]
         ));
     }
 
     #[test]
     fn pause_menu_ui_maps_back_and_zero_to_back_intent() {
-        let ui = PauseMenuUiState::default();
-
         assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::PauseMenuInput(InputKey::Back))
+            resolve_keydown(InputKey::Back, &GameState::PauseMenu).as_slice(),
+            [UiEvent::PauseMenuInput(InputKey::Back)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Key0),
-            Some(UiEvent::PauseMenuInput(InputKey::Key0))
+            resolve_keydown(InputKey::Key0, &GameState::PauseMenu).as_slice(),
+            [UiEvent::PauseMenuInput(InputKey::Key0)]
         ));
     }
 
     #[test]
     fn inventory_ui_maps_expected_keys() {
-        let ui = InventoryUiState::default();
-
         assert!(matches!(
-            ui.event_for_key(InputKey::Up),
-            Some(UiEvent::InventoryInput(InputKey::Up))
+            resolve_keydown(InputKey::Up, &GameState::Inventory).as_slice(),
+            [UiEvent::InventoryInput(InputKey::Up)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Down),
-            Some(UiEvent::InventoryInput(InputKey::Down))
+            resolve_keydown(InputKey::Down, &GameState::Inventory).as_slice(),
+            [UiEvent::InventoryInput(InputKey::Down)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::InventoryInput(InputKey::Ok))
+            resolve_keydown(InputKey::Ok, &GameState::Inventory).as_slice(),
+            [UiEvent::InventoryInput(InputKey::Ok)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::InventoryInput(InputKey::Back))
+            resolve_keydown(InputKey::Back, &GameState::Inventory).as_slice(),
+            [UiEvent::InventoryInput(InputKey::Back)]
         ));
     }
 
     #[test]
     fn dialog_ui_maps_expected_keys() {
-        let ui = DialogUiState::default();
-
         assert!(matches!(
-            ui.event_for_key(InputKey::Ok),
-            Some(UiEvent::DialogInput(InputKey::Ok))
+            resolve_keydown(InputKey::Ok, &GameState::Dialog).as_slice(),
+            [UiEvent::DialogInput(InputKey::Ok)]
         ));
         assert!(matches!(
-            ui.event_for_key(InputKey::Back),
-            Some(UiEvent::DialogInput(InputKey::Back))
+            resolve_keydown(InputKey::Back, &GameState::Dialog).as_slice(),
+            [UiEvent::DialogInput(InputKey::Back)]
         ));
     }
 }

@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use wipi::framebuffer::Framebuffer;
 
-use crate::game::state::TimedKind;
+use crate::game::state::{CombatantState, TimedKind};
 use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent,
@@ -758,40 +758,7 @@ fn sync_explore_player(
         explore.interaction_hint = next_hint;
         changed = true;
     }
-
-    let next_hp = combatant.stats.current_hp as u32;
-    let next_max_hp = combatant.stats.max_hp as u32;
-    let next_mp = combatant.stats.current_mp as u32;
-    let next_max_mp = combatant.stats.max_mp as u32;
-    if explore.hp != next_hp {
-        explore.hp = next_hp;
-        changed = true;
-    }
-    if explore.max_hp != next_max_hp {
-        explore.max_hp = next_max_hp;
-        changed = true;
-    }
-    if explore.mp != next_mp {
-        explore.mp = next_mp;
-        changed = true;
-    }
-    if explore.max_mp != next_max_mp {
-        explore.max_mp = next_max_mp;
-        changed = true;
-    }
-    let next_status = super::render_state::StatusRender::from_timed(&combatant.timed);
-    if explore.player_status.poison_timer != next_status.poison_timer
-        || explore.player_status.stun_timer != next_status.stun_timer
-        || explore.player_status.armor_break_timer != next_status.armor_break_timer
-    {
-        explore.player_status = next_status;
-        changed = true;
-    }
-    let next_cooldowns = super::render_state::skill_cooldowns_from_timed(&combatant.timed);
-    if explore.skill_cooldowns != next_cooldowns {
-        explore.skill_cooldowns = next_cooldowns;
-        changed = true;
-    }
+    changed |= sync_explore_combatant_stats(explore, combatant);
     changed
 }
 
@@ -802,6 +769,10 @@ fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) ->
     let Some(combatant) = world.combat.combatant(leader_id) else {
         return false;
     };
+    sync_explore_combatant_stats(explore, combatant)
+}
+
+fn sync_explore_combatant_stats(explore: &mut ExploreRender, combatant: &CombatantState) -> bool {
     let mut changed = false;
     let next_hp = combatant.stats.current_hp as u32;
     let next_max_hp = combatant.stats.max_hp as u32;

@@ -47,19 +47,19 @@ fn apply_explore_input(
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) {
+    if let Some(direction) = key.direction() {
+        out.push(GameEvent::Explore(ExploreEvent::MoveDirection(direction)));
+        return;
+    }
+
+    if let Some(action_index) = explore_action_index(key) {
+        if let Some(action) = ui.explore.key_actions.get(action_index).and_then(|a| *a) {
+            out.push(GameEvent::CombatPlayerAction(action));
+        }
+        return;
+    }
+
     match key {
-        InputKey::Up => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
-            crate::data::Direction::Up,
-        ))),
-        InputKey::Down => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
-            crate::data::Direction::Down,
-        ))),
-        InputKey::Left => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
-            crate::data::Direction::Left,
-        ))),
-        InputKey::Right => out.push(GameEvent::Explore(ExploreEvent::MoveDirection(
-            crate::data::Direction::Right,
-        ))),
         InputKey::Ok => {
             if let Some(s) = session
                 && let Some(leader) = s.leader_entity()
@@ -70,27 +70,21 @@ fn apply_explore_input(
                 }));
             }
         }
-        InputKey::Key1 => {
-            if let Some(action) = ui.explore.key_actions.first().and_then(|a| *a) {
-                out.push(GameEvent::CombatPlayerAction(action));
-            }
-        }
-        InputKey::Key2 => {
-            if let Some(action) = ui.explore.key_actions.get(1).and_then(|a| *a) {
-                out.push(GameEvent::CombatPlayerAction(action));
-            }
-        }
-        InputKey::Key3 => {
-            if let Some(action) = ui.explore.key_actions.get(2).and_then(|a| *a) {
-                out.push(GameEvent::CombatPlayerAction(action));
-            }
-        }
         InputKey::Key0 => out.push(GameEvent::Transition(TransitionEvent::ToPauseMenu)),
         InputKey::Back => {
             out.push(GameEvent::SaveWorld);
             out.push(GameEvent::Transition(TransitionEvent::ToMenu));
         }
         _ => {}
+    }
+}
+
+fn explore_action_index(key: InputKey) -> Option<usize> {
+    match key {
+        InputKey::Key1 => Some(0),
+        InputKey::Key2 => Some(1),
+        InputKey::Key3 => Some(2),
+        _ => None,
     }
 }
 
