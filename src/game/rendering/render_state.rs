@@ -221,6 +221,21 @@ pub(super) fn interaction_hint_from_world(
     Some(String::from(text))
 }
 
+fn item_name_or_id(item_id: &str, item_name: Option<&str>) -> String {
+    item_name
+        .map(String::from)
+        .unwrap_or_else(|| String::from(item_id))
+}
+
+fn stacked_item_label(item_id: &str, amount: i32, item_name: Option<&str>) -> String {
+    let name = item_name_or_id(item_id, item_name);
+    if amount > 1 {
+        format!("{} x{}", name, amount)
+    } else {
+        name
+    }
+}
+
 impl ExploreRender {
     pub(super) fn from_world(
         world: &WorldState,
@@ -384,17 +399,11 @@ impl InventoryRender {
         let mut items = Vec::with_capacity(leader.inventory.len());
         for stack in &leader.inventory {
             let item = data.find_item(&stack.item_id);
-            let name = if let Some(item) = item {
-                if stack.amount > 1 {
-                    format!("{} x{}", item.name, stack.amount)
-                } else {
-                    item.name.clone()
-                }
-            } else if stack.amount > 1 {
-                format!("{} x{}", stack.item_id, stack.amount)
-            } else {
-                stack.item_id.clone()
-            };
+            let name = stacked_item_label(
+                &stack.item_id,
+                stack.amount,
+                item.map(|item| item.name.as_str()),
+            );
             let kind = item.map(|item| item.kind).unwrap_or(ItemKind::Consumable);
             items.push(InventoryItemRender { name, kind });
         }
@@ -445,13 +454,14 @@ impl ShopRender {
         let leader = world.leader_entity()?;
         let shop_state = ui.shop.state.as_ref()?;
 
-        let mut buy_items = Vec::with_capacity(shop_state.items.len());
-        for item in &shop_state.items {
-            buy_items.push(ShopItemRender {
+        let buy_items: Vec<ShopItemRender> = shop_state
+            .items
+            .iter()
+            .map(|item| ShopItemRender {
                 name: item.name.clone(),
                 price: item.price,
-            });
-        }
+            })
+            .collect();
         let mut player_inventory = Vec::new();
         for stack in &leader.inventory {
             if stack.item_id == GOLD_ITEM_ID {
@@ -461,7 +471,7 @@ impl ShopRender {
             let (name, sell_price) = if let Some(item) = item {
                 (item.name.clone(), item.price / 2)
             } else {
-                (stack.item_id.clone(), 0)
+                (item_name_or_id(&stack.item_id, None), 0)
             };
             for _ in 0..stack.amount.max(0) {
                 player_inventory.push(ShopItemRender {

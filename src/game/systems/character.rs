@@ -81,40 +81,20 @@ fn resolve_use_item(
     let Some(item) = data.find_item(&stack.item_id) else {
         return;
     };
-    match item.kind {
-        ItemKind::Consumable => {
-            out.push(GameEvent::Combat(CombatEvent::Heal {
-                entity_id: leader_id,
-                amount: item.hp_restore(),
-            }));
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-                entity_id: leader_id,
-                item_id: stack.item_id.clone(),
-                delta: -1,
-            }));
-        }
-        ItemKind::Weapon => {
-            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
-                entity_id: leader_id,
-                slot: LoadoutSlot::Weapon,
-                index: Some(index),
-            }));
-        }
-        ItemKind::Armor => {
-            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
-                entity_id: leader_id,
-                slot: LoadoutSlot::Armor,
-                index: Some(index),
-            }));
-        }
-        ItemKind::Accessory => {
-            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
-                entity_id: leader_id,
-                slot: LoadoutSlot::Accessory,
-                index: Some(index),
-            }));
-        }
+    if let Some(slot) = loadout_slot(item.kind) {
+        out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
+            entity_id: leader_id,
+            slot,
+            index: Some(index),
+        }));
+        return;
     }
+
+    out.push(GameEvent::Combat(CombatEvent::Heal {
+        entity_id: leader_id,
+        amount: item.hp_restore(),
+    }));
+    push_item_delta(out, leader_id, stack.item_id.clone(), -1);
 }
 
 fn resolve_shop_buy(
@@ -131,16 +111,13 @@ fn resolve_shop_buy(
         return;
     }
 
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: crate::game::GOLD_ITEM_ID.into(),
-        delta: -item.price.max(0),
-    }));
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: item_id.into(),
-        delta: 1,
-    }));
+    push_item_delta(
+        out,
+        leader_id,
+        crate::game::GOLD_ITEM_ID,
+        -item.price.max(0),
+    );
+    push_item_delta(out, leader_id, item_id, 1);
 }
 
 fn resolve_shop_sell(
@@ -160,16 +137,13 @@ fn resolve_shop_sell(
         return;
     };
 
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: stack.item_id.clone(),
-        delta: -1,
-    }));
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: crate::game::GOLD_ITEM_ID.into(),
-        delta: (item.price / 2).max(0),
-    }));
+    push_item_delta(out, leader_id, stack.item_id.clone(), -1);
+    push_item_delta(
+        out,
+        leader_id,
+        crate::game::GOLD_ITEM_ID,
+        (item.price / 2).max(0),
+    );
 }
 
 fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameEvent>) {
@@ -194,35 +168,41 @@ fn resolve_dialog_action(
 ) {
     match action {
         DialogAction::GiveItem(id) => {
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-                entity_id,
-                item_id: id.clone(),
-                delta: 1,
-            }));
+            push_item_delta(out, entity_id, id.clone(), 1);
         }
         DialogAction::TakeItem(id) => {
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-                entity_id,
-                item_id: id.clone(),
-                delta: -1,
-            }));
+            push_item_delta(out, entity_id, id.clone(), -1);
         }
         DialogAction::GiveGold(amount) => {
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-                entity_id,
-                item_id: crate::game::GOLD_ITEM_ID.into(),
-                delta: (*amount).max(0),
-            }));
+            push_item_delta(out, entity_id, crate::game::GOLD_ITEM_ID, (*amount).max(0));
         }
         DialogAction::TakeGold(amount) => {
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-                entity_id,
-                item_id: crate::game::GOLD_ITEM_ID.into(),
-                delta: -(*amount).max(0),
-            }));
+            push_item_delta(out, entity_id, crate::game::GOLD_ITEM_ID, -(*amount).max(0));
         }
         DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out),
         DialogAction::GiveQuest(_) | DialogAction::CompleteQuest(_) | DialogAction::OpenShop(_) => {
         }
+    }
+}
+
+fn push_item_delta(
+    out: &mut Vec<GameEvent>,
+    entity_id: u32,
+    item_id: impl Into<alloc::string::String>,
+    delta: i32,
+) {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
+        entity_id,
+        item_id: item_id.into(),
+        delta,
+    }));
+}
+
+fn loadout_slot(kind: ItemKind) -> Option<LoadoutSlot> {
+    match kind {
+        ItemKind::Weapon => Some(LoadoutSlot::Weapon),
+        ItemKind::Armor => Some(LoadoutSlot::Armor),
+        ItemKind::Accessory => Some(LoadoutSlot::Accessory),
+        ItemKind::Consumable => None,
     }
 }

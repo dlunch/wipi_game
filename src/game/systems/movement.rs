@@ -53,28 +53,16 @@ fn resolve_tick_with_occupancy(
     let mut next_state = *state;
 
     let Some(map) = map else {
-        return MovementTickEvent {
-            next_state,
-            facing: None,
-            step: None,
-        };
+        return idle_tick(next_state);
     };
 
     if state.move_cooldown > 0 {
         next_state.move_cooldown -= 1;
-        return MovementTickEvent {
-            next_state,
-            facing: None,
-            step: None,
-        };
+        return idle_tick(next_state);
     }
 
     let Some(key) = state.pressed_direction else {
-        return MovementTickEvent {
-            next_state,
-            facing: None,
-            step: None,
-        };
+        return idle_tick(next_state);
     };
 
     let (dx, dy) = match key {
@@ -97,6 +85,14 @@ fn resolve_tick_with_occupancy(
         next_state,
         facing: Some((dx, dy)),
         step,
+    }
+}
+
+fn idle_tick(next_state: MovementState) -> MovementTickEvent {
+    MovementTickEvent {
+        next_state,
+        facing: None,
+        step: None,
     }
 }
 
