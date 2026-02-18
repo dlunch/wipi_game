@@ -94,7 +94,6 @@ pub struct CombatState {
     pub active: bool,
     pub allies: Vec<AllyCombatantState>,
     pub enemies: Vec<EnemyCombatantState>,
-    pub update_counter: u32,
     pub respawn_timer: u32,
 }
 
@@ -103,7 +102,6 @@ impl CombatState {
         self.active = false;
         self.allies.clear();
         self.enemies.clear();
-        self.update_counter = 0;
         self.respawn_timer = 0;
     }
 
@@ -182,9 +180,6 @@ impl CombatState {
             } => {
                 let combatant = self.combatant_mut(*entity_id)?;
                 combatant.timed.set(*kind, *time_left);
-            }
-            CombatEvent::SetUpdateCounter(update_counter) => {
-                self.update_counter = *update_counter;
             }
             CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;

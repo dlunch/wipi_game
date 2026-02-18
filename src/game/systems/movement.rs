@@ -113,17 +113,17 @@ fn find_tile_target(tiles: &[(usize, usize, String)], x: usize, y: usize) -> Opt
         .find_map(|(tx, ty, target)| (*tx == x && *ty == y).then(|| target.clone()))
 }
 
-struct UpdateMovementResolver;
+struct TickMovementResolver;
 
-static UPDATE_MOVEMENT_RESOLVER: UpdateMovementResolver = UpdateMovementResolver;
+static TICK_MOVEMENT_RESOLVER: TickMovementResolver = TickMovementResolver;
 
 pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    vec![&UPDATE_MOVEMENT_RESOLVER]
+    vec![&TICK_MOVEMENT_RESOLVER]
 }
 
-impl DomainEventResolver for UpdateMovementResolver {
+impl DomainEventResolver for TickMovementResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
-        &[GameEventKind::UpdateMovement]
+        &[GameEventKind::Tick]
     }
 
     fn resolve(

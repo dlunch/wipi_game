@@ -295,7 +295,6 @@ fn resolve_revive_player(
     out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
     out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
     out.push(GameEvent::Combat(CombatEvent::SetActive(false)));
-    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,

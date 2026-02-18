@@ -27,6 +27,7 @@ pub struct OccupancyState {
 
 #[derive(Default)]
 pub struct WorldState {
+    pub tick_counter: u32,
     pub entities: EntityStore,
     pub party: PartyState,
     pub movement: MovementState,
@@ -39,6 +40,7 @@ pub struct WorldState {
 impl WorldState {
     pub fn empty() -> Self {
         Self {
+            tick_counter: 0,
             entities: EntityStore::new(),
             party: PartyState::default(),
             movement: MovementState::default(),
@@ -186,6 +188,9 @@ impl WorldState {
 
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
+            GameEvent::Tick => {
+                self.tick_counter = self.tick_counter.wrapping_add(1);
+            }
             GameEvent::World(world_event) => {
                 self.apply_world_event(data, world_event)?;
             }
@@ -226,6 +231,7 @@ impl WorldState {
         self.entities.clear();
         self.party.leader_id = 0;
         self.party.companion_ids.clear();
+        self.tick_counter = 0;
         self.movement.reset();
         self.combat.reset();
         self.quests.clear();
@@ -465,7 +471,6 @@ impl WorldState {
             | CombatEvent::SetCombatantAtk { .. }
             | CombatEvent::SetCombatantDef { .. }
             | CombatEvent::SetCombatantTimed { .. }
-            | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. }
             | CombatEvent::ChangeCombatantHp { .. } => {}
@@ -486,7 +491,6 @@ impl WorldState {
             CombatEvent::RemoveEnemy(entity_id) => Some(*entity_id),
             CombatEvent::SetActive(_)
             | CombatEvent::ClearEnemies
-            | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. } => None,
         }) else {

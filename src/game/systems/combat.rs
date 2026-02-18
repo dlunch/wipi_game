@@ -31,7 +31,7 @@ pub fn resolvers() -> Vec<&'static dyn DomainEventResolver> {
 impl DomainEventResolver for CombatResolver {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
         &[
-            GameEventKind::UpdateCombat,
+            GameEventKind::Tick,
             GameEventKind::CombatPlayerAction,
             GameEventKind::Transition,
         ]
@@ -46,7 +46,7 @@ impl DomainEventResolver for CombatResolver {
     ) -> Result<()> {
         if !matches!(
             event,
-            GameEvent::UpdateCombat
+            GameEvent::Tick
                 | GameEvent::CombatPlayerAction(_)
                 | GameEvent::Transition(TransitionEvent::MapChanged)
         ) {
@@ -55,7 +55,7 @@ impl DomainEventResolver for CombatResolver {
 
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
-            GameEvent::UpdateCombat => resolve_tick(data, world, out)?,
+            GameEvent::Tick => resolve_tick(data, world, out)?,
             GameEvent::CombatPlayerAction(action) => {
                 resolve_player_action(data, world, action, out)?
             }
@@ -78,10 +78,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
 
-    let next_counter = world.combat.update_counter.wrapping_add(1);
-    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(
-        next_counter,
-    )));
+    let next_counter = world.tick_counter.wrapping_add(1);
 
     tick_combatant_timed(leader_id, leader_combatant, next_counter, out);
 
@@ -415,7 +412,6 @@ fn resolve_map_changed(
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::Combat(CombatEvent::SetActive(!map.peaceful)));
         out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
-        out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
         return Ok(());
     }
 
@@ -488,7 +484,6 @@ fn resolve_map_changed(
 
     out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
-    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
     Ok(())
 }
 

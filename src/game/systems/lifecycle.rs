@@ -243,9 +243,6 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         emit_combat_stats(enemy.entity_id, &enemy.combatant.stats, out);
         emit_timed_effects(enemy.entity_id, &enemy.combatant.timed.effects, out);
     }
-    out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(
-        world.combat.update_counter,
-    )));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(
         world.combat.respawn_timer,
     )));

@@ -26,7 +26,7 @@ pub fn serialize(world: &WorldState) -> String {
         format_args_to_string(&[
             "COMBAT",
             if world.combat.active { "1" } else { "0" },
-            &world.combat.update_counter.to_string(),
+            &world.tick_counter.to_string(),
             &world.combat.respawn_timer.to_string(),
         ]),
     ];
@@ -145,7 +145,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
     let mut parsed_quests = Vec::new();
     let mut parsed_treasures = Vec::new();
     let mut parsed_combat_active = false;
-    let mut parsed_update_counter = 0u32;
+    let mut parsed_tick_counter = 0u32;
     let mut parsed_respawn_timer = 0u32;
 
     for (line_no, line) in data
@@ -178,7 +178,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             "COMBAT" => {
                 ensure!(parts.len() >= 4, "COMBAT line is malformed");
                 parsed_combat_active = parse_flag(parts[1], "COMBAT.active")?;
-                parsed_update_counter = parse_value(parts[2], "COMBAT.update_counter")?;
+                parsed_tick_counter = parse_value(parts[2], "COMBAT.tick_counter")?;
                 parsed_respawn_timer = parse_value(parts[3], "COMBAT.respawn_timer")?;
             }
             "ENTITY" => {
@@ -337,6 +337,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
         .max(1);
 
     *world = WorldState {
+        tick_counter: parsed_tick_counter,
         entities: crate::game::EntityStore::from_list(parsed_entities, next_entity_id),
         party: parsed_party,
         movement: Default::default(),
@@ -344,7 +345,6 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             active: parsed_combat_active,
             allies: parsed_allies,
             enemies: parsed_enemies,
-            update_counter: parsed_update_counter,
             respawn_timer: parsed_respawn_timer,
         },
         quests: parsed_quests,

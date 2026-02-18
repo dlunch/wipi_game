@@ -42,7 +42,6 @@ pub enum CombatEvent {
         kind: TimedKind,
         time_left: u32,
     },
-    SetUpdateCounter(u32),
     SetRespawnTimer(u32),
     GrantKillReward {
         enemy_id: String,
@@ -52,8 +51,7 @@ pub enum CombatEvent {
 }
 
 pub enum GameEvent {
-    UpdateMovement,
-    UpdateCombat,
+    Tick,
     SoftError(String),
     StartNewGame,
     ContinueGame,
@@ -83,8 +81,7 @@ pub enum GameEvent {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GameEventKind {
-    UpdateMovement,
-    UpdateCombat,
+    Tick,
     SoftError,
     StartNewGame,
     ContinueGame,
@@ -117,37 +114,36 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 27;
+    pub const COUNT: usize = 26;
 
     pub const fn as_usize(self) -> usize {
         match self {
-            Self::UpdateMovement => 0,
-            Self::UpdateCombat => 1,
-            Self::SoftError => 2,
-            Self::StartNewGame => 3,
-            Self::ContinueGame => 4,
-            Self::SaveWorld => 5,
-            Self::UseInventorySelected => 6,
-            Self::World => 7,
-            Self::Entity => 8,
-            Self::OpenDialogState => 9,
-            Self::OpenShopById => 10,
-            Self::OpenShopState => 11,
-            Self::RestoreHpMp => 12,
-            Self::ApplyDialogAction => 13,
-            Self::ApplyDialogTransition => 14,
-            Self::ShopBuyItem => 15,
-            Self::ShopSellSelected => 16,
-            Self::RevivePlayer => 17,
-            Self::CombatPlayerAction => 18,
-            Self::FatalError => 19,
-            Self::Loading => 20,
-            Self::Movement => 21,
-            Self::Combat => 22,
-            Self::Explore => 23,
-            Self::Lifecycle => 24,
-            Self::Transition => 25,
-            Self::Exit => 26,
+            Self::Tick => 0,
+            Self::SoftError => 1,
+            Self::StartNewGame => 2,
+            Self::ContinueGame => 3,
+            Self::SaveWorld => 4,
+            Self::UseInventorySelected => 5,
+            Self::World => 6,
+            Self::Entity => 7,
+            Self::OpenDialogState => 8,
+            Self::OpenShopById => 9,
+            Self::OpenShopState => 10,
+            Self::RestoreHpMp => 11,
+            Self::ApplyDialogAction => 12,
+            Self::ApplyDialogTransition => 13,
+            Self::ShopBuyItem => 14,
+            Self::ShopSellSelected => 15,
+            Self::RevivePlayer => 16,
+            Self::CombatPlayerAction => 17,
+            Self::FatalError => 18,
+            Self::Loading => 19,
+            Self::Movement => 20,
+            Self::Combat => 21,
+            Self::Explore => 22,
+            Self::Lifecycle => 23,
+            Self::Transition => 24,
+            Self::Exit => 25,
         }
     }
 }
@@ -155,8 +151,7 @@ impl GameEventKind {
 impl GameEvent {
     pub const fn kind(&self) -> GameEventKind {
         match self {
-            Self::UpdateMovement => GameEventKind::UpdateMovement,
-            Self::UpdateCombat => GameEventKind::UpdateCombat,
+            Self::Tick => GameEventKind::Tick,
             Self::SoftError(_) => GameEventKind::SoftError,
             Self::StartNewGame => GameEventKind::StartNewGame,
             Self::ContinueGame => GameEventKind::ContinueGame,

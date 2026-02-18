@@ -106,8 +106,7 @@ impl GameEngine {
                 out.push(GameEvent::Loading(crate::game::LoadingEvent::Tick));
             }
             GameState::Explore => {
-                out.push(GameEvent::UpdateMovement);
-                out.push(GameEvent::UpdateCombat);
+                out.push(GameEvent::Tick);
             }
             _ => {}
         }

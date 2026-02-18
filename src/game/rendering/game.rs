@@ -660,7 +660,6 @@ fn patch_explore_combat(
         CombatEvent::SetCombatantAtk { .. }
         | CombatEvent::SetCombatantDef { .. }
         | CombatEvent::SetActive(_)
-        | CombatEvent::SetUpdateCounter(_)
         | CombatEvent::SetRespawnTimer(_)
         | CombatEvent::GrantKillReward { .. } => Ok(false),
     }
