@@ -168,6 +168,7 @@ impl GameEngine {
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
         let mut derived = Vec::with_capacity(8);
+        let mut effect_events = Vec::with_capacity(4);
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
@@ -179,8 +180,13 @@ impl GameEngine {
             }
 
             self.resolve_with_handlers(&event, &mut derived)?;
-            let effect_events =
-                apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
+            apply_effects(
+                &self.state,
+                &mut self.data,
+                self.world.as_ref(),
+                &event,
+                &mut effect_events,
+            )?;
 
             self.apply_with_handlers(&event)?;
             let render_fx_changed =
@@ -201,7 +207,7 @@ impl GameEngine {
             }
 
             queue.extend(derived.drain(..));
-            queue.extend(effect_events);
+            queue.extend(effect_events.drain(..));
         }
 
         Ok(needs_repaint)

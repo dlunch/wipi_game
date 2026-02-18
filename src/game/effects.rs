@@ -15,8 +15,8 @@ pub fn apply_effects(
     data: &mut Rc<GameData>,
     world: Option<&WorldState>,
     event: &GameEvent,
-) -> Result<Vec<GameEvent>> {
-    let mut out = Vec::with_capacity(4);
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     match event {
         GameEvent::Loading(LoadingEvent::Tick) => {
             let step = match state {
@@ -25,7 +25,7 @@ pub fn apply_effects(
                     out.push(GameEvent::Loading(LoadingEvent::Error(String::from(
                         "Invalid state: expected Loading",
                     ))));
-                    return Ok(out);
+                    return Ok(());
                 }
             };
 
@@ -66,5 +66,5 @@ pub fn apply_effects(
         }
         _ => {}
     }
-    Ok(out)
+    Ok(())
 }
