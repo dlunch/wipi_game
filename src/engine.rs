@@ -77,21 +77,8 @@ impl GameEngine {
             Ok(changed) => needs_repaint |= changed,
             Err(e) => {
                 let error_event = GameEvent::Loading(LoadingEvent::Error(format!("{e}")));
-                if self.apply_with_handlers(&error_event).is_ok() {
-                    let render_fx_changed =
-                        self.render_fx
-                            .apply_event(&self.state, self.world.as_ref(), &error_event);
-                    needs_repaint |= self.render_state.apply_game_event_patch(
-                        &error_event,
-                        &self.state,
-                        self.world.as_ref(),
-                        &self.ui,
-                        &self.data,
-                        &self.render_fx,
-                    );
-                    if render_fx_changed {
-                        needs_repaint |= self.render_state.apply_tick(&self.render_fx);
-                    }
+                if let Ok(changed) = self.apply_and_patch_event(&error_event) {
+                    needs_repaint |= changed;
                 }
             }
         }
@@ -187,25 +174,32 @@ impl GameEngine {
                 &mut derived,
             )?;
 
-            self.apply_with_handlers(&event)?;
-            let render_fx_changed =
-                self.render_fx
-                    .apply_event(&self.state, self.world.as_ref(), &event);
-
-            needs_repaint |= self.render_state.apply_game_event_patch(
-                &event,
-                &self.state,
-                self.world.as_ref(),
-                &self.ui,
-                &self.data,
-                &self.render_fx,
-            );
-
-            if render_fx_changed {
-                needs_repaint |= self.render_state.apply_tick(&self.render_fx);
-            }
+            needs_repaint |= self.apply_and_patch_event(&event)?;
 
             queue.extend(derived.drain(..));
+        }
+
+        Ok(needs_repaint)
+    }
+
+    fn apply_and_patch_event(&mut self, event: &GameEvent) -> Result<bool> {
+        self.apply_with_handlers(event)?;
+
+        let render_fx_changed = self
+            .render_fx
+            .apply_event(&self.state, self.world.as_ref(), event);
+
+        let mut needs_repaint = self.render_state.apply_game_event_patch(
+            event,
+            &self.state,
+            self.world.as_ref(),
+            &self.ui,
+            &self.data,
+            &self.render_fx,
+        );
+
+        if render_fx_changed {
+            needs_repaint |= self.render_state.apply_tick(&self.render_fx);
         }
 
         Ok(needs_repaint)
