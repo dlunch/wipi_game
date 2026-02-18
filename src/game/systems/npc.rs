@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 
-use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::systems::resolver::{DomainEventResolver, require_world};
 use crate::game::{DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, WorldState};
 
 #[derive(Debug)]
@@ -123,7 +123,7 @@ impl DomainEventResolver for NpcResolver {
                 facing,
                 fallback_action,
             }) => {
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                let world = require_world(world)?;
                 let leader = world.leader_entity()?;
 
                 if let Some(npc_event) = try_interact_npc(world, data, *facing)? {

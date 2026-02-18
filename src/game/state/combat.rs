@@ -99,6 +99,14 @@ pub struct CombatState {
 }
 
 impl CombatState {
+    pub fn reset(&mut self) {
+        self.active = false;
+        self.allies.clear();
+        self.enemies.clear();
+        self.update_counter = 0;
+        self.respawn_timer = 0;
+    }
+
     pub fn combatant(&self, entity_id: EntityId) -> Result<&CombatantState> {
         self.allies
             .iter()

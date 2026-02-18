@@ -8,6 +8,7 @@ use anyhow::Result;
 use crate::game::save::load_game;
 use crate::game::state::{
     CombatStatsSnapshot, EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedEffect,
+    combat_attack_def,
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
@@ -151,28 +152,7 @@ impl LifecycleResolver {
 }
 
 fn snapshot_for_entity(data: &GameData, entity: &EntityState) -> Result<CombatStatsSnapshot> {
-    let mut atk = entity.stat.base_atk;
-    let mut def = entity.stat.base_def;
-
-    if let Some(index) = entity.loadout.weapon
-        && let Some(stack) = entity.inventory.get(index)
-    {
-        let item = data.find_item(&stack.item_id)?;
-        atk += item.atk();
-    }
-    if let Some(index) = entity.loadout.armor
-        && let Some(stack) = entity.inventory.get(index)
-    {
-        let item = data.find_item(&stack.item_id)?;
-        def += item.def();
-    }
-    if let Some(index) = entity.loadout.accessory
-        && let Some(stack) = entity.inventory.get(index)
-    {
-        let item = data.find_item(&stack.item_id)?;
-        atk += item.atk();
-        def += item.def();
-    }
+    let (atk, def) = combat_attack_def(data, entity)?;
 
     Ok(CombatStatsSnapshot {
         max_hp: entity.stat.base_max_hp,

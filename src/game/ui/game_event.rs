@@ -7,7 +7,7 @@ impl UiState {
     pub fn apply_game_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
-                *self = UiState::default();
+                self.reset();
             }
             GameEvent::Lifecycle(crate::game::LifecycleEvent::SetMenuHasSaveData(has_save)) => {
                 self.menu.state = MenuState::new(*has_save);

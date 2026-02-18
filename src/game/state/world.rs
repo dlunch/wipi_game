@@ -8,7 +8,7 @@ use crate::data::Direction;
 use crate::data::QuestProgress;
 use crate::game::state::{
     AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
-    EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
+    EntityState, EntityStore, GOLD_ITEM_ID, PartyState, combat_attack_def,
 };
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
@@ -222,10 +222,26 @@ impl WorldState {
         Ok(())
     }
 
+    pub fn reset(&mut self) {
+        self.entities.clear();
+        self.party.leader_id = 0;
+        self.party.companion_ids.clear();
+        self.movement.reset();
+        self.combat.reset();
+        self.quests.clear();
+        self.opened_treasures.clear();
+        self.occupancy.map_id.clear();
+        self.occupancy.width = 0;
+        self.occupancy.height = 0;
+        self.occupancy.npc_tiles.clear();
+        self.occupancy.enemy_tiles.clear();
+        self.occupancy.enemy_tile_counts.clear();
+    }
+
     fn apply_world_event(&mut self, data: &GameData, event: &WorldEvent) -> Result<()> {
         match event {
             WorldEvent::CreateWorld => {
-                *self = WorldState::empty();
+                self.reset();
             }
             WorldEvent::SetWorldMap(map_id) => {
                 self.rebuild_npc_occupancy_for_map(data, map_id)?;
@@ -262,6 +278,7 @@ impl WorldState {
     }
 
     fn apply_entity_event(&mut self, data: &GameData, event: &EntityEvent) -> Result<()> {
+        let mut sync_stats_for: Option<EntityId> = None;
         match event {
             EntityEvent::SetLeaderEntity(entity_id) => {
                 self.party.leader_id = *entity_id;
@@ -344,7 +361,7 @@ impl WorldState {
             } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.base_max_hp = *base_max_hp;
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::SetEntityBaseMaxMp {
                 entity_id,
@@ -352,7 +369,7 @@ impl WorldState {
             } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.base_max_mp = *base_max_mp;
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::SetEntityBaseAtk {
                 entity_id,
@@ -360,7 +377,7 @@ impl WorldState {
             } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.base_atk = *base_atk;
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::SetEntityBaseDef {
                 entity_id,
@@ -368,12 +385,12 @@ impl WorldState {
             } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.base_def = *base_def;
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::AddEntityExp { entity_id, amount } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.add_exp(*amount);
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::ClearEntityInventory { entity_id } => {
                 let entity = self.entities.get_mut(*entity_id)?;
@@ -381,7 +398,7 @@ impl WorldState {
                 entity.loadout.weapon = None;
                 entity.loadout.armor = None;
                 entity.loadout.accessory = None;
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::SetEntityLoadoutSlot {
                 entity_id,
@@ -400,7 +417,7 @@ impl WorldState {
                         entity.loadout.accessory = *index;
                     }
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
             EntityEvent::ChangeEntityItem {
                 entity_id,
@@ -412,8 +429,11 @@ impl WorldState {
                 } else if *delta < 0 {
                     self.remove_item_amount(*entity_id, item_id, -*delta)?;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id)?;
+                sync_stats_for = Some(*entity_id);
             }
+        }
+        if let Some(entity_id) = sync_stats_for {
+            self.sync_combat_stats_for_entity(data, entity_id)?;
         }
         Ok(())
     }
@@ -673,29 +693,7 @@ impl WorldState {
         combatant.stats.current_hp = combatant.stats.current_hp.min(max_hp).max(0);
         combatant.stats.current_mp = combatant.stats.current_mp.min(max_mp).max(0);
 
-        let mut atk = entity.stat.base_atk;
-        let mut def = entity.stat.base_def;
-
-        if let Some(index) = entity.loadout.weapon
-            && let Some(stack) = entity.inventory.get(index)
-        {
-            let item = data.find_item(&stack.item_id)?;
-            atk += item.atk();
-        }
-        if let Some(index) = entity.loadout.armor
-            && let Some(stack) = entity.inventory.get(index)
-        {
-            let item = data.find_item(&stack.item_id)?;
-            def += item.def();
-        }
-        if let Some(index) = entity.loadout.accessory
-            && let Some(stack) = entity.inventory.get(index)
-        {
-            let item = data.find_item(&stack.item_id)?;
-            atk += item.atk();
-            def += item.def();
-        }
-
+        let (atk, def) = combat_attack_def(data, entity)?;
         combatant.stats.atk = atk;
         combatant.stats.def = def;
         Ok(())

@@ -56,6 +56,23 @@ pub struct UiState {
     pub dialog: DialogUiState,
 }
 
+impl UiState {
+    pub fn reset(&mut self) {
+        self.explore = ExploreUiState::default();
+        self.menu.state = MenuState::new(false);
+        self.menu.selected = 0;
+        self.pause_menu.state = PauseMenuState::new();
+        self.pause_menu.selected = 0;
+        self.inventory.selected = 0;
+        self.quest_log.selected = 0;
+        self.quest_log.tracked_quest_id = None;
+        self.shop.state = None;
+        self.shop.mode = ShopMode::Select;
+        self.shop.selected = 0;
+        self.dialog.state = None;
+    }
+}
+
 pub enum UiEvent {
     OverlayCloseRequested,
     ReviveRequested,

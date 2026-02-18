@@ -36,6 +36,22 @@ enum GameStateKind {
 }
 
 impl GameState {
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            GameState::Loading(_) => "Loading",
+            GameState::Menu => "Menu",
+            GameState::Explore => "Explore",
+            GameState::Dead => "Dead",
+            GameState::Inventory => "Inventory",
+            GameState::Stats => "Stats",
+            GameState::Dialog => "Dialog",
+            GameState::Shop => "Shop",
+            GameState::QuestLog => "QuestLog",
+            GameState::PauseMenu => "PauseMenu",
+            GameState::Error(_) => "Error",
+        }
+    }
+
     fn kind(&self) -> GameStateKind {
         match self {
             GameState::Loading(_) => GameStateKind::Loading,

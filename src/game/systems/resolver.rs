@@ -1,7 +1,7 @@
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::game::{GameData, GameEvent, GameEventKind, GameEventSubscriber, WorldState};
 
@@ -23,4 +23,8 @@ impl<T: DomainEventResolver + ?Sized> GameEventSubscriber for T {
             .copied()
             .any(|subscribed| subscribed == kind)
     }
+}
+
+pub fn require_world(world: Option<&WorldState>) -> Result<&WorldState> {
+    world.ok_or_else(|| anyhow!("No active world"))
 }

@@ -3,12 +3,12 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::data::{Direction, Map, Tile};
 
 use crate::game::state::EntityState;
-use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::systems::resolver::{DomainEventResolver, require_world};
 use crate::game::{
     GameData, GameEvent, GameEventKind, MovementEvent, MovementState, MovementTickEvent, TileEvent,
     WorldState,
@@ -133,7 +133,7 @@ impl DomainEventResolver for UpdateMovementResolver {
         _event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let world = world.ok_or_else(|| anyhow!("No active world"))?;
+        let world = require_world(world)?;
         let leader = world.leader_entity()?;
 
         let (movement_event, tile_event) =

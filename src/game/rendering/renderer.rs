@@ -111,3 +111,13 @@ pub fn draw_hp_bar(fb: &mut Framebuffer, x: i32, y: i32, w: i32, current: i32, m
 pub fn draw_selection_cursor(fb: &mut Framebuffer, x: i32, y: i32) {
     fb.fill_rect(x, y + 2, 4, 4, COLOR_WHITE);
 }
+
+pub fn truncate_by_chars(s: &str, max_chars: usize) -> &str {
+    if max_chars == 0 {
+        return "";
+    }
+    match s.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    }
+}

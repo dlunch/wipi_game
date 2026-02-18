@@ -9,6 +9,7 @@ pub use combat::{
     AllyCombatantState, CombatState, CombatStatsSnapshot, CombatantState, EnemyCombatantState,
     TimedEffect, TimedKind, TimedState,
 };
+pub use entity::combat_attack_def;
 pub use entity::{
     EntityId, EntityKind, EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, ItemStack,
     LoadoutState, PartyState,

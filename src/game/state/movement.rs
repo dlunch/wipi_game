@@ -23,8 +23,16 @@ pub struct MovementTickEvent {
 
 impl MovementState {
     pub fn apply_tick(&mut self, event: MovementTickEvent) -> bool {
-        *self = event.next_state;
+        self.apply_next_state(event.next_state);
         event.step.is_some()
+    }
+
+    pub fn reset(&mut self) {
+        self.pressed_direction = None;
+        self.move_cooldown = 0;
+        self.pressed_mask = 0;
+        self.press_order = [u8::MAX; 4];
+        self.press_len = 0;
     }
 
     pub fn on_direction_pressed(&mut self, direction: Direction) {
@@ -87,6 +95,14 @@ impl MovementState {
             self.press_order[idx] = u8::MAX;
         }
         self.press_len = write as u8;
+    }
+
+    fn apply_next_state(&mut self, next_state: MovementState) {
+        self.pressed_direction = next_state.pressed_direction;
+        self.move_cooldown = next_state.move_cooldown;
+        self.pressed_mask = next_state.pressed_mask;
+        self.press_order = next_state.press_order;
+        self.press_len = next_state.press_len;
     }
 
     fn refresh_pressed_direction(&mut self) {

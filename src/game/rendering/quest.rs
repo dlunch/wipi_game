@@ -4,7 +4,7 @@ use wipi::framebuffer::Framebuffer;
 
 use super::renderer::{
     COLOR_BLACK, COLOR_CYAN, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen,
-    draw_rect, draw_text, fill_rect,
+    draw_rect, draw_text, fill_rect, truncate_by_chars,
 };
 use crate::game::QuestLogRender;
 
@@ -55,14 +55,4 @@ pub fn draw_quest_log(fb: &mut Framebuffer, state: &QuestLogRender) {
     }
 
     draw_text(fb, 8, screen_h - 14, "OK:Track  Back:Close", COLOR_GRAY);
-}
-
-fn truncate_by_chars(s: &str, max_chars: usize) -> &str {
-    if max_chars == 0 {
-        return "";
-    }
-    match s.char_indices().nth(max_chars) {
-        Some((byte_idx, _)) => &s[..byte_idx],
-        None => s,
-    }
 }

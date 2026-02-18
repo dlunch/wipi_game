@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::Direction;
+use crate::game::GameData;
 
 pub type EntityId = u32;
 pub const GOLD_ITEM_ID: &str = "gold";
@@ -113,6 +114,33 @@ impl EntityState {
     }
 }
 
+pub fn combat_attack_def(data: &GameData, entity: &EntityState) -> Result<(i32, i32)> {
+    let mut atk = entity.stat.base_atk;
+    let mut def = entity.stat.base_def;
+
+    if let Some(index) = entity.loadout.weapon
+        && let Some(stack) = entity.inventory.get(index)
+    {
+        let item = data.find_item(&stack.item_id)?;
+        atk += item.atk();
+    }
+    if let Some(index) = entity.loadout.armor
+        && let Some(stack) = entity.inventory.get(index)
+    {
+        let item = data.find_item(&stack.item_id)?;
+        def += item.def();
+    }
+    if let Some(index) = entity.loadout.accessory
+        && let Some(stack) = entity.inventory.get(index)
+    {
+        let item = data.find_item(&stack.item_id)?;
+        atk += item.atk();
+        def += item.def();
+    }
+
+    Ok((atk, def))
+}
+
 #[derive(Debug)]
 pub struct EntityStore {
     list: Vec<EntityState>,
@@ -185,6 +213,12 @@ impl EntityStore {
 
     pub fn contains(&self, entity_id: EntityId) -> bool {
         self.index_by_id.contains_key(&entity_id)
+    }
+
+    pub fn clear(&mut self) {
+        self.list.clear();
+        self.index_by_id.clear();
+        self.next_entity_id = 1;
     }
 
     pub fn remove(&mut self, entity_id: EntityId) {

@@ -6,7 +6,7 @@ use wipi::framebuffer::{Color, Framebuffer};
 use super::renderer::{
     COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
     COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
-    draw_rect, draw_text, fill_rect,
+    draw_rect, draw_text, fill_rect, truncate_by_chars,
 };
 use super::sprites::SpriteAtlas;
 use crate::data::{Direction, Map, SkillType, Tile};
@@ -404,16 +404,6 @@ fn draw_minimap(fb: &mut Framebuffer, map: &Map, state: &ExploreRender) {
         MINIMAP_CELL,
         COLOR_WHITE,
     );
-}
-
-fn truncate_by_chars(s: &str, max_chars: usize) -> &str {
-    if max_chars == 0 {
-        return "";
-    }
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
 }
 
 fn draw_skill_bar(

@@ -4,7 +4,7 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{Error, Result, anyhow, ensure};
+use anyhow::{Error, Result, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
@@ -157,18 +157,9 @@ impl GameEngine {
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<bool> {
         let mut needs_repaint = false;
         let mut queue: VecDeque<GameEvent> = initial_events.into();
-        let mut processed = 0usize;
         let mut derived = Vec::with_capacity(8);
 
         while let Some(event) = queue.pop_front() {
-            processed += 1;
-            if processed > 256 {
-                return Err(anyhow!(
-                    "Event queue overflow: processed {} events in one dispatch",
-                    processed
-                ));
-            }
-
             self.resolve_with_handlers(&event, &mut derived)?;
             apply_effects(
                 &self.state,
