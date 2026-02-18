@@ -65,12 +65,12 @@ impl GameEngine {
 
     fn tick_inner(&mut self) -> Result<bool> {
         let mut needs_repaint = false;
-        let mut initial_events = Vec::with_capacity(16);
+        let mut input_events = Vec::with_capacity(16);
         while let Some(input) = self.pending_inputs.pop_front() {
             let ui_events = self
                 .ui
                 .resolve_input(input, &self.state, self.world.as_ref());
-            self.apply_ui_events(ui_events, &mut initial_events)?;
+            self.apply_ui_events(ui_events, &mut input_events)?;
         }
         needs_repaint |= self
             .render_state
@@ -79,8 +79,11 @@ impl GameEngine {
         self.render_fx.tick();
         needs_repaint |= self.render_state.apply_tick(&self.render_fx);
 
-        self.resolve_tick_game_events(&mut initial_events);
-        needs_repaint |= self.dispatch_game_events(initial_events)?;
+        needs_repaint |= self.dispatch_game_events(input_events)?;
+
+        let mut tick_events = Vec::with_capacity(2);
+        self.resolve_tick_game_events(&mut tick_events);
+        needs_repaint |= self.dispatch_game_events(tick_events)?;
 
         Ok(needs_repaint)
     }
@@ -171,9 +174,7 @@ impl GameEngine {
 
             needs_repaint |= self.apply_and_patch_event(&event)?;
 
-            while let Some(derived_event) = derived.pop() {
-                queue.push_front(derived_event);
-            }
+            queue.extend(derived.drain(..));
         }
 
         Ok(needs_repaint)

@@ -277,12 +277,12 @@ fn resolve_take_damage(
     if stats.current_hp == previous_hp {
         return Ok(());
     }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-        entity_id,
-        current_hp: stats.current_hp,
-    }));
     if stats.current_hp <= 0 {
         if world.leader_id()? == entity_id {
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+                entity_id,
+                current_hp: stats.current_hp,
+            }));
             out.push(GameEvent::Transition(TransitionEvent::ToDead));
         } else if let Some(enemy) = world
             .combat
@@ -298,6 +298,11 @@ fn resolve_take_damage(
                 gold: enemy_data.gold,
             }));
         }
+    } else {
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+            entity_id,
+            current_hp: stats.current_hp,
+        }));
     }
     Ok(())
 }

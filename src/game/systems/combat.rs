@@ -372,20 +372,6 @@ fn damage_enemy_at_position(
         let damage = raw_damage.saturating_sub(effective_def / 2).max(1);
         next_stats.current_hp = next_stats.current_hp.saturating_sub(damage).max(0);
 
-        out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-            entity_id: enemy.entity_id,
-            current_hp: next_stats.current_hp,
-        }));
-        if let Some((kind, duration)) = timed_effect
-            && enemy.combatant.timed.time_left(kind) < duration
-        {
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                entity_id: enemy.entity_id,
-                kind,
-                time_left: duration,
-            }));
-        }
-
         if next_stats.current_hp <= 0 {
             out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
             let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
@@ -394,6 +380,20 @@ fn damage_enemy_at_position(
                 exp: enemy_data.exp,
                 gold: enemy_data.gold,
             }));
+        } else {
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+                entity_id: enemy.entity_id,
+                current_hp: next_stats.current_hp,
+            }));
+            if let Some((kind, duration)) = timed_effect
+                && enemy.combatant.timed.time_left(kind) < duration
+            {
+                out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+                    entity_id: enemy.entity_id,
+                    kind,
+                    time_left: duration,
+                }));
+            }
         }
         return Ok(true);
     }
