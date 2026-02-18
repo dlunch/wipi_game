@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 use super::state::MenuState;
-use crate::game::save::has_save_data;
 use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, UiState};
 
 impl UiState {
@@ -10,9 +9,13 @@ impl UiState {
             GameEvent::Lifecycle(crate::game::LifecycleEvent::ResetUi) => {
                 *self = UiState::default();
             }
+            GameEvent::Lifecycle(crate::game::LifecycleEvent::SetMenuHasSaveData(has_save)) => {
+                self.menu.state = MenuState::new(*has_save);
+                self.menu.selected = 0;
+            }
             GameEvent::Loading(crate::game::LoadingEvent::Loaded)
             | GameEvent::Transition(crate::game::TransitionEvent::ToMenu) => {
-                self.menu.state = MenuState::new(has_save_data());
+                // Menu content is configured by Lifecycle::SetMenuHasSaveData.
                 self.menu.selected = 0;
             }
             GameEvent::Transition(crate::game::TransitionEvent::ToPauseMenu) => {

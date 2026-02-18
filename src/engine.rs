@@ -1,6 +1,7 @@
 use alloc::collections::VecDeque;
 use alloc::format;
 use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -8,8 +9,8 @@ use anyhow::{Result, anyhow, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, RenderFxState, RenderState, SpriteAtlas, UiEvent, UiEventApplier,
-    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
+    GameState, InputKey, LoadingEvent, RenderFxState, RenderState, SpriteAtlas, UiEvent,
+    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -84,23 +85,13 @@ impl GameEngine {
             .apply_ui_patch(&self.ui, self.world.as_ref());
         self.pending_inputs = pending;
 
-        if self.render_fx.tick() {
-            needs_repaint |= self.render_state.apply_tick(&self.render_fx);
-        }
+        self.render_fx.tick();
+        needs_repaint |= self.render_state.apply_tick(&self.render_fx);
 
         self.resolve_tick_game_events(&mut initial_events);
         match self.dispatch_game_events(initial_events) {
             Ok(changed) => needs_repaint |= changed,
-            Err(e) => {
-                self.state = GameState::Error(format!("{e}"));
-                needs_repaint |= self.render_state.on_state_changed(
-                    &self.state,
-                    self.world.as_ref(),
-                    &self.ui,
-                    &self.data,
-                    &self.render_fx,
-                );
-            }
+            Err(e) => needs_repaint |= self.apply_engine_error(format!("{e}")),
         }
 
         needs_repaint
@@ -124,6 +115,38 @@ impl GameEngine {
         for event in ui_events {
             self.ui.apply_ui_event(self.world.as_ref(), event, out);
         }
+    }
+
+    fn apply_engine_error(&mut self, error_message: String) -> bool {
+        let error_event = GameEvent::Loading(LoadingEvent::Error(error_message));
+        let previous_state = self.state.stamp();
+        let render_fx_changed = match self.apply_with_handlers(&error_event) {
+            Ok(changed) => changed,
+            Err(_) => return false,
+        };
+
+        let mut needs_repaint = false;
+        if self.state.stamp() != previous_state {
+            needs_repaint |= self.render_state.on_state_changed(
+                &self.state,
+                self.world.as_ref(),
+                &self.ui,
+                &self.data,
+                &self.render_fx,
+            );
+        }
+        needs_repaint |= self.render_state.apply_game_event_patch(
+            &error_event,
+            &self.state,
+            self.world.as_ref(),
+            &self.ui,
+            &self.data,
+            &self.render_fx,
+        );
+        if render_fx_changed {
+            needs_repaint |= self.render_state.apply_tick(&self.render_fx);
+        }
+        needs_repaint
     }
 
     fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {

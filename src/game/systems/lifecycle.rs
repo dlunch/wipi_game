@@ -27,6 +27,7 @@ pub enum LoadingEvent {
 pub enum LifecycleEvent {
     ResetUi,
     ContinueSetup,
+    SetMenuHasSaveData(bool),
 }
 
 struct LifecycleResolver;

@@ -5,8 +5,10 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use super::save::save_game;
-use crate::game::{GameData, GameEvent, GameState, LoadingEvent, WorldState};
+use super::save::{has_save_data, save_game};
+use crate::game::{
+    GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent, TransitionEvent, WorldState,
+};
 
 pub fn apply_effects(
     state: &GameState,
@@ -36,7 +38,12 @@ pub fn apply_effects(
             };
 
             let loading = match load_result {
-                Ok(true) => LoadingEvent::Loaded,
+                Ok(true) => {
+                    out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
+                        has_save_data(),
+                    )));
+                    LoadingEvent::Loaded
+                }
                 Ok(false) => LoadingEvent::Advance(step + 1),
                 Err(e) => LoadingEvent::Error(e),
             };
@@ -45,6 +52,14 @@ pub fn apply_effects(
         GameEvent::SaveWorld => {
             let world = world.ok_or_else(|| anyhow!("No active world"))?;
             save_game(world)?;
+            out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
+                true,
+            )));
+        }
+        GameEvent::Transition(TransitionEvent::ToMenu) => {
+            out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
+                has_save_data(),
+            )));
         }
         GameEvent::Exit(code) => {
             wipi::kernel::exit(*code);

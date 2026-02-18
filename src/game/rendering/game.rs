@@ -8,8 +8,8 @@ use wipi::framebuffer::Framebuffer;
 use crate::game::state::TimedKind;
 use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameState, LoadingEvent, MovementEvent,
-    SpriteAtlas, TransitionEvent, WorldEvent, WorldState,
+    CombatEvent, EntityEvent, GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent,
+    MovementEvent, SpriteAtlas, TransitionEvent, WorldEvent, WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -71,7 +71,33 @@ impl RenderState {
                 }
                 false
             }
-            RenderState::Menu { .. } => false,
+            RenderState::Menu {
+                title,
+                items,
+                selected,
+            } => {
+                if !matches!(
+                    event,
+                    GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(_))
+                ) {
+                    return false;
+                }
+
+                let mut changed = false;
+                if *title != ui.menu.state.title {
+                    *title = ui.menu.state.title;
+                    changed = true;
+                }
+                if *items != ui.menu.state.items {
+                    *items = ui.menu.state.items.clone();
+                    changed = true;
+                }
+                if *selected != ui.menu.selected {
+                    *selected = ui.menu.selected;
+                    changed = true;
+                }
+                changed
+            }
             RenderState::Explore(explore) => {
                 patch_explore(explore, event, world, ui, data, render_fx, state)
             }
