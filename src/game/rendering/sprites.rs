@@ -91,6 +91,8 @@ impl SpriteAtlas {
     }
 
     fn load_atlas(meta_path: &str) -> Option<AtlasData> {
+        // Atlas assets are optional until real sprite resources are added.
+        // Any load/parse failure intentionally falls back to rectangle rendering.
         let resource = Resource::new(meta_path).ok()?;
         let text = str::from_utf8(resource.read()).ok()?;
         let parsed = parse_meta(text).ok()?;

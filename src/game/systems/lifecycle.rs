@@ -19,7 +19,6 @@ pub enum LoadingEvent {
     Tick,
     Advance(usize),
     Loaded,
-    Error(String),
 }
 
 #[derive(Clone, Copy)]
@@ -210,13 +209,13 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
         world.party.leader_id,
     )));
     out.push(GameEvent::Entity(EntityEvent::ClearCompanionEntities));
+    for entity in world.entities.iter() {
+        emit_entity_snapshot(entity, out);
+    }
     for companion_id in &world.party.companion_ids {
         out.push(GameEvent::Entity(EntityEvent::AddCompanionEntity(
             *companion_id,
         )));
-    }
-    for entity in world.entities.iter() {
-        emit_entity_snapshot(entity, out);
     }
     for quest in &world.quests {
         emit_quest_snapshot(

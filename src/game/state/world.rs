@@ -265,17 +265,15 @@ impl WorldState {
         match event {
             EntityEvent::SetLeaderEntity(entity_id) => {
                 self.party.leader_id = *entity_id;
-                self.sync_allies_with_party();
             }
             EntityEvent::ClearCompanionEntities => {
                 self.party.companion_ids.clear();
-                self.sync_allies_with_party();
             }
             EntityEvent::AddCompanionEntity(entity_id) => {
                 if !self.party.companion_ids.contains(entity_id) {
                     self.party.companion_ids.push(*entity_id);
                 }
-                self.sync_allies_with_party();
+                self.sync_allies_with_party()?;
             }
             EntityEvent::CreateEntity {
                 entity_id,
@@ -283,7 +281,7 @@ impl WorldState {
                 name,
             } => {
                 ensure!(
-                    self.entities.get(*entity_id).is_err(),
+                    !self.entities.contains(*entity_id),
                     "Entity already exists: {}",
                     entity_id
                 );
@@ -300,7 +298,7 @@ impl WorldState {
                     loadout: Default::default(),
                 });
                 self.sync_combat_entry_for_entity(data, *entity_id)?;
-                self.sync_allies_with_party();
+                self.sync_allies_with_party()?;
             }
             EntityEvent::SetEntityTransform {
                 entity_id,
@@ -601,24 +599,26 @@ impl WorldState {
         Ok(())
     }
 
-    fn sync_allies_with_party(&mut self) {
+    fn sync_allies_with_party(&mut self) -> Result<()> {
         let mut party_ids: Vec<EntityId> = Vec::with_capacity(1 + self.party.companion_ids.len());
-        if self.party.leader_id != 0 {
+        if self.party.leader_id != 0 && self.entities.contains(self.party.leader_id) {
             party_ids.push(self.party.leader_id);
         }
-        party_ids.extend(self.party.companion_ids.iter().copied());
+        for entity_id in &self.party.companion_ids {
+            self.entities.get(*entity_id)?;
+            party_ids.push(*entity_id);
+        }
 
         self.combat
             .allies
             .retain(|ally| party_ids.contains(&ally.entity_id));
 
         for entity_id in party_ids {
-            if self.entities.get(entity_id).is_ok()
-                && self
-                    .combat
-                    .allies
-                    .iter()
-                    .all(|ally| ally.entity_id != entity_id)
+            if self
+                .combat
+                .allies
+                .iter()
+                .all(|ally| ally.entity_id != entity_id)
             {
                 self.combat.allies.push(AllyCombatantState {
                     entity_id,
@@ -626,21 +626,23 @@ impl WorldState {
                 });
             }
         }
+        Ok(())
     }
 
     fn sync_combat_entry_for_entity(&mut self, data: &GameData, entity_id: EntityId) -> Result<()> {
         let entity = self.entities.get(entity_id)?;
 
         if matches!(entity.kind, EntityKind::Enemy) {
-            let source_enemy_id = if data.find_enemy(&entity.name).is_ok() {
-                entity.name.clone()
-            } else {
-                data.enemies
-                    .iter()
-                    .find(|enemy| enemy.name == entity.name)
-                    .map(|enemy| enemy.id.clone())
-                    .ok_or_else(|| anyhow!("Enemy data not found for entity '{}'", entity.name))?
-            };
+            let source_enemy_id = data
+                .find_enemy(&entity.name)
+                .map(|_| entity.name.clone())
+                .or_else(|_| {
+                    data.enemies
+                        .iter()
+                        .find(|enemy| enemy.name == entity.name)
+                        .map(|enemy| enemy.id.clone())
+                        .ok_or_else(|| anyhow!("Enemy data not found for entity '{}'", entity.name))
+                })?;
 
             if let Some(enemy) = self
                 .combat

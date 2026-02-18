@@ -83,6 +83,7 @@ pub enum GameEvent {
     ShopSellSelected(usize),
     RevivePlayer,
     CombatPlayerAction(crate::game::ExploreAction),
+    FatalError(String),
     Loading(crate::game::LoadingEvent),
     Movement(MovementEvent),
     Combat(CombatEvent),
@@ -113,6 +114,7 @@ pub enum GameEventKind {
     ShopSellSelected,
     RevivePlayer,
     CombatPlayerAction,
+    FatalError,
     Loading,
     Movement,
     Combat,
@@ -127,7 +129,7 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 26;
+    pub const COUNT: usize = 27;
 
     pub const fn as_usize(self) -> usize {
         match self {
@@ -150,13 +152,14 @@ impl GameEventKind {
             Self::ShopSellSelected => 16,
             Self::RevivePlayer => 17,
             Self::CombatPlayerAction => 18,
-            Self::Loading => 19,
-            Self::Movement => 20,
-            Self::Combat => 21,
-            Self::Explore => 22,
-            Self::Lifecycle => 23,
-            Self::Transition => 24,
-            Self::Exit => 25,
+            Self::FatalError => 19,
+            Self::Loading => 20,
+            Self::Movement => 21,
+            Self::Combat => 22,
+            Self::Explore => 23,
+            Self::Lifecycle => 24,
+            Self::Transition => 25,
+            Self::Exit => 26,
         }
     }
 }
@@ -183,6 +186,7 @@ impl GameEvent {
             Self::ShopSellSelected(_) => GameEventKind::ShopSellSelected,
             Self::RevivePlayer => GameEventKind::RevivePlayer,
             Self::CombatPlayerAction(_) => GameEventKind::CombatPlayerAction,
+            Self::FatalError(_) => GameEventKind::FatalError,
             Self::Loading(_) => GameEventKind::Loading,
             Self::Movement(_) => GameEventKind::Movement,
             Self::Combat(_) => GameEventKind::Combat,

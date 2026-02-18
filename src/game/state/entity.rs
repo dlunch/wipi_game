@@ -183,6 +183,10 @@ impl EntityStore {
             .ok_or_else(|| anyhow!("Entity index out of bounds: {}", index))
     }
 
+    pub fn contains(&self, entity_id: EntityId) -> bool {
+        self.index_by_id.contains_key(&entity_id)
+    }
+
     pub fn remove(&mut self, entity_id: EntityId) {
         let Some(index) = self.index_by_id.remove(&entity_id) else {
             return;

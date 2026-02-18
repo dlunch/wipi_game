@@ -8,8 +8,8 @@ use anyhow::{Error, Result, anyhow, ensure};
 
 use crate::game::{
     DomainEventResolver, GameData, GameEvent, GameEventKind, GameEventSubscriber, GameInput,
-    GameState, InputKey, LoadingEvent, RenderFxState, RenderState, SpriteAtlas, UiEvent,
-    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
+    GameState, InputKey, RenderFxState, RenderState, SpriteAtlas, UiEvent, UiEventApplier,
+    UiInputEventResolver, UiState, WorldSlot, apply_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -210,7 +210,7 @@ impl GameEngine {
     }
 
     fn handle_tick_error(&mut self, err: Error) -> bool {
-        let error_event = GameEvent::Loading(LoadingEvent::Error(format!("{err}")));
+        let error_event = GameEvent::FatalError(format!("{err}"));
         match self.apply_and_patch_event(&error_event) {
             Ok(_) => {}
             Err(apply_err) => {

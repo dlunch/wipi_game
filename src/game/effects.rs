@@ -1,6 +1,4 @@
-use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
@@ -19,33 +17,22 @@ pub fn apply_effects(
 ) -> Result<()> {
     match event {
         GameEvent::Loading(LoadingEvent::Tick) => {
-            let step = match state {
-                GameState::Loading(step) => *step,
-                _ => {
-                    out.push(GameEvent::Loading(LoadingEvent::Error(String::from(
-                        "Invalid state: expected Loading",
-                    ))));
-                    return Ok(());
-                }
+            let GameState::Loading(step) = state else {
+                return Err(anyhow!("Invalid state: expected Loading"));
             };
 
-            let load_result = if let Some(data_mut) = Rc::get_mut(data) {
-                data_mut
-                    .load_step(step)
-                    .map_err(|e| format!("Load error: {}", e))
+            let data_mut =
+                Rc::get_mut(data).ok_or_else(|| anyhow!("Load error: data is shared"))?;
+            let loaded = data_mut
+                .load_step(*step)
+                .map_err(|e| anyhow!("Load error: {}", e))?;
+            let loading = if loaded {
+                out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
+                    has_save_data()?,
+                )));
+                LoadingEvent::Loaded
             } else {
-                Err(String::from("Load error: data is shared"))
-            };
-
-            let loading = match load_result {
-                Ok(true) => {
-                    out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
-                        has_save_data()?,
-                    )));
-                    LoadingEvent::Loaded
-                }
-                Ok(false) => LoadingEvent::Advance(step + 1),
-                Err(e) => LoadingEvent::Error(e),
+                LoadingEvent::Advance(*step + 1)
             };
             out.push(GameEvent::Loading(loading));
         }

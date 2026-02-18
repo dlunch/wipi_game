@@ -212,14 +212,14 @@ fn apply_shop_input(
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let shop_items_len = match ui.shop.state.as_ref() {
-        Some(state) => state.items.len(),
-        None => 0,
-    };
-    let inventory_len = match session {
-        Some(s) => s.leader_entity()?.inventory.len(),
-        None => 0,
-    };
+    let shop_state = ui
+        .shop
+        .state
+        .as_ref()
+        .ok_or_else(|| anyhow!("No active shop state"))?;
+    let session = session.ok_or_else(|| anyhow!("No active world"))?;
+    let shop_items_len = shop_state.items.len();
+    let inventory_len = session.leader_entity()?.inventory.len();
 
     match ui.shop.mode {
         ShopMode::Select => match key {
@@ -260,15 +260,9 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                let s = session.ok_or_else(|| anyhow!("No active world"))?;
-                let leader_id = s.leader_id()?;
-                let shop_state = ui
-                    .shop
-                    .state
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("No active shop state"))?;
+                let leader_id = session.leader_id()?;
                 if let Some(item) = shop_state.items.get(ui.shop.selected).cloned() {
-                    let gold = s.gold_amount(leader_id)?;
+                    let gold = session.gold_amount(leader_id)?;
                     if gold >= item.price {
                         out.push(GameEvent::ShopBuyItem(item.id));
                     } else {
@@ -304,8 +298,7 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                let s = session.ok_or_else(|| anyhow!("No active world"))?;
-                let leader = s.leader_entity()?;
+                let leader = session.leader_entity()?;
                 if let Some(item) = leader.inventory.get(ui.shop.selected) {
                     if item.item_id == GOLD_ITEM_ID {
                         out.push(GameEvent::SoftError(String::from("Cannot sell gold")));

@@ -132,6 +132,7 @@ impl GameEventSubscriber for GameState {
         matches!(
             kind,
             GameEventKind::Loading
+                | GameEventKind::FatalError
                 | GameEventKind::Transition
                 | GameEventKind::ApplyDialogTransition
                 | GameEventKind::OpenDialogState
@@ -147,8 +148,8 @@ impl GameState {
                 LoadingEvent::Tick => {}
                 LoadingEvent::Advance(step) => self.transition_to(GameState::Loading(*step)),
                 LoadingEvent::Loaded => self.transition_to(GameState::Menu),
-                LoadingEvent::Error(msg) => *self = GameState::Error(msg.clone()),
             },
+            GameEvent::FatalError(msg) => *self = GameState::Error(msg.clone()),
             GameEvent::Transition(TransitionEvent::ToExplore)
             | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
                 self.transition_to(GameState::Explore)
