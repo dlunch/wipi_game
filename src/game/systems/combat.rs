@@ -106,7 +106,6 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
         }
 
         tick_combatant_timed(enemy.entity_id, &enemy.combatant, next_counter, out);
-        maybe_enemy_poison_tick(data, enemy, next_counter, out);
 
         let enemy_stunned = enemy.combatant.timed.time_left(TimedKind::Stun) > 0;
         let mut attack_cooldown = enemy.combatant.timed.time_left(TimedKind::AttackCooldown);
@@ -237,36 +236,6 @@ fn tick_combatant_timed(
                     }));
                 }
             }
-        }
-    }
-}
-
-fn maybe_enemy_poison_tick(
-    data: &GameData,
-    enemy: &EnemyCombatantState,
-    next_counter: u32,
-    out: &mut Vec<GameEvent>,
-) {
-    if enemy.combatant.timed.time_left(TimedKind::Poison) == 0 {
-        return;
-    }
-    if !next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
-        return;
-    }
-    let mut next_stats = enemy.combatant.stats;
-    next_stats.current_hp = next_stats.current_hp.saturating_sub(POISON_DAMAGE).max(0);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
-        entity_id: enemy.entity_id,
-        stats: next_stats,
-    }));
-    if next_stats.current_hp <= 0 {
-        out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
-        if let Some(enemy_data) = data.find_enemy(&enemy.source_enemy_id) {
-            out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                enemy_id: enemy_data.id.clone(),
-                exp: enemy_data.exp,
-                gold: enemy_data.gold,
-            }));
         }
     }
 }

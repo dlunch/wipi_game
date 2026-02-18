@@ -112,7 +112,9 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 maps.push(builder.build()?);
             }
             ensure!(!rest.is_empty(), "missing map id in: {}", line);
-            let (id_raw, name_raw) = rest.split_once(':').unwrap_or((rest, rest));
+            let (id_raw, name_raw) = rest
+                .split_once(':')
+                .ok_or_else(|| anyhow::anyhow!("missing ':' separator in map line: {}", line))?;
             let id = id_raw.to_string();
             let name = name_raw.to_string();
 

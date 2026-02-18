@@ -60,7 +60,7 @@ impl DomainEventResolver for WorldLogicResolver {
                 gold,
             }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out),
             GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) => {
-                resolve_take_damage(world, *entity_id, *amount, out);
+                resolve_take_damage(data, world, *entity_id, *amount, out);
             }
             GameEvent::RevivePlayer => {
                 resolve_revive_player(data, world, out);
@@ -276,7 +276,13 @@ fn resolve_kill_reward(
     }
 }
 
-fn resolve_take_damage(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<GameEvent>) {
+fn resolve_take_damage(
+    data: &GameData,
+    world: &WorldState,
+    entity_id: u32,
+    amount: i32,
+    out: &mut Vec<GameEvent>,
+) {
     if amount <= 0 {
         return;
     }
@@ -289,8 +295,24 @@ fn resolve_take_damage(world: &WorldState, entity_id: u32, amount: i32, out: &mu
         entity_id,
         stats,
     }));
-    if Some(entity_id) == world.leader_id() && stats.current_hp <= 0 {
-        out.push(GameEvent::Transition(TransitionEvent::ToDead));
+    if stats.current_hp <= 0 {
+        if Some(entity_id) == world.leader_id() {
+            out.push(GameEvent::Transition(TransitionEvent::ToDead));
+        } else if let Some(enemy) = world
+            .combat
+            .enemies
+            .iter()
+            .find(|e| e.entity_id == entity_id)
+        {
+            out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(entity_id)));
+            if let Some(enemy_data) = data.find_enemy(&enemy.source_enemy_id) {
+                out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+                    enemy_id: enemy_data.id.clone(),
+                    exp: enemy_data.exp,
+                    gold: enemy_data.gold,
+                }));
+            }
+        }
     }
 }
 

@@ -135,17 +135,6 @@ impl CombatState {
             CombatEvent::SetEnemies(enemies) => {
                 self.enemies = enemies.clone();
             }
-            CombatEvent::UpsertEnemy(enemy) => {
-                if let Some(existing) = self
-                    .enemies
-                    .iter_mut()
-                    .find(|existing| existing.entity_id == enemy.entity_id)
-                {
-                    *existing = enemy.clone();
-                } else {
-                    self.enemies.push(enemy.clone());
-                }
-            }
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
             }

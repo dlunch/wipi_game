@@ -332,7 +332,6 @@ impl WorldState {
                 self.rebuild_enemy_occupancy();
             }
             CombatEvent::SetEnemies(_)
-            | CombatEvent::UpsertEnemy(_)
             | CombatEvent::SetCombatantStats { .. }
             | CombatEvent::SetCombatantTimed { .. } => {
                 self.rebuild_enemy_occupancy();

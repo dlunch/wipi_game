@@ -1,6 +1,5 @@
-use crate::game::{GameEvent, TransitionEvent, WorldEvent};
-
 use super::world::WorldState;
+use crate::game::{GameEvent, TransitionEvent, WorldEvent};
 
 #[derive(Default)]
 pub struct WorldSlot {

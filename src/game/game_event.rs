@@ -14,7 +14,6 @@ pub enum CombatEvent {
     SetActive(bool),
     SetAllies(Vec<AllyCombatantState>),
     SetEnemies(Vec<EnemyCombatantState>),
-    UpsertEnemy(EnemyCombatantState),
     RemoveEnemy(EntityId),
     MoveEnemy {
         entity_id: EntityId,

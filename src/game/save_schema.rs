@@ -401,7 +401,7 @@ fn timed_kind_code(kind: TimedKind) -> String {
 fn parse_timed_kind(code: &str) -> TimedKind {
     if let Some(slot) = code
         .strip_prefix("SKILL:")
-        .and_then(|value| value.parse::<u8>().ok())
+        .map(|value| value.parse::<u8>().unwrap_or(0))
     {
         return TimedKind::SkillCooldown(slot);
     }
@@ -422,11 +422,8 @@ fn opt_usize(value: Option<usize>) -> String {
 }
 
 fn parse_opt_usize(value: &str) -> Option<usize> {
-    value
-        .parse::<i32>()
-        .ok()
-        .filter(|value| *value >= 0)
-        .map(|value| value as usize)
+    let v = value.parse::<i32>().unwrap_or(-1);
+    if v >= 0 { Some(v as usize) } else { None }
 }
 
 fn join_u32(values: &[u32]) -> String {
@@ -445,6 +442,6 @@ fn parse_u32_list(raw: &str) -> Vec<u32> {
         return Vec::new();
     }
     raw.split(',')
-        .filter_map(|value| value.parse::<u32>().ok())
+        .map(|value| value.parse::<u32>().unwrap_or(0))
         .collect()
 }

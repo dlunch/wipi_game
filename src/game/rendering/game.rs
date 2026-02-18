@@ -1120,10 +1120,6 @@ fn apply_event_to_explore_render(
                     enemy_changed = true;
                 }
             }
-            CombatEvent::UpsertEnemy(enemy_state) => {
-                upsert_enemy_render(explore, world, data, render_fx, enemy_state.entity_id);
-                enemy_changed = true;
-            }
             CombatEvent::RemoveEnemy(entity_id) => {
                 let before = explore.enemies.len();
                 explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);

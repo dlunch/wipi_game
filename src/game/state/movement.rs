@@ -1,6 +1,6 @@
-use crate::data::Direction;
 use anyhow::Result;
 
+use crate::data::Direction;
 use crate::game::{
     ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, TransitionEvent,
 };
