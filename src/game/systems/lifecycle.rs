@@ -8,7 +8,7 @@ use anyhow::Result;
 use crate::game::save::load_game;
 use crate::game::state::{
     CombatStatsSnapshot, EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedEffect,
-    combat_attack_def,
+    TimedKind, combat_attack_def,
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
@@ -131,6 +131,11 @@ impl LifecycleResolver {
         emit_entity_snapshot(&leader, out);
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
         emit_combat_stats(leader_id, &leader_stats, out);
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id: leader_id,
+            kind: TimedKind::MpRegenTick,
+            time_left: 0,
+        }));
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
         out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
@@ -144,8 +149,22 @@ impl LifecycleResolver {
 
         let leader = world.leader_entity()?;
         data.find_map(&leader.map_id)?;
+        let leader_id = world.leader_id()?;
 
         emit_world_snapshot(&world, out);
+        if world
+            .combat
+            .combatant(leader_id)?
+            .timed
+            .time_left(TimedKind::MpRegenTick)
+            == 0
+        {
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+                entity_id: leader_id,
+                kind: TimedKind::MpRegenTick,
+                time_left: 0,
+            }));
+        }
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         Ok(())
     }

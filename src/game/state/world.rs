@@ -431,6 +431,10 @@ impl WorldState {
     }
 
     fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
+        if self.should_ignore_stale_enemy_combat_event(event) {
+            return Ok(());
+        }
+
         let previous_tile_index = match event {
             CombatEvent::MoveEnemy { entity_id, .. } | CombatEvent::RemoveEnemy(entity_id) => {
                 self.enemy_tile_index_for_entity(*entity_id)?
@@ -470,6 +474,40 @@ impl WorldState {
             | CombatEvent::SetCombatantCurrentHp { .. } => {}
         }
         Ok(())
+    }
+
+    fn should_ignore_stale_enemy_combat_event(&self, event: &CombatEvent) -> bool {
+        let Some(entity_id) = (match event {
+            CombatEvent::MoveEnemy { entity_id, .. }
+            | CombatEvent::SetCombatantMaxHp { entity_id, .. }
+            | CombatEvent::SetCombatantCurrentHp { entity_id, .. }
+            | CombatEvent::SetCombatantMaxMp { entity_id, .. }
+            | CombatEvent::SetCombatantCurrentMp { entity_id, .. }
+            | CombatEvent::SetCombatantAtk { entity_id, .. }
+            | CombatEvent::SetCombatantDef { entity_id, .. }
+            | CombatEvent::SetCombatantTimed { entity_id, .. } => Some(*entity_id),
+            CombatEvent::RemoveEnemy(entity_id) => Some(*entity_id),
+            CombatEvent::SetActive(_)
+            | CombatEvent::ClearEnemies
+            | CombatEvent::SetUpdateCounter(_)
+            | CombatEvent::SetRespawnTimer(_)
+            | CombatEvent::GrantKillReward { .. }
+            | CombatEvent::RecoverMp { .. }
+            | CombatEvent::Heal { .. }
+            | CombatEvent::TakeDamage { .. } => None,
+        }) else {
+            return false;
+        };
+
+        if self.combat.combatant(entity_id).is_ok() {
+            return false;
+        }
+
+        if self.party.leader_id == entity_id || self.party.companion_ids.contains(&entity_id) {
+            return false;
+        }
+
+        true
     }
 
     fn clear_enemy_occupancy(&mut self) {
@@ -715,7 +753,7 @@ mod tests {
 
     use crate::data::{Direction, Quest, QuestType};
     use crate::game::state::{
-        CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack,
+        CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
     };
     use crate::game::{CombatEvent, EntityEvent, GameData, GameEvent, WorldEvent};
 
@@ -873,6 +911,51 @@ mod tests {
 
         world.apply_event(&data, &GameEvent::Combat(CombatEvent::RemoveEnemy(10)))?;
         assert!(!world.is_occupied(1, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn stale_enemy_combat_event_after_remove_is_ignored() -> Result<()> {
+        let data = GameData::default();
+        let mut world = WorldState::empty();
+
+        world.occupancy = OccupancyState {
+            map_id: String::from("map"),
+            width: 3,
+            height: 3,
+            npc_tiles: vec![false; 9],
+            enemy_tiles: vec![false; 9],
+            enemy_tile_counts: vec![0; 9],
+        };
+
+        world.entities.upsert(EntityState {
+            id: 10,
+            kind: EntityKind::Enemy,
+            name: String::from("slime"),
+            map_id: String::from("map"),
+            x: 1,
+            y: 1,
+            facing: Direction::Down,
+            stat: Default::default(),
+            inventory: Vec::<ItemStack>::new(),
+            loadout: Default::default(),
+        });
+        world.combat.enemies.push(EnemyCombatantState {
+            entity_id: 10,
+            source_enemy_id: String::from("slime"),
+            combatant: CombatantState::default(),
+        });
+
+        world.apply_event(&data, &GameEvent::Combat(CombatEvent::RemoveEnemy(10)))?;
+        world.apply_event(
+            &data,
+            &GameEvent::Combat(CombatEvent::SetCombatantTimed {
+                entity_id: 10,
+                kind: TimedKind::AttackCooldown,
+                time_left: 5,
+            }),
+        )?;
+
         Ok(())
     }
 }

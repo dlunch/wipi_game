@@ -69,12 +69,13 @@ impl DomainEventResolver for CombatResolver {
 }
 
 fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -> Result<()> {
+    let leader_id = world.leader_id()?;
+    let leader_combatant = world.combat.combatant(leader_id)?;
+    tick_mp_regen(leader_id, leader_combatant, out);
     if !world.combat.active {
         return Ok(());
     }
-    let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
-    let leader_combatant = world.combat.combatant(leader_id)?;
     let map = data.find_map(&leader_entity.map_id)?;
 
     let next_counter = world.combat.update_counter.wrapping_add(1);
@@ -170,6 +171,29 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     Ok(())
 }
 
+fn tick_mp_regen(entity_id: u32, combatant: &CombatantState, out: &mut Vec<GameEvent>) {
+    if combatant.stats.current_hp <= 0 {
+        return;
+    }
+
+    let time_left = combatant.timed.time_left(TimedKind::MpRegenTick);
+    let next = if time_left <= 1 {
+        out.push(GameEvent::Combat(CombatEvent::RecoverMp {
+            entity_id,
+            amount: 1,
+        }));
+        MP_REGEN_INTERVAL
+    } else {
+        time_left - 1
+    };
+
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+        entity_id,
+        kind: TimedKind::MpRegenTick,
+        time_left: next,
+    }));
+}
+
 fn tick_combatant_timed(
     entity_id: u32,
     combatant: &CombatantState,
@@ -178,22 +202,6 @@ fn tick_combatant_timed(
 ) {
     for effect in &combatant.timed.effects {
         match effect.kind {
-            TimedKind::MpRegenTick => {
-                let next = if effect.time_left <= 1 {
-                    out.push(GameEvent::Combat(CombatEvent::RecoverMp {
-                        entity_id,
-                        amount: 1,
-                    }));
-                    MP_REGEN_INTERVAL
-                } else {
-                    effect.time_left - 1
-                };
-                out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                    entity_id,
-                    kind: TimedKind::MpRegenTick,
-                    time_left: next,
-                }));
-            }
             TimedKind::Poison => {
                 let next = effect.time_left.saturating_sub(1);
                 out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
@@ -211,7 +219,8 @@ fn tick_combatant_timed(
             TimedKind::Stun
             | TimedKind::ArmorBreak
             | TimedKind::AttackCooldown
-            | TimedKind::SkillCooldown(_) => {
+            | TimedKind::SkillCooldown(_)
+            | TimedKind::MpRegenTick => {
                 if effect.time_left > 0 {
                     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
                         entity_id,
