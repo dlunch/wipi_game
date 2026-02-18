@@ -1,9 +1,10 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
-use crate::game::{ExploreEvent, GameEvent, TransitionEvent, WorldState};
+use crate::game::{ExploreEvent, GOLD_ITEM_ID, GameEvent, TransitionEvent, WorldState};
 
 pub trait UiEventApplier {
     fn apply_ui_event(
@@ -276,7 +277,11 @@ fn apply_shop_input(
                         && s.gold_amount(leader_id) >= item.price
                     {
                         out.push(GameEvent::ShopBuyItem(item.id));
+                    } else {
+                        out.push(GameEvent::SoftError(String::from("Not enough gold")));
                     }
+                } else {
+                    out.push(GameEvent::SoftError(String::from("No active world")));
                 }
                 ui.shop.mode = ShopMode::Buy;
             }
@@ -305,7 +310,18 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                out.push(GameEvent::ShopSellSelected(ui.shop.selected));
+                if let Some(s) = session
+                    && let Some(leader) = s.leader_entity()
+                    && let Some(item) = leader.inventory.get(ui.shop.selected)
+                {
+                    if item.item_id == GOLD_ITEM_ID {
+                        out.push(GameEvent::SoftError(String::from("Cannot sell gold")));
+                    } else {
+                        out.push(GameEvent::ShopSellSelected(ui.shop.selected));
+                    }
+                } else {
+                    out.push(GameEvent::SoftError(String::from("Invalid item selection")));
+                }
                 ui.shop.mode = ShopMode::Sell;
             }
             InputKey::Back => {

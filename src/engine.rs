@@ -94,6 +94,10 @@ impl GameEngine {
         &self.sprites
     }
 
+    pub fn render_fx(&self) -> &RenderFxState {
+        &self.render_fx
+    }
+
     fn resolve_tick_game_events(&self, out: &mut Vec<GameEvent>) {
         match self.state {
             GameState::Loading(_) => {

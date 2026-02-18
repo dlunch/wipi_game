@@ -1,4 +1,5 @@
 use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -72,9 +73,11 @@ fn resolve_use_item(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let Some(stack) = leader.inventory.get(index) else {
+        push_soft_error(out, "Invalid inventory selection");
         return Ok(());
     };
     if stack.amount <= 0 {
+        push_soft_error(out, "Item is unavailable");
         return Ok(());
     }
 
@@ -105,6 +108,7 @@ fn resolve_shop_buy(
 ) -> Result<()> {
     let item = data.find_item(item_id)?;
     if world.gold_amount(leader_id) < item.price {
+        push_soft_error(out, "Not enough gold");
         return Ok(());
     }
 
@@ -126,9 +130,15 @@ fn resolve_shop_sell(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let Some(stack) = leader.inventory.get(index) else {
+        push_soft_error(out, "Invalid item selection");
         return Ok(());
     };
-    if stack.amount <= 0 || stack.item_id == crate::game::GOLD_ITEM_ID {
+    if stack.amount <= 0 {
+        push_soft_error(out, "Item is unavailable");
+        return Ok(());
+    }
+    if stack.item_id == crate::game::GOLD_ITEM_ID {
+        push_soft_error(out, "Cannot sell gold");
         return Ok(());
     }
     let item = data.find_item(&stack.item_id)?;
@@ -193,6 +203,10 @@ fn push_item_delta(
         item_id: item_id.into(),
         delta,
     }));
+}
+
+fn push_soft_error(out: &mut Vec<GameEvent>, message: &str) {
+    out.push(GameEvent::SoftError(String::from(message)));
 }
 
 fn loadout_slot(kind: ItemKind) -> Option<LoadoutSlot> {

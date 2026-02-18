@@ -838,7 +838,12 @@ fn sync_explore_quest(
     changed
 }
 
-pub fn render(state: &RenderState, sprites: &SpriteAtlas, fb: &mut Framebuffer) {
+pub fn render(
+    state: &RenderState,
+    sprites: &SpriteAtlas,
+    render_fx: &RenderFxState,
+    fb: &mut Framebuffer,
+) {
     match state {
         RenderState::Loading { step } => draw_loading(fb, *step),
         RenderState::Menu {
@@ -880,6 +885,12 @@ pub fn render(state: &RenderState, sprites: &SpriteAtlas, fb: &mut Framebuffer) 
             draw_text(fb, 16, 16, "No active session", COLOR_RED);
         }
     }
+
+    if render_fx.soft_error_notice_timer() > 0
+        && let Some(message) = render_fx.soft_error_message()
+    {
+        draw_soft_error_notice(fb, message);
+    }
 }
 
 fn draw_loading(fb: &mut Framebuffer, step: usize) {
@@ -894,6 +905,17 @@ fn draw_loading(fb: &mut Framebuffer, step: usize) {
         &format!("Step {}", step),
         COLOR_WHITE,
     );
+}
+
+fn draw_soft_error_notice(fb: &mut Framebuffer, message: &str) {
+    let width = fb.width() as i32;
+    let box_x = 12;
+    let box_y = 8;
+    let box_w = width - 24;
+    let box_h = 24;
+    fill_rect(fb, box_x, box_y, box_w, box_h, COLOR_DARK_GRAY);
+    draw_rect(fb, box_x, box_y, box_w, box_h, COLOR_RED);
+    draw_text(fb, box_x + 8, box_y + 8, message, COLOR_WHITE);
 }
 
 fn draw_dead(fb: &mut Framebuffer) {

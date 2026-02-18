@@ -11,6 +11,8 @@ pub struct RenderFxState {
     skill_effects: Vec<SkillEffectInstance>,
     quest_notice_timer: u32,
     shop_purchase_notice_timer: u32,
+    soft_error_notice_timer: u32,
+    soft_error_message: Option<alloc::string::String>,
     anim_tick: u32,
 }
 
@@ -26,6 +28,7 @@ const HIT_FLASH_DURATION: u32 = 10;
 const SKILL_EFFECT_DURATION: u32 = 8;
 const QUEST_NOTICE_DURATION: u32 = 90;
 const SHOP_PURCHASE_NOTICE_DURATION: u32 = 45;
+const SOFT_ERROR_NOTICE_DURATION: u32 = 60;
 
 impl RenderFxState {
     pub fn tick(&mut self) -> bool {
@@ -59,6 +62,13 @@ impl RenderFxState {
         if self.shop_purchase_notice_timer > 0 {
             self.shop_purchase_notice_timer -= 1;
             changed = true;
+        }
+        if self.soft_error_notice_timer > 0 {
+            self.soft_error_notice_timer -= 1;
+            changed = true;
+            if self.soft_error_notice_timer == 0 {
+                self.soft_error_message = None;
+            }
         }
         changed
             || before != self.enemy_hit_flashes.len()
@@ -130,6 +140,13 @@ impl RenderFxState {
                 self.shop_purchase_notice_timer = SHOP_PURCHASE_NOTICE_DURATION;
                 changed
             }
+            GameEvent::SoftError(message) => {
+                let changed = self.soft_error_notice_timer != SOFT_ERROR_NOTICE_DURATION
+                    || self.soft_error_message.as_deref() != Some(message.as_str());
+                self.soft_error_notice_timer = SOFT_ERROR_NOTICE_DURATION;
+                self.soft_error_message = Some(message.clone());
+                changed
+            }
             _ => false,
         }
     }
@@ -144,6 +161,14 @@ impl RenderFxState {
 
     pub(super) fn shop_purchase_notice_timer(&self) -> u32 {
         self.shop_purchase_notice_timer
+    }
+
+    pub(super) fn soft_error_notice_timer(&self) -> u32 {
+        self.soft_error_notice_timer
+    }
+
+    pub(super) fn soft_error_message(&self) -> Option<&str> {
+        self.soft_error_message.as_deref()
     }
 
     pub(super) fn anim_tick(&self) -> u32 {
