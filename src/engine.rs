@@ -123,6 +123,9 @@ impl GameEngine {
     }
 
     fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
+        if matches!(event, GameEvent::Tick) && self.world.as_ref().is_none() {
+            return Ok(());
+        }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
         for resolver in bucket {
             resolver.resolve(&self.data, self.world.as_ref(), event, out)?;

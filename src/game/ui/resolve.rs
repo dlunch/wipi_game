@@ -67,43 +67,24 @@ fn fixed_event_if_allowed(key: InputKey, allowed: &[InputKey], event: UiEvent) -
 }
 
 fn resolve_keydown(key: InputKey, game_state: &GameState) -> Vec<UiEvent> {
-    match game_state {
-        GameState::Loading(_) => Vec::new(),
-        GameState::Menu => key_event_if_allowed(key, &MENU_KEYS, UiEvent::MenuInput)
-            .into_iter()
-            .collect(),
-        GameState::Explore => key_event_if_allowed(key, &EXPLORE_KEYS, UiEvent::ExploreInput)
-            .into_iter()
-            .collect(),
-        GameState::Dead => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ReviveRequested)
-            .into_iter()
-            .collect(),
-        GameState::Inventory => key_event_if_allowed(key, &INVENTORY_KEYS, UiEvent::InventoryInput)
-            .into_iter()
-            .collect(),
+    let event = match game_state {
+        GameState::Loading(_) => None,
+        GameState::Menu => key_event_if_allowed(key, &MENU_KEYS, UiEvent::MenuInput),
+        GameState::Explore => key_event_if_allowed(key, &EXPLORE_KEYS, UiEvent::ExploreInput),
+        GameState::Dead => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ReviveRequested),
+        GameState::Inventory => key_event_if_allowed(key, &INVENTORY_KEYS, UiEvent::InventoryInput),
         GameState::Stats => {
             fixed_event_if_allowed(key, &OVERLAY_CLOSE_KEYS, UiEvent::OverlayCloseRequested)
-                .into_iter()
-                .collect()
         }
-        GameState::QuestLog => key_event_if_allowed(key, &QUEST_LOG_KEYS, UiEvent::QuestLogInput)
-            .into_iter()
-            .collect(),
-        GameState::Dialog => key_event_if_allowed(key, &DIALOG_KEYS, UiEvent::DialogInput)
-            .into_iter()
-            .collect(),
-        GameState::Shop => key_event_if_allowed(key, &SHOP_KEYS, UiEvent::ShopInput)
-            .into_iter()
-            .collect(),
+        GameState::QuestLog => key_event_if_allowed(key, &QUEST_LOG_KEYS, UiEvent::QuestLogInput),
+        GameState::Dialog => key_event_if_allowed(key, &DIALOG_KEYS, UiEvent::DialogInput),
+        GameState::Shop => key_event_if_allowed(key, &SHOP_KEYS, UiEvent::ShopInput),
         GameState::PauseMenu => {
             key_event_if_allowed(key, &PAUSE_MENU_KEYS, UiEvent::PauseMenuInput)
-                .into_iter()
-                .collect()
         }
-        GameState::Error(_) => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ErrorConfirmRequested)
-            .into_iter()
-            .collect(),
-    }
+        GameState::Error(_) => fixed_event_if_allowed(key, &OK_KEY, UiEvent::ErrorConfirmRequested),
+    };
+    event.into_iter().collect()
 }
 
 fn resolve_keyup(

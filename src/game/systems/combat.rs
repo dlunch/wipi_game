@@ -47,9 +47,7 @@ impl DomainEventResolver for CombatResolver {
     ) -> Result<()> {
         match event {
             GameEvent::Tick => {
-                let Some(world) = world else {
-                    return Ok(());
-                };
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 resolve_tick(data, world, out)?
             }
             GameEvent::CombatPlayerAction(action) => {

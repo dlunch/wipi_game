@@ -3,7 +3,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Map, Tile};
 
@@ -133,9 +133,7 @@ impl DomainEventResolver for TickMovementResolver {
         _event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        let Some(world) = world else {
-            return Ok(());
-        };
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         let leader = world.leader_entity()?;
 
         let (movement_event, tile_event) =
