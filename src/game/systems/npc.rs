@@ -24,55 +24,61 @@ pub enum NpcEvent {
     RestoreStats,
 }
 
-fn try_interact_npc(world: &WorldState, data: &GameData, facing: Direction) -> Option<NpcEvent> {
-    let leader = world.leader_entity()?;
-    let leader_id = world.leader_id()?;
+fn try_interact_npc(
+    world: &WorldState,
+    data: &GameData,
+    facing: Direction,
+) -> Result<Option<NpcEvent>> {
+    let Some(leader) = world.leader_entity() else {
+        return Ok(None);
+    };
+    let Some(leader_id) = world.leader_id() else {
+        return Ok(None);
+    };
     let (target_x, target_y) = facing.apply(leader.x, leader.y);
 
-    let npc = data.find_npc_at(&leader.map_id, target_x, target_y)?;
+    let Some(npc) = data.find_npc_at(&leader.map_id, target_x, target_y) else {
+        return Ok(None);
+    };
 
     match npc.npc_type {
         NpcType::Healer => {
-            if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-                let lines = filter_dialog_lines(world, leader_id, dialog);
-                if !lines.is_empty() {
-                    return Some(NpcEvent::OpenDialog(DialogSpec {
-                        npc_name: npc.name.clone(),
-                        lines,
-                        restore: true,
-                    }));
-                }
+            let dialog = data.find_dialog(&npc.dialog_id)?;
+            let lines = filter_dialog_lines(world, leader_id, dialog);
+            if !lines.is_empty() {
+                return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
+                    npc_name: npc.name.clone(),
+                    lines,
+                    restore: true,
+                })));
             }
 
-            return Some(NpcEvent::RestoreStats);
+            return Ok(Some(NpcEvent::RestoreStats));
         }
         NpcType::ShopKeeper => {
             let shop = npc
                 .shop_id
                 .as_ref()
-                .and_then(|sid| data.find_shop(sid))
+                .map(|sid| data.find_shop(sid))
+                .transpose()?
                 .or_else(|| data.shops.first())
-                .cloned();
-
-            if let Some(shop) = shop {
-                return Some(NpcEvent::OpenShop(shop.id));
-            }
+                .ok_or_else(|| anyhow!("No shop available for NPC '{}'", npc.id))?;
+            return Ok(Some(NpcEvent::OpenShop(shop.id.clone())));
         }
         NpcType::QuestGiver | NpcType::Villager => {}
     }
 
-    if let Some(dialog) = data.find_dialog(&npc.dialog_id) {
-        let lines = filter_dialog_lines(world, leader_id, dialog);
-        if !lines.is_empty() {
-            return Some(NpcEvent::OpenDialog(DialogSpec {
-                npc_name: npc.name.clone(),
-                lines,
-                restore: false,
-            }));
-        }
+    let dialog = data.find_dialog(&npc.dialog_id)?;
+    let lines = filter_dialog_lines(world, leader_id, dialog);
+    if !lines.is_empty() {
+        return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
+            npc_name: npc.name.clone(),
+            lines,
+            restore: false,
+        })));
     }
 
-    None
+    Ok(None)
 }
 
 fn filter_dialog_lines(world: &WorldState, leader_id: u32, dialog: &Dialog) -> Vec<DialogLine> {
@@ -120,14 +126,12 @@ impl DomainEventResolver for NpcResolver {
                     .leader_entity()
                     .ok_or_else(|| anyhow!("No leader entity"))?;
 
-                if let Some(npc_event) = try_interact_npc(world, data, *facing) {
+                if let Some(npc_event) = try_interact_npc(world, data, *facing)? {
                     out.push(GameEvent::Explore(ExploreEvent::Npc(npc_event)));
                     return Ok(());
                 }
 
-                let is_peaceful = data
-                    .find_map(&leader.map_id)
-                    .is_some_and(|map| map.peaceful);
+                let is_peaceful = data.find_map(&leader.map_id)?.peaceful;
                 if !is_peaceful && let Some(action) = fallback_action {
                     out.push(GameEvent::CombatPlayerAction(*action));
                 }

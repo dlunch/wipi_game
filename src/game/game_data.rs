@@ -95,34 +95,40 @@ impl GameData {
         }
     }
 
-    pub fn find_map(&self, id: &str) -> Option<&Map> {
+    pub fn find_map(&self, id: &str) -> Result<&Map> {
         Self::find_indexed(&self.maps, &self.map_index, id, |map| map.id.as_str())
+            .ok_or_else(|| anyhow!("map not found: {}", id))
     }
 
-    pub fn find_item(&self, id: &str) -> Option<&Item> {
+    pub fn find_item(&self, id: &str) -> Result<&Item> {
         Self::find_indexed(&self.items, &self.item_index, id, |item| item.id.as_str())
+            .ok_or_else(|| anyhow!("item not found: {}", id))
     }
 
-    pub fn find_enemy(&self, id: &str) -> Option<&Enemy> {
+    pub fn find_enemy(&self, id: &str) -> Result<&Enemy> {
         Self::find_indexed(&self.enemies, &self.enemy_index, id, |enemy| {
             enemy.id.as_str()
         })
+        .ok_or_else(|| anyhow!("enemy not found: {}", id))
     }
 
-    pub fn find_dialog(&self, id: &str) -> Option<&Dialog> {
+    pub fn find_dialog(&self, id: &str) -> Result<&Dialog> {
         Self::find_indexed(&self.dialogs, &self.dialog_index, id, |dialog| {
             dialog.id.as_str()
         })
+        .ok_or_else(|| anyhow!("dialog not found: {}", id))
     }
 
-    pub fn find_quest(&self, id: &str) -> Option<&Quest> {
+    pub fn find_quest(&self, id: &str) -> Result<&Quest> {
         Self::find_indexed(&self.quests, &self.quest_index, id, |quest| {
             quest.id.as_str()
         })
+        .ok_or_else(|| anyhow!("quest not found: {}", id))
     }
 
-    pub fn find_shop(&self, id: &str) -> Option<&Shop> {
+    pub fn find_shop(&self, id: &str) -> Result<&Shop> {
         Self::find_indexed(&self.shops, &self.shop_index, id, |shop| shop.id.as_str())
+            .ok_or_else(|| anyhow!("shop not found: {}", id))
     }
 
     pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {
@@ -131,11 +137,13 @@ impl GameData {
             .find(|npc| npc.map_id == map_id && npc.x == x && npc.y == y)
     }
 
-    pub fn get_shop_items(&self, shop: &Shop) -> Vec<Item> {
-        shop.items
-            .iter()
-            .filter_map(|item_id| self.find_item(item_id).cloned())
-            .collect()
+    pub fn get_shop_items(&self, shop: &Shop) -> Result<Vec<Item>> {
+        let mut items = Vec::with_capacity(shop.items.len());
+        for item_id in &shop.items {
+            let item = self.find_item(item_id)?;
+            items.push(item.clone());
+        }
+        Ok(items)
     }
 
     fn resolve_map_npcs(maps: &[Map], npc_defs: &[Npc]) -> Result<Vec<Npc>> {

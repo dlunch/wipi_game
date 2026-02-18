@@ -46,13 +46,13 @@ impl DomainEventResolver for CharacterMutationResolver {
 
         match event {
             GameEvent::UseInventorySelected(index) => {
-                resolve_use_item(data, leader_id, leader, *index, out)
+                resolve_use_item(data, leader_id, leader, *index, out)?
             }
             GameEvent::ShopBuyItem(item_id) => {
-                resolve_shop_buy(data, world, leader_id, item_id, out)
+                resolve_shop_buy(data, world, leader_id, item_id, out)?
             }
             GameEvent::ShopSellSelected(index) => {
-                resolve_shop_sell(data, leader_id, leader, *index, out)
+                resolve_shop_sell(data, leader_id, leader, *index, out)?
             }
             GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out),
             GameEvent::ApplyDialogAction(action) => {
@@ -70,24 +70,22 @@ fn resolve_use_item(
     leader: &crate::game::EntityState,
     index: usize,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let Some(stack) = leader.inventory.get(index) else {
-        return;
+        return Ok(());
     };
     if stack.amount <= 0 {
-        return;
+        return Ok(());
     }
 
-    let Some(item) = data.find_item(&stack.item_id) else {
-        return;
-    };
+    let item = data.find_item(&stack.item_id)?;
     if let Some(slot) = loadout_slot(item.kind) {
         out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
             entity_id: leader_id,
             slot,
             index: Some(index),
         }));
-        return;
+        return Ok(());
     }
 
     out.push(GameEvent::Combat(CombatEvent::Heal {
@@ -95,6 +93,7 @@ fn resolve_use_item(
         amount: item.hp_restore(),
     }));
     push_item_delta(out, leader_id, stack.item_id.clone(), -1);
+    Ok(())
 }
 
 fn resolve_shop_buy(
@@ -103,12 +102,10 @@ fn resolve_shop_buy(
     leader_id: u32,
     item_id: &str,
     out: &mut Vec<GameEvent>,
-) {
-    let Some(item) = data.find_item(item_id) else {
-        return;
-    };
+) -> Result<()> {
+    let item = data.find_item(item_id)?;
     if world.gold_amount(leader_id) < item.price {
-        return;
+        return Ok(());
     }
 
     push_item_delta(
@@ -118,6 +115,7 @@ fn resolve_shop_buy(
         -item.price.max(0),
     );
     push_item_delta(out, leader_id, item_id, 1);
+    Ok(())
 }
 
 fn resolve_shop_sell(
@@ -126,16 +124,14 @@ fn resolve_shop_sell(
     leader: &crate::game::EntityState,
     index: usize,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let Some(stack) = leader.inventory.get(index) else {
-        return;
+        return Ok(());
     };
     if stack.amount <= 0 || stack.item_id == crate::game::GOLD_ITEM_ID {
-        return;
+        return Ok(());
     }
-    let Some(item) = data.find_item(&stack.item_id) else {
-        return;
-    };
+    let item = data.find_item(&stack.item_id)?;
 
     push_item_delta(out, leader_id, stack.item_id.clone(), -1);
     push_item_delta(
@@ -144,6 +140,7 @@ fn resolve_shop_sell(
         crate::game::GOLD_ITEM_ID,
         (item.price / 2).max(0),
     );
+    Ok(())
 }
 
 fn resolve_restore_hp_mp(world: &WorldState, entity_id: u32, out: &mut Vec<GameEvent>) {

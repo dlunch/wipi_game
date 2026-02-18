@@ -40,13 +40,13 @@ impl DomainEventResolver for WorldLogicResolver {
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement, Some(tile_event))) => {
-                resolve_tile_event(data, world, movement.step, tile_event, out);
+                resolve_tile_event(data, world, movement.step, tile_event, out)?;
             }
             GameEvent::ApplyDialogAction(DialogAction::GiveQuest(id)) => {
                 resolve_give_quest(world, id, out);
             }
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
-                resolve_complete_quest(data, world, id, out);
+                resolve_complete_quest(data, world, id, out)?;
             }
             GameEvent::Combat(CombatEvent::RecoverMp { entity_id, amount }) => {
                 resolve_recover_mp(world, *entity_id, *amount, out);
@@ -58,12 +58,12 @@ impl DomainEventResolver for WorldLogicResolver {
                 enemy_id,
                 exp,
                 gold,
-            }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out),
+            }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out)?,
             GameEvent::Combat(CombatEvent::TakeDamage { entity_id, amount }) => {
-                resolve_take_damage(data, world, *entity_id, *amount, out);
+                resolve_take_damage(data, world, *entity_id, *amount, out)?;
             }
             GameEvent::RevivePlayer => {
-                resolve_revive_player(data, world, out);
+                resolve_revive_player(data, world, out)?;
             }
             _ => {}
         }
@@ -77,9 +77,9 @@ fn resolve_tile_event(
     step: Option<(i32, i32)>,
     tile_event: &TileEvent,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let Some(leader) = world.leader_entity() else {
-        return;
+        return Ok(());
     };
 
     let (next_x, next_y) = if let Some((dx, dy)) = step {
@@ -95,7 +95,7 @@ fn resolve_tile_event(
         TileEvent::Treasure => {
             let map_id = leader.map_id.clone();
             if world.is_treasure_opened(&map_id, next_x, next_y) {
-                return;
+                return Ok(());
             }
             out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
                 map_id,
@@ -105,6 +105,7 @@ fn resolve_tile_event(
             if let Some(item_id) = data.newgame.treasure_item.as_deref()
                 && let Some(leader_id) = world.leader_id()
             {
+                let _ = data.find_item(item_id)?;
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
                     item_id: item_id.into(),
@@ -114,13 +115,11 @@ fn resolve_tile_event(
         }
         TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
             if target.is_empty() {
-                return;
+                return Ok(());
             }
-            let Some(map) = data.find_map(target) else {
-                return;
-            };
+            let map = data.find_map(target)?;
             let Some(leader_id) = world.leader_id() else {
-                return;
+                return Ok(());
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
             out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
@@ -133,6 +132,7 @@ fn resolve_tile_event(
             out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
     }
+    Ok(())
 }
 
 fn resolve_give_quest(world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
@@ -144,20 +144,23 @@ fn resolve_give_quest(world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
     }));
 }
 
-fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
+fn resolve_complete_quest(
+    data: &GameData,
+    world: &WorldState,
+    id: &str,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     let can_reward = world
         .quests
         .iter()
         .any(|quest| quest.quest_id == id && quest.completed && !quest.rewarded);
     if !can_reward {
-        return;
+        return Ok(());
     }
 
-    let Some(quest) = data.find_quest(id) else {
-        return;
-    };
+    let quest = data.find_quest(id)?;
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
@@ -180,6 +183,7 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
         quest_id: id.into(),
         rewarded: true,
     }));
+    Ok(())
 }
 
 fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<GameEvent>) {
@@ -228,9 +232,9 @@ fn resolve_kill_reward(
     exp: i32,
     gold: i32,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
@@ -246,16 +250,15 @@ fn resolve_kill_reward(
         if progress.completed || progress.rewarded {
             continue;
         }
-        if let Some(quest) = data.find_quest(&progress.quest_id)
-            && quest.quest_type == QuestType::Kill
-            && quest.target_id == enemy_id
-        {
+        let quest = data.find_quest(&progress.quest_id)?;
+        if quest.quest_type == QuestType::Kill && quest.target_id == enemy_id {
             out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
                 quest_id: progress.quest_id.clone(),
                 delta: 1,
             }));
         }
     }
+    Ok(())
 }
 
 fn resolve_take_damage(
@@ -264,18 +267,18 @@ fn resolve_take_damage(
     entity_id: u32,
     amount: i32,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     let Some(combatant) = world.combat.combatant(entity_id) else {
-        return;
+        return Ok(());
     };
     let mut stats = combatant.stats;
     let previous_hp = stats.current_hp;
     stats.current_hp = (stats.current_hp - amount).max(0);
     if stats.current_hp == previous_hp {
-        return;
+        return Ok(());
     }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
@@ -291,26 +294,30 @@ fn resolve_take_damage(
             .find(|e| e.entity_id == entity_id)
         {
             out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(entity_id)));
-            if let Some(enemy_data) = data.find_enemy(&enemy.source_enemy_id) {
-                out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                    enemy_id: enemy_data.id.clone(),
-                    exp: enemy_data.exp,
-                    gold: enemy_data.gold,
-                }));
-            }
+            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
+            out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+                enemy_id: enemy_data.id.clone(),
+                exp: enemy_data.exp,
+                gold: enemy_data.gold,
+            }));
         }
     }
+    Ok(())
 }
 
-fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
+fn resolve_revive_player(
+    data: &GameData,
+    world: &WorldState,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     let Some(combatant) = world.combat.combatant(leader_id) else {
-        return;
+        return Ok(());
     };
     if combatant.stats.current_hp > 0 {
-        return;
+        return Ok(());
     }
     let current_gold = world.gold_amount(leader_id);
     let gold_penalty = (current_gold / 10).max(10);
@@ -336,9 +343,11 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         village_map_id.clone(),
     )));
-    let village_position = data
-        .find_map(&village_map_id)
-        .map(|village_map| village_map.find_player_start().unwrap_or((0, 0)));
+    let village_position = Some(
+        data.find_map(&village_map_id)?
+            .find_player_start()
+            .unwrap_or((0, 0)),
+    );
     out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: leader_id,
         map_id: Some(village_map_id),
@@ -385,4 +394,5 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     }));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));
     out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+    Ok(())
 }

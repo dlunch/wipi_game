@@ -185,10 +185,10 @@ impl WorldState {
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::World(world_event) => {
-                self.apply_world_event(data, world_event);
+                self.apply_world_event(data, world_event)?;
             }
             GameEvent::Entity(entity_event) => {
-                self.apply_entity_event(data, entity_event);
+                self.apply_entity_event(data, entity_event)?;
             }
             GameEvent::Combat(combat_event) => {
                 self.apply_combat_event(combat_event, event)?;
@@ -220,13 +220,13 @@ impl WorldState {
         Ok(())
     }
 
-    fn apply_world_event(&mut self, data: &GameData, event: &WorldEvent) {
+    fn apply_world_event(&mut self, data: &GameData, event: &WorldEvent) -> Result<()> {
         match event {
             WorldEvent::CreateWorld => {
                 *self = WorldState::empty();
             }
             WorldEvent::SetWorldMap(map_id) => {
-                self.rebuild_npc_occupancy_for_map(data, map_id);
+                self.rebuild_npc_occupancy_for_map(data, map_id)?;
                 self.rebuild_enemy_occupancy();
             }
             WorldEvent::CreateQuestProgress { quest_id } => {
@@ -235,11 +235,10 @@ impl WorldState {
             WorldEvent::ChangeQuestCurrentCount { quest_id, delta } => {
                 let progress = self.ensure_quest_progress(quest_id);
                 progress.current_count = (progress.current_count + *delta).max(0);
-                if let Some(quest) = data.find_quest(quest_id) {
-                    progress.current_count = progress.current_count.min(quest.target_count.max(0));
-                    if progress.current_count >= quest.target_count {
-                        progress.completed = true;
-                    }
+                let quest = data.find_quest(quest_id)?;
+                progress.current_count = progress.current_count.min(quest.target_count.max(0));
+                if progress.current_count >= quest.target_count {
+                    progress.completed = true;
                 }
             }
             WorldEvent::SetQuestCompleted {
@@ -257,9 +256,10 @@ impl WorldState {
                 }
             }
         }
+        Ok(())
     }
 
-    fn apply_entity_event(&mut self, data: &GameData, event: &EntityEvent) {
+    fn apply_entity_event(&mut self, data: &GameData, event: &EntityEvent) -> Result<()> {
         match event {
             EntityEvent::SetLeaderEntity(entity_id) => {
                 self.party.leader_id = *entity_id;
@@ -298,7 +298,7 @@ impl WorldState {
                         loadout: Default::default(),
                     });
                 }
-                self.sync_combat_entry_for_entity(data, *entity_id);
+                self.sync_combat_entry_for_entity(data, *entity_id)?;
                 self.sync_allies_with_party();
                 let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
                 self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
@@ -352,7 +352,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_max_hp = *base_max_hp;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::SetEntityBaseMaxMp {
                 entity_id,
@@ -361,7 +361,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_max_mp = *base_max_mp;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::SetEntityBaseAtk {
                 entity_id,
@@ -370,7 +370,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_atk = *base_atk;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::SetEntityBaseDef {
                 entity_id,
@@ -379,13 +379,13 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_def = *base_def;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::AddEntityExp { entity_id, amount } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.add_exp(*amount);
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::ClearEntityInventory { entity_id } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
@@ -394,7 +394,7 @@ impl WorldState {
                     entity.loadout.armor = None;
                     entity.loadout.accessory = None;
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::SetEntityLoadoutSlot {
                 entity_id,
@@ -414,7 +414,7 @@ impl WorldState {
                         }
                     }
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
             EntityEvent::ChangeEntityItem {
                 entity_id,
@@ -426,9 +426,10 @@ impl WorldState {
                 } else if *delta < 0 {
                     self.remove_item_amount(*entity_id, item_id, -*delta);
                 }
-                self.sync_combat_stats_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id)?;
             }
         }
+        Ok(())
     }
 
     fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
@@ -567,24 +568,22 @@ impl WorldState {
         }
     }
 
-    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: &str) {
+    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: &str) -> Result<()> {
         self.occupancy.map_id = map_id.into();
-        if let Some(map) = data.find_map(map_id) {
-            self.occupancy.width = map.width;
-            self.occupancy.height = map.height;
-            let len = map.width * map.height;
-            self.occupancy.npc_tiles = vec![false; len];
-            self.occupancy.enemy_tiles = vec![false; len];
-            self.occupancy.enemy_tile_counts = vec![0; len];
+        let map = data.find_map(map_id)?;
+        self.occupancy.width = map.width;
+        self.occupancy.height = map.height;
+        let len = map.width * map.height;
+        self.occupancy.npc_tiles = vec![false; len];
+        self.occupancy.enemy_tiles = vec![false; len];
+        self.occupancy.enemy_tile_counts = vec![0; len];
 
-            for (x, y, _) in &map.npcs {
-                if *x < map.width && *y < map.height {
-                    self.occupancy.npc_tiles[*y * map.width + *x] = true;
-                }
+        for (x, y, _) in &map.npcs {
+            if *x < map.width && *y < map.height {
+                self.occupancy.npc_tiles[*y * map.width + *x] = true;
             }
-        } else {
-            self.occupancy = OccupancyState::default();
         }
+        Ok(())
     }
 
     fn rebuild_enemy_occupancy(&mut self) {
@@ -639,13 +638,13 @@ impl WorldState {
         }
     }
 
-    fn sync_combat_entry_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
+    fn sync_combat_entry_for_entity(&mut self, data: &GameData, entity_id: EntityId) -> Result<()> {
         let Some(entity) = self.entities.get(entity_id) else {
-            return;
+            return Ok(());
         };
 
         if matches!(entity.kind, EntityKind::Enemy) {
-            let source_enemy_id = if data.find_enemy(&entity.name).is_some() {
+            let source_enemy_id = if data.find_enemy(&entity.name).is_ok() {
                 entity.name.clone()
             } else {
                 data.enemies
@@ -670,14 +669,15 @@ impl WorldState {
                 });
             }
         }
+        Ok(())
     }
 
-    fn sync_combat_stats_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
+    fn sync_combat_stats_for_entity(&mut self, data: &GameData, entity_id: EntityId) -> Result<()> {
         let Some(entity) = self.entities.get(entity_id) else {
-            return;
+            return Ok(());
         };
         let Some(combatant) = self.combat.combatant_mut(entity_id) else {
-            return;
+            return Ok(());
         };
 
         let max_hp = entity.stat.base_max_hp.max(0);
@@ -692,26 +692,27 @@ impl WorldState {
 
         if let Some(index) = entity.loadout.weapon
             && let Some(stack) = entity.inventory.get(index)
-            && let Some(item) = data.find_item(&stack.item_id)
         {
+            let item = data.find_item(&stack.item_id)?;
             atk += item.atk();
         }
         if let Some(index) = entity.loadout.armor
             && let Some(stack) = entity.inventory.get(index)
-            && let Some(item) = data.find_item(&stack.item_id)
         {
+            let item = data.find_item(&stack.item_id)?;
             def += item.def();
         }
         if let Some(index) = entity.loadout.accessory
             && let Some(stack) = entity.inventory.get(index)
-            && let Some(item) = data.find_item(&stack.item_id)
         {
+            let item = data.find_item(&stack.item_id)?;
             atk += item.atk();
             def += item.def();
         }
 
         combatant.stats.atk = atk;
         combatant.stats.def = def;
+        Ok(())
     }
 
     fn ensure_quest_progress(&mut self, quest_id: &str) -> &mut QuestProgress {

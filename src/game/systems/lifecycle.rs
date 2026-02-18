@@ -56,9 +56,9 @@ impl DomainEventResolver for LifecycleResolver {
         match event {
             GameEvent::StartNewGame => {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
-                Self::setup_new_game_events(data, out);
+                Self::setup_new_game_events(data, out)?;
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-                if let Some(dialog_state) = Self::intro_dialog_state(data) {
+                if let Some(dialog_state) = Self::intro_dialog_state(data)? {
                     out.push(GameEvent::OpenDialogState(dialog_state));
                 }
             }
@@ -67,7 +67,7 @@ impl DomainEventResolver for LifecycleResolver {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ContinueSetup));
             }
             GameEvent::Lifecycle(LifecycleEvent::ContinueSetup) => {
-                Self::setup_continue_events(data, out);
+                Self::setup_continue_events(data, out)?;
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
             _ => {}
@@ -78,13 +78,15 @@ impl DomainEventResolver for LifecycleResolver {
 }
 
 impl LifecycleResolver {
-    fn intro_dialog_state(data: &GameData) -> Option<DialogState> {
-        let (dialog_id, npc_name) = data.newgame.intro_dialog.as_ref()?;
+    fn intro_dialog_state(data: &GameData) -> Result<Option<DialogState>> {
+        let Some((dialog_id, npc_name)) = data.newgame.intro_dialog.as_ref() else {
+            return Ok(None);
+        };
         let dialog = data.find_dialog(dialog_id)?;
-        Some(DialogState::from_dialog(npc_name.clone(), dialog))
+        Ok(Some(DialogState::from_dialog(npc_name.clone(), dialog)))
     }
 
-    fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) {
+    fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
         let config = &data.newgame;
         let leader_id: EntityId = 1;
 
@@ -112,14 +114,13 @@ impl LifecycleResolver {
             );
         }
 
-        if let Some(map) = data.find_map(&config.start_map) {
-            let (x, y) = map.find_player_start().unwrap_or((leader.x, leader.y));
-            leader.map_id = map.id.clone();
-            leader.x = x;
-            leader.y = y;
-        }
+        let map = data.find_map(&config.start_map)?;
+        let (x, y) = map.find_player_start().unwrap_or((leader.x, leader.y));
+        leader.map_id = map.id.clone();
+        leader.x = x;
+        leader.y = y;
 
-        let leader_stats = snapshot_for_entity(data, &leader);
+        let leader_stats = snapshot_for_entity(data, &leader)?;
 
         out.push(GameEvent::World(WorldEvent::CreateWorld));
         out.push(GameEvent::World(WorldEvent::SetWorldMap(
@@ -134,62 +135,64 @@ impl LifecycleResolver {
         out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
         out.push(GameEvent::Movement(MovementEvent::SetMoveCooldown(0)));
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
+        Ok(())
     }
 
-    fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) {
+    fn setup_continue_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
         let mut world = WorldState::empty();
         match load_game(&mut world) {
             Ok(true) => {
                 let Some(leader) = world.leader_entity() else {
-                    Self::setup_new_game_events(data, out);
-                    return;
+                    Self::setup_new_game_events(data, out)?;
+                    return Ok(());
                 };
-                if data.find_map(&leader.map_id).is_none() {
-                    Self::setup_new_game_events(data, out);
-                    return;
+                if data.find_map(&leader.map_id).is_err() {
+                    Self::setup_new_game_events(data, out)?;
+                    return Ok(());
                 }
                 emit_world_snapshot(&world, out);
                 out.push(GameEvent::Transition(TransitionEvent::MapChanged));
             }
             Ok(false) | Err(_) => {
-                Self::setup_new_game_events(data, out);
+                Self::setup_new_game_events(data, out)?;
             }
         }
+        Ok(())
     }
 }
 
-fn snapshot_for_entity(data: &GameData, entity: &EntityState) -> CombatStatsSnapshot {
+fn snapshot_for_entity(data: &GameData, entity: &EntityState) -> Result<CombatStatsSnapshot> {
     let mut atk = entity.stat.base_atk;
     let mut def = entity.stat.base_def;
 
     if let Some(index) = entity.loadout.weapon
         && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
     {
+        let item = data.find_item(&stack.item_id)?;
         atk += item.atk();
     }
     if let Some(index) = entity.loadout.armor
         && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
     {
+        let item = data.find_item(&stack.item_id)?;
         def += item.def();
     }
     if let Some(index) = entity.loadout.accessory
         && let Some(stack) = entity.inventory.get(index)
-        && let Some(item) = data.find_item(&stack.item_id)
     {
+        let item = data.find_item(&stack.item_id)?;
         atk += item.atk();
         def += item.def();
     }
 
-    CombatStatsSnapshot {
+    Ok(CombatStatsSnapshot {
         max_hp: entity.stat.base_max_hp,
         current_hp: entity.stat.base_max_hp,
         max_mp: entity.stat.base_max_mp,
         current_mp: entity.stat.base_max_mp,
         atk,
         def,
-    }
+    })
 }
 
 fn push_stack(inventory: &mut Vec<ItemStack>, item_id: &str, amount: i32) -> usize {

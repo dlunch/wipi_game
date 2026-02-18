@@ -21,18 +21,18 @@ pub fn resolve_world_tick(
     leader: &EntityState,
     world: &WorldState,
     data: &GameData,
-) -> (MovementTickEvent, Option<TileEvent>) {
-    let map = data.find_map(&leader.map_id);
+) -> Result<(MovementTickEvent, Option<TileEvent>)> {
+    let map = data.find_map(&leader.map_id)?;
     let movement_event = resolve_tick_with_occupancy(state, leader, world, map);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
         let next_x = (leader.x as i32 + dx).max(0) as usize;
         let next_y = (leader.y as i32 + dy).max(0) as usize;
-        tile_event_for_position(&leader.map_id, next_x, next_y, data)
+        tile_event_for_position(&leader.map_id, next_x, next_y, data)?
     } else {
         None
     };
 
-    (movement_event, tile_event)
+    Ok((movement_event, tile_event))
 }
 
 fn can_move(entity: &EntityState, map: &Map, dx: i32, dy: i32) -> bool {
@@ -48,13 +48,9 @@ fn resolve_tick_with_occupancy(
     state: &MovementState,
     leader: &EntityState,
     world: &WorldState,
-    map: Option<&Map>,
+    map: &Map,
 ) -> MovementTickEvent {
     let mut next_state = *state;
-
-    let Some(map) = map else {
-        return idle_tick(next_state);
-    };
 
     if state.move_cooldown > 0 {
         next_state.move_cooldown -= 1;
@@ -96,14 +92,19 @@ fn idle_tick(next_state: MovementState) -> MovementTickEvent {
     }
 }
 
-fn tile_event_for_position(map_id: &str, x: usize, y: usize, data: &GameData) -> Option<TileEvent> {
+fn tile_event_for_position(
+    map_id: &str,
+    x: usize,
+    y: usize,
+    data: &GameData,
+) -> Result<Option<TileEvent>> {
     let map = data.find_map(map_id)?;
-    match map.get_tile(x, y) {
+    Ok(match map.get_tile(x, y) {
         Tile::Treasure => Some(TileEvent::Treasure),
         Tile::Exit => find_tile_target(&map.exits, x, y).map(TileEvent::MapExit),
         Tile::Dungeon => find_tile_target(&map.dungeons, x, y).map(TileEvent::DungeonEntrance),
         _ => None,
-    }
+    })
 }
 
 fn find_tile_target(tiles: &[(usize, usize, String)], x: usize, y: usize) -> Option<String> {
@@ -137,7 +138,8 @@ impl DomainEventResolver for UpdateMovementResolver {
             .leader_entity()
             .ok_or_else(|| anyhow!("No leader entity"))?;
 
-        let (movement_event, tile_event) = resolve_world_tick(&world.movement, leader, world, data);
+        let (movement_event, tile_event) =
+            resolve_world_tick(&world.movement, leader, world, data)?;
 
         let has_meaningful_movement = movement_event.next_state != world.movement
             || movement_event.facing.is_some()

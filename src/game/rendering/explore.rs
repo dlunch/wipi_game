@@ -18,7 +18,7 @@ const MINIMAP_RADIUS: i32 = 6;
 const MINIMAP_CELL: i32 = 3;
 
 pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender, sprites: &SpriteAtlas) {
-    let Some(map) = state.data.find_map(&state.map_id) else {
+    let Ok(map) = state.data.find_map(&state.map_id) else {
         clear_screen(fb);
         draw_text(fb, 16, 16, "ERR: Map not found", COLOR_RED);
         return;

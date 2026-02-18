@@ -636,7 +636,7 @@ fn patch_or_insert_enemy(
     let name = data
         .find_enemy(&enemy.source_enemy_id)
         .map(|enemy_data| enemy_data.name.clone())
-        .unwrap_or_else(|| enemy.source_enemy_id.clone());
+        .unwrap_or_else(|_| enemy.source_enemy_id.clone());
     let next = super::render_state::EnemyRender {
         enemy_id: entity_id,
         name,

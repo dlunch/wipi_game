@@ -200,7 +200,7 @@ pub(super) fn interaction_hint_from_world(
     data: &Rc<GameData>,
 ) -> Option<String> {
     let leader = world.leader_entity()?;
-    let map = data.find_map(&leader.map_id)?;
+    let map = data.find_map(&leader.map_id).ok()?;
     let (tx, ty) = leader.facing.apply(leader.x, leader.y);
 
     if let Some(npc) = data.find_npc_at(&leader.map_id, tx, ty) {
@@ -246,7 +246,7 @@ impl ExploreRender {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
         let leader_combatant = world.combat.combatant(leader_id)?;
-        let map = data.find_map(&leader.map_id)?;
+        let map = data.find_map(&leader.map_id).ok()?;
 
         let mut enemies = Vec::with_capacity(world.combat.enemies.len());
         let mut enemy_indices = BTreeMap::new();
@@ -257,7 +257,7 @@ impl ExploreRender {
             let name = data
                 .find_enemy(&enemy.source_enemy_id)
                 .map(|enemy_data| enemy_data.name.clone())
-                .unwrap_or_else(|| enemy.source_enemy_id.clone());
+                .unwrap_or_else(|_| enemy.source_enemy_id.clone());
             let enemy_index = enemies.len();
             enemies.push(EnemyRender {
                 enemy_id: enemy.entity_id,
@@ -372,7 +372,7 @@ impl TrackedQuestRender {
             .quests
             .iter()
             .find(|quest| quest.quest_id == tracked_quest_id && !quest.rewarded)?;
-        let quest_data = data.find_quest(&progress.quest_id)?;
+        let quest_data = data.find_quest(&progress.quest_id).ok()?;
 
         Some(Self {
             name: quest_data.name.clone(),
@@ -398,7 +398,7 @@ impl InventoryRender {
 
         let mut items = Vec::with_capacity(leader.inventory.len());
         for stack in &leader.inventory {
-            let item = data.find_item(&stack.item_id);
+            let item = data.find_item(&stack.item_id).ok();
             let name = stacked_item_label(
                 &stack.item_id,
                 stack.amount,
@@ -467,7 +467,7 @@ impl ShopRender {
             if stack.item_id == GOLD_ITEM_ID {
                 continue;
             }
-            let item = data.find_item(&stack.item_id);
+            let item = data.find_item(&stack.item_id).ok();
             let (name, sell_price) = if let Some(item) = item {
                 (item.name.clone(), item.price / 2)
             } else {
@@ -506,7 +506,7 @@ impl QuestLogRender {
             if quest.rewarded {
                 continue;
             }
-            if let Some(quest_data) = data.find_quest(&quest.quest_id) {
+            if let Ok(quest_data) = data.find_quest(&quest.quest_id) {
                 quests.push(QuestEntryRender {
                     quest_id: quest.quest_id.clone(),
                     name: quest_data.name.clone(),

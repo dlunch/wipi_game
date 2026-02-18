@@ -55,12 +55,12 @@ impl DomainEventResolver for CombatResolver {
 
         let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
-            GameEvent::UpdateCombat => resolve_tick(data, world, out),
+            GameEvent::UpdateCombat => resolve_tick(data, world, out)?,
             GameEvent::CombatPlayerAction(action) => {
-                resolve_player_action(data, world, action, out)
+                resolve_player_action(data, world, action, out)?
             }
             GameEvent::Transition(TransitionEvent::MapChanged) => {
-                resolve_map_changed(data, world, out)
+                resolve_map_changed(data, world, out)?
             }
             _ => {}
         }
@@ -68,22 +68,20 @@ impl DomainEventResolver for CombatResolver {
     }
 }
 
-fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
+fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -> Result<()> {
     if !world.combat.active {
-        return;
+        return Ok(());
     }
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     let Some(leader_entity) = world.leader_entity() else {
-        return;
+        return Ok(());
     };
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return;
+        return Ok(());
     };
-    let Some(map) = data.find_map(&leader_entity.map_id) else {
-        return;
-    };
+    let map = data.find_map(&leader_entity.map_id)?;
 
     let next_counter = world.combat.update_counter.wrapping_add(1);
     out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(
@@ -156,9 +154,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
             && attack_cooldown == 0
             && leader_combatant.stats.current_hp > 0
         {
-            let Some(enemy_data) = data.find_enemy(&enemy.source_enemy_id) else {
-                continue;
-            };
+            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
             let effective_def = if leader_combatant.timed.time_left(TimedKind::ArmorBreak) > 0 {
                 leader_combatant.stats.def / 2
             } else {
@@ -180,6 +176,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
             amount: total_player_damage,
         }));
     }
+    Ok(())
 }
 
 fn tick_combatant_timed(
@@ -241,20 +238,20 @@ fn resolve_player_action(
     world: &WorldState,
     action: &crate::game::ExploreAction,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     let Some(leader_entity) = world.leader_entity() else {
-        return;
+        return Ok(());
     };
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return;
+        return Ok(());
     };
     if leader_combatant.stats.current_hp <= 0
         || leader_combatant.timed.time_left(TimedKind::Stun) > 0
     {
-        return;
+        return Ok(());
     }
 
     if let Some((slot, skill)) = action.skill() {
@@ -263,10 +260,10 @@ fn resolve_player_action(
             .time_left(TimedKind::SkillCooldown(slot as u8))
             > 0
         {
-            return;
+            return Ok(());
         }
         if leader_combatant.stats.current_mp < skill.mp_cost {
-            return;
+            return Ok(());
         }
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
@@ -277,19 +274,21 @@ fn resolve_player_action(
             entity_id: leader_id,
             amount: -skill.mp_cost,
         }));
-        resolve_skill_action(data, world, leader_entity, leader_combatant, skill, out);
+        resolve_skill_action(data, world, leader_entity, leader_combatant, skill, out)?;
     } else {
         if leader_combatant.timed.time_left(TimedKind::AttackCooldown) > 0 {
-            return;
+            return Ok(());
         }
         let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
-        damage_enemy_at_position(data, world, tx, ty, leader_combatant.stats.atk, None, out);
+        let _ =
+            damage_enemy_at_position(data, world, tx, ty, leader_combatant.stats.atk, None, out)?;
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::AttackCooldown,
             time_left: PLAYER_ATTACK_COOLDOWN,
         }));
     }
+    Ok(())
 }
 
 fn resolve_skill_action(
@@ -299,7 +298,7 @@ fn resolve_skill_action(
     leader_combatant: &CombatantState,
     skill: &Skill,
     out: &mut Vec<GameEvent>,
-) {
+) -> Result<()> {
     let base_damage = skill.power + leader_combatant.stats.atk / 2;
     match skill.skill_type {
         SkillType::Ranged => {
@@ -313,7 +312,7 @@ fn resolve_skill_action(
                     base_damage,
                     Some((TimedKind::Poison, POISON_DURATION / 2)),
                     out,
-                ) {
+                )? {
                     break;
                 }
             }
@@ -334,7 +333,7 @@ fn resolve_skill_action(
                     base_damage,
                     Some((TimedKind::ArmorBreak, ARMOR_BREAK_DURATION / 2)),
                     out,
-                );
+                )?;
             }
         }
         SkillType::Heal => {
@@ -346,6 +345,7 @@ fn resolve_skill_action(
             }
         }
     }
+    Ok(())
 }
 
 fn damage_enemy_at_position(
@@ -356,7 +356,7 @@ fn damage_enemy_at_position(
     raw_damage: i32,
     timed_effect: Option<(TimedKind, u32)>,
     out: &mut Vec<GameEvent>,
-) -> bool {
+) -> Result<bool> {
     for enemy in &world.combat.enemies {
         let Some(entity) = world.entity(enemy.entity_id) else {
             continue;
@@ -389,36 +389,37 @@ fn damage_enemy_at_position(
 
         if next_stats.current_hp <= 0 {
             out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
-            if let Some(enemy_data) = data.find_enemy(&enemy.source_enemy_id) {
-                out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                    enemy_id: enemy_data.id.clone(),
-                    exp: enemy_data.exp,
-                    gold: enemy_data.gold,
-                }));
-            }
+            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
+            out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+                enemy_id: enemy_data.id.clone(),
+                exp: enemy_data.exp,
+                gold: enemy_data.gold,
+            }));
         }
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }
 
-fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
+fn resolve_map_changed(
+    data: &GameData,
+    world: &WorldState,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     for enemy in &world.combat.enemies {
         out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(enemy.entity_id)));
     }
 
     let Some(leader_id) = world.leader_id() else {
-        return;
+        return Ok(());
     };
     let Some(leader_entity) = world.leader_entity() else {
-        return;
+        return Ok(());
     };
-    let Some(map) = data.find_map(&leader_entity.map_id) else {
-        return;
-    };
+    let map = data.find_map(&leader_entity.map_id)?;
 
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
-        return;
+        return Ok(());
     };
     emit_combat_stats(leader_id, &leader_combatant.stats, out);
     for effect in &leader_combatant.timed.effects {
@@ -429,17 +430,16 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
         }));
     }
 
-    let enemy_templates: Vec<&Enemy> = map
-        .encounters
-        .iter()
-        .filter_map(|(enemy_id, _)| data.find_enemy(enemy_id))
-        .collect();
+    let mut enemy_templates: Vec<&Enemy> = Vec::with_capacity(map.encounters.len());
+    for (enemy_id, _) in &map.encounters {
+        enemy_templates.push(data.find_enemy(enemy_id)?);
+    }
     if enemy_templates.is_empty() || map.peaceful {
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::Combat(CombatEvent::SetActive(!map.peaceful)));
         out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
         out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
-        return;
+        return Ok(());
     }
 
     out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
@@ -512,6 +512,7 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
     out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
     out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
+    Ok(())
 }
 
 fn next_enemy_position_towards(

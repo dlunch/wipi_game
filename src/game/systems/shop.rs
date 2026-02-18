@@ -31,10 +31,8 @@ impl DomainEventResolver for OpenShopByIdResolver {
             return Err(anyhow!("Invalid event: expected OpenShopById"));
         };
 
-        let Some(shop) = data.find_shop(shop_id).cloned() else {
-            return Err(anyhow!("Shop not found: {shop_id}"));
-        };
-        let shop_items = data.get_shop_items(&shop);
+        let shop = data.find_shop(shop_id)?.clone();
+        let shop_items = data.get_shop_items(&shop)?;
         out.push(GameEvent::OpenShopState(Box::new(ShopState::new(
             shop, shop_items,
         ))));
