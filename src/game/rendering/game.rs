@@ -693,7 +693,10 @@ fn patch_or_insert_enemy(
         y: entity.y,
         hp: enemy.combatant.stats.current_hp,
         max_hp: enemy.combatant.stats.max_hp,
-        attack_cooldown: enemy.combatant.timed.time_left(TimedKind::AttackCooldown),
+        attack_cooldown: enemy
+            .combatant
+            .timed
+            .time_left(TimedKind::AttackCooldown, world.tick_counter),
         hit_flash: render_fx.enemy_hit_flash(entity_id),
         dead: enemy.combatant.stats.current_hp <= 0,
     };
@@ -791,17 +794,25 @@ fn sync_explore_player(
         explore.interaction_hint = next_hint;
         changed = true;
     }
-    changed |= sync_explore_combatant_stats(explore, combatant);
+    changed |= sync_explore_combatant_stats(explore, combatant, world.tick_counter);
     Ok(changed)
 }
 
 fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) -> Result<bool> {
     let leader_id = world.leader_id()?;
     let combatant = world.combat.combatant(leader_id)?;
-    Ok(sync_explore_combatant_stats(explore, combatant))
+    Ok(sync_explore_combatant_stats(
+        explore,
+        combatant,
+        world.tick_counter,
+    ))
 }
 
-fn sync_explore_combatant_stats(explore: &mut ExploreRender, combatant: &CombatantState) -> bool {
+fn sync_explore_combatant_stats(
+    explore: &mut ExploreRender,
+    combatant: &CombatantState,
+    current_tick: u32,
+) -> bool {
     let mut changed = false;
     let next_hp = combatant.stats.current_hp as u32;
     let next_max_hp = combatant.stats.max_hp as u32;
@@ -823,7 +834,7 @@ fn sync_explore_combatant_stats(explore: &mut ExploreRender, combatant: &Combata
         explore.max_mp = next_max_mp;
         changed = true;
     }
-    let next_status = super::render_state::StatusRender::from_timed(&combatant.timed);
+    let next_status = super::render_state::StatusRender::from_timed(&combatant.timed, current_tick);
     if explore.player_status.poison_timer != next_status.poison_timer
         || explore.player_status.stun_timer != next_status.stun_timer
         || explore.player_status.armor_break_timer != next_status.armor_break_timer
@@ -831,7 +842,8 @@ fn sync_explore_combatant_stats(explore: &mut ExploreRender, combatant: &Combata
         explore.player_status = next_status;
         changed = true;
     }
-    let next_cooldowns = super::render_state::skill_cooldowns_from_timed(&combatant.timed);
+    let next_cooldowns =
+        super::render_state::skill_cooldowns_from_timed(&combatant.timed, current_tick);
     if explore.skill_cooldowns != next_cooldowns {
         explore.skill_cooldowns = next_cooldowns;
         changed = true;

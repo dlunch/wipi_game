@@ -114,18 +114,20 @@ impl RenderFxState {
             GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id,
                 kind: TimedKind::SkillCooldown(slot),
-                time_left,
+                end_tick,
             }) if matches!(
                 state,
                 GameState::Explore | GameState::Dialog | GameState::PauseMenu
             ) =>
             {
-                if *time_left == 0 {
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
+                if *end_tick <= world.tick_counter {
                     return Ok(false);
                 }
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 let leader_id = world.leader_id()?;
-                if *entity_id != leader_id || !is_skill_cast_cooldown(*slot, *time_left) {
+                if *entity_id != leader_id
+                    || !is_skill_cast_cooldown(*slot, *end_tick, world.tick_counter)
+                {
                     return Ok(false);
                 }
                 self.skill_effects.clear();
@@ -196,7 +198,11 @@ impl RenderFxState {
     }
 }
 
-fn is_skill_cast_cooldown(slot: u8, time_left: u32) -> bool {
+fn is_skill_cast_cooldown(slot: u8, end_tick: u32, current_tick: u32) -> bool {
+    if end_tick <= current_tick {
+        return false;
+    }
+    let time_left = end_tick - current_tick;
     match slot {
         0 => time_left == Skill::FIREBALL.cooldown,
         1 => time_left == Skill::HEAL.cooldown,

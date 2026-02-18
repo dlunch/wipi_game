@@ -40,7 +40,7 @@ pub enum CombatEvent {
     SetCombatantTimed {
         entity_id: EntityId,
         kind: TimedKind,
-        time_left: u32,
+        end_tick: u32,
     },
     SetRespawnTimer(u32),
     GrantKillReward {

@@ -71,16 +71,15 @@ impl DomainEventResolver for CombatResolver {
 fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -> Result<()> {
     let leader_id = world.leader_id()?;
     let leader_combatant = world.combat.combatant(leader_id)?;
-    tick_mp_regen(leader_id, leader_combatant, out);
+    let next_tick = world.tick_counter.wrapping_add(1);
+    tick_mp_regen(leader_id, leader_combatant, next_tick, out);
     if !world.combat.active {
         return Ok(());
     }
     let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
 
-    let next_counter = world.tick_counter.wrapping_add(1);
-
-    tick_combatant_timed(leader_id, leader_combatant, next_counter, out);
+    tick_combatant_effects(leader_id, leader_combatant, next_tick, out);
 
     let mut occupied_tiles = Vec::with_capacity(world.combat.enemies.len() + 1);
     occupied_tiles.push(tile_index(leader_entity.x, leader_entity.y, map.width));
@@ -96,24 +95,19 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             continue;
         }
 
-        tick_combatant_timed(enemy.entity_id, &enemy.combatant, next_counter, out);
+        tick_combatant_effects(enemy.entity_id, &enemy.combatant, next_tick, out);
 
-        let enemy_stunned = enemy.combatant.timed.time_left(TimedKind::Stun) > 0;
-        let mut attack_cooldown = enemy.combatant.timed.time_left(TimedKind::AttackCooldown);
-        if attack_cooldown > 0 {
-            attack_cooldown -= 1;
-            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                entity_id: enemy.entity_id,
-                kind: TimedKind::AttackCooldown,
-                time_left: attack_cooldown,
-            }));
-        }
+        let enemy_stunned = enemy.combatant.timed.is_active(TimedKind::Stun, next_tick);
+        let attack_cooldown = enemy
+            .combatant
+            .timed
+            .time_left(TimedKind::AttackCooldown, next_tick);
 
         let enemy_entity = world.entity(enemy.entity_id)?;
         let mut next_x = enemy_entity.x;
         let mut next_y = enemy_entity.y;
 
-        if !enemy_stunned && next_counter.is_multiple_of(ENEMY_MOVE_INTERVAL) {
+        if !enemy_stunned && next_tick.is_multiple_of(ENEMY_MOVE_INTERVAL) {
             let (mx, my) = next_enemy_position_towards(
                 enemy_entity.x,
                 enemy_entity.y,
@@ -144,7 +138,10 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             && leader_combatant.stats.current_hp > 0
         {
             let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
-            let effective_def = if leader_combatant.timed.time_left(TimedKind::ArmorBreak) > 0 {
+            let effective_def = if leader_combatant
+                .timed
+                .is_active(TimedKind::ArmorBreak, next_tick)
+            {
                 leader_combatant.stats.def / 2
             } else {
                 leader_combatant.stats.def
@@ -154,7 +151,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id: enemy.entity_id,
                 kind: TimedKind::AttackCooldown,
-                time_left: ENEMY_ATTACK_COOLDOWN,
+                end_tick: next_tick.wrapping_add(ENEMY_ATTACK_COOLDOWN),
             }));
         }
     }
@@ -168,65 +165,42 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     Ok(())
 }
 
-fn tick_mp_regen(entity_id: u32, combatant: &CombatantState, out: &mut Vec<GameEvent>) {
+fn tick_mp_regen(
+    entity_id: u32,
+    combatant: &CombatantState,
+    next_tick: u32,
+    out: &mut Vec<GameEvent>,
+) {
     if combatant.stats.current_hp <= 0 {
         return;
     }
 
-    let time_left = combatant.timed.time_left(TimedKind::MpRegenTick);
-    let next = if time_left <= 1 {
+    if !combatant.timed.is_active(TimedKind::MpRegenTick, next_tick) {
         out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
             entity_id,
             delta: 1,
         }));
-        MP_REGEN_INTERVAL
-    } else {
-        time_left - 1
-    };
-
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id,
-        kind: TimedKind::MpRegenTick,
-        time_left: next,
-    }));
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id,
+            kind: TimedKind::MpRegenTick,
+            end_tick: next_tick.wrapping_add(MP_REGEN_INTERVAL),
+        }));
+    }
 }
 
-fn tick_combatant_timed(
+fn tick_combatant_effects(
     entity_id: u32,
     combatant: &CombatantState,
-    next_counter: u32,
+    next_tick: u32,
     out: &mut Vec<GameEvent>,
 ) {
-    for effect in &combatant.timed.effects {
-        match effect.kind {
-            TimedKind::Poison => {
-                let next = effect.time_left.saturating_sub(1);
-                out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                    entity_id,
-                    kind: TimedKind::Poison,
-                    time_left: next,
-                }));
-                if effect.time_left > 0 && next_counter.is_multiple_of(STATUS_TICK_INTERVAL) {
-                    out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
-                        entity_id,
-                        delta: -POISON_DAMAGE,
-                    }));
-                }
-            }
-            TimedKind::Stun
-            | TimedKind::ArmorBreak
-            | TimedKind::AttackCooldown
-            | TimedKind::SkillCooldown(_)
-            | TimedKind::MpRegenTick => {
-                if effect.time_left > 0 {
-                    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-                        entity_id,
-                        kind: effect.kind,
-                        time_left: effect.time_left - 1,
-                    }));
-                }
-            }
-        }
+    if combatant.timed.is_active(TimedKind::Poison, next_tick)
+        && next_tick.is_multiple_of(STATUS_TICK_INTERVAL)
+    {
+        out.push(GameEvent::Combat(CombatEvent::ChangeCombatantHp {
+            entity_id,
+            delta: -POISON_DAMAGE,
+        }));
     }
 }
 
@@ -239,8 +213,11 @@ fn resolve_player_action(
     let leader_id = world.leader_id()?;
     let leader_entity = world.leader_entity()?;
     let leader_combatant = world.combat.combatant(leader_id)?;
+    let current_tick = world.tick_counter;
     if leader_combatant.stats.current_hp <= 0
-        || leader_combatant.timed.time_left(TimedKind::Stun) > 0
+        || leader_combatant
+            .timed
+            .is_active(TimedKind::Stun, current_tick)
     {
         return Ok(());
     }
@@ -248,8 +225,7 @@ fn resolve_player_action(
     if let Some((slot, skill)) = action.skill() {
         if leader_combatant
             .timed
-            .time_left(TimedKind::SkillCooldown(slot as u8))
-            > 0
+            .is_active(TimedKind::SkillCooldown(slot as u8), current_tick)
         {
             return Ok(());
         }
@@ -259,7 +235,7 @@ fn resolve_player_action(
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::SkillCooldown(slot as u8),
-            time_left: skill.cooldown,
+            end_tick: current_tick.wrapping_add(skill.cooldown),
         }));
         out.push(GameEvent::Combat(CombatEvent::ChangeCombatantMp {
             entity_id: leader_id,
@@ -275,7 +251,10 @@ fn resolve_player_action(
             out,
         )?;
     } else {
-        if leader_combatant.timed.time_left(TimedKind::AttackCooldown) > 0 {
+        if leader_combatant
+            .timed
+            .is_active(TimedKind::AttackCooldown, current_tick)
+        {
             return Ok(());
         }
         let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
@@ -284,7 +263,7 @@ fn resolve_player_action(
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::AttackCooldown,
-            time_left: PLAYER_ATTACK_COOLDOWN,
+            end_tick: current_tick.wrapping_add(PLAYER_ATTACK_COOLDOWN),
         }));
     }
     Ok(())
@@ -355,13 +334,18 @@ fn damage_enemy_at_position(
     timed_effect: Option<(TimedKind, u32)>,
     out: &mut Vec<GameEvent>,
 ) -> Result<bool> {
+    let current_tick = world.tick_counter;
     for enemy in &world.combat.enemies {
         let entity = world.entity(enemy.entity_id)?;
         if entity.x != x || entity.y != y {
             continue;
         }
         let mut next_stats = enemy.combatant.stats;
-        let effective_def = if enemy.combatant.timed.time_left(TimedKind::ArmorBreak) > 0 {
+        let effective_def = if enemy
+            .combatant
+            .timed
+            .is_active(TimedKind::ArmorBreak, current_tick)
+        {
             next_stats.def / 2
         } else {
             next_stats.def
@@ -379,12 +363,12 @@ fn damage_enemy_at_position(
         }
 
         if let Some((kind, duration)) = timed_effect
-            && enemy.combatant.timed.time_left(kind) < duration
+            && enemy.combatant.timed.time_left(kind, current_tick) < duration
         {
             out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id: enemy.entity_id,
                 kind,
-                time_left: duration,
+                end_tick: current_tick.wrapping_add(duration),
             }));
         }
         return Ok(true);

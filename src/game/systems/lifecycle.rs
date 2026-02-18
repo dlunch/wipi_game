@@ -134,7 +134,7 @@ impl LifecycleResolver {
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::MpRegenTick,
-            time_left: 0,
+            end_tick: 0,
         }));
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::Movement(MovementEvent::ClearPressedDirections));
@@ -156,13 +156,13 @@ impl LifecycleResolver {
             .combat
             .combatant(leader_id)?
             .timed
-            .time_left(TimedKind::MpRegenTick)
+            .time_left(TimedKind::MpRegenTick, world.tick_counter)
             == 0
         {
             out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id: leader_id,
                 kind: TimedKind::MpRegenTick,
-                time_left: 0,
+                end_tick: 0,
             }));
         }
         out.push(GameEvent::Transition(TransitionEvent::MapChanged));
@@ -282,7 +282,7 @@ fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Ve
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id,
             kind: effect.kind,
-            time_left: effect.time_left,
+            end_tick: effect.end_tick,
         }));
     }
 }

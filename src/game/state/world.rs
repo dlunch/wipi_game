@@ -950,7 +950,7 @@ mod tests {
             &GameEvent::Combat(CombatEvent::SetCombatantTimed {
                 entity_id: 10,
                 kind: TimedKind::AttackCooldown,
-                time_left: 5,
+                end_tick: 5,
             }),
         )?;
 

@@ -42,7 +42,7 @@ pub enum TimedKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimedEffect {
     pub kind: TimedKind,
-    pub time_left: u32,
+    pub end_tick: u32,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -51,22 +51,34 @@ pub struct TimedState {
 }
 
 impl TimedState {
-    pub fn time_left(&self, kind: TimedKind) -> u32 {
+    pub fn end_tick(&self, kind: TimedKind) -> u32 {
         for effect in &self.effects {
             if effect.kind == kind {
-                return effect.time_left;
+                return effect.end_tick;
             }
         }
         0
     }
 
-    pub fn set(&mut self, kind: TimedKind, time_left: u32) {
-        if let Some(effect) = self.effects.iter_mut().find(|effect| effect.kind == kind) {
-            effect.time_left = time_left;
-        } else {
-            self.effects.push(TimedEffect { kind, time_left });
+    pub fn time_left(&self, kind: TimedKind, current_tick: u32) -> u32 {
+        let end_tick = self.end_tick(kind);
+        if end_tick <= current_tick {
+            return 0;
         }
-        self.effects.retain(|effect| effect.time_left > 0);
+        end_tick - current_tick
+    }
+
+    pub fn is_active(&self, kind: TimedKind, current_tick: u32) -> bool {
+        self.end_tick(kind) > current_tick
+    }
+
+    pub fn set(&mut self, kind: TimedKind, end_tick: u32) {
+        if let Some(effect) = self.effects.iter_mut().find(|effect| effect.kind == kind) {
+            effect.end_tick = end_tick;
+        } else {
+            self.effects.push(TimedEffect { kind, end_tick });
+        }
+        self.effects.retain(|effect| effect.end_tick > 0);
     }
 }
 
@@ -176,10 +188,10 @@ impl CombatState {
             CombatEvent::SetCombatantTimed {
                 entity_id,
                 kind,
-                time_left,
+                end_tick,
             } => {
                 let combatant = self.combatant_mut(*entity_id)?;
-                combatant.timed.set(*kind, *time_left);
+                combatant.timed.set(*kind, *end_tick);
             }
             CombatEvent::SetRespawnTimer(respawn_timer) => {
                 self.respawn_timer = *respawn_timer;

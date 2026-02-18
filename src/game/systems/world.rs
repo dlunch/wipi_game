@@ -299,34 +299,34 @@ fn resolve_revive_player(
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::Poison,
-        time_left: 0,
+        end_tick: 0,
     }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::Stun,
-        time_left: 0,
+        end_tick: 0,
     }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::ArmorBreak,
-        time_left: 0,
+        end_tick: 0,
     }));
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::AttackCooldown,
-        time_left: 0,
+        end_tick: 0,
     }));
     for slot in 0..3u8 {
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::SkillCooldown(slot),
-            time_left: 0,
+            end_tick: 0,
         }));
     }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
         entity_id: leader_id,
         kind: TimedKind::MpRegenTick,
-        time_left: 0,
+        end_tick: 0,
     }));
     out.push(GameEvent::Transition(TransitionEvent::MapChanged));
     out.push(GameEvent::Transition(TransitionEvent::ToExplore));

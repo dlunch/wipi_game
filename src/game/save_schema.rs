@@ -127,7 +127,7 @@ fn push_combatant_line(
             "TIMED",
             &entity_id.to_string(),
             &timed_kind_code(effect.kind),
-            &effect.time_left.to_string(),
+            &effect.end_tick.to_string(),
         ]));
     }
 }
@@ -278,7 +278,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                     entity_id,
                     TimedEffect {
                         kind: parse_timed_kind(parts[2])?,
-                        time_left: parse_value(parts[3], "TIMED.time_left")?,
+                        end_tick: parse_value(parts[3], "TIMED.end_tick")?,
                     },
                 ));
             }

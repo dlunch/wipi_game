@@ -179,20 +179,20 @@ pub(super) fn scroll_for_selection(selected: usize, total: usize, visible: usize
 }
 
 impl StatusRender {
-    pub(super) fn from_timed(timed: &TimedState) -> Self {
+    pub(super) fn from_timed(timed: &TimedState, current_tick: u32) -> Self {
         Self {
-            poison_timer: timed.time_left(TimedKind::Poison),
-            stun_timer: timed.time_left(TimedKind::Stun),
-            armor_break_timer: timed.time_left(TimedKind::ArmorBreak),
+            poison_timer: timed.time_left(TimedKind::Poison, current_tick),
+            stun_timer: timed.time_left(TimedKind::Stun, current_tick),
+            armor_break_timer: timed.time_left(TimedKind::ArmorBreak, current_tick),
         }
     }
 }
 
-pub(super) fn skill_cooldowns_from_timed(timed: &TimedState) -> [u32; 3] {
+pub(super) fn skill_cooldowns_from_timed(timed: &TimedState, current_tick: u32) -> [u32; 3] {
     [
-        timed.time_left(TimedKind::SkillCooldown(0)),
-        timed.time_left(TimedKind::SkillCooldown(1)),
-        timed.time_left(TimedKind::SkillCooldown(2)),
+        timed.time_left(TimedKind::SkillCooldown(0), current_tick),
+        timed.time_left(TimedKind::SkillCooldown(1), current_tick),
+        timed.time_left(TimedKind::SkillCooldown(2), current_tick),
     ]
 }
 
@@ -264,7 +264,10 @@ impl ExploreRender {
                 y: entity.y,
                 hp: enemy.combatant.stats.current_hp,
                 max_hp: enemy.combatant.stats.max_hp,
-                attack_cooldown: enemy.combatant.timed.time_left(TimedKind::AttackCooldown),
+                attack_cooldown: enemy
+                    .combatant
+                    .timed
+                    .time_left(TimedKind::AttackCooldown, world.tick_counter),
                 hit_flash: render_fx.enemy_hit_flash(enemy.entity_id),
                 dead: enemy.combatant.stats.current_hp <= 0,
             });
@@ -308,8 +311,11 @@ impl ExploreRender {
                 .skill_effect_iter()
                 .map(|(x, y, effect_type)| SkillEffectRender { x, y, effect_type })
                 .collect(),
-            skill_cooldowns: skill_cooldowns_from_timed(&leader_combatant.timed),
-            player_status: StatusRender::from_timed(&leader_combatant.timed),
+            skill_cooldowns: skill_cooldowns_from_timed(
+                &leader_combatant.timed,
+                world.tick_counter,
+            ),
+            player_status: StatusRender::from_timed(&leader_combatant.timed, world.tick_counter),
             key_actions: ui.explore.key_actions,
             peaceful: map.peaceful,
             quest_notice_timer: render_fx.quest_notice_timer(),
