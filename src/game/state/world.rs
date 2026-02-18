@@ -250,21 +250,26 @@ impl WorldState {
                     .retain(|enemy| enemy.entity_id != *entity_id);
                 self.rebuild_enemy_occupancy();
             }
-            WorldEvent::SetEntityMap { entity_id, map_id } => {
+            WorldEvent::SetEntityTransform {
+                entity_id,
+                map_id,
+                position,
+                facing,
+            } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.map_id = map_id.clone();
+                    if let Some(map_id) = map_id {
+                        entity.map_id = map_id.clone();
+                    }
+                    if let Some((x, y)) = position {
+                        entity.x = *x;
+                        entity.y = *y;
+                    }
+                    if let Some(facing) = facing {
+                        entity.facing = *facing;
+                    }
                 }
-            }
-            WorldEvent::SetEntityPosition { entity_id, x, y } => {
-                if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.x = *x;
-                    entity.y = *y;
-                }
-                self.rebuild_enemy_occupancy();
-            }
-            WorldEvent::SetEntityFacing { entity_id, facing } => {
-                if let Some(entity) = self.entities.get_mut(*entity_id) {
-                    entity.facing = *facing;
+                if map_id.is_some() || position.is_some() {
+                    self.rebuild_enemy_occupancy();
                 }
             }
             WorldEvent::SetEntityStat { entity_id, stat } => {
@@ -285,16 +290,17 @@ impl WorldState {
                     entity.loadout = *loadout;
                 }
             }
-            WorldEvent::AddEntityItem {
+            WorldEvent::ChangeEntityItem {
                 entity_id,
                 item_id,
-                amount,
-            } => self.add_item_amount(*entity_id, item_id, *amount),
-            WorldEvent::RemoveEntityItem {
-                entity_id,
-                item_id,
-                amount,
-            } => self.remove_item_amount(*entity_id, item_id, *amount),
+                delta,
+            } => {
+                if *delta > 0 {
+                    self.add_item_amount(*entity_id, item_id, *delta);
+                } else if *delta < 0 {
+                    self.remove_item_amount(*entity_id, item_id, -*delta);
+                }
+            }
             WorldEvent::AddQuestProgress(progress) => {
                 if let Some(existing) = self
                     .quests

@@ -160,8 +160,7 @@ impl RenderState {
                     GameEvent::World(
                         WorldEvent::SetEntityInventory { .. }
                             | WorldEvent::SetEntityLoadout { .. }
-                            | WorldEvent::AddEntityItem { .. }
-                            | WorldEvent::RemoveEntityItem { .. }
+                            | WorldEvent::ChangeEntityItem { .. }
                             | WorldEvent::RemoveEntity(_)
                             | WorldEvent::UpsertEntity(_)
                     ) | GameEvent::ShopSellSelected(_)
@@ -235,8 +234,7 @@ impl RenderState {
                     GameEvent::World(
                         WorldEvent::SetEntityInventory { .. }
                             | WorldEvent::SetEntityLoadout { .. }
-                            | WorldEvent::AddEntityItem { .. }
-                            | WorldEvent::RemoveEntityItem { .. }
+                            | WorldEvent::ChangeEntityItem { .. }
                             | WorldEvent::RemoveEntity(_)
                             | WorldEvent::UpsertEntity(_)
                     ) | GameEvent::ShopBuyItem(_)
@@ -621,16 +619,29 @@ fn apply_event_to_explore_render(
                     ui.quest_log.tracked_quest_id.as_deref(),
                 );
             }
-            WorldEvent::SetEntityPosition { entity_id, .. }
-            | WorldEvent::SetEntityFacing { entity_id, .. } => {
+            WorldEvent::SetEntityTransform {
+                entity_id,
+                map_id,
+                position,
+                facing,
+            } => {
+                if map_id.is_some() {
+                    if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
+                        *explore = next;
+                        return true;
+                    }
+                    return false;
+                }
                 if Some(*entity_id) == leader_id {
-                    requires_hint_refresh = true;
+                    if position.is_some() || facing.is_some() {
+                        requires_hint_refresh = true;
+                    }
                 } else {
                     upsert_enemy_render(explore, world, data, render_fx, *entity_id);
                     enemy_changed = true;
                 }
             }
-            WorldEvent::SetEntityMap { .. } | WorldEvent::SetWorldMap(_) => {
+            WorldEvent::SetWorldMap(_) => {
                 if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
                     *explore = next;
                     return true;
@@ -661,8 +672,7 @@ fn apply_event_to_explore_render(
             }
             WorldEvent::SetEntityInventory { .. }
             | WorldEvent::SetEntityLoadout { .. }
-            | WorldEvent::AddEntityItem { .. }
-            | WorldEvent::RemoveEntityItem { .. }
+            | WorldEvent::ChangeEntityItem { .. }
             | WorldEvent::SetParty(_)
             | WorldEvent::CreateWorld
             | WorldEvent::ResetMovement => {}

@@ -181,18 +181,11 @@ pub enum WorldEvent {
     SetParty(PartyState),
     UpsertEntity(EntityState),
     RemoveEntity(EntityId),
-    SetEntityMap {
+    SetEntityTransform {
         entity_id: EntityId,
-        map_id: String,
-    },
-    SetEntityPosition {
-        entity_id: EntityId,
-        x: usize,
-        y: usize,
-    },
-    SetEntityFacing {
-        entity_id: EntityId,
-        facing: Direction,
+        map_id: Option<String>,
+        position: Option<(usize, usize)>,
+        facing: Option<Direction>,
     },
     SetEntityStat {
         entity_id: EntityId,
@@ -206,15 +199,10 @@ pub enum WorldEvent {
         entity_id: EntityId,
         loadout: LoadoutState,
     },
-    AddEntityItem {
+    ChangeEntityItem {
         entity_id: EntityId,
         item_id: String,
-        amount: i32,
-    },
-    RemoveEntityItem {
-        entity_id: EntityId,
-        item_id: String,
-        amount: i32,
+        delta: i32,
     },
     AddQuestProgress(crate::data::QuestProgress),
     AddOpenedTreasure {

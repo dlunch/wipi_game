@@ -87,10 +87,10 @@ fn resolve_use_item(
                 entity_id: leader_id,
                 amount: item.hp_restore(),
             }));
-            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                 entity_id: leader_id,
                 item_id: stack.item_id.clone(),
-                amount: 1,
+                delta: -1,
             }));
         }
         ItemKind::Weapon => {
@@ -132,15 +132,15 @@ fn resolve_shop_buy(
         return;
     }
 
-    out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: crate::game::GOLD_ITEM_ID.into(),
-        amount: item.price.max(0),
+        delta: -item.price.max(0),
     }));
-    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: item_id.into(),
-        amount: 1,
+        delta: 1,
     }));
 }
 
@@ -162,15 +162,15 @@ fn resolve_shop_sell(
         return;
     };
 
-    out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: stack.item_id.clone(),
-        amount: 1,
+        delta: -1,
     }));
-    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: crate::game::GOLD_ITEM_ID.into(),
-        amount: (item.price / 2).max(0),
+        delta: (item.price / 2).max(0),
     }));
     sync_leader_combat_stats(data, world, leader_id, out);
 }
@@ -197,33 +197,33 @@ fn resolve_dialog_action(
 ) -> Result<()> {
     match action {
         DialogAction::GiveItem(id) => {
-            out.push(GameEvent::World(WorldEvent::AddEntityItem {
+            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                 entity_id,
                 item_id: id.clone(),
-                amount: 1,
+                delta: 1,
             }));
             sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::TakeItem(id) => {
-            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                 entity_id,
                 item_id: id.clone(),
-                amount: 1,
+                delta: -1,
             }));
             sync_leader_combat_stats(data, world, entity_id, out);
         }
         DialogAction::GiveGold(amount) => {
-            out.push(GameEvent::World(WorldEvent::AddEntityItem {
+            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                 entity_id,
                 item_id: crate::game::GOLD_ITEM_ID.into(),
-                amount: (*amount).max(0),
+                delta: (*amount).max(0),
             }));
         }
         DialogAction::TakeGold(amount) => {
-            out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                 entity_id,
                 item_id: crate::game::GOLD_ITEM_ID.into(),
-                amount: (*amount).max(0),
+                delta: -(*amount).max(0),
             }));
         }
         DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out),

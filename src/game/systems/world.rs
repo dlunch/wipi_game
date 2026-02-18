@@ -109,10 +109,10 @@ fn resolve_tile_event(
             if let Some(item_id) = data.newgame.treasure_item.as_deref()
                 && let Some(leader_id) = leader_id(world)
             {
-                out.push(GameEvent::World(WorldEvent::AddEntityItem {
+                out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
                     entity_id: leader_id,
                     item_id: item_id.into(),
-                    amount: 1,
+                    delta: 1,
                 }));
             }
         }
@@ -128,14 +128,11 @@ fn resolve_tile_event(
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
             out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
-            out.push(GameEvent::World(WorldEvent::SetEntityMap {
+            out.push(GameEvent::World(WorldEvent::SetEntityTransform {
                 entity_id: leader_id,
-                map_id: map.id.clone(),
-            }));
-            out.push(GameEvent::World(WorldEvent::SetEntityPosition {
-                entity_id: leader_id,
-                x,
-                y,
+                map_id: Some(map.id.clone()),
+                position: Some((x, y)),
+                facing: None,
             }));
             out.push(GameEvent::Transition(TransitionEvent::MapChanged));
         }
@@ -181,16 +178,16 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
         entity_id: leader_id,
         stat: next_stat,
     }));
-    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
-        amount: quest.reward_gold.max(0),
+        delta: quest.reward_gold.max(0),
     }));
     if let Some(item_id) = &quest.reward_item {
-        out.push(GameEvent::World(WorldEvent::AddEntityItem {
+        out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
             entity_id: leader_id,
             item_id: item_id.clone(),
-            amount: 1,
+            delta: 1,
         }));
     }
 
@@ -252,10 +249,10 @@ fn resolve_kill_reward(
         entity_id: leader_id,
         stat: next_stat,
     }));
-    out.push(GameEvent::World(WorldEvent::AddEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
-        amount: gold.max(0),
+        delta: gold.max(0),
     }));
 
     for progress in &world.quests {
@@ -328,10 +325,10 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     }
     let current_gold = world.gold_amount(leader_id);
     let gold_penalty = (current_gold / 10).max(10);
-    out.push(GameEvent::World(WorldEvent::RemoveEntityItem {
+    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
-        amount: gold_penalty,
+        delta: -gold_penalty,
     }));
 
     let mut revived_stats = combatant.stats;
@@ -346,16 +343,20 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         village_map_id.clone(),
     )));
-    out.push(GameEvent::World(WorldEvent::SetEntityMap {
-        entity_id: leader_id,
-        map_id: village_map_id.clone(),
-    }));
     if let Some(village_map) = data.find_map(&village_map_id) {
         let (x, y) = village_map.find_player_start().unwrap_or((0, 0));
-        out.push(GameEvent::World(WorldEvent::SetEntityPosition {
+        out.push(GameEvent::World(WorldEvent::SetEntityTransform {
             entity_id: leader_id,
-            x,
-            y,
+            map_id: Some(village_map_id.clone()),
+            position: Some((x, y)),
+            facing: None,
+        }));
+    } else {
+        out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+            entity_id: leader_id,
+            map_id: Some(village_map_id.clone()),
+            position: None,
+            facing: None,
         }));
     }
     out.push(GameEvent::World(WorldEvent::ResetMovement));
