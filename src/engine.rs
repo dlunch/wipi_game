@@ -177,7 +177,6 @@ impl GameEngine {
                 ));
             }
 
-            derived.clear();
             self.resolve_with_handlers(&event, &mut derived)?;
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
