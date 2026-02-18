@@ -329,6 +329,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_max_hp = *base_max_hp;
                 }
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::SetEntityBaseMaxMp {
                 entity_id,
@@ -337,6 +338,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_max_mp = *base_max_mp;
                 }
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::SetEntityBaseAtk {
                 entity_id,
@@ -345,6 +347,7 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_atk = *base_atk;
                 }
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::SetEntityBaseDef {
                 entity_id,
@@ -353,11 +356,13 @@ impl WorldState {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.base_def = *base_def;
                 }
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::AddEntityExp { entity_id, amount } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
                     entity.stat.add_exp(*amount);
                 }
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::ClearEntityInventory { entity_id } => {
                 if let Some(entity) = self.entities.get_mut(*entity_id) {
@@ -366,7 +371,7 @@ impl WorldState {
                     entity.loadout.armor = None;
                     entity.loadout.accessory = None;
                 }
-                self.sync_combat_offense_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::SetEntityLoadoutSlot {
                 entity_id,
@@ -386,7 +391,7 @@ impl WorldState {
                         }
                     }
                 }
-                self.sync_combat_offense_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::ChangeEntityItem {
                 entity_id,
@@ -398,7 +403,7 @@ impl WorldState {
                 } else if *delta < 0 {
                     self.remove_item_amount(*entity_id, item_id, -*delta);
                 }
-                self.sync_combat_offense_for_entity(data, *entity_id);
+                self.sync_combat_stats_for_entity(data, *entity_id);
             }
             WorldEvent::CreateQuestProgress { quest_id } => {
                 self.ensure_quest_progress(quest_id);
@@ -431,6 +436,16 @@ impl WorldState {
     }
 
     fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
+        let enemy_was_alive = match event {
+            CombatEvent::SetCombatantCurrentHp { entity_id, .. } => self
+                .combat
+                .enemies
+                .iter()
+                .find(|enemy| enemy.entity_id == *entity_id)
+                .map(|enemy| enemy.combatant.stats.current_hp > 0),
+            _ => None,
+        };
+
         self.combat.apply_event(game_event)?;
         match event {
             CombatEvent::MoveEnemy { entity_id, x, y } => {
@@ -448,7 +463,17 @@ impl WorldState {
                 self.rebuild_enemy_occupancy();
             }
             CombatEvent::SetCombatantCurrentHp { entity_id, .. } => {
-                if self
+                if let Some(was_alive) = enemy_was_alive {
+                    let is_alive = self
+                        .combat
+                        .enemies
+                        .iter()
+                        .find(|enemy| enemy.entity_id == *entity_id)
+                        .is_some_and(|enemy| enemy.combatant.stats.current_hp > 0);
+                    if was_alive != is_alive {
+                        self.rebuild_enemy_occupancy();
+                    }
+                } else if self
                     .combat
                     .enemies
                     .iter()
@@ -581,13 +606,20 @@ impl WorldState {
         }
     }
 
-    fn sync_combat_offense_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
+    fn sync_combat_stats_for_entity(&mut self, data: &GameData, entity_id: EntityId) {
         let Some(entity) = self.entities.get(entity_id) else {
             return;
         };
         let Some(combatant) = self.combat.combatant_mut(entity_id) else {
             return;
         };
+
+        let max_hp = entity.stat.base_max_hp.max(0);
+        let max_mp = entity.stat.base_max_mp.max(0);
+        combatant.stats.max_hp = max_hp;
+        combatant.stats.max_mp = max_mp;
+        combatant.stats.current_hp = combatant.stats.current_hp.min(max_hp).max(0);
+        combatant.stats.current_mp = combatant.stats.current_mp.min(max_mp).max(0);
 
         let mut atk = entity.stat.base_atk;
         let mut def = entity.stat.base_def;
@@ -656,5 +688,187 @@ impl GameEventSubscriber for WorldState {
                 | GameEventKind::Explore
                 | GameEventKind::Transition
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::String;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    use anyhow::{Result, anyhow};
+
+    use crate::data::{Direction, Quest, QuestType};
+    use crate::game::state::{
+        CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack,
+    };
+    use crate::game::{CombatEvent, GameData, GameEvent, WorldEvent};
+
+    use super::{OccupancyState, WorldState};
+
+    #[test]
+    fn add_entity_exp_syncs_combat_snapshot() -> Result<()> {
+        let data = GameData::default();
+        let mut world = WorldState::empty();
+
+        world.apply_event(&data, &GameEvent::World(WorldEvent::CreateWorld))?;
+        world.apply_event(&data, &GameEvent::World(WorldEvent::SetLeaderEntity(1)))?;
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::CreateEntity {
+                entity_id: 1,
+                kind: EntityKind::Player,
+                name: String::from("Hero"),
+            }),
+        )?;
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::AddEntityExp {
+                entity_id: 1,
+                amount: 100,
+            }),
+        )?;
+
+        let entity = world
+            .entity(1)
+            .ok_or_else(|| anyhow!("entity should exist"))?;
+        let combatant = world
+            .combat
+            .combatant(1)
+            .ok_or_else(|| anyhow!("combatant should exist"))?;
+
+        assert_eq!(entity.stat.level, 2);
+        assert_eq!(combatant.stats.max_hp, entity.stat.base_max_hp);
+        assert_eq!(combatant.stats.max_mp, entity.stat.base_max_mp);
+        assert_eq!(combatant.stats.atk, entity.stat.base_atk);
+        assert_eq!(combatant.stats.def, entity.stat.base_def);
+        assert_eq!(combatant.stats.current_hp, 80);
+        assert_eq!(combatant.stats.current_mp, 30);
+        Ok(())
+    }
+
+    #[test]
+    fn quest_progress_uses_delta_and_clamps_to_target() -> Result<()> {
+        let mut data = GameData::default();
+        data.quests.push(Quest {
+            id: String::from("q-kill"),
+            name: String::from("Quest"),
+            description: String::from("Desc"),
+            quest_type: QuestType::Kill,
+            target_id: String::from("slime"),
+            target_count: 3,
+            reward_exp: 1,
+            reward_gold: 1,
+            reward_item: None,
+        });
+
+        let mut world = WorldState::empty();
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::CreateQuestProgress {
+                quest_id: String::from("q-kill"),
+            }),
+        )?;
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
+                quest_id: String::from("q-kill"),
+                delta: 1,
+            }),
+        )?;
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
+                quest_id: String::from("q-kill"),
+                delta: 1,
+            }),
+        )?;
+
+        let progress = world
+            .quests
+            .iter()
+            .find(|progress| progress.quest_id == "q-kill")
+            .ok_or_else(|| anyhow!("quest progress should exist"))?;
+        assert_eq!(progress.current_count, 2);
+        assert!(!progress.completed);
+
+        world.apply_event(
+            &data,
+            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
+                quest_id: String::from("q-kill"),
+                delta: 10,
+            }),
+        )?;
+        let progress = world
+            .quests
+            .iter()
+            .find(|progress| progress.quest_id == "q-kill")
+            .ok_or_else(|| anyhow!("quest progress should exist"))?;
+        assert_eq!(progress.current_count, 3);
+        assert!(progress.completed);
+        Ok(())
+    }
+
+    #[test]
+    fn enemy_occupancy_updates_only_on_alive_transition() -> Result<()> {
+        let data = GameData::default();
+        let mut world = WorldState::empty();
+
+        world.occupancy = OccupancyState {
+            map_id: String::from("map"),
+            width: 3,
+            height: 3,
+            npc_tiles: vec![false; 9],
+            enemy_tiles: vec![false; 9],
+        };
+
+        world.entities.upsert(EntityState {
+            id: 10,
+            kind: EntityKind::Enemy,
+            name: String::from("slime"),
+            map_id: String::from("map"),
+            x: 1,
+            y: 1,
+            facing: Direction::Down,
+            stat: Default::default(),
+            inventory: Vec::<ItemStack>::new(),
+            loadout: Default::default(),
+        });
+        world.combat.enemies.push(EnemyCombatantState {
+            entity_id: 10,
+            source_enemy_id: String::from("slime"),
+            combatant: CombatantState::default(),
+        });
+        world.rebuild_enemy_occupancy();
+        assert!(world.is_occupied(1, 1));
+
+        world.apply_event(
+            &data,
+            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+                entity_id: 10,
+                current_hp: 5,
+            }),
+        )?;
+        assert!(world.is_occupied(1, 1));
+
+        world.apply_event(
+            &data,
+            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+                entity_id: 10,
+                current_hp: 0,
+            }),
+        )?;
+        assert!(!world.is_occupied(1, 1));
+
+        world.apply_event(
+            &data,
+            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
+                entity_id: 10,
+                current_hp: 3,
+            }),
+        )?;
+        assert!(world.is_occupied(1, 1));
+        Ok(())
     }
 }
