@@ -24,6 +24,7 @@ pub struct GameData {
     pub shops: Vec<Shop>,
     pub newgame: NewGameConfig,
     item_index: BTreeMap<String, usize>,
+    enemy_index: BTreeMap<String, usize>,
     map_index: BTreeMap<String, usize>,
     dialog_index: BTreeMap<String, usize>,
     quest_index: BTreeMap<String, usize>,
@@ -37,7 +38,10 @@ impl GameData {
                 self.items = Self::load_resource("data/items.dat", parse_items)?;
                 self.rebuild_item_index();
             }
-            1 => self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?,
+            1 => {
+                self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?;
+                self.rebuild_enemy_index();
+            }
             2 => {
                 self.maps = Self::load_resource("data/maps.dat", parse_maps)?;
                 self.rebuild_map_index();
@@ -87,6 +91,9 @@ impl GameData {
     }
 
     pub fn find_enemy(&self, id: &str) -> Option<&Enemy> {
+        if let Some(idx) = self.enemy_index.get(id).copied() {
+            return self.enemies.get(idx);
+        }
         self.enemies.iter().find(|enemy| enemy.id == id)
     }
 
@@ -184,6 +191,13 @@ impl GameData {
         self.item_index.clear();
         for (idx, item) in self.items.iter().enumerate() {
             self.item_index.insert(item.id.clone(), idx);
+        }
+    }
+
+    fn rebuild_enemy_index(&mut self) {
+        self.enemy_index.clear();
+        for (idx, enemy) in self.enemies.iter().enumerate() {
+            self.enemy_index.insert(enemy.id.clone(), idx);
         }
     }
 

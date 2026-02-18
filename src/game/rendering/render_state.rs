@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
@@ -69,6 +70,7 @@ pub struct ExploreRender {
     pub first_live_enemy_name: Option<String>,
     pub opened_treasures: Vec<(String, usize, usize)>,
     pub enemies: Vec<EnemyRender>,
+    pub(super) enemy_indices: BTreeMap<u32, usize>,
     pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffectRender>,
     pub skill_cooldowns: [u32; 3],
@@ -91,6 +93,7 @@ pub struct EnemyRender {
     pub dead: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SkillEffectRender {
     pub x: usize,
     pub y: usize,
@@ -231,6 +234,7 @@ impl ExploreRender {
         let map = data.find_map(&leader.map_id)?;
 
         let mut enemies = Vec::with_capacity(world.combat.enemies.len());
+        let mut enemy_indices = BTreeMap::new();
         for enemy in &world.combat.enemies {
             let Some(entity) = world.entity(enemy.entity_id) else {
                 continue;
@@ -239,6 +243,7 @@ impl ExploreRender {
                 .find_enemy(&enemy.source_enemy_id)
                 .map(|enemy_data| enemy_data.name.clone())
                 .unwrap_or_else(|| enemy.source_enemy_id.clone());
+            let enemy_index = enemies.len();
             enemies.push(EnemyRender {
                 enemy_id: enemy.entity_id,
                 name,
@@ -250,6 +255,7 @@ impl ExploreRender {
                 hit_flash: render_fx.enemy_hit_flash(enemy.entity_id),
                 dead: enemy.combatant.stats.current_hp <= 0,
             });
+            enemy_indices.insert(enemy.entity_id, enemy_index);
         }
 
         let first_live_enemy_name = enemies
@@ -283,6 +289,7 @@ impl ExploreRender {
             first_live_enemy_name,
             opened_treasures: world.opened_treasures.clone(),
             enemies,
+            enemy_indices,
             player_hit_flash: render_fx.player_hit_flash(),
             skill_effects: render_fx
                 .skill_effect_iter()
@@ -295,6 +302,47 @@ impl ExploreRender {
             quest_notice_timer: render_fx.quest_notice_timer(),
             anim_tick: render_fx.anim_tick(),
         })
+    }
+
+    pub(super) fn enemy_mut(&mut self, enemy_id: u32) -> Option<&mut EnemyRender> {
+        let index = self.enemy_indices.get(&enemy_id).copied()?;
+        self.enemies.get_mut(index)
+    }
+
+    pub(super) fn remove_enemy(&mut self, enemy_id: u32) -> bool {
+        let Some(index) = self.enemy_indices.remove(&enemy_id) else {
+            return false;
+        };
+        if index >= self.enemies.len() {
+            return false;
+        }
+        self.enemies.remove(index);
+        self.rebuild_enemy_indices();
+        true
+    }
+
+    pub(super) fn upsert_enemy(&mut self, enemy: EnemyRender) {
+        if let Some(existing) = self.enemy_mut(enemy.enemy_id) {
+            *existing = enemy;
+            return;
+        }
+        let index = self.enemies.len();
+        self.enemy_indices.insert(enemy.enemy_id, index);
+        self.enemies.push(enemy);
+    }
+
+    pub(super) fn rebuild_enemy_indices(&mut self) {
+        self.enemy_indices.clear();
+        for (index, enemy) in self.enemies.iter().enumerate() {
+            self.enemy_indices.insert(enemy.enemy_id, index);
+        }
+    }
+
+    pub(super) fn first_live_enemy_name(&self) -> Option<String> {
+        self.enemies
+            .iter()
+            .find(|enemy| enemy.hp > 0)
+            .map(|enemy| enemy.name.clone())
     }
 }
 

@@ -1,4 +1,3 @@
-use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -88,11 +87,11 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
 
     tick_combatant_timed(leader_id, leader_combatant, next_counter, out);
 
-    let mut occupied_tiles = BTreeSet::new();
-    occupied_tiles.insert(tile_index(leader_entity.x, leader_entity.y, map.width));
+    let mut occupied_tiles = Vec::with_capacity(world.combat.enemies.len() + 1);
+    occupied_tiles.push(tile_index(leader_entity.x, leader_entity.y, map.width));
     for enemy in &world.combat.enemies {
         if let Some(entity) = world.entity(enemy.entity_id) {
-            occupied_tiles.insert(tile_index(entity.x, entity.y, map.width));
+            occupied_tiles.push(tile_index(entity.x, entity.y, map.width));
         }
     }
 
@@ -129,7 +128,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
                 leader_entity.x,
                 leader_entity.y,
                 map,
-                &occupied_tiles,
+                occupied_tiles.as_slice(),
             );
             next_x = mx;
             next_y = my;
@@ -140,8 +139,11 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
                 x: next_x,
                 y: next_y,
             }));
-            occupied_tiles.remove(&tile_index(enemy_entity.x, enemy_entity.y, map.width));
-            occupied_tiles.insert(tile_index(next_x, next_y, map.width));
+            let old_tile = tile_index(enemy_entity.x, enemy_entity.y, map.width);
+            if let Some(index) = occupied_tiles.iter().position(|tile| *tile == old_tile) {
+                occupied_tiles.swap_remove(index);
+            }
+            occupied_tiles.push(tile_index(next_x, next_y, map.width));
         }
 
         if !enemy_stunned
@@ -525,7 +527,7 @@ fn next_enemy_position_towards(
     target_x: usize,
     target_y: usize,
     map: &Map,
-    occupied: &BTreeSet<usize>,
+    occupied: &[usize],
 ) -> (usize, usize) {
     let dx: i32 = match target_x.cmp(&enemy_x) {
         core::cmp::Ordering::Greater => 1,

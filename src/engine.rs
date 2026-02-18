@@ -56,8 +56,8 @@ impl GameEngine {
         self.pending_inputs.push_back(GameInput::KeyUp(key));
     }
 
-    pub fn tick(&mut self) {
-        self.update();
+    pub fn tick(&mut self) -> bool {
+        self.update()
     }
 
     pub fn render_state(&self) -> &RenderState {
@@ -68,7 +68,8 @@ impl GameEngine {
         &self.sprites
     }
 
-    fn update(&mut self) {
+    fn update(&mut self) -> bool {
+        let mut needs_repaint = false;
         let mut initial_events = Vec::with_capacity(16);
         let mut pending = VecDeque::with_capacity(32);
         core::mem::swap(&mut pending, &mut self.pending_inputs);
@@ -78,23 +79,31 @@ impl GameEngine {
                 .resolve_input(input, &self.state, self.world.as_ref());
             self.apply_ui_events(ui_events, &mut initial_events);
         }
-        self.render_state
+        needs_repaint |= self
+            .render_state
             .apply_ui_patch(&self.ui, self.world.as_ref());
         self.pending_inputs = pending;
+
         if self.render_fx.tick() {
-            self.render_state.apply_tick(&self.render_fx);
+            needs_repaint |= self.render_state.apply_tick(&self.render_fx);
         }
+
         self.resolve_tick_game_events(&mut initial_events);
-        if let Err(e) = self.dispatch_game_events(initial_events) {
-            self.state = GameState::Error(format!("{e}"));
-            self.render_state.apply_state(
-                &self.state,
-                self.world.as_ref(),
-                &self.ui,
-                &self.data,
-                &self.render_fx,
-            );
+        match self.dispatch_game_events(initial_events) {
+            Ok(changed) => needs_repaint |= changed,
+            Err(e) => {
+                self.state = GameState::Error(format!("{e}"));
+                needs_repaint |= self.render_state.on_state_changed(
+                    &self.state,
+                    self.world.as_ref(),
+                    &self.ui,
+                    &self.data,
+                    &self.render_fx,
+                );
+            }
         }
+
+        needs_repaint
     }
 
     fn resolve_tick_game_events(&self, out: &mut Vec<GameEvent>) {
@@ -125,14 +134,14 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_with_handlers(&mut self, event: GameEvent) -> Result<bool> {
+    fn apply_with_handlers(&mut self, event: &GameEvent) -> Result<bool> {
         let kind = event.kind();
 
         if self.state.subscribes(kind) {
-            self.state.apply_event(&event)?;
+            self.state.apply_event(event)?;
         }
 
-        self.world.apply_event(&event);
+        self.world.apply_event(event);
 
         ensure!(
             !self.state.requires_world() || self.world.as_ref().is_some(),
@@ -143,23 +152,23 @@ impl GameEngine {
         if let Some(world) = self.world.as_mut()
             && world.subscribes(kind)
         {
-            world.apply_event(&self.data, &event)?;
+            world.apply_event(&self.data, event)?;
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(kind) {
-            self.ui.apply_game_event(&event)?;
+            self.ui.apply_game_event(event)?;
         }
 
         Ok(self
             .render_fx
-            .apply_event(&self.state, self.world.as_ref(), &event))
+            .apply_event(&self.state, self.world.as_ref(), event))
     }
 
-    fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<()> {
+    fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<bool> {
+        let mut needs_repaint = false;
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
         let mut derived = Vec::with_capacity(8);
-        let mut render_fx_changed = false;
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
@@ -175,23 +184,36 @@ impl GameEngine {
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
-            render_fx_changed |= self.apply_with_handlers(event)?;
+            let previous_state = self.state.stamp();
+            let render_fx_changed = self.apply_with_handlers(&event)?;
 
-            queue.extend(derived.drain(..));
-            queue.extend(effect_events);
-        }
+            if self.state.stamp() != previous_state {
+                needs_repaint |= self.render_state.on_state_changed(
+                    &self.state,
+                    self.world.as_ref(),
+                    &self.ui,
+                    &self.data,
+                    &self.render_fx,
+                );
+            }
 
-        if processed > 0 {
-            self.render_state.apply_state(
+            needs_repaint |= self.render_state.apply_game_event_patch(
+                &event,
                 &self.state,
                 self.world.as_ref(),
                 &self.ui,
                 &self.data,
                 &self.render_fx,
             );
-        } else if render_fx_changed {
-            self.render_state.apply_tick(&self.render_fx);
+
+            if render_fx_changed {
+                needs_repaint |= self.render_state.apply_tick(&self.render_fx);
+            }
+
+            queue.extend(derived.drain(..));
+            queue.extend(effect_events);
         }
-        Ok(())
+
+        Ok(needs_repaint)
     }
 }

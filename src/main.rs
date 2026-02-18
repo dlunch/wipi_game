@@ -55,8 +55,9 @@ impl Default for RpgGame {
 
 impl RpgGame {
     fn tick(engine: &Rc<RefCell<GameEngine>>) {
-        engine.borrow_mut().tick();
-        repaint(0, 0, 0, 240, 320);
+        if engine.borrow_mut().tick() {
+            repaint(0, 0, 0, 240, 320);
+        }
     }
 
     pub fn new() -> Self {

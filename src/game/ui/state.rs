@@ -214,7 +214,7 @@ impl MenuState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     NewGame,
     Continue,

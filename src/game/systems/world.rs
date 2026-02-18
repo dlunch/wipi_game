@@ -191,10 +191,14 @@ fn resolve_recover_mp(world: &WorldState, entity_id: u32, amount: i32, out: &mut
         return;
     };
     let mut stats = combatant.stats;
+    let previous_mp = stats.current_mp;
     if amount > 0 {
         stats.current_mp = (stats.current_mp + amount).min(stats.max_mp);
     } else if amount < 0 {
         stats.current_mp = (stats.current_mp + amount).max(0);
+    }
+    if stats.current_mp == previous_mp {
+        return;
     }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentMp {
         entity_id,
@@ -210,7 +214,11 @@ fn resolve_heal(world: &WorldState, entity_id: u32, amount: i32, out: &mut Vec<G
         return;
     };
     let mut stats = combatant.stats;
+    let previous_hp = stats.current_hp;
     stats.current_hp = (stats.current_hp + amount).min(stats.max_hp);
+    if stats.current_hp == previous_hp {
+        return;
+    }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
         current_hp: stats.current_hp,
@@ -268,7 +276,11 @@ fn resolve_take_damage(
         return;
     };
     let mut stats = combatant.stats;
+    let previous_hp = stats.current_hp;
     stats.current_hp = (stats.current_hp - amount).max(0);
+    if stats.current_hp == previous_hp {
+        return;
+    }
     out.push(GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
         entity_id,
         current_hp: stats.current_hp,
