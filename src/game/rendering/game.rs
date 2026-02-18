@@ -16,7 +16,11 @@ use super::inventory::{draw_inventory, draw_stats};
 use super::menu::{draw_menu, draw_pause_menu};
 use super::quest::draw_quest_log;
 use super::render_fx::RenderFxState;
-use super::render_types::*;
+use super::render_state::{
+    EnemyRender, ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender,
+    StatsRender, StatusRender, TrackedQuestRender, interaction_hint_from_world,
+    scroll_for_selection, skill_cooldowns_from_timed,
+};
 use super::renderer::{
     COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text, fill_rect,
 };
@@ -56,16 +60,17 @@ impl RenderState {
                 selected: ui.menu.selected,
             },
             GameState::Explore => {
-                match world.and_then(|world| build_explore_render(world, ui, data, render_fx)) {
+                match world.and_then(|world| ExploreRender::from_world(world, ui, data, render_fx))
+                {
                     Some(explore) => RenderState::Explore(explore),
                     None => RenderState::NoSession,
                 }
             }
             GameState::Inventory => match world {
-                Some(world) => RenderState::Inventory(build_inventory_render(world, ui, data)),
+                Some(world) => RenderState::Inventory(InventoryRender::from_world(world, ui, data)),
                 None => RenderState::NoSession,
             },
-            GameState::Stats => match world.and_then(build_stats_render) {
+            GameState::Stats => match world.and_then(StatsRender::from_world) {
                 Some(stats) => RenderState::Stats(stats),
                 None => RenderState::NoSession,
             },
@@ -76,8 +81,9 @@ impl RenderState {
                         .get(dialog_state.current_line)
                         .map(|line| line.text.clone());
                     RenderState::Dialog {
-                        explore: world
-                            .and_then(|world| build_explore_render(world, ui, data, render_fx)),
+                        explore: world.and_then(|world| {
+                            ExploreRender::from_world(world, ui, data, render_fx)
+                        }),
                         npc_name: dialog_state.npc_name.clone(),
                         lines: dialog_state
                             .lines
@@ -93,17 +99,18 @@ impl RenderState {
                 }
             }
             GameState::Shop => {
-                match world.and_then(|world| build_shop_render(world, ui, data, render_fx)) {
+                match world.and_then(|world| ShopRender::from_world(world, ui, data, render_fx)) {
                     Some(shop) => RenderState::Shop(shop),
                     None => RenderState::NoSession,
                 }
             }
             GameState::QuestLog => match world {
-                Some(world) => RenderState::QuestLog(build_quest_log_render(world, ui, data)),
+                Some(world) => RenderState::QuestLog(QuestLogRender::from_world(world, ui, data)),
                 None => RenderState::NoSession,
             },
             GameState::PauseMenu => RenderState::PauseMenu {
-                explore: world.and_then(|world| build_explore_render(world, ui, data, render_fx)),
+                explore: world
+                    .and_then(|world| ExploreRender::from_world(world, ui, data, render_fx)),
                 items: ui.pause_menu.state.items.clone(),
                 selected: ui.pause_menu.selected,
             },
@@ -162,7 +169,7 @@ impl RenderState {
                         | GameEvent::UseInventorySelected(_)
                 ) {
                     if let Some(world) = world {
-                        *inventory = build_inventory_render(world, ui, data);
+                        *inventory = InventoryRender::from_world(world, ui, data);
                     } else {
                         return;
                     }
@@ -237,7 +244,7 @@ impl RenderState {
                         | GameEvent::OpenShopState(_)
                 ) {
                     if let Some(world) = world
-                        && let Some(next_shop) = build_shop_render(world, ui, data, render_fx)
+                        && let Some(next_shop) = ShopRender::from_world(world, ui, data, render_fx)
                     {
                         *shop = next_shop;
                         true
@@ -257,7 +264,7 @@ impl RenderState {
                 }
                 if matches!(event, GameEvent::World(WorldEvent::AddQuestProgress(_))) {
                     if let Some(world) = world {
-                        *quest_log = build_quest_log_render(world, ui, data);
+                        *quest_log = QuestLogRender::from_world(world, ui, data);
                     } else {
                         return;
                     }
@@ -411,15 +418,15 @@ fn sync_stats_render(stats: &mut StatsRender, world: Option<&WorldState>) -> boo
         return false;
     };
 
-    stats.hp = as_u32(combatant.stats.current_hp);
-    stats.max_hp = as_u32(combatant.stats.max_hp);
-    stats.mp = as_u32(combatant.stats.current_mp);
-    stats.max_mp = as_u32(combatant.stats.max_mp);
-    stats.level = as_u32(leader.stat.level);
-    stats.atk = as_u32(combatant.stats.atk);
-    stats.def = as_u32(combatant.stats.def);
-    stats.exp = as_u32(leader.stat.exp);
-    stats.gold = as_u32(world.gold_amount(leader_id));
+    stats.hp = combatant.stats.current_hp as u32;
+    stats.max_hp = combatant.stats.max_hp as u32;
+    stats.mp = combatant.stats.current_mp as u32;
+    stats.max_mp = combatant.stats.max_mp as u32;
+    stats.level = leader.stat.level as u32;
+    stats.atk = combatant.stats.atk as u32;
+    stats.def = combatant.stats.def as u32;
+    stats.exp = leader.stat.exp as u32;
+    stats.gold = world.gold_amount(leader_id) as u32;
     true
 }
 
@@ -443,12 +450,12 @@ fn sync_explore_runtime(
     explore.player_y = leader.y;
     explore.player_facing = leader.facing;
     explore.player_moving = world.movement.pressed_direction.is_some();
-    explore.hp = as_u32(leader_combatant.stats.current_hp);
-    explore.max_hp = as_u32(leader_combatant.stats.max_hp);
-    explore.mp = as_u32(leader_combatant.stats.current_mp);
-    explore.max_mp = as_u32(leader_combatant.stats.max_mp);
-    explore.level = as_u32(leader.stat.level);
-    explore.player_status = timed_to_status(&leader_combatant.timed);
+    explore.hp = leader_combatant.stats.current_hp as u32;
+    explore.max_hp = leader_combatant.stats.max_hp as u32;
+    explore.mp = leader_combatant.stats.current_mp as u32;
+    explore.max_mp = leader_combatant.stats.max_mp as u32;
+    explore.level = leader.stat.level as u32;
+    explore.player_status = StatusRender::from_timed(&leader_combatant.timed);
     explore.skill_cooldowns = skill_cooldowns_from_timed(&leader_combatant.timed);
     explore.key_actions = ui.explore.key_actions;
     explore.player_hit_flash = render_fx.player_hit_flash();
@@ -545,7 +552,7 @@ fn apply_event_to_explore_render(
             requires_hint_refresh = true;
         }
         GameEvent::Transition(crate::game::TransitionEvent::MapChanged) => {
-            if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+            if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
                 *explore = next;
                 return true;
             }
@@ -586,7 +593,7 @@ fn apply_event_to_explore_render(
                 enemy_changed = before != explore.enemies.len();
             }
             CombatEvent::SetEnemies(_) => {
-                if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+                if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
                     *explore = next;
                     return true;
                 }
@@ -612,7 +619,7 @@ fn apply_event_to_explore_render(
                     .iter()
                     .filter(|quest| !quest.rewarded && !quest.completed)
                     .count();
-                explore.tracked_quest = build_tracked_quest_render(
+                explore.tracked_quest = TrackedQuestRender::from_world(
                     world,
                     data,
                     ui.quest_log.tracked_quest_id.as_deref(),
@@ -628,7 +635,7 @@ fn apply_event_to_explore_render(
                 }
             }
             WorldEvent::SetEntityMap { .. } | WorldEvent::SetWorldMap(_) => {
-                if let Some(next) = build_explore_render(world, ui, data, render_fx) {
+                if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
                     *explore = next;
                     return true;
                 }
@@ -638,7 +645,7 @@ fn apply_event_to_explore_render(
                 if Some(*entity_id) == leader_id
                     && let Some(leader) = world.leader_entity()
                 {
-                    explore.level = as_u32(leader.stat.level);
+                    explore.level = leader.stat.level as u32;
                 }
             }
             WorldEvent::RemoveEntity(entity_id) => {
@@ -663,7 +670,7 @@ fn apply_event_to_explore_render(
     }
 
     if requires_hint_refresh {
-        explore.interaction_hint = build_interaction_hint(world, data);
+        explore.interaction_hint = interaction_hint_from_world(world, data);
     }
     if enemy_changed {
         refresh_first_live_enemy_name(explore);

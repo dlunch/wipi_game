@@ -177,7 +177,10 @@ fn resolve_keyup(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        DialogUiState, ExploreUiState, InputKey, InventoryUiState, MenuUiState, PauseMenuUiState,
+        UiEvent,
+    };
 
     #[test]
     fn explore_ui_maps_ok_to_npc_interact_with_fallback_action() {

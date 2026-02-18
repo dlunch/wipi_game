@@ -24,7 +24,12 @@ pub(crate) fn parse_usize(s: &str, field: &str, line: &str) -> Result<usize> {
 mod tests {
     use alloc::vec;
 
-    use super::*;
+    use anyhow::Result;
+
+    use super::{
+        parse_dialogs, parse_enemies, parse_items, parse_maps, parse_newgame, parse_npcs,
+        parse_quests, parse_shops,
+    };
 
     use crate::data::types::{DialogAction, DialogCondition, ItemKind, NpcType, QuestType, Tile};
 

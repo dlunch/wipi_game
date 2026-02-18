@@ -350,9 +350,11 @@ impl Skill {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::String;
     use alloc::vec;
+    use alloc::vec::Vec;
 
-    use super::*;
+    use super::{Item, ItemKind, Map, Tile};
 
     fn make_item(kind: ItemKind, p1: i32, p2: i32) -> Item {
         Item {
