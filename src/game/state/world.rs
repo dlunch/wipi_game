@@ -9,7 +9,8 @@ use crate::game::state::{
     CombatState, EntityId, EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
 };
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, MovementState, WorldEvent,
+    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameEventKind, GameEventSubscriber,
+    MovementState, WorldEvent,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -331,13 +332,21 @@ impl WorldState {
                 self.entities.remove(*entity_id);
                 self.rebuild_enemy_occupancy();
             }
-            CombatEvent::SetEnemies(_)
+            CombatEvent::SpawnEntity {
+                kind: CombatSpawnKind::Enemy { .. },
+                ..
+            }
+            | CombatEvent::ClearEnemies
             | CombatEvent::SetCombatantStats { .. }
             | CombatEvent::SetCombatantTimed { .. } => {
                 self.rebuild_enemy_occupancy();
             }
             CombatEvent::SetActive(_)
-            | CombatEvent::SetAllies(_)
+            | CombatEvent::ClearAllies
+            | CombatEvent::SpawnEntity {
+                kind: CombatSpawnKind::Ally,
+                ..
+            }
             | CombatEvent::SetUpdateCounter(_)
             | CombatEvent::SetRespawnTimer(_)
             | CombatEvent::GrantKillReward { .. }

@@ -4,16 +4,20 @@ use alloc::vec::Vec;
 
 use crate::data::Direction;
 use crate::game::state::{
-    AllyCombatantState, CombatStatsSnapshot, EnemyCombatantState, EntityId, EntityStat,
-    EntityState, ItemStack, LoadoutState, PartyState, TimedKind,
+    CombatStatsSnapshot, EntityId, EntityStat, EntityState, ItemStack, LoadoutState, PartyState,
+    TimedKind,
 };
 
 #[derive(Clone)]
 #[allow(dead_code)]
 pub enum CombatEvent {
     SetActive(bool),
-    SetAllies(Vec<AllyCombatantState>),
-    SetEnemies(Vec<EnemyCombatantState>),
+    ClearAllies,
+    ClearEnemies,
+    SpawnEntity {
+        entity_id: EntityId,
+        kind: CombatSpawnKind,
+    },
     RemoveEnemy(EntityId),
     MoveEnemy {
         entity_id: EntityId,
@@ -48,6 +52,12 @@ pub enum CombatEvent {
         entity_id: EntityId,
         amount: i32,
     },
+}
+
+#[derive(Clone)]
+pub enum CombatSpawnKind {
+    Ally,
+    Enemy { source_enemy_id: String },
 }
 
 pub enum GameEvent {

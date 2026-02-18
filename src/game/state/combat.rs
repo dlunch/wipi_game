@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use anyhow::Result;
 
 use crate::game::state::EntityId;
-use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
+use crate::game::{CombatEvent, CombatSpawnKind, GameEvent, GameEventKind, GameEventSubscriber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CombatStatsSnapshot {
@@ -129,12 +129,37 @@ impl CombatState {
             CombatEvent::SetActive(active) => {
                 self.active = *active;
             }
-            CombatEvent::SetAllies(allies) => {
-                self.allies = allies.clone();
+            CombatEvent::ClearAllies => {
+                self.allies.clear();
             }
-            CombatEvent::SetEnemies(enemies) => {
-                self.enemies = enemies.clone();
+            CombatEvent::ClearEnemies => {
+                self.enemies.clear();
             }
+            CombatEvent::SpawnEntity { entity_id, kind } => match kind {
+                CombatSpawnKind::Ally => {
+                    if self.allies.iter().all(|ally| ally.entity_id != *entity_id) {
+                        self.allies.push(AllyCombatantState {
+                            entity_id: *entity_id,
+                            combatant: CombatantState::default(),
+                        });
+                    }
+                }
+                CombatSpawnKind::Enemy { source_enemy_id } => {
+                    if let Some(enemy) = self
+                        .enemies
+                        .iter_mut()
+                        .find(|enemy| enemy.entity_id == *entity_id)
+                    {
+                        enemy.source_enemy_id = source_enemy_id.clone();
+                    } else {
+                        self.enemies.push(EnemyCombatantState {
+                            entity_id: *entity_id,
+                            source_enemy_id: source_enemy_id.clone(),
+                            combatant: CombatantState::default(),
+                        });
+                    }
+                }
+            },
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.enemies.retain(|enemy| enemy.entity_id != *entity_id);
             }

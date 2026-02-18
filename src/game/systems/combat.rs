@@ -6,12 +6,12 @@ use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::state::{
-    AllyCombatantState, CombatStatsSnapshot, CombatantState, EnemyCombatantState, EntityKind,
-    EntityStat, EntityState, TimedKind, TimedState,
+    CombatStatsSnapshot, CombatantState, EntityKind, EntityStat, EntityState, TimedKind,
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
+    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent,
+    WorldState,
 };
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -426,19 +426,28 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
     else {
         return;
     };
-    out.push(GameEvent::Combat(CombatEvent::SetAllies(vec![
-        AllyCombatantState {
-            entity_id: leader_id,
-            combatant: CombatantState {
-                stats: leader_stats,
-                timed: world
-                    .combat
-                    .combatant(leader_id)
-                    .map(|combatant| combatant.timed.clone())
-                    .unwrap_or_default(),
-            },
-        },
-    ])));
+    out.push(GameEvent::Combat(CombatEvent::ClearAllies));
+    out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
+        entity_id: leader_id,
+        kind: CombatSpawnKind::Ally,
+    }));
+    out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+        entity_id: leader_id,
+        stats: leader_stats,
+    }));
+    if let Some(leader_timed) = world
+        .combat
+        .combatant(leader_id)
+        .map(|combatant| combatant.timed.clone())
+    {
+        for effect in leader_timed.effects {
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+                entity_id: leader_id,
+                kind: effect.kind,
+                time_left: effect.time_left,
+            }));
+        }
+    }
 
     let enemy_templates: Vec<&Enemy> = map
         .encounters
@@ -446,14 +455,14 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
         .filter_map(|(enemy_id, _)| data.find_enemy(enemy_id))
         .collect();
     if enemy_templates.is_empty() || map.peaceful {
-        out.push(GameEvent::Combat(CombatEvent::SetEnemies(Vec::new())));
+        out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
         out.push(GameEvent::Combat(CombatEvent::SetActive(!map.peaceful)));
         out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
         out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));
         return;
     }
 
-    let mut enemies = Vec::new();
+    out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
     let mut next_entity_id = world.entities.next_entity_id.max(1);
     let mut spawn_index = 0usize;
     for y in 0..map.height {
@@ -487,25 +496,26 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
                 loadout: Default::default(),
             };
             out.push(GameEvent::World(WorldEvent::UpsertEntity(enemy_entity)));
-            enemies.push(EnemyCombatantState {
+            out.push(GameEvent::Combat(CombatEvent::SpawnEntity {
                 entity_id,
-                source_enemy_id: enemy_data.id.clone(),
-                combatant: CombatantState {
-                    stats: CombatStatsSnapshot {
-                        max_hp: enemy_data.hp,
-                        current_hp: enemy_data.hp,
-                        max_mp: 0,
-                        current_mp: 0,
-                        atk: enemy_data.atk,
-                        def: enemy_data.def,
-                    },
-                    timed: TimedState::default(),
+                kind: CombatSpawnKind::Enemy {
+                    source_enemy_id: enemy_data.id.clone(),
                 },
-            });
+            }));
+            out.push(GameEvent::Combat(CombatEvent::SetCombatantStats {
+                entity_id,
+                stats: CombatStatsSnapshot {
+                    max_hp: enemy_data.hp,
+                    current_hp: enemy_data.hp,
+                    max_mp: 0,
+                    current_mp: 0,
+                    atk: enemy_data.atk,
+                    def: enemy_data.def,
+                },
+            }));
         }
     }
 
-    out.push(GameEvent::Combat(CombatEvent::SetEnemies(enemies)));
     out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
     out.push(GameEvent::Combat(CombatEvent::SetUpdateCounter(0)));

@@ -7,7 +7,8 @@ use wipi::framebuffer::Framebuffer;
 use crate::game::state::TimedKind;
 use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent, WorldState,
+    CombatEvent, CombatSpawnKind, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent,
+    WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -592,13 +593,21 @@ fn apply_event_to_explore_render(
                 explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
                 enemy_changed = before != explore.enemies.len();
             }
-            CombatEvent::SetEnemies(_) => {
-                if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
-                    *explore = next;
-                    return true;
-                }
-                return false;
+            CombatEvent::ClearEnemies => {
+                explore.enemies.clear();
+                enemy_changed = true;
             }
+            CombatEvent::SpawnEntity {
+                entity_id,
+                kind: CombatSpawnKind::Enemy { .. },
+            } => {
+                upsert_enemy_render(explore, world, data, render_fx, *entity_id);
+                enemy_changed = true;
+            }
+            CombatEvent::SpawnEntity {
+                kind: CombatSpawnKind::Ally,
+                ..
+            } => {}
 
             _ => {}
         },
