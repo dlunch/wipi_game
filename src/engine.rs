@@ -125,7 +125,7 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_with_handlers(&mut self, event: GameEvent) -> Result<()> {
+    fn apply_with_handlers(&mut self, event: GameEvent) -> Result<bool> {
         let kind = event.kind();
 
         if self.state.subscribes(kind) {
@@ -150,27 +150,16 @@ impl GameEngine {
             self.ui.apply_game_event(&event)?;
         }
 
-        if self
+        Ok(self
             .render_fx
-            .apply_event(&self.state, self.world.as_ref(), &event)
-        {
-            self.render_state.apply_tick(&self.render_fx);
-        }
-        self.render_state.apply_game_event(
-            &self.state,
-            self.world.as_ref(),
-            &self.ui,
-            &self.data,
-            &event,
-            &self.render_fx,
-        );
-        Ok(())
+            .apply_event(&self.state, self.world.as_ref(), &event))
     }
 
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<()> {
         let mut queue: VecDeque<GameEvent> = initial_events.into();
         let mut processed = 0usize;
         let mut derived = Vec::with_capacity(8);
+        let mut render_fx_changed = false;
 
         while let Some(event) = queue.pop_front() {
             processed += 1;
@@ -186,10 +175,22 @@ impl GameEngine {
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
-            self.apply_with_handlers(event)?;
+            render_fx_changed |= self.apply_with_handlers(event)?;
 
             queue.extend(derived.drain(..));
             queue.extend(effect_events);
+        }
+
+        if processed > 0 {
+            self.render_state.apply_state(
+                &self.state,
+                self.world.as_ref(),
+                &self.ui,
+                &self.data,
+                &self.render_fx,
+            );
+        } else if render_fx_changed {
+            self.render_state.apply_tick(&self.render_fx);
         }
         Ok(())
     }

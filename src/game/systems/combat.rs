@@ -1,3 +1,4 @@
+use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -87,11 +88,11 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
 
     tick_combatant_timed(leader_id, leader_combatant, next_counter, out);
 
-    let mut occupied_positions = Vec::with_capacity(world.combat.enemies.len() + 1);
-    occupied_positions.push((leader_entity.x, leader_entity.y));
+    let mut occupied_tiles = BTreeSet::new();
+    occupied_tiles.insert(tile_index(leader_entity.x, leader_entity.y, map.width));
     for enemy in &world.combat.enemies {
         if let Some(entity) = world.entity(enemy.entity_id) {
-            occupied_positions.push((entity.x, entity.y));
+            occupied_tiles.insert(tile_index(entity.x, entity.y, map.width));
         }
     }
 
@@ -128,7 +129,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
                 leader_entity.x,
                 leader_entity.y,
                 map,
-                occupied_positions.as_slice(),
+                &occupied_tiles,
             );
             next_x = mx;
             next_y = my;
@@ -139,13 +140,8 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) {
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(slot) = occupied_positions
-                .iter_mut()
-                .find(|(x, y)| *x == enemy_entity.x && *y == enemy_entity.y)
-            {
-                slot.0 = next_x;
-                slot.1 = next_y;
-            }
+            occupied_tiles.remove(&tile_index(enemy_entity.x, enemy_entity.y, map.width));
+            occupied_tiles.insert(tile_index(next_x, next_y, map.width));
         }
 
         if !enemy_stunned
@@ -529,7 +525,7 @@ fn next_enemy_position_towards(
     target_x: usize,
     target_y: usize,
     map: &Map,
-    occupied: &[(usize, usize)],
+    occupied: &BTreeSet<usize>,
 ) -> (usize, usize) {
     let dx: i32 = match target_x.cmp(&enemy_x) {
         core::cmp::Ordering::Greater => 1,
@@ -545,7 +541,7 @@ fn next_enemy_position_towards(
     if dx != 0 {
         let nx = (enemy_x as i32 + dx).max(0) as usize;
         if map.get_tile(nx, enemy_y).is_passable()
-            && !occupied.iter().any(|(x, y)| *x == nx && *y == enemy_y)
+            && !occupied.contains(&tile_index(nx, enemy_y, map.width))
         {
             return (nx, enemy_y);
         }
@@ -553,12 +549,16 @@ fn next_enemy_position_towards(
     if dy != 0 {
         let ny = (enemy_y as i32 + dy).max(0) as usize;
         if map.get_tile(enemy_x, ny).is_passable()
-            && !occupied.iter().any(|(x, y)| *x == enemy_x && *y == ny)
+            && !occupied.contains(&tile_index(enemy_x, ny, map.width))
         {
             return (enemy_x, ny);
         }
     }
     (enemy_x, enemy_y)
+}
+
+fn tile_index(x: usize, y: usize, width: usize) -> usize {
+    y * width + x
 }
 
 fn enemy_distance(x: usize, y: usize, px: usize, py: usize) -> usize {

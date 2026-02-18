@@ -27,6 +27,7 @@ use super::renderer::{
 use super::shop::draw_shop;
 
 impl RenderState {
+    #[allow(dead_code)]
     fn matches_state(&self, state: &GameState) -> bool {
         matches!(
             (self, state),
@@ -119,6 +120,7 @@ impl RenderState {
         };
     }
 
+    #[allow(dead_code)]
     pub fn apply_game_event(
         &mut self,
         state: &GameState,
@@ -406,6 +408,7 @@ impl RenderState {
     }
 }
 
+#[allow(dead_code)]
 fn sync_stats_render(stats: &mut StatsRender, world: Option<&WorldState>) -> bool {
     let Some(world) = world else {
         return false;
@@ -432,6 +435,7 @@ fn sync_stats_render(stats: &mut StatsRender, world: Option<&WorldState>) -> boo
     true
 }
 
+#[allow(dead_code)]
 fn sync_explore_runtime(
     explore: &mut ExploreRender,
     world: &WorldState,
@@ -473,6 +477,7 @@ fn sync_explore_runtime(
     true
 }
 
+#[allow(dead_code)]
 fn enemy_render_from_world(
     world: &WorldState,
     data: &Rc<GameData>,
@@ -502,6 +507,7 @@ fn enemy_render_from_world(
     })
 }
 
+#[allow(dead_code)]
 fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
     explore.first_live_enemy_name = explore
         .enemies
@@ -510,6 +516,7 @@ fn refresh_first_live_enemy_name(explore: &mut ExploreRender) {
         .map(|enemy| enemy.name.clone());
 }
 
+#[allow(dead_code)]
 fn upsert_enemy_render(
     explore: &mut ExploreRender,
     world: &WorldState,
@@ -531,6 +538,7 @@ fn upsert_enemy_render(
     }
 }
 
+#[allow(dead_code)]
 fn apply_event_to_explore_render(
     explore: &mut ExploreRender,
     world: Option<&WorldState>,
@@ -713,6 +721,7 @@ fn apply_event_to_explore_render(
     true
 }
 
+#[allow(dead_code)]
 fn is_quest_world_event(event: &GameEvent) -> bool {
     matches!(
         event,

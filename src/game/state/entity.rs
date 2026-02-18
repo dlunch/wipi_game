@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -110,35 +111,82 @@ impl EntityState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EntityStore {
-    pub list: Vec<EntityState>,
+    list: Vec<EntityState>,
+    index_by_id: BTreeMap<EntityId, usize>,
     pub next_entity_id: EntityId,
 }
 
 impl EntityStore {
+    pub fn new() -> Self {
+        Self {
+            list: Vec::new(),
+            index_by_id: BTreeMap::new(),
+            next_entity_id: 1,
+        }
+    }
+
+    pub fn from_list(list: Vec<EntityState>, next_entity_id: EntityId) -> Self {
+        let mut index_by_id = BTreeMap::new();
+        for (index, entity) in list.iter().enumerate() {
+            index_by_id.insert(entity.id, index);
+        }
+        Self {
+            list,
+            index_by_id,
+            next_entity_id: next_entity_id.max(1),
+        }
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'_, EntityState> {
+        self.list.iter()
+    }
+
     pub fn upsert(&mut self, entity: EntityState) {
         let next = entity.id.wrapping_add(1).max(1);
         if next > self.next_entity_id {
             self.next_entity_id = next;
         }
-        if let Some(existing) = self.list.iter_mut().find(|e| e.id == entity.id) {
-            *existing = entity;
+
+        if let Some(index) = self.index_by_id.get(&entity.id).copied() {
+            self.list[index] = entity;
         } else {
             self.list.push(entity);
+            let index = self.list.len() - 1;
+            let entity_id = self.list[index].id;
+            self.index_by_id.insert(entity_id, index);
         }
     }
 
     pub fn get(&self, entity_id: EntityId) -> Option<&EntityState> {
-        self.list.iter().find(|entity| entity.id == entity_id)
+        let index = self.index_by_id.get(&entity_id).copied()?;
+        self.list.get(index)
     }
 
     pub fn get_mut(&mut self, entity_id: EntityId) -> Option<&mut EntityState> {
-        self.list.iter_mut().find(|entity| entity.id == entity_id)
+        let index = self.index_by_id.get(&entity_id).copied()?;
+        self.list.get_mut(index)
     }
 
     pub fn remove(&mut self, entity_id: EntityId) {
-        self.list.retain(|entity| entity.id != entity_id);
+        let Some(index) = self.index_by_id.remove(&entity_id) else {
+            return;
+        };
+
+        let last_index = self.list.len() - 1;
+        self.list.swap_remove(index);
+        if index != last_index
+            && let Some(moved) = self.list.get(index)
+        {
+            self.index_by_id.insert(moved.id, index);
+        }
+    }
+}
+
+impl Default for EntityStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

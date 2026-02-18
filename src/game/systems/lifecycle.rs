@@ -222,7 +222,7 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
             *companion_id,
         )));
     }
-    for entity in &world.entities.list {
+    for entity in world.entities.iter() {
         emit_entity_snapshot(entity, out);
     }
     for quest in &world.quests {

@@ -22,6 +22,7 @@ pub struct OccupancyState {
     pub height: usize,
     pub npc_tiles: Vec<bool>,
     pub enemy_tiles: Vec<bool>,
+    pub enemy_tile_counts: Vec<u16>,
 }
 
 #[derive(Clone, Default)]
@@ -38,10 +39,7 @@ pub struct WorldState {
 impl WorldState {
     pub fn empty() -> Self {
         Self {
-            entities: EntityStore {
-                list: Vec::new(),
-                next_entity_id: 1,
-            },
+            entities: EntityStore::new(),
             party: PartyState::default(),
             movement: MovementState::default(),
             combat: CombatState::default(),
@@ -303,7 +301,7 @@ impl WorldState {
                 self.sync_combat_entry_for_entity(data, *entity_id);
                 self.sync_allies_with_party();
                 let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
-                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
+                self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
             EntityEvent::RemoveEntity(entity_id) => {
                 let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id);
@@ -318,7 +316,7 @@ impl WorldState {
                 self.combat
                     .enemies
                     .retain(|enemy| enemy.entity_id != *entity_id);
-                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, None);
+                self.apply_enemy_occupancy_delta(previous_tile_index, None);
             }
             EntityEvent::SetEntityTransform {
                 entity_id,
@@ -341,11 +339,7 @@ impl WorldState {
                 }
                 if map_id.is_some() || position.is_some() {
                     let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
-                    self.apply_enemy_occupancy_delta(
-                        *entity_id,
-                        previous_tile_index,
-                        next_tile_index,
-                    );
+                    self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
                 }
             }
             EntityEvent::SetEntityLevel { entity_id, level } => {
@@ -468,18 +462,18 @@ impl WorldState {
                     enemy_entity.y = *y;
                 }
                 let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
-                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
+                self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
             CombatEvent::RemoveEnemy(entity_id) => {
                 self.entities.remove(*entity_id);
-                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, None);
+                self.apply_enemy_occupancy_delta(previous_tile_index, None);
             }
             CombatEvent::ClearEnemies => {
                 self.clear_enemy_occupancy();
             }
             CombatEvent::SetCombatantCurrentHp { entity_id, .. } => {
                 let next_tile_index = self.enemy_tile_index_for_entity(*entity_id);
-                self.apply_enemy_occupancy_delta(*entity_id, previous_tile_index, next_tile_index);
+                self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
             CombatEvent::SetActive(_)
             | CombatEvent::ClearAllies
@@ -502,6 +496,9 @@ impl WorldState {
     fn clear_enemy_occupancy(&mut self) {
         for occupied in &mut self.occupancy.enemy_tiles {
             *occupied = false;
+        }
+        for count in &mut self.occupancy.enemy_tile_counts {
+            *count = 0;
         }
     }
 
@@ -527,38 +524,8 @@ impl WorldState {
         Some(entity.y * self.occupancy.width + entity.x)
     }
 
-    fn has_other_alive_enemy_on_tile(
-        &self,
-        tile_index: usize,
-        excluded_entity_id: EntityId,
-    ) -> bool {
-        if self.occupancy.width == 0 || self.occupancy.height == 0 {
-            return false;
-        }
-        for enemy in &self.combat.enemies {
-            if enemy.entity_id == excluded_entity_id || enemy.combatant.stats.current_hp <= 0 {
-                continue;
-            }
-            let Some(entity) = self.entities.get(enemy.entity_id) else {
-                continue;
-            };
-            if entity.map_id != self.occupancy.map_id {
-                continue;
-            }
-            if entity.x >= self.occupancy.width || entity.y >= self.occupancy.height {
-                continue;
-            }
-            let index = entity.y * self.occupancy.width + entity.x;
-            if index == tile_index {
-                return true;
-            }
-        }
-        false
-    }
-
     fn apply_enemy_occupancy_delta(
         &mut self,
-        entity_id: EntityId,
         previous_tile_index: Option<usize>,
         next_tile_index: Option<usize>,
     ) {
@@ -568,14 +535,27 @@ impl WorldState {
 
         if let Some(previous_tile_index) = previous_tile_index
             && previous_tile_index < self.occupancy.enemy_tiles.len()
-            && !self.has_other_alive_enemy_on_tile(previous_tile_index, entity_id)
         {
-            self.occupancy.enemy_tiles[previous_tile_index] = false;
+            if let Some(count) = self
+                .occupancy
+                .enemy_tile_counts
+                .get_mut(previous_tile_index)
+            {
+                if *count > 0 {
+                    *count -= 1;
+                }
+                self.occupancy.enemy_tiles[previous_tile_index] = *count > 0;
+            } else {
+                self.occupancy.enemy_tiles[previous_tile_index] = false;
+            }
         }
 
         if let Some(next_tile_index) = next_tile_index
             && next_tile_index < self.occupancy.enemy_tiles.len()
         {
+            if let Some(count) = self.occupancy.enemy_tile_counts.get_mut(next_tile_index) {
+                *count = count.saturating_add(1);
+            }
             self.occupancy.enemy_tiles[next_tile_index] = true;
         }
     }
@@ -588,6 +568,7 @@ impl WorldState {
             let len = map.width * map.height;
             self.occupancy.npc_tiles = vec![false; len];
             self.occupancy.enemy_tiles = vec![false; len];
+            self.occupancy.enemy_tile_counts = vec![0; len];
 
             for (x, y, _) in &map.npcs {
                 if *x < map.width && *y < map.height {
@@ -615,7 +596,11 @@ impl WorldState {
                 continue;
             }
             if entity.x < self.occupancy.width && entity.y < self.occupancy.height {
-                self.occupancy.enemy_tiles[entity.y * self.occupancy.width + entity.x] = true;
+                let index = entity.y * self.occupancy.width + entity.x;
+                if let Some(count) = self.occupancy.enemy_tile_counts.get_mut(index) {
+                    *count = count.saturating_add(1);
+                    self.occupancy.enemy_tiles[index] = true;
+                }
             }
         }
     }
@@ -896,6 +881,7 @@ mod tests {
             height: 3,
             npc_tiles: vec![false; 9],
             enemy_tiles: vec![false; 9],
+            enemy_tile_counts: vec![0; 9],
         };
 
         world.entities.upsert(EntityState {

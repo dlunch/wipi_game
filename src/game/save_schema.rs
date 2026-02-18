@@ -29,7 +29,7 @@ pub fn serialize(world: &WorldState) -> String {
         ]),
     ];
 
-    for entity in &world.entities.list {
+    for entity in world.entities.iter() {
         lines.push(format_args_to_string(&[
             "ENTITY",
             &entity.id.to_string(),
@@ -311,10 +311,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
         .max(1);
 
     *world = WorldState {
-        entities: crate::game::EntityStore {
-            list: parsed_entities,
-            next_entity_id,
-        },
+        entities: crate::game::EntityStore::from_list(parsed_entities, next_entity_id),
         party: parsed_party,
         movement: Default::default(),
         combat: CombatState {
@@ -332,6 +329,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> bool {
             height: 0,
             npc_tiles: Vec::new(),
             enemy_tiles: Vec::new(),
+            enemy_tile_counts: Vec::new(),
         },
     };
 
