@@ -1,7 +1,6 @@
 use alloc::collections::VecDeque;
 use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -72,9 +71,7 @@ impl GameEngine {
     fn update(&mut self) -> bool {
         let mut needs_repaint = false;
         let mut initial_events = Vec::with_capacity(16);
-        let mut pending = VecDeque::with_capacity(32);
-        core::mem::swap(&mut pending, &mut self.pending_inputs);
-        while let Some(input) = pending.pop_front() {
+        while let Some(input) = self.pending_inputs.pop_front() {
             let ui_events = self
                 .ui
                 .resolve_input(input, &self.state, self.world.as_ref());
@@ -83,7 +80,6 @@ impl GameEngine {
         needs_repaint |= self
             .render_state
             .apply_ui_patch(&self.ui, self.world.as_ref());
-        self.pending_inputs = pending;
 
         self.render_fx.tick();
         needs_repaint |= self.render_state.apply_tick(&self.render_fx);
@@ -91,7 +87,22 @@ impl GameEngine {
         self.resolve_tick_game_events(&mut initial_events);
         match self.dispatch_game_events(initial_events) {
             Ok(changed) => needs_repaint |= changed,
-            Err(e) => needs_repaint |= self.apply_engine_error(format!("{e}")),
+            Err(e) => {
+                let error_event = GameEvent::Loading(LoadingEvent::Error(format!("{e}")));
+                if let Ok(render_fx_changed) = self.apply_with_handlers(&error_event) {
+                    needs_repaint |= self.render_state.apply_game_event_patch(
+                        &error_event,
+                        &self.state,
+                        self.world.as_ref(),
+                        &self.ui,
+                        &self.data,
+                        &self.render_fx,
+                    );
+                    if render_fx_changed {
+                        needs_repaint |= self.render_state.apply_tick(&self.render_fx);
+                    }
+                }
+            }
         }
 
         needs_repaint
@@ -115,28 +126,6 @@ impl GameEngine {
         for event in ui_events {
             self.ui.apply_ui_event(self.world.as_ref(), event, out);
         }
-    }
-
-    fn apply_engine_error(&mut self, error_message: String) -> bool {
-        let error_event = GameEvent::Loading(LoadingEvent::Error(error_message));
-        let render_fx_changed = match self.apply_with_handlers(&error_event) {
-            Ok(changed) => changed,
-            Err(_) => return false,
-        };
-
-        let mut needs_repaint = false;
-        needs_repaint |= self.render_state.apply_game_event_patch(
-            &error_event,
-            &self.state,
-            self.world.as_ref(),
-            &self.ui,
-            &self.data,
-            &self.render_fx,
-        );
-        if render_fx_changed {
-            needs_repaint |= self.render_state.apply_tick(&self.render_fx);
-        }
-        needs_repaint
     }
 
     fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {

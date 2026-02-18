@@ -37,7 +37,8 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> bool {
-        if self.apply_state_transition_event(event, state, world, ui, data, render_fx) {
+        if !self.matches_state_variant(state) {
+            *self = Self::from_state(state, world, ui, data, render_fx);
             return true;
         }
 
@@ -516,27 +517,6 @@ impl RenderState {
         }
     }
 
-    fn apply_state_transition_event(
-        &mut self,
-        event: &GameEvent,
-        state: &GameState,
-        world: Option<&WorldState>,
-        ui: &UiState,
-        data: &Rc<GameData>,
-        render_fx: &RenderFxState,
-    ) -> bool {
-        if !is_state_transition_event(event) {
-            return false;
-        }
-
-        if self.matches_state_variant(state) {
-            return false;
-        }
-
-        *self = Self::from_state(state, world, ui, data, render_fx);
-        true
-    }
-
     fn matches_state_variant(&self, state: &GameState) -> bool {
         match (self, state) {
             (RenderState::Loading { .. }, GameState::Loading(_))
@@ -554,19 +534,6 @@ impl RenderState {
             _ => false,
         }
     }
-}
-
-fn is_state_transition_event(event: &GameEvent) -> bool {
-    matches!(
-        event,
-        GameEvent::Loading(LoadingEvent::Advance(_))
-            | GameEvent::Loading(LoadingEvent::Loaded)
-            | GameEvent::Loading(LoadingEvent::Error(_))
-            | GameEvent::Transition(_)
-            | GameEvent::ApplyDialogTransition(_)
-            | GameEvent::OpenDialogState(_)
-            | GameEvent::OpenShopState(_)
-    )
 }
 
 fn patch_explore(
