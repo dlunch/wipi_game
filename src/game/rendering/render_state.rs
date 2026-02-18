@@ -284,7 +284,10 @@ impl ExploreRender {
             opened_treasures: world.opened_treasures.clone(),
             enemies,
             player_hit_flash: render_fx.player_hit_flash(),
-            skill_effects: Vec::new(),
+            skill_effects: render_fx
+                .skill_effect_iter()
+                .map(|(x, y, effect_type)| SkillEffectRender { x, y, effect_type })
+                .collect(),
             skill_cooldowns: skill_cooldowns_from_timed(&leader_combatant.timed),
             player_status: StatusRender::from_timed(&leader_combatant.timed),
             key_actions: ui.explore.key_actions,

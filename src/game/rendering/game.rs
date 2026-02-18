@@ -18,7 +18,7 @@ use super::quest::draw_quest_log;
 use super::render_fx::RenderFxState;
 use super::render_state::{
     EnemyRender, ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender,
-    StatsRender, StatusRender, TrackedQuestRender, interaction_hint_from_world,
+    SkillEffectRender, StatsRender, StatusRender, TrackedQuestRender, interaction_hint_from_world,
     scroll_for_selection, skill_cooldowns_from_timed,
 };
 use super::renderer::{
@@ -391,6 +391,10 @@ impl RenderState {
                 for enemy in &mut explore.enemies {
                     enemy.hit_flash = render_fx.enemy_hit_flash(enemy.enemy_id);
                 }
+                explore.skill_effects = render_fx
+                    .skill_effect_iter()
+                    .map(|(x, y, effect_type)| SkillEffectRender { x, y, effect_type })
+                    .collect();
                 explore.quest_notice_timer = render_fx.quest_notice_timer();
                 explore.anim_tick = render_fx.anim_tick();
             }
@@ -460,6 +464,10 @@ fn sync_explore_runtime(
     for enemy in &mut explore.enemies {
         enemy.hit_flash = render_fx.enemy_hit_flash(enemy.enemy_id);
     }
+    explore.skill_effects = render_fx
+        .skill_effect_iter()
+        .map(|(x, y, effect_type)| SkillEffectRender { x, y, effect_type })
+        .collect();
     explore.quest_notice_timer = render_fx.quest_notice_timer();
     explore.anim_tick = render_fx.anim_tick();
     true
