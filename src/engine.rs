@@ -81,8 +81,11 @@ impl GameEngine {
 
         needs_repaint |= self.dispatch_game_events(input_events)?;
 
-        let mut tick_events = Vec::with_capacity(2);
-        self.resolve_tick_game_events(&mut tick_events);
+        let tick_events = if matches!(self.state, GameState::Loading(_) | GameState::Explore) {
+            vec![GameEvent::Tick]
+        } else {
+            Vec::new()
+        };
         needs_repaint |= self.dispatch_game_events(tick_events)?;
 
         Ok(needs_repaint)
@@ -98,18 +101,6 @@ impl GameEngine {
 
     pub fn render_fx(&self) -> &RenderFxState {
         &self.render_fx
-    }
-
-    fn resolve_tick_game_events(&self, out: &mut Vec<GameEvent>) {
-        match self.state {
-            GameState::Loading(_) => {
-                out.push(GameEvent::Loading(crate::game::LoadingEvent::Tick));
-            }
-            GameState::Explore => {
-                out.push(GameEvent::Tick);
-            }
-            _ => {}
-        }
     }
 
     fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>, out: &mut Vec<GameEvent>) -> Result<()> {

@@ -17,7 +17,6 @@ use crate::game::{
 };
 
 pub enum LoadingEvent {
-    Tick,
     Advance(usize),
     Loaded,
 }

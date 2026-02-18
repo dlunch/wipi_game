@@ -16,9 +16,9 @@ pub fn apply_effects(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     match event {
-        GameEvent::Loading(LoadingEvent::Tick) => {
+        GameEvent::Tick => {
             let GameState::Loading(step) = state else {
-                return Err(anyhow!("Invalid state: expected Loading"));
+                return Ok(());
             };
 
             let data_mut =

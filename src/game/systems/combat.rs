@@ -44,22 +44,19 @@ impl DomainEventResolver for CombatResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
-        if !matches!(
-            event,
-            GameEvent::Tick
-                | GameEvent::CombatPlayerAction(_)
-                | GameEvent::Transition(TransitionEvent::MapChanged)
-        ) {
-            return Ok(());
-        }
-
-        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
-            GameEvent::Tick => resolve_tick(data, world, out)?,
+            GameEvent::Tick => {
+                let Some(world) = world else {
+                    return Ok(());
+                };
+                resolve_tick(data, world, out)?
+            }
             GameEvent::CombatPlayerAction(action) => {
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 resolve_player_action(data, world, action, out)?
             }
             GameEvent::Transition(TransitionEvent::MapChanged) => {
+                let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 resolve_map_changed(data, world, out)?
             }
             _ => {}
