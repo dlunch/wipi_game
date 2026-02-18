@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use crate::data::{DialogAction, ItemKind};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldEvent, WorldState,
+    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldState,
 };
 
 struct CharacterMutationResolver;
@@ -87,28 +87,28 @@ fn resolve_use_item(
                 entity_id: leader_id,
                 amount: item.hp_restore(),
             }));
-            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                 entity_id: leader_id,
                 item_id: stack.item_id.clone(),
                 delta: -1,
             }));
         }
         ItemKind::Weapon => {
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
                 slot: LoadoutSlot::Weapon,
                 index: Some(index),
             }));
         }
         ItemKind::Armor => {
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
                 slot: LoadoutSlot::Armor,
                 index: Some(index),
             }));
         }
         ItemKind::Accessory => {
-            out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
                 entity_id: leader_id,
                 slot: LoadoutSlot::Accessory,
                 index: Some(index),
@@ -131,12 +131,12 @@ fn resolve_shop_buy(
         return;
     }
 
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: crate::game::GOLD_ITEM_ID.into(),
         delta: -item.price.max(0),
     }));
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: item_id.into(),
         delta: 1,
@@ -160,12 +160,12 @@ fn resolve_shop_sell(
         return;
     };
 
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: stack.item_id.clone(),
         delta: -1,
     }));
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: crate::game::GOLD_ITEM_ID.into(),
         delta: (item.price / 2).max(0),
@@ -194,28 +194,28 @@ fn resolve_dialog_action(
 ) -> Result<()> {
     match action {
         DialogAction::GiveItem(id) => {
-            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                 entity_id,
                 item_id: id.clone(),
                 delta: 1,
             }));
         }
         DialogAction::TakeItem(id) => {
-            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                 entity_id,
                 item_id: id.clone(),
                 delta: -1,
             }));
         }
         DialogAction::GiveGold(amount) => {
-            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                 entity_id,
                 item_id: crate::game::GOLD_ITEM_ID.into(),
                 delta: (*amount).max(0),
             }));
         }
         DialogAction::TakeGold(amount) => {
-            out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                 entity_id,
                 item_id: crate::game::GOLD_ITEM_ID.into(),
                 delta: -(*amount).max(0),

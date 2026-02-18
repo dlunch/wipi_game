@@ -74,6 +74,7 @@ pub enum GameEvent {
     SaveWorld,
     UseInventorySelected(usize),
     World(WorldEvent),
+    Entity(EntityEvent),
     OpenDialogState(crate::game::DialogState),
     OpenShopById(String),
     OpenShopState(Box<crate::game::ShopState>),
@@ -102,6 +103,7 @@ pub enum GameEventKind {
     SaveWorld,
     UseInventorySelected,
     World,
+    Entity,
     OpenDialogState,
     OpenShopById,
     OpenShopState,
@@ -126,7 +128,7 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 24;
+    pub const COUNT: usize = 25;
 
     pub const fn as_usize(self) -> usize {
         match self {
@@ -137,23 +139,24 @@ impl GameEventKind {
             Self::SaveWorld => 4,
             Self::UseInventorySelected => 5,
             Self::World => 6,
-            Self::OpenDialogState => 7,
-            Self::OpenShopById => 8,
-            Self::OpenShopState => 9,
-            Self::RestoreHpMp => 10,
-            Self::ApplyDialogAction => 11,
-            Self::ApplyDialogTransition => 12,
-            Self::ShopBuyItem => 13,
-            Self::ShopSellSelected => 14,
-            Self::RevivePlayer => 15,
-            Self::CombatPlayerAction => 16,
-            Self::Loading => 17,
-            Self::Movement => 18,
-            Self::Combat => 19,
-            Self::Explore => 20,
-            Self::Lifecycle => 21,
-            Self::Transition => 22,
-            Self::Exit => 23,
+            Self::Entity => 7,
+            Self::OpenDialogState => 8,
+            Self::OpenShopById => 9,
+            Self::OpenShopState => 10,
+            Self::RestoreHpMp => 11,
+            Self::ApplyDialogAction => 12,
+            Self::ApplyDialogTransition => 13,
+            Self::ShopBuyItem => 14,
+            Self::ShopSellSelected => 15,
+            Self::RevivePlayer => 16,
+            Self::CombatPlayerAction => 17,
+            Self::Loading => 18,
+            Self::Movement => 19,
+            Self::Combat => 20,
+            Self::Explore => 21,
+            Self::Lifecycle => 22,
+            Self::Transition => 23,
+            Self::Exit => 24,
         }
     }
 }
@@ -168,6 +171,7 @@ impl GameEvent {
             Self::SaveWorld => GameEventKind::SaveWorld,
             Self::UseInventorySelected(_) => GameEventKind::UseInventorySelected,
             Self::World(_) => GameEventKind::World,
+            Self::Entity(_) => GameEventKind::Entity,
             Self::OpenDialogState(_) => GameEventKind::OpenDialogState,
             Self::OpenShopById(_) => GameEventKind::OpenShopById,
             Self::OpenShopState(_) => GameEventKind::OpenShopState,
@@ -194,6 +198,16 @@ impl GameEvent {
 pub enum WorldEvent {
     CreateWorld,
     SetWorldMap(String),
+    CreateQuestProgress { quest_id: String },
+    ChangeQuestCurrentCount { quest_id: String, delta: i32 },
+    SetQuestCompleted { quest_id: String, completed: bool },
+    SetQuestRewarded { quest_id: String, rewarded: bool },
+    AddOpenedTreasure { map_id: String, x: usize, y: usize },
+}
+
+#[derive(Clone)]
+#[allow(dead_code)]
+pub enum EntityEvent {
     SetLeaderEntity(EntityId),
     ClearCompanionEntities,
     AddCompanionEntity(EntityId),
@@ -253,26 +267,6 @@ pub enum WorldEvent {
         entity_id: EntityId,
         item_id: String,
         delta: i32,
-    },
-    CreateQuestProgress {
-        quest_id: String,
-    },
-    ChangeQuestCurrentCount {
-        quest_id: String,
-        delta: i32,
-    },
-    SetQuestCompleted {
-        quest_id: String,
-        completed: bool,
-    },
-    SetQuestRewarded {
-        quest_id: String,
-        rewarded: bool,
-    },
-    AddOpenedTreasure {
-        map_id: String,
-        x: usize,
-        y: usize,
     },
 }
 

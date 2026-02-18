@@ -8,8 +8,8 @@ use crate::data::{DialogAction, QuestType};
 use crate::game::state::{GOLD_ITEM_ID, TimedKind};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, MovementEvent, TileEvent, TransitionEvent,
-    WorldEvent, WorldState,
+    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, MovementEvent, TileEvent,
+    TransitionEvent, WorldEvent, WorldState,
 };
 
 struct WorldLogicResolver;
@@ -109,7 +109,7 @@ fn resolve_tile_event(
             if let Some(item_id) = data.newgame.treasure_item.as_deref()
                 && let Some(leader_id) = leader_id(world)
             {
-                out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+                out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
                     item_id: item_id.into(),
                     delta: 1,
@@ -128,7 +128,7 @@ fn resolve_tile_event(
             };
             let (x, y) = map.find_player_start().unwrap_or((next_x, next_y));
             out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
-            out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id: leader_id,
                 map_id: Some(map.id.clone()),
                 position: Some((x, y)),
@@ -163,17 +163,17 @@ fn resolve_complete_quest(data: &GameData, world: &WorldState, id: &str, out: &m
     let Some(leader_id) = leader_id(world) else {
         return;
     };
-    out.push(GameEvent::World(WorldEvent::AddEntityExp {
+    out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
         amount: quest.reward_exp,
     }));
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
         delta: quest.reward_gold.max(0),
     }));
     if let Some(item_id) = &quest.reward_item {
-        out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
             entity_id: leader_id,
             item_id: item_id.clone(),
             delta: 1,
@@ -228,11 +228,11 @@ fn resolve_kill_reward(
     let Some(leader_id) = leader_id(world) else {
         return;
     };
-    out.push(GameEvent::World(WorldEvent::AddEntityExp {
+    out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
         amount: exp,
     }));
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
         delta: gold.max(0),
@@ -306,7 +306,7 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     }
     let current_gold = world.gold_amount(leader_id);
     let gold_penalty = (current_gold / 10).max(10);
-    out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id: leader_id,
         item_id: GOLD_ITEM_ID.into(),
         delta: -gold_penalty,
@@ -330,14 +330,14 @@ fn resolve_revive_player(data: &GameData, world: &WorldState, out: &mut Vec<Game
     )));
     if let Some(village_map) = data.find_map(&village_map_id) {
         let (x, y) = village_map.find_player_start().unwrap_or((0, 0));
-        out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+        out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
             entity_id: leader_id,
             map_id: Some(village_map_id.clone()),
             position: Some((x, y)),
             facing: None,
         }));
     } else {
-        out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+        out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
             entity_id: leader_id,
             map_id: Some(village_map_id.clone()),
             position: None,

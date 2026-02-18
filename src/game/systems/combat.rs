@@ -8,7 +8,7 @@ use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
 use crate::game::state::{CombatStatsSnapshot, CombatantState, EntityKind, EntityState, TimedKind};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldEvent, WorldState,
+    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldState,
 };
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
@@ -464,46 +464,46 @@ fn resolve_map_changed(data: &GameData, world: &WorldState, out: &mut Vec<GameEv
 
             let entity_id = next_entity_id;
             next_entity_id = next_entity_id.wrapping_add(1).max(1);
-            out.push(GameEvent::World(WorldEvent::CreateEntity {
+            out.push(GameEvent::Entity(EntityEvent::CreateEntity {
                 entity_id,
                 kind: EntityKind::Enemy,
                 name: enemy_data.name.clone(),
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id,
                 map_id: Some(map.id.clone()),
                 position: Some((x, y)),
                 facing: Some(Direction::Down),
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityLevel {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityLevel {
                 entity_id,
                 level: 1,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityExp {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityExp {
                 entity_id,
                 exp: 0,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityExpToNext {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityExpToNext {
                 entity_id,
                 exp_to_next: 100,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxHp {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityBaseMaxHp {
                 entity_id,
                 base_max_hp: enemy_data.hp,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxMp {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityBaseMaxMp {
                 entity_id,
                 base_max_mp: 0,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityBaseAtk {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityBaseAtk {
                 entity_id,
                 base_atk: enemy_data.atk,
             }));
-            out.push(GameEvent::World(WorldEvent::SetEntityBaseDef {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityBaseDef {
                 entity_id,
                 base_def: enemy_data.def,
             }));
-            out.push(GameEvent::World(WorldEvent::ClearEntityInventory {
+            out.push(GameEvent::Entity(EntityEvent::ClearEntityInventory {
                 entity_id,
             }));
             let stats = CombatStatsSnapshot {

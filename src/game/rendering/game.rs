@@ -7,7 +7,7 @@ use wipi::framebuffer::Framebuffer;
 use crate::game::state::TimedKind;
 use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
 use crate::game::{
-    CombatEvent, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent, WorldState,
+    CombatEvent, EntityEvent, GameData, GameEvent, GameState, SpriteAtlas, WorldEvent, WorldState,
 };
 
 use super::dialog::draw_dialog;
@@ -157,12 +157,12 @@ impl RenderState {
                 inventory.selected = ui.inventory.selected;
                 if matches!(
                     event,
-                    GameEvent::World(
-                        WorldEvent::ClearEntityInventory { .. }
-                            | WorldEvent::SetEntityLoadoutSlot { .. }
-                            | WorldEvent::ChangeEntityItem { .. }
-                            | WorldEvent::RemoveEntity(_)
-                            | WorldEvent::CreateEntity { .. }
+                    GameEvent::Entity(
+                        EntityEvent::ClearEntityInventory { .. }
+                            | EntityEvent::SetEntityLoadoutSlot { .. }
+                            | EntityEvent::ChangeEntityItem { .. }
+                            | EntityEvent::RemoveEntity(_)
+                            | EntityEvent::CreateEntity { .. }
                     ) | GameEvent::ShopSellSelected(_)
                         | GameEvent::ShopBuyItem(_)
                         | GameEvent::UseInventorySelected(_)
@@ -231,12 +231,12 @@ impl RenderState {
                 shop.scroll = scroll_for_selection(shop.selected, total, SHOP_VISIBLE_ITEMS);
                 if matches!(
                     event,
-                    GameEvent::World(
-                        WorldEvent::ClearEntityInventory { .. }
-                            | WorldEvent::SetEntityLoadoutSlot { .. }
-                            | WorldEvent::ChangeEntityItem { .. }
-                            | WorldEvent::RemoveEntity(_)
-                            | WorldEvent::CreateEntity { .. }
+                    GameEvent::Entity(
+                        EntityEvent::ClearEntityInventory { .. }
+                            | EntityEvent::SetEntityLoadoutSlot { .. }
+                            | EntityEvent::ChangeEntityItem { .. }
+                            | EntityEvent::RemoveEntity(_)
+                            | EntityEvent::CreateEntity { .. }
                     ) | GameEvent::ShopBuyItem(_)
                         | GameEvent::ShopSellSelected(_)
                         | GameEvent::OpenShopState(_)
@@ -627,7 +627,17 @@ fn apply_event_to_explore_render(
                     ui.quest_log.tracked_quest_id.as_deref(),
                 );
             }
-            WorldEvent::SetEntityTransform {
+            WorldEvent::SetWorldMap(_) => {
+                if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
+                    *explore = next;
+                    return true;
+                }
+                return false;
+            }
+            WorldEvent::CreateWorld => {}
+        },
+        GameEvent::Entity(entity_event) => match entity_event {
+            EntityEvent::SetEntityTransform {
                 entity_id,
                 map_id,
                 position,
@@ -649,21 +659,14 @@ fn apply_event_to_explore_render(
                     enemy_changed = true;
                 }
             }
-            WorldEvent::SetWorldMap(_) => {
-                if let Some(next) = ExploreRender::from_world(world, ui, data, render_fx) {
-                    *explore = next;
-                    return true;
-                }
-                return false;
-            }
-            WorldEvent::SetEntityLevel { entity_id, .. } => {
+            EntityEvent::SetEntityLevel { entity_id, .. } => {
                 if Some(*entity_id) == leader_id
                     && let Some(leader) = world.leader_entity()
                 {
                     explore.level = leader.stat.level as u32;
                 }
             }
-            WorldEvent::CreateEntity {
+            EntityEvent::CreateEntity {
                 entity_id, kind, ..
             } => {
                 if matches!(kind, crate::game::EntityKind::Enemy) {
@@ -671,25 +674,24 @@ fn apply_event_to_explore_render(
                     enemy_changed = true;
                 }
             }
-            WorldEvent::RemoveEntity(entity_id) => {
+            EntityEvent::RemoveEntity(entity_id) => {
                 let before = explore.enemies.len();
                 explore.enemies.retain(|enemy| enemy.enemy_id != *entity_id);
                 enemy_changed = before != explore.enemies.len();
             }
-            WorldEvent::ClearEntityInventory { .. }
-            | WorldEvent::SetEntityLoadoutSlot { .. }
-            | WorldEvent::SetEntityExp { .. }
-            | WorldEvent::SetEntityExpToNext { .. }
-            | WorldEvent::SetEntityBaseMaxHp { .. }
-            | WorldEvent::SetEntityBaseMaxMp { .. }
-            | WorldEvent::SetEntityBaseAtk { .. }
-            | WorldEvent::SetEntityBaseDef { .. }
-            | WorldEvent::AddEntityExp { .. }
-            | WorldEvent::ChangeEntityItem { .. }
-            | WorldEvent::SetLeaderEntity(_)
-            | WorldEvent::ClearCompanionEntities
-            | WorldEvent::AddCompanionEntity(_)
-            | WorldEvent::CreateWorld => {}
+            EntityEvent::ClearEntityInventory { .. }
+            | EntityEvent::SetEntityLoadoutSlot { .. }
+            | EntityEvent::SetEntityExp { .. }
+            | EntityEvent::SetEntityExpToNext { .. }
+            | EntityEvent::SetEntityBaseMaxHp { .. }
+            | EntityEvent::SetEntityBaseMaxMp { .. }
+            | EntityEvent::SetEntityBaseAtk { .. }
+            | EntityEvent::SetEntityBaseDef { .. }
+            | EntityEvent::AddEntityExp { .. }
+            | EntityEvent::ChangeEntityItem { .. }
+            | EntityEvent::SetLeaderEntity(_)
+            | EntityEvent::ClearCompanionEntities
+            | EntityEvent::AddCompanionEntity(_) => {}
         },
         _ => {}
     }

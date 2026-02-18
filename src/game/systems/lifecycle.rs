@@ -11,8 +11,8 @@ use crate::game::state::{
 };
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{
-    CombatEvent, DialogState, GameData, GameEvent, GameEventKind, LoadoutSlot, MovementEvent,
-    TransitionEvent, WorldEvent, WorldState,
+    CombatEvent, DialogState, EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot,
+    MovementEvent, TransitionEvent, WorldEvent, WorldState,
 };
 
 #[derive(Clone)]
@@ -125,8 +125,8 @@ impl LifecycleResolver {
         out.push(GameEvent::World(WorldEvent::SetWorldMap(
             leader.map_id.clone(),
         )));
-        out.push(GameEvent::World(WorldEvent::SetLeaderEntity(leader_id)));
-        out.push(GameEvent::World(WorldEvent::ClearCompanionEntities));
+        out.push(GameEvent::Entity(EntityEvent::SetLeaderEntity(leader_id)));
+        out.push(GameEvent::Entity(EntityEvent::ClearCompanionEntities));
         emit_entity_snapshot(&leader, out);
         out.push(GameEvent::Combat(CombatEvent::SetActive(true)));
         emit_combat_stats(leader_id, &leader_stats, out);
@@ -213,12 +213,12 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         world.occupancy.map_id.clone(),
     )));
-    out.push(GameEvent::World(WorldEvent::SetLeaderEntity(
+    out.push(GameEvent::Entity(EntityEvent::SetLeaderEntity(
         world.party.leader_id,
     )));
-    out.push(GameEvent::World(WorldEvent::ClearCompanionEntities));
+    out.push(GameEvent::Entity(EntityEvent::ClearCompanionEntities));
     for companion_id in &world.party.companion_ids {
-        out.push(GameEvent::World(WorldEvent::AddCompanionEntity(
+        out.push(GameEvent::Entity(EntityEvent::AddCompanionEntity(
             *companion_id,
         )));
     }
@@ -310,66 +310,66 @@ fn emit_combat_stats(entity_id: EntityId, stats: &CombatStatsSnapshot, out: &mut
 }
 
 fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
-    out.push(GameEvent::World(WorldEvent::CreateEntity {
+    out.push(GameEvent::Entity(EntityEvent::CreateEntity {
         entity_id: entity.id,
         kind: entity.kind,
         name: entity.name.clone(),
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityTransform {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: entity.id,
         map_id: Some(entity.map_id.clone()),
         position: Some((entity.x, entity.y)),
         facing: Some(entity.facing),
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityLevel {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityLevel {
         entity_id: entity.id,
         level: entity.stat.level,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityExp {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityExp {
         entity_id: entity.id,
         exp: entity.stat.exp,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityExpToNext {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityExpToNext {
         entity_id: entity.id,
         exp_to_next: entity.stat.exp_to_next,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxHp {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityBaseMaxHp {
         entity_id: entity.id,
         base_max_hp: entity.stat.base_max_hp,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityBaseMaxMp {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityBaseMaxMp {
         entity_id: entity.id,
         base_max_mp: entity.stat.base_max_mp,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityBaseAtk {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityBaseAtk {
         entity_id: entity.id,
         base_atk: entity.stat.base_atk,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityBaseDef {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityBaseDef {
         entity_id: entity.id,
         base_def: entity.stat.base_def,
     }));
-    out.push(GameEvent::World(WorldEvent::ClearEntityInventory {
+    out.push(GameEvent::Entity(EntityEvent::ClearEntityInventory {
         entity_id: entity.id,
     }));
     for stack in &entity.inventory {
-        out.push(GameEvent::World(WorldEvent::ChangeEntityItem {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
             entity_id: entity.id,
             item_id: stack.item_id.clone(),
             delta: stack.amount,
         }));
     }
-    out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
         entity_id: entity.id,
         slot: LoadoutSlot::Weapon,
         index: entity.loadout.weapon,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
         entity_id: entity.id,
         slot: LoadoutSlot::Armor,
         index: entity.loadout.armor,
     }));
-    out.push(GameEvent::World(WorldEvent::SetEntityLoadoutSlot {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
         entity_id: entity.id,
         slot: LoadoutSlot::Accessory,
         index: entity.loadout.accessory,
