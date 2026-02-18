@@ -14,23 +14,6 @@ pub trait UiEventApplier {
     );
 }
 
-#[derive(Debug, Clone, Copy)]
-enum MenuEvent {
-    None,
-    SetSelected(usize),
-    Action(MenuAction),
-}
-
-#[derive(Clone, Copy)]
-enum PauseMenuAction {
-    None,
-    OpenInventory,
-    OpenStats,
-    OpenQuestLog,
-    SaveAndReturnExplore,
-    BackToExplore,
-}
-
 impl UiEventApplier for UiState {
     fn apply_ui_event(
         &mut self,
@@ -231,31 +214,6 @@ fn apply_quest_log_input(
     }
 }
 
-fn apply_shop_buy_selected(
-    ui: &UiState,
-    session: Option<&WorldState>,
-    selected: usize,
-    out: &mut Vec<GameEvent>,
-) {
-    let Some(s) = session else {
-        return;
-    };
-    let Some(leader_id) = s.leader_id() else {
-        return;
-    };
-    let shop_items = ui
-        .shop
-        .state
-        .as_ref()
-        .map(|state| state.items.as_slice())
-        .unwrap_or(&[]);
-    if let Some(item) = shop_items.get(selected).cloned()
-        && s.gold_amount(leader_id) >= item.price
-    {
-        out.push(GameEvent::ShopBuyItem(item.id));
-    }
-}
-
 fn apply_shop_input(
     ui: &mut UiState,
     session: Option<&WorldState>,
@@ -311,7 +269,21 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                apply_shop_buy_selected(ui, session, ui.shop.selected, out);
+                if let Some(s) = session
+                    && let Some(leader_id) = s.leader_id()
+                {
+                    let shop_items = ui
+                        .shop
+                        .state
+                        .as_ref()
+                        .map(|state| state.items.as_slice())
+                        .unwrap_or(&[]);
+                    if let Some(item) = shop_items.get(ui.shop.selected).cloned()
+                        && s.gold_amount(leader_id) >= item.price
+                    {
+                        out.push(GameEvent::ShopBuyItem(item.id));
+                    }
+                }
                 ui.shop.mode = ShopMode::Buy;
             }
             InputKey::Back => {
@@ -354,43 +326,29 @@ fn apply_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {
     let selected = ui.menu.selected;
     let items = &ui.menu.state.items;
 
-    let event = match key {
+    match key {
         InputKey::Up => {
             let next = step_up(selected);
             if next != selected {
-                MenuEvent::SetSelected(next)
-            } else {
-                MenuEvent::None
+                ui.menu.selected = next;
             }
         }
         InputKey::Down => {
             let next = step_down(selected, items.len());
             if next != selected {
-                MenuEvent::SetSelected(next)
-            } else {
-                MenuEvent::None
+                ui.menu.selected = next;
             }
         }
         InputKey::Ok => {
             if let Some((_, action)) = items.get(selected).copied() {
-                MenuEvent::Action(action)
-            } else {
-                MenuEvent::None
+                match action {
+                    MenuAction::NewGame => out.push(GameEvent::StartNewGame),
+                    MenuAction::Continue => out.push(GameEvent::ContinueGame),
+                    MenuAction::Exit => out.push(GameEvent::Exit(0)),
+                }
             }
         }
-        _ => MenuEvent::None,
-    };
-
-    match event {
-        MenuEvent::None => {}
-        MenuEvent::SetSelected(selected) => {
-            ui.menu.selected = selected;
-        }
-        MenuEvent::Action(action) => match action {
-            MenuAction::NewGame => out.push(GameEvent::StartNewGame),
-            MenuAction::Continue => out.push(GameEvent::ContinueGame),
-            MenuAction::Exit => out.push(GameEvent::Exit(0)),
-        },
+        _ => {}
     }
 }
 
@@ -398,51 +356,36 @@ fn apply_pause_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEve
     let selected = ui.pause_menu.selected;
     let item_count = ui.pause_menu.state.items.len();
 
-    let action = match key {
+    match key {
         InputKey::Up => {
             let next = step_up(selected);
             if next != selected {
                 ui.pause_menu.selected = next;
             }
-            PauseMenuAction::None
         }
         InputKey::Down => {
             let next = step_down(selected, item_count);
             if next != selected {
                 ui.pause_menu.selected = next;
             }
-            PauseMenuAction::None
         }
         InputKey::Ok => match selected {
-            0 => PauseMenuAction::OpenInventory,
-            1 => PauseMenuAction::OpenStats,
-            2 => PauseMenuAction::OpenQuestLog,
-            3 => PauseMenuAction::SaveAndReturnExplore,
-            _ => PauseMenuAction::None,
+            0 => {
+                ui.inventory.selected = 0;
+                out.push(GameEvent::Transition(TransitionEvent::ToInventory));
+            }
+            1 => out.push(GameEvent::Transition(TransitionEvent::ToStats)),
+            2 => out.push(GameEvent::Transition(TransitionEvent::ToQuestLog)),
+            3 => {
+                ui.shop = Default::default();
+                out.push(GameEvent::SaveWorld);
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+            }
+            _ => {}
         },
-        InputKey::Back | InputKey::Key0 => PauseMenuAction::BackToExplore,
-        _ => PauseMenuAction::None,
-    };
-
-    match action {
-        PauseMenuAction::None => {}
-        PauseMenuAction::OpenInventory => {
-            ui.inventory.selected = 0;
-            out.push(GameEvent::Transition(TransitionEvent::ToInventory));
-        }
-        PauseMenuAction::OpenStats => {
-            out.push(GameEvent::Transition(TransitionEvent::ToStats));
-        }
-        PauseMenuAction::OpenQuestLog => {
-            out.push(GameEvent::Transition(TransitionEvent::ToQuestLog));
-        }
-        PauseMenuAction::SaveAndReturnExplore => {
-            ui.shop = Default::default();
-            out.push(GameEvent::SaveWorld);
+        InputKey::Back | InputKey::Key0 => {
             out.push(GameEvent::Transition(TransitionEvent::ToExplore));
         }
-        PauseMenuAction::BackToExplore => {
-            out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-        }
+        _ => {}
     }
 }

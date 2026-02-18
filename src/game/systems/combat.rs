@@ -44,18 +44,23 @@ impl DomainEventResolver for CombatResolver {
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
+        if !matches!(
+            event,
+            GameEvent::UpdateCombat
+                | GameEvent::CombatPlayerAction(_)
+                | GameEvent::Transition(TransitionEvent::MapChanged)
+        ) {
+            return Ok(());
+        }
+
+        let world = world.ok_or_else(|| anyhow!("No active world"))?;
         match event {
-            GameEvent::UpdateCombat => {
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
-                resolve_tick(data, world, out);
-            }
+            GameEvent::UpdateCombat => resolve_tick(data, world, out),
             GameEvent::CombatPlayerAction(action) => {
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
-                resolve_player_action(data, world, action, out);
+                resolve_player_action(data, world, action, out)
             }
             GameEvent::Transition(TransitionEvent::MapChanged) => {
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
-                resolve_map_changed(data, world, out);
+                resolve_map_changed(data, world, out)
             }
             _ => {}
         }
@@ -246,10 +251,9 @@ fn resolve_player_action(
     let Some(leader_combatant) = world.combat.combatant(leader_id) else {
         return;
     };
-    if leader_combatant.stats.current_hp <= 0 {
-        return;
-    }
-    if leader_combatant.timed.time_left(TimedKind::Stun) > 0 {
+    if leader_combatant.stats.current_hp <= 0
+        || leader_combatant.timed.time_left(TimedKind::Stun) > 0
+    {
         return;
     }
 
@@ -274,19 +278,18 @@ fn resolve_player_action(
             amount: -skill.mp_cost,
         }));
         resolve_skill_action(data, world, leader_entity, leader_combatant, skill, out);
-        return;
+    } else {
+        if leader_combatant.timed.time_left(TimedKind::AttackCooldown) > 0 {
+            return;
+        }
+        let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
+        damage_enemy_at_position(data, world, tx, ty, leader_combatant.stats.atk, None, out);
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id: leader_id,
+            kind: TimedKind::AttackCooldown,
+            time_left: PLAYER_ATTACK_COOLDOWN,
+        }));
     }
-
-    if leader_combatant.timed.time_left(TimedKind::AttackCooldown) > 0 {
-        return;
-    }
-    let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
-    damage_enemy_at_position(data, world, tx, ty, leader_combatant.stats.atk, None, out);
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::AttackCooldown,
-        time_left: PLAYER_ATTACK_COOLDOWN,
-    }));
 }
 
 fn resolve_skill_action(
