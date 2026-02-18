@@ -27,10 +27,7 @@ use super::renderer::{
     COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text, fill_rect,
 };
 use super::shop::draw_shop;
-
-fn require_world(world: Option<&WorldState>) -> Result<&WorldState> {
-    world.ok_or_else(|| anyhow!("No active world"))
-}
+use crate::game::world::require_world;
 
 fn build_explore_render(
     world: Option<&WorldState>,
@@ -68,6 +65,47 @@ fn build_quest_log_render(
     data: &Rc<GameData>,
 ) -> Result<QuestLogRender> {
     QuestLogRender::from_world(require_world(world)?, ui, data)
+}
+
+struct DialogRenderFields {
+    explore: Option<ExploreRender>,
+    npc_name: String,
+    lines: Vec<String>,
+    current_line: usize,
+    current_text: Option<String>,
+    has_next: bool,
+}
+
+fn build_dialog_render_fields(
+    world: Option<&WorldState>,
+    ui: &UiState,
+    data: &Rc<GameData>,
+    render_fx: &RenderFxState,
+) -> Result<DialogRenderFields> {
+    let dialog_state = ui
+        .dialog
+        .state
+        .as_ref()
+        .ok_or_else(|| anyhow!("No dialog state"))?;
+    let lines: Vec<String> = dialog_state
+        .lines
+        .iter()
+        .map(|line| line.text.clone())
+        .collect();
+    let current_line = dialog_state.current_line.min(lines.len().saturating_sub(1));
+    let current_text = lines.get(current_line).cloned();
+    let explore = world
+        .map(|world| ExploreRender::from_world(world, ui, data, render_fx))
+        .transpose()?;
+
+    Ok(DialogRenderFields {
+        explore,
+        npc_name: dialog_state.npc_name.clone(),
+        lines,
+        current_line,
+        current_text,
+        has_next: current_line + 1 < dialog_state.lines.len(),
+    })
 }
 
 impl RenderState {
@@ -164,36 +202,15 @@ impl RenderState {
                         }
                     }
                     GameEvent::OpenDialogState(dialog_state) => {
-                        let next_lines: Vec<String> = dialog_state
-                            .lines
-                            .iter()
-                            .map(|line| line.text.clone())
-                            .collect();
-                        let next_line = dialog_state
-                            .current_line
-                            .min(next_lines.len().saturating_sub(1));
-                        let next_text = next_lines.get(next_line).cloned();
-                        let next_has_next = next_line + 1 < next_lines.len();
-                        if *npc_name != dialog_state.npc_name {
-                            *npc_name = dialog_state.npc_name.clone();
-                            changed = true;
-                        }
-                        if *lines != next_lines {
-                            *lines = next_lines;
-                            changed = true;
-                        }
-                        if *current_line != next_line {
-                            *current_line = next_line;
-                            changed = true;
-                        }
-                        if *current_text != next_text {
-                            *current_text = next_text;
-                            changed = true;
-                        }
-                        if *has_next != next_has_next {
-                            *has_next = next_has_next;
-                            changed = true;
-                        }
+                        let _ = dialog_state;
+                        let next = build_dialog_render_fields(world, ui, data, render_fx)?;
+                        *explore = next.explore;
+                        *npc_name = next.npc_name;
+                        *lines = next.lines;
+                        *current_line = next.current_line;
+                        *current_text = next.current_text;
+                        *has_next = next.has_next;
+                        changed = true;
                     }
                     _ => {}
                 }
@@ -241,18 +258,9 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Result<bool> {
-        let should_check_transition = matches!(
-            event,
-            GameEvent::Loading(LoadingEvent::Loaded)
-                | GameEvent::FatalError(_)
-                | GameEvent::Transition(_)
-                | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore)
-                | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
-                | GameEvent::OpenDialogState(_)
-                | GameEvent::OpenShopState(_)
-        );
-
-        if !should_check_transition || self.matches_state_variant(state) {
+        if GameState::transition_target_from_event(event).is_none()
+            || self.matches_state_variant(state)
+        {
             return Ok(false);
         }
 
@@ -450,29 +458,15 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Result<Self> {
-        if let Some(dialog_state) = ui.dialog.state.as_ref() {
-            let lines: Vec<String> = dialog_state
-                .lines
-                .iter()
-                .map(|line| line.text.clone())
-                .collect();
-            let current_line = dialog_state.current_line.min(lines.len().saturating_sub(1));
-            let current_text = lines.get(current_line).cloned();
-            let explore = if let Some(world) = world {
-                Some(ExploreRender::from_world(world, ui, data, render_fx)?)
-            } else {
-                None
-            };
-            return Ok(RenderState::Dialog {
-                explore,
-                npc_name: dialog_state.npc_name.clone(),
-                lines,
-                current_line,
-                current_text,
-                has_next: current_line + 1 < dialog_state.lines.len(),
-            });
-        }
-        Err(anyhow!("No dialog state"))
+        let fields = build_dialog_render_fields(world, ui, data, render_fx)?;
+        Ok(RenderState::Dialog {
+            explore: fields.explore,
+            npc_name: fields.npc_name,
+            lines: fields.lines,
+            current_line: fields.current_line,
+            current_text: fields.current_text,
+            has_next: fields.has_next,
+        })
     }
 
     fn build_for_state(

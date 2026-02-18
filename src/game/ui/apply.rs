@@ -6,6 +6,7 @@ use anyhow::{Result, anyhow};
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
 use crate::game::selection::{step_down, step_up};
+use crate::game::world::require_world;
 use crate::game::{ExploreEvent, GOLD_ITEM_ID, GameEvent, TransitionEvent, WorldState};
 
 pub trait UiEventApplier {
@@ -43,18 +44,6 @@ impl UiEventApplier for UiState {
         };
         Ok(())
     }
-}
-
-fn require_world(session: Option<&WorldState>) -> Result<&WorldState> {
-    session.ok_or_else(|| anyhow!("No active world"))
-}
-
-fn apply_selection_up(selected: &mut usize) {
-    *selected = step_up(*selected);
-}
-
-fn apply_selection_down(selected: &mut usize, item_count: usize) {
-    *selected = step_down(*selected, item_count);
 }
 
 fn apply_explore_input(
@@ -113,10 +102,10 @@ fn apply_inventory_input(
 
     let selected = ui.inventory.selected;
     match key {
-        InputKey::Up => apply_selection_up(&mut ui.inventory.selected),
+        InputKey::Up => ui.inventory.selected = step_up(ui.inventory.selected),
         InputKey::Down => {
             let inventory_len = s.leader_entity()?.inventory.len();
-            apply_selection_down(&mut ui.inventory.selected, inventory_len);
+            ui.inventory.selected = step_down(ui.inventory.selected, inventory_len);
         }
         InputKey::Ok => {
             out.push(GameEvent::UseInventorySelected(selected));
@@ -186,8 +175,10 @@ fn apply_quest_log_input(
     }
 
     match key {
-        InputKey::Up => apply_selection_up(&mut ui.quest_log.selected),
-        InputKey::Down => apply_selection_down(&mut ui.quest_log.selected, active_quest_ids.len()),
+        InputKey::Up => ui.quest_log.selected = step_up(ui.quest_log.selected),
+        InputKey::Down => {
+            ui.quest_log.selected = step_down(ui.quest_log.selected, active_quest_ids.len())
+        }
         InputKey::Ok => {
             let Some(quest_id) = active_quest_ids.get(ui.quest_log.selected).cloned() else {
                 return Ok(());
@@ -223,8 +214,8 @@ fn apply_shop_input(
 
     match ui.shop.mode {
         ShopMode::Select => match key {
-            InputKey::Up => apply_selection_up(&mut ui.shop.selected),
-            InputKey::Down => apply_selection_down(&mut ui.shop.selected, 2),
+            InputKey::Up => ui.shop.selected = step_up(ui.shop.selected),
+            InputKey::Down => ui.shop.selected = step_down(ui.shop.selected, 2),
             InputKey::Ok => {
                 if ui.shop.selected == 0 {
                     ui.shop.mode = ShopMode::Buy;
@@ -237,8 +228,8 @@ fn apply_shop_input(
             _ => {}
         },
         ShopMode::Buy => match key {
-            InputKey::Up => apply_selection_up(&mut ui.shop.selected),
-            InputKey::Down => apply_selection_down(&mut ui.shop.selected, shop_items_len),
+            InputKey::Up => ui.shop.selected = step_up(ui.shop.selected),
+            InputKey::Down => ui.shop.selected = step_down(ui.shop.selected, shop_items_len),
             InputKey::Ok => {
                 if shop_items_len > 0 {
                     ui.shop.mode = ShopMode::ConfirmBuy;
@@ -271,8 +262,8 @@ fn apply_shop_input(
             _ => {}
         },
         ShopMode::Sell => match key {
-            InputKey::Up => apply_selection_up(&mut ui.shop.selected),
-            InputKey::Down => apply_selection_down(&mut ui.shop.selected, inventory_len),
+            InputKey::Up => ui.shop.selected = step_up(ui.shop.selected),
+            InputKey::Down => ui.shop.selected = step_down(ui.shop.selected, inventory_len),
             InputKey::Ok => {
                 if inventory_len > 0 {
                     ui.shop.mode = ShopMode::ConfirmSell;
@@ -312,8 +303,8 @@ fn apply_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {
     let items = &ui.menu.state.items;
 
     match key {
-        InputKey::Up => apply_selection_up(&mut ui.menu.selected),
-        InputKey::Down => apply_selection_down(&mut ui.menu.selected, items.len()),
+        InputKey::Up => ui.menu.selected = step_up(ui.menu.selected),
+        InputKey::Down => ui.menu.selected = step_down(ui.menu.selected, items.len()),
         InputKey::Ok => {
             if let Some((_, action)) = items.get(selected).copied() {
                 match action {
@@ -332,8 +323,8 @@ fn apply_pause_menu_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEve
     let item_count = ui.pause_menu.state.items.len();
 
     match key {
-        InputKey::Up => apply_selection_up(&mut ui.pause_menu.selected),
-        InputKey::Down => apply_selection_down(&mut ui.pause_menu.selected, item_count),
+        InputKey::Up => ui.pause_menu.selected = step_up(ui.pause_menu.selected),
+        InputKey::Down => ui.pause_menu.selected = step_down(ui.pause_menu.selected, item_count),
         InputKey::Ok => match selected {
             0 => {
                 ui.inventory.selected = 0;

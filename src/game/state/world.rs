@@ -36,6 +36,10 @@ pub struct WorldState {
     pub occupancy: OccupancyState,
 }
 
+pub fn require_world(world: Option<&WorldState>) -> Result<&WorldState> {
+    world.ok_or_else(|| anyhow!("No active world"))
+}
+
 impl WorldState {
     pub fn empty() -> Self {
         Self {
@@ -340,51 +344,43 @@ impl WorldState {
                     self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
                 }
             }
-            EntityEvent::SetEntityLevel { entity_id, level } => {
+            EntityEvent::SetEntityLevel { entity_id, .. }
+            | EntityEvent::SetEntityExp { entity_id, .. }
+            | EntityEvent::SetEntityExpToNext { entity_id, .. } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.level = *level;
+                match event {
+                    EntityEvent::SetEntityLevel { level, .. } => {
+                        entity.stat.level = *level;
+                    }
+                    EntityEvent::SetEntityExp { exp, .. } => {
+                        entity.stat.exp = *exp;
+                    }
+                    EntityEvent::SetEntityExpToNext { exp_to_next, .. } => {
+                        entity.stat.exp_to_next = *exp_to_next;
+                    }
+                    _ => {}
+                }
             }
-            EntityEvent::SetEntityExp { entity_id, exp } => {
+            EntityEvent::SetEntityBaseMaxHp { entity_id, .. }
+            | EntityEvent::SetEntityBaseMaxMp { entity_id, .. }
+            | EntityEvent::SetEntityBaseAtk { entity_id, .. }
+            | EntityEvent::SetEntityBaseDef { entity_id, .. } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.exp = *exp;
-            }
-            EntityEvent::SetEntityExpToNext {
-                entity_id,
-                exp_to_next,
-            } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.exp_to_next = *exp_to_next;
-            }
-            EntityEvent::SetEntityBaseMaxHp {
-                entity_id,
-                base_max_hp,
-            } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.base_max_hp = *base_max_hp;
-                sync_stats_for = Some(*entity_id);
-            }
-            EntityEvent::SetEntityBaseMaxMp {
-                entity_id,
-                base_max_mp,
-            } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.base_max_mp = *base_max_mp;
-                sync_stats_for = Some(*entity_id);
-            }
-            EntityEvent::SetEntityBaseAtk {
-                entity_id,
-                base_atk,
-            } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.base_atk = *base_atk;
-                sync_stats_for = Some(*entity_id);
-            }
-            EntityEvent::SetEntityBaseDef {
-                entity_id,
-                base_def,
-            } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.stat.base_def = *base_def;
+                match event {
+                    EntityEvent::SetEntityBaseMaxHp { base_max_hp, .. } => {
+                        entity.stat.base_max_hp = *base_max_hp;
+                    }
+                    EntityEvent::SetEntityBaseMaxMp { base_max_mp, .. } => {
+                        entity.stat.base_max_mp = *base_max_mp;
+                    }
+                    EntityEvent::SetEntityBaseAtk { base_atk, .. } => {
+                        entity.stat.base_atk = *base_atk;
+                    }
+                    EntityEvent::SetEntityBaseDef { base_def, .. } => {
+                        entity.stat.base_def = *base_def;
+                    }
+                    _ => {}
+                }
                 sync_stats_for = Some(*entity_id);
             }
             EntityEvent::AddEntityExp { entity_id, amount } => {

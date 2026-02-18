@@ -141,6 +141,28 @@ impl GameState {
             GameStateKind::Error => false,
         }
     }
+
+    pub fn transition_target_from_event(event: &GameEvent) -> Option<GameState> {
+        match event {
+            GameEvent::Loading(LoadingEvent::Advance(step)) => Some(GameState::Loading(*step)),
+            GameEvent::Loading(LoadingEvent::Loaded) => Some(GameState::Menu),
+            GameEvent::FatalError(msg) => Some(GameState::Error(msg.clone())),
+            GameEvent::Transition(TransitionEvent::ToExplore)
+            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
+                Some(GameState::Explore)
+            }
+            GameEvent::Transition(TransitionEvent::ToDead) => Some(GameState::Dead),
+            GameEvent::Transition(TransitionEvent::ToMenu) => Some(GameState::Menu),
+            GameEvent::Transition(TransitionEvent::ToPauseMenu) => Some(GameState::PauseMenu),
+            GameEvent::Transition(TransitionEvent::ToInventory) => Some(GameState::Inventory),
+            GameEvent::Transition(TransitionEvent::ToStats) => Some(GameState::Stats),
+            GameEvent::Transition(TransitionEvent::ToQuestLog) => Some(GameState::QuestLog),
+            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
+            | GameEvent::OpenDialogState(_) => Some(GameState::Dialog),
+            GameEvent::OpenShopState(_) => Some(GameState::Shop),
+            _ => None,
+        }
+    }
 }
 
 impl GameEventSubscriber for GameState {
@@ -159,39 +181,8 @@ impl GameEventSubscriber for GameState {
 
 impl GameState {
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
-        match event {
-            GameEvent::Loading(event) => match event {
-                LoadingEvent::Tick => {}
-                LoadingEvent::Advance(step) => self.transition_to(GameState::Loading(*step)),
-                LoadingEvent::Loaded => self.transition_to(GameState::Menu),
-            },
-            GameEvent::FatalError(msg) => *self = GameState::Error(msg.clone()),
-            GameEvent::Transition(TransitionEvent::ToExplore)
-            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
-                self.transition_to(GameState::Explore)
-            }
-            GameEvent::Transition(TransitionEvent::ToDead) => {
-                self.transition_to(GameState::Dead);
-            }
-            GameEvent::Transition(TransitionEvent::ToMenu) => {
-                self.transition_to(GameState::Menu);
-            }
-            GameEvent::Transition(TransitionEvent::ToPauseMenu) => {
-                self.transition_to(GameState::PauseMenu);
-            }
-            GameEvent::Transition(TransitionEvent::ToInventory) => {
-                self.transition_to(GameState::Inventory);
-            }
-            GameEvent::Transition(TransitionEvent::ToStats) => {
-                self.transition_to(GameState::Stats);
-            }
-            GameEvent::Transition(TransitionEvent::ToQuestLog) => {
-                self.transition_to(GameState::QuestLog);
-            }
-            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
-            | GameEvent::OpenDialogState(_) => self.transition_to(GameState::Dialog),
-            GameEvent::OpenShopState(_) => self.transition_to(GameState::Shop),
-            _ => {}
+        if let Some(next) = GameState::transition_target_from_event(event) {
+            self.transition_to(next);
         }
         Ok(())
     }
