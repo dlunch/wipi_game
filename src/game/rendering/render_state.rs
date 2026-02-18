@@ -82,6 +82,7 @@ pub struct ExploreRender {
     pub anim_tick: u32,
 }
 
+#[derive(PartialEq, Eq)]
 pub struct EnemyRender {
     pub enemy_id: u32,
     pub name: String,

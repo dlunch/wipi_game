@@ -85,12 +85,10 @@ impl RenderFxState {
     ) -> Result<bool> {
         let changed = match event {
             GameEvent::Entity(EntityEvent::ChangeEntityHp { entity_id, delta }) if *delta < 0 => {
-                let leader_id = if let Some(world) = world {
-                    Some(world.leader_id()?)
-                } else {
-                    None
+                let Some(world) = world else {
+                    return Ok(false);
                 };
-                if Some(*entity_id) == leader_id {
+                if *entity_id == world.leader_id()? {
                     let changed = self.player_hit_flash != HIT_FLASH_DURATION;
                     self.player_hit_flash = HIT_FLASH_DURATION;
                     changed

@@ -27,6 +27,6 @@ pub use state::{
 pub use systems::{DomainEventResolver, LifecycleEvent, LoadingEvent, NpcEvent, domain_resolvers};
 pub use ui::{
     DialogState, DialogTransition, ExploreAction, GameInput, InputKey, MenuAction, ShopMode,
-    ShopState, UiEvent, UiEventApplier, UiInputEventResolver, UiState,
+    ShopState, UiEventApplier, UiInputEventResolver, UiState,
 };
 pub use world::WorldState;

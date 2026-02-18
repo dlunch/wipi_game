@@ -235,7 +235,9 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Result<bool> {
-        if !GameState::has_transition_target(event) || self.matches_state_variant(state) {
+        if GameState::transition_target_from_event(event).is_none()
+            || self.matches_state_variant(state)
+        {
             return Ok(false);
         }
 
@@ -619,7 +621,6 @@ fn patch_explore_entity(
     data: &Rc<GameData>,
     render_fx: &RenderFxState,
 ) -> Result<bool> {
-    let leader_id = world.leader_id()?;
     match event {
         EntityEvent::SetEntityLevel { entity_id, .. }
         | EntityEvent::SetEntityExp { entity_id, .. }
@@ -634,50 +635,18 @@ fn patch_explore_entity(
         | EntityEvent::ChangeEntityMp { entity_id, .. }
         | EntityEvent::SetEntityLoadoutSlot { entity_id, .. }
         | EntityEvent::ChangeEntityItem { entity_id, .. }
-        | EntityEvent::ClearEntityInventory { entity_id } => {
-            if *entity_id == leader_id {
-                return sync_explore_player(explore, world, ui, data);
-            }
-            if world
-                .combat
-                .enemies
-                .iter()
-                .any(|enemy| enemy.entity_id == *entity_id)
-            {
-                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
-            }
-            Ok(false)
-        }
-        EntityEvent::SetEntityTransform { entity_id, .. } => {
-            if *entity_id == leader_id {
-                return sync_explore_player(explore, world, ui, data);
-            }
-            if world
-                .combat
-                .enemies
-                .iter()
-                .any(|enemy| enemy.entity_id == *entity_id)
-            {
-                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
-            }
-            Ok(false)
+        | EntityEvent::ClearEntityInventory { entity_id }
+        | EntityEvent::SetEntityTransform { entity_id, .. } => {
+            patch_explore_entity_target(explore, *entity_id, world, ui, data, render_fx, true)
         }
         EntityEvent::CreateEntity { entity_id, .. } => {
-            if world
-                .combat
-                .enemies
-                .iter()
-                .any(|enemy| enemy.entity_id == *entity_id)
-            {
-                return patch_or_insert_enemy(explore, *entity_id, world, data, render_fx);
-            }
-            Ok(false)
+            patch_explore_entity_target(explore, *entity_id, world, ui, data, render_fx, false)
         }
         EntityEvent::SetLeaderEntity(_)
         | EntityEvent::ClearCompanionEntities
         | EntityEvent::AddCompanionEntity(_) => Ok(false),
         EntityEvent::AddEntityExp { entity_id, .. } => {
-            if *entity_id == leader_id {
+            if *entity_id == world.leader_id()? {
                 return sync_explore_player(explore, world, ui, data);
             }
             Ok(false)
@@ -704,24 +673,50 @@ fn patch_explore_combat(
             Ok(true)
         }
         CombatEvent::MoveEnemy { entity_id, .. }
-        | CombatEvent::SetCombatantTimed { entity_id, .. }
-        | CombatEvent::RemoveEnemy(entity_id) => {
+        | CombatEvent::SetCombatantTimed { entity_id, .. } => {
             if *entity_id == leader_id {
                 return sync_explore_player_stats(explore, world);
             }
-            if let CombatEvent::RemoveEnemy(entity_id) = event {
-                if explore.remove_enemy(*entity_id) {
-                    explore.first_live_enemy_name = explore.first_live_enemy_name();
-                    return Ok(true);
-                }
-                return Ok(false);
-            }
             patch_or_insert_enemy(explore, *entity_id, world, data, render_fx)
+        }
+        CombatEvent::RemoveEnemy(entity_id) => {
+            if *entity_id == leader_id {
+                return sync_explore_player_stats(explore, world);
+            }
+            if explore.remove_enemy(*entity_id) {
+                explore.first_live_enemy_name = explore.first_live_enemy_name();
+                return Ok(true);
+            }
+            Ok(false)
         }
         CombatEvent::SetActive(_)
         | CombatEvent::SetRespawnTimer(_)
         | CombatEvent::GrantKillReward { .. } => Ok(false),
     }
+}
+
+fn patch_explore_entity_target(
+    explore: &mut ExploreRender,
+    entity_id: u32,
+    world: &WorldState,
+    ui: &UiState,
+    data: &Rc<GameData>,
+    render_fx: &RenderFxState,
+    sync_leader: bool,
+) -> Result<bool> {
+    let leader_id = world.leader_id()?;
+    if sync_leader && entity_id == leader_id {
+        return sync_explore_player(explore, world, ui, data);
+    }
+    if world
+        .combat
+        .enemies
+        .iter()
+        .any(|enemy| enemy.entity_id == entity_id)
+    {
+        return patch_or_insert_enemy(explore, entity_id, world, data, render_fx);
+    }
+    Ok(false)
 }
 
 fn patch_or_insert_enemy(
@@ -761,36 +756,12 @@ fn patch_or_insert_enemy(
     };
 
     let changed = if let Some(existing) = explore.enemy_mut(entity_id) {
-        let mut event_changed = false;
-        if existing.x != next.x {
-            existing.x = next.x;
-            event_changed = true;
+        if *existing == next {
+            false
+        } else {
+            *existing = next;
+            true
         }
-        if existing.y != next.y {
-            existing.y = next.y;
-            event_changed = true;
-        }
-        if existing.hp != next.hp {
-            existing.hp = next.hp;
-            event_changed = true;
-        }
-        if existing.max_hp != next.max_hp {
-            existing.max_hp = next.max_hp;
-            event_changed = true;
-        }
-        if existing.attack_cooldown != next.attack_cooldown {
-            existing.attack_cooldown = next.attack_cooldown;
-            event_changed = true;
-        }
-        if existing.dead != next.dead {
-            existing.dead = next.dead;
-            event_changed = true;
-        }
-        if existing.name != next.name {
-            existing.name = next.name;
-            event_changed = true;
-        }
-        event_changed
     } else {
         explore.upsert_enemy(next);
         true

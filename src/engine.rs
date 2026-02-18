@@ -9,8 +9,7 @@ use anyhow::{Error, Result, ensure};
 use crate::game::{
     DomainEventEffect, DomainEventResolver, GameData, GameEvent, GameEventKind,
     GameEventSubscriber, GameInput, GameState, InputKey, RenderFxState, RenderState, SpriteAtlas,
-    UiEvent, UiEventApplier, UiInputEventResolver, UiState, WorldSlot, domain_effects,
-    domain_resolvers,
+    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, domain_effects, domain_resolvers,
 };
 
 pub struct GameEngine {
@@ -81,7 +80,11 @@ impl GameEngine {
             let ui_events = self
                 .ui
                 .resolve_input(input, &self.state, self.world.as_ref());
-            self.apply_ui_events(ui_events, &mut input_events)?;
+            input_events.reserve(ui_events.len() * 2);
+            for event in ui_events {
+                self.ui
+                    .apply_ui_event(self.world.as_ref(), event, &mut input_events)?;
+            }
         }
         needs_repaint |= self
             .render_state
@@ -90,14 +93,13 @@ impl GameEngine {
         self.render_fx.tick();
         needs_repaint |= self.render_state.apply_tick(&self.render_fx);
 
-        needs_repaint |= self.dispatch_game_events(input_events)?;
+        if !input_events.is_empty() {
+            needs_repaint |= self.dispatch_game_events(input_events)?;
+        }
 
-        let tick_events = if matches!(self.state, GameState::Loading(_) | GameState::Explore) {
-            vec![GameEvent::Tick]
-        } else {
-            Vec::new()
-        };
-        needs_repaint |= self.dispatch_game_events(tick_events)?;
+        if matches!(self.state, GameState::Loading(_) | GameState::Explore) {
+            needs_repaint |= self.dispatch_game_events(vec![GameEvent::Tick])?;
+        }
 
         Ok(needs_repaint)
     }
@@ -112,14 +114,6 @@ impl GameEngine {
 
     pub fn render_fx(&self) -> &RenderFxState {
         &self.render_fx
-    }
-
-    fn apply_ui_events(&mut self, ui_events: Vec<UiEvent>, out: &mut Vec<GameEvent>) -> Result<()> {
-        out.reserve(ui_events.len() * 2);
-        for event in ui_events {
-            self.ui.apply_ui_event(self.world.as_ref(), event, out)?;
-        }
-        Ok(())
     }
 
     fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
@@ -212,11 +206,8 @@ impl GameEngine {
 
     fn handle_tick_error(&mut self, err: Error) -> bool {
         let error_event = GameEvent::FatalError(format!("{err}"));
-        match self.apply_and_patch_event(&error_event) {
-            Ok(_) => {}
-            Err(apply_err) => {
-                self.state = GameState::Error(format!("{apply_err}"));
-            }
+        if let Err(apply_err) = self.apply_and_patch_event(&error_event) {
+            self.state = GameState::Error(format!("{apply_err}"));
         }
         true
     }

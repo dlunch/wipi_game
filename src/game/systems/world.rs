@@ -207,12 +207,11 @@ fn resolve_entity_hp_change(
     delta: i32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    if delta >= 0 {
+    let entity = world.entity(entity_id)?;
+    if delta >= 0 || entity.current_hp <= 0 {
         return Ok(());
     }
-    let entity = world.entity(entity_id)?;
-    let next_hp = (entity.current_hp + delta).max(0);
-    if next_hp > 0 || entity.current_hp <= 0 {
+    if (entity.current_hp + delta).max(0) > 0 {
         return Ok(());
     }
 

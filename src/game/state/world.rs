@@ -91,21 +91,16 @@ impl WorldState {
     }
 
     pub fn has_item(&self, entity_id: EntityId, item_id: &str) -> Result<bool> {
-        let entity = self.entity(entity_id)?;
-        Ok(entity
-            .inventory
-            .iter()
-            .any(|stack| stack.item_id == item_id && stack.amount > 0))
+        Ok(self.item_amount(entity_id, item_id)? > 0)
     }
 
     pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> Result<i32> {
         let entity = self.entity(entity_id)?;
-        for stack in &entity.inventory {
-            if stack.item_id == item_id {
-                return Ok(stack.amount.max(0));
-            }
-        }
-        Ok(0)
+        Ok(entity
+            .inventory
+            .iter()
+            .find(|stack| stack.item_id == item_id)
+            .map_or(0, |stack| stack.amount.max(0)))
     }
 
     pub fn gold_amount(&self, entity_id: EntityId) -> Result<i32> {
@@ -180,17 +175,12 @@ impl WorldState {
         if x >= map.width || y >= map.height {
             return true;
         }
-        if self.occupancy.map_id != map.id {
-            return false;
-        }
-        self.is_occupied(x, y)
+        self.occupancy.map_id == map.id && self.is_occupied(x, y)
     }
 
     pub fn apply_event(&mut self, data: &GameData, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::Tick => {
-                self.tick_counter = self.tick_counter.wrapping_add(1);
-            }
+            GameEvent::Tick => self.tick_counter = self.tick_counter.wrapping_add(1),
             GameEvent::World(world_event) => {
                 self.apply_world_event(data, world_event)?;
             }
@@ -234,19 +224,12 @@ impl WorldState {
         self.combat.reset();
         self.quests.clear();
         self.opened_treasures.clear();
-        self.occupancy.map_id.clear();
-        self.occupancy.width = 0;
-        self.occupancy.height = 0;
-        self.occupancy.npc_tiles.clear();
-        self.occupancy.enemy_tiles.clear();
-        self.occupancy.enemy_tile_counts.clear();
+        self.occupancy = OccupancyState::default();
     }
 
     fn apply_world_event(&mut self, data: &GameData, event: &WorldEvent) -> Result<()> {
         match event {
-            WorldEvent::CreateWorld => {
-                self.reset();
-            }
+            WorldEvent::CreateWorld => self.reset(),
             WorldEvent::SetWorldMap(map_id) => {
                 self.rebuild_npc_occupancy_for_map(data, map_id)?;
                 self.rebuild_enemy_occupancy()?;
@@ -503,12 +486,8 @@ impl WorldState {
     }
 
     fn clear_enemy_occupancy(&mut self) {
-        for occupied in &mut self.occupancy.enemy_tiles {
-            *occupied = false;
-        }
-        for count in &mut self.occupancy.enemy_tile_counts {
-            *count = 0;
-        }
+        self.occupancy.enemy_tiles.fill(false);
+        self.occupancy.enemy_tile_counts.fill(0);
     }
 
     fn enemy_tile_index_for_entity(&self, entity_id: EntityId) -> Result<Option<usize>> {
@@ -544,19 +523,15 @@ impl WorldState {
 
         if let Some(previous_tile_index) = previous_tile_index
             && previous_tile_index < self.occupancy.enemy_tiles.len()
-        {
-            if let Some(count) = self
+            && let Some(count) = self
                 .occupancy
                 .enemy_tile_counts
                 .get_mut(previous_tile_index)
-            {
-                if *count > 0 {
-                    *count -= 1;
-                }
-                self.occupancy.enemy_tiles[previous_tile_index] = *count > 0;
-            } else {
-                self.occupancy.enemy_tiles[previous_tile_index] = false;
+        {
+            if *count > 0 {
+                *count -= 1;
             }
+            self.occupancy.enemy_tiles[previous_tile_index] = *count > 0;
         }
 
         if let Some(next_tile_index) = next_tile_index
