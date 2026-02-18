@@ -15,7 +15,7 @@ use crate::game::{
     MovementState, WorldEvent,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct OccupancyState {
     pub map_id: String,
     pub width: usize,
@@ -25,7 +25,7 @@ pub struct OccupancyState {
     pub enemy_tile_counts: Vec<u16>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct WorldState {
     pub entities: EntityStore,
     pub party: PartyState,

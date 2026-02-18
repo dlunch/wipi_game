@@ -15,7 +15,6 @@ use crate::game::{
     MovementEvent, TransitionEvent, WorldEvent, WorldState,
 };
 
-#[derive(Clone)]
 pub enum LoadingEvent {
     Tick,
     Advance(usize),
@@ -141,7 +140,7 @@ impl LifecycleResolver {
         let mut world = WorldState::empty();
         match load_game(&mut world) {
             Ok(true) => {
-                let Some(leader) = world.leader_entity().cloned() else {
+                let Some(leader) = world.leader_entity() else {
                     Self::setup_new_game_events(data, out);
                     return;
                 };

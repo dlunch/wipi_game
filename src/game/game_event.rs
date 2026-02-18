@@ -4,7 +4,6 @@ use alloc::string::String;
 use crate::data::Direction;
 use crate::game::state::{EntityId, EntityKind, TimedKind};
 
-#[derive(Clone)]
 pub enum CombatEvent {
     SetActive(bool),
     ClearEnemies,
@@ -191,7 +190,6 @@ impl GameEvent {
     }
 }
 
-#[derive(Clone)]
 pub enum WorldEvent {
     CreateWorld,
     SetWorldMap(String),
@@ -202,7 +200,6 @@ pub enum WorldEvent {
     AddOpenedTreasure { map_id: String, x: usize, y: usize },
 }
 
-#[derive(Clone)]
 pub enum EntityEvent {
     SetLeaderEntity(EntityId),
     ClearCompanionEntities,
@@ -285,14 +282,13 @@ pub enum TransitionEvent {
     ReleaseMovementDirection(Direction),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TileEvent {
     Treasure,
     MapExit(String),
     DungeonEntrance(String),
 }
 
-#[derive(Clone)]
 pub enum ExploreEvent {
     MoveDirection(Direction),
     TryNpcInteract {
@@ -302,7 +298,6 @@ pub enum ExploreEvent {
     Npc(crate::game::NpcEvent),
 }
 
-#[derive(Clone)]
 pub enum MovementEvent {
     Tick(crate::game::MovementTickEvent, Option<TileEvent>),
     ClearPressedDirections,

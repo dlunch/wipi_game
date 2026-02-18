@@ -45,7 +45,7 @@ pub struct TimedEffect {
     pub time_left: u32,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct TimedState {
     pub effects: Vec<TimedEffect>,
 }
@@ -68,26 +68,26 @@ impl TimedState {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct CombatantState {
     pub stats: CombatStatsSnapshot,
     pub timed: TimedState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AllyCombatantState {
     pub entity_id: EntityId,
     pub combatant: CombatantState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct EnemyCombatantState {
     pub entity_id: EntityId,
     pub source_enemy_id: String,
     pub combatant: CombatantState,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct CombatState {
     pub active: bool,
     pub allies: Vec<AllyCombatantState>,

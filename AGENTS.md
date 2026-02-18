@@ -119,6 +119,8 @@ let Some(map) = self.current_map() else {
 ### Memory & Allocation
 - **NO standard library** - use `alloc::` for String, Vec, etc.
 - Clone sparingly - prefer references where possible
+- Avoid `#[derive(Clone)]` unless clone semantics are truly required by call sites.
+- For `Copy` types, `Clone` may be derived only as required by Rust trait rules.
 
 ### Comments
 - **Avoid unnecessary comments** - code should be self-explanatory

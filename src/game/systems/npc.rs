@@ -10,14 +10,14 @@ use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
 use crate::game::systems::resolver::DomainEventResolver;
 use crate::game::{DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, WorldState};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DialogSpec {
     pub npc_name: String,
     pub lines: Vec<DialogLine>,
     pub restore: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum NpcEvent {
     OpenDialog(DialogSpec),
     OpenShop(String),

@@ -58,7 +58,7 @@ impl EntityStat {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ItemStack {
     pub item_id: String,
     pub amount: i32,
@@ -80,7 +80,7 @@ pub struct LoadoutState {
     pub accessory: Option<usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EntityState {
     pub id: EntityId,
     pub kind: EntityKind,
@@ -111,7 +111,7 @@ impl EntityState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EntityStore {
     list: Vec<EntityState>,
     index_by_id: BTreeMap<EntityId, usize>,
@@ -190,7 +190,7 @@ impl Default for EntityStore {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct PartyState {
     pub leader_id: EntityId,
     pub companion_ids: Vec<EntityId>,
