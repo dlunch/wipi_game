@@ -19,6 +19,10 @@ impl WorldSlot {
         self.active.as_mut()
     }
 
+    pub fn is_active(&self) -> bool {
+        self.active.is_some()
+    }
+
     pub fn apply_event(&mut self, event: &GameEvent) {
         match event {
             GameEvent::World(WorldEvent::CreateWorld) => {

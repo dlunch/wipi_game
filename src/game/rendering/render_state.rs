@@ -285,7 +285,7 @@ impl ExploreRender {
             player_x: leader.x,
             player_y: leader.y,
             player_facing: leader.facing,
-            player_moving: world.movement.pressed_direction.is_some(),
+            player_moving: world.movement.is_moving(),
             hp: leader.current_hp as u32,
             max_hp: leader.stat.base_max_hp as u32,
             mp: leader.current_mp as u32,

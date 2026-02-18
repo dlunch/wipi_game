@@ -12,7 +12,7 @@ use crate::game::state::{
 };
 use crate::game::{
     CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
-    MovementState, WorldEvent,
+    MovementEvent, MovementState, WorldEvent,
 };
 
 #[derive(Debug, Default)]
@@ -202,9 +202,7 @@ impl WorldState {
             }
             GameEvent::Movement(_) | GameEvent::Explore(_) | GameEvent::Transition(_) => {
                 self.movement.apply_event(event)?;
-                if let GameEvent::Movement(crate::game::MovementEvent::Tick(movement_event, _)) =
-                    event
-                {
+                if let GameEvent::Movement(MovementEvent::Tick(movement_event, _)) = event {
                     let leader_id = self.leader_id()?;
                     let leader = self.entities.get_mut(leader_id)?;
                     if let Some((dx, dy)) = movement_event.facing {
@@ -348,49 +346,50 @@ impl WorldState {
                     self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
                 }
             }
-            EntityEvent::SetEntityLevel { entity_id, .. }
-            | EntityEvent::SetEntityExp { entity_id, .. }
-            | EntityEvent::SetEntityExpToNext { entity_id, .. } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                match event {
-                    EntityEvent::SetEntityLevel { level, .. } => {
-                        entity.stat.level = *level;
-                    }
-                    EntityEvent::SetEntityExp { exp, .. } => {
-                        entity.stat.exp = *exp;
-                    }
-                    EntityEvent::SetEntityExpToNext { exp_to_next, .. } => {
-                        entity.stat.exp_to_next = *exp_to_next;
-                    }
-                    _ => {}
-                }
+            EntityEvent::SetEntityLevel { entity_id, level } => {
+                self.entities.get_mut(*entity_id)?.stat.level = *level;
             }
-            EntityEvent::SetEntityBaseMaxHp { entity_id, .. }
-            | EntityEvent::SetEntityBaseMaxMp { entity_id, .. }
-            | EntityEvent::SetEntityBaseAtk { entity_id, .. }
-            | EntityEvent::SetEntityBaseDef { entity_id, .. } => {
+            EntityEvent::SetEntityExp { entity_id, exp } => {
+                self.entities.get_mut(*entity_id)?.stat.exp = *exp;
+            }
+            EntityEvent::SetEntityExpToNext {
+                entity_id,
+                exp_to_next,
+            } => {
+                self.entities.get_mut(*entity_id)?.stat.exp_to_next = *exp_to_next;
+            }
+            EntityEvent::SetEntityBaseMaxHp {
+                entity_id,
+                base_max_hp,
+            } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                match event {
-                    EntityEvent::SetEntityBaseMaxHp { base_max_hp, .. } => {
-                        entity.stat.base_max_hp = *base_max_hp;
-                    }
-                    EntityEvent::SetEntityBaseMaxMp { base_max_mp, .. } => {
-                        entity.stat.base_max_mp = *base_max_mp;
-                    }
-                    EntityEvent::SetEntityBaseAtk { base_atk, .. } => {
-                        entity.stat.base_atk = *base_atk;
-                    }
-                    EntityEvent::SetEntityBaseDef { base_def, .. } => {
-                        entity.stat.base_def = *base_def;
-                    }
-                    _ => {}
-                }
-                entity.current_hp = entity.current_hp.clamp(0, entity.stat.base_max_hp.max(0));
-                entity.current_mp = entity.current_mp.clamp(0, entity.stat.base_max_mp.max(0));
+                entity.stat.base_max_hp = *base_max_hp;
+                clamp_entity_resources(entity);
+            }
+            EntityEvent::SetEntityBaseMaxMp {
+                entity_id,
+                base_max_mp,
+            } => {
+                let entity = self.entities.get_mut(*entity_id)?;
+                entity.stat.base_max_mp = *base_max_mp;
+                clamp_entity_resources(entity);
+            }
+            EntityEvent::SetEntityBaseAtk {
+                entity_id,
+                base_atk,
+            } => {
+                self.entities.get_mut(*entity_id)?.stat.base_atk = *base_atk;
+            }
+            EntityEvent::SetEntityBaseDef {
+                entity_id,
+                base_def,
+            } => {
+                self.entities.get_mut(*entity_id)?.stat.base_def = *base_def;
             }
             EntityEvent::AddEntityExp { entity_id, amount } => {
                 let entity = self.entities.get_mut(*entity_id)?;
                 entity.stat.add_exp(*amount);
+                clamp_entity_resources(entity);
             }
             EntityEvent::ClearEntityInventory { entity_id } => {
                 let entity = self.entities.get_mut(*entity_id)?;
@@ -435,9 +434,8 @@ impl WorldState {
             }
             EntityEvent::ChangeEntityHp { entity_id, delta } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                let max_hp = entity.stat.base_max_hp.max(0);
-                let next_hp = entity.current_hp + *delta;
-                entity.current_hp = next_hp.clamp(0, max_hp);
+                entity.current_hp =
+                    (entity.current_hp + *delta).clamp(0, entity.stat.base_max_hp.max(0));
             }
             EntityEvent::SetEntityCurrentMp { entity_id, value } => {
                 let entity = self.entities.get_mut(*entity_id)?;
@@ -446,9 +444,8 @@ impl WorldState {
             }
             EntityEvent::ChangeEntityMp { entity_id, delta } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                let max_mp = entity.stat.base_max_mp.max(0);
-                let next_mp = entity.current_mp + *delta;
-                entity.current_mp = next_mp.clamp(0, max_mp);
+                entity.current_mp =
+                    (entity.current_mp + *delta).clamp(0, entity.stat.base_max_mp.max(0));
             }
         }
         Ok(())
@@ -491,22 +488,13 @@ impl WorldState {
     }
 
     fn should_ignore_stale_enemy_combat_event(&self, event: &CombatEvent) -> bool {
-        let Some(entity_id) = (match event {
-            CombatEvent::MoveEnemy { entity_id, .. }
-            | CombatEvent::SetCombatantTimed { entity_id, .. } => Some(*entity_id),
-            CombatEvent::RemoveEnemy(entity_id) => Some(*entity_id),
-            CombatEvent::SetActive(_)
-            | CombatEvent::ClearEnemies
-            | CombatEvent::SetRespawnTimer(_)
-            | CombatEvent::GrantKillReward { .. } => None,
-        }) else {
+        let Some(entity_id) = combat_event_target_entity_id(event) else {
             return false;
         };
 
-        if self.combat.combatant(entity_id).is_ok() {
+        if self.combat.has_combatant(entity_id) {
             return false;
         }
-
         if self.party.leader_id == entity_id || self.party.companion_ids.contains(&entity_id) {
             return false;
         }
@@ -713,6 +701,23 @@ fn fix_loadout_after_remove(equipped: &mut Option<usize>, removed_index: usize) 
         } else if *index == removed_index {
             *equipped = None;
         }
+    }
+}
+
+fn clamp_entity_resources(entity: &mut EntityState) {
+    entity.current_hp = entity.current_hp.clamp(0, entity.stat.base_max_hp.max(0));
+    entity.current_mp = entity.current_mp.clamp(0, entity.stat.base_max_mp.max(0));
+}
+
+fn combat_event_target_entity_id(event: &CombatEvent) -> Option<EntityId> {
+    match event {
+        CombatEvent::MoveEnemy { entity_id, .. }
+        | CombatEvent::SetCombatantTimed { entity_id, .. } => Some(*entity_id),
+        CombatEvent::RemoveEnemy(entity_id) => Some(*entity_id),
+        CombatEvent::SetActive(_)
+        | CombatEvent::ClearEnemies
+        | CombatEvent::SetRespawnTimer(_)
+        | CombatEvent::GrantKillReward { .. } => None,
     }
 }
 

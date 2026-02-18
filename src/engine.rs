@@ -123,7 +123,7 @@ impl GameEngine {
     }
 
     fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
-        if matches!(event, GameEvent::Tick) && self.world.as_ref().is_none() {
+        if matches!(event, GameEvent::Tick) && !self.world.is_active() {
             return Ok(());
         }
         let bucket = &self.resolver_buckets[event.kind().as_usize()];
@@ -143,7 +143,7 @@ impl GameEngine {
         self.world.apply_event(event);
 
         ensure!(
-            !self.state.requires_world() || self.world.as_ref().is_some(),
+            !self.state.requires_world() || self.world.is_active(),
             "Missing world for state transition: {:?}",
             self.state
         );

@@ -239,15 +239,7 @@ fn resolve_player_action(
             entity_id: leader_id,
             delta: -skill.mp_cost,
         }));
-        resolve_skill_action(
-            data,
-            world,
-            leader_id,
-            leader_entity,
-            leader_atk,
-            skill,
-            out,
-        )?;
+        resolve_skill_action(world, leader_id, leader_entity, leader_atk, skill, out)?;
     } else {
         if leader_combatant
             .timed
@@ -256,7 +248,7 @@ fn resolve_player_action(
             return Ok(());
         }
         let (tx, ty) = leader_entity.facing.apply(leader_entity.x, leader_entity.y);
-        let _ = damage_enemy_at_position(data, world, tx, ty, leader_atk, None, out)?;
+        damage_enemy_at_position(world, tx, ty, leader_atk, None, out)?;
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
             entity_id: leader_id,
             kind: TimedKind::AttackCooldown,
@@ -267,7 +259,6 @@ fn resolve_player_action(
 }
 
 fn resolve_skill_action(
-    data: &GameData,
     world: &WorldState,
     leader_id: u32,
     leader: &EntityState,
@@ -281,7 +272,6 @@ fn resolve_skill_action(
             for dist in 1..=skill.range {
                 let (tx, ty) = leader.facing.apply_distance(leader.x, leader.y, dist);
                 if damage_enemy_at_position(
-                    data,
                     world,
                     tx,
                     ty,
@@ -301,8 +291,7 @@ fn resolve_skill_action(
                 Direction::Right,
             ] {
                 let (tx, ty) = dir.apply(leader.x, leader.y);
-                let _ = damage_enemy_at_position(
-                    data,
+                damage_enemy_at_position(
                     world,
                     tx,
                     ty,
@@ -323,7 +312,6 @@ fn resolve_skill_action(
 }
 
 fn damage_enemy_at_position(
-    _data: &GameData,
     world: &WorldState,
     x: usize,
     y: usize,

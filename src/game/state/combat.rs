@@ -119,6 +119,14 @@ impl CombatState {
             .ok_or_else(|| anyhow!("Combatant not found: {}", entity_id))
     }
 
+    pub fn has_combatant(&self, entity_id: EntityId) -> bool {
+        self.allies.iter().any(|ally| ally.entity_id == entity_id)
+            || self
+                .enemies
+                .iter()
+                .any(|enemy| enemy.entity_id == entity_id)
+    }
+
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         let GameEvent::Combat(event) = event else {
             return Ok(());

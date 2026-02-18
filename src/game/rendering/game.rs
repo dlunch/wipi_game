@@ -170,8 +170,7 @@ impl RenderState {
                             changed = true;
                         }
                     }
-                    GameEvent::OpenDialogState(dialog_state) => {
-                        let _ = dialog_state;
+                    GameEvent::OpenDialogState(_) => {
                         let next = build_dialog_render_fields(world, ui, data, render_fx)?;
                         *explore = next.explore;
                         *npc_name = next.npc_name;
@@ -236,9 +235,7 @@ impl RenderState {
         data: &Rc<GameData>,
         render_fx: &RenderFxState,
     ) -> Result<bool> {
-        if GameState::transition_target_from_event(event).is_none()
-            || self.matches_state_variant(state)
-        {
+        if !GameState::has_transition_target(event) || self.matches_state_variant(state) {
             return Ok(false);
         }
 
@@ -832,7 +829,7 @@ fn sync_explore_player(
         explore.player_facing = leader.facing;
         changed = true;
     }
-    let next_player_moving = world.movement.pressed_direction.is_some();
+    let next_player_moving = world.movement.is_moving();
     if explore.player_moving != next_player_moving {
         explore.player_moving = next_player_moving;
         changed = true;

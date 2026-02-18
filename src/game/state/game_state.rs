@@ -163,6 +163,10 @@ impl GameState {
             _ => None,
         }
     }
+
+    pub fn has_transition_target(event: &GameEvent) -> bool {
+        Self::transition_target_from_event(event).is_some()
+    }
 }
 
 impl GameEventSubscriber for GameState {

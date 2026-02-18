@@ -101,7 +101,7 @@ fn resolve_tile_event(
             }));
             if let Some(item_id) = data.newgame.treasure_item.as_deref() {
                 let leader_id = world.leader_id()?;
-                let _ = data.find_item(item_id)?;
+                data.find_item(item_id)?;
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
                     item_id: item_id.into(),
@@ -158,17 +158,9 @@ fn resolve_complete_quest(
         entity_id: leader_id,
         amount: quest.reward_exp,
     }));
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: GOLD_ITEM_ID.into(),
-        delta: quest.reward_gold.max(0),
-    }));
+    push_item_delta(out, leader_id, GOLD_ITEM_ID, quest.reward_gold.max(0));
     if let Some(item_id) = &quest.reward_item {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-            entity_id: leader_id,
-            item_id: item_id.clone(),
-            delta: 1,
-        }));
+        push_item_delta(out, leader_id, item_id.clone(), 1);
     }
 
     out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
@@ -191,11 +183,7 @@ fn resolve_kill_reward(
         entity_id: leader_id,
         amount: exp,
     }));
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: GOLD_ITEM_ID.into(),
-        delta: gold.max(0),
-    }));
+    push_item_delta(out, leader_id, GOLD_ITEM_ID, gold.max(0));
 
     for progress in &world.quests {
         if progress.completed || progress.rewarded {
@@ -228,23 +216,21 @@ fn resolve_entity_hp_change(
         return Ok(());
     }
 
-    if next_hp <= 0 {
-        if world.leader_id()? == entity_id {
-            out.push(GameEvent::Transition(TransitionEvent::ToDead));
-        } else if let Some(enemy) = world
-            .combat
-            .enemies
-            .iter()
-            .find(|e| e.entity_id == entity_id)
-        {
-            out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(entity_id)));
-            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
-            out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-                enemy_id: enemy_data.id.clone(),
-                exp: enemy_data.exp,
-                gold: enemy_data.gold,
-            }));
-        }
+    if world.leader_id()? == entity_id {
+        out.push(GameEvent::Transition(TransitionEvent::ToDead));
+    } else if let Some(enemy) = world
+        .combat
+        .enemies
+        .iter()
+        .find(|e| e.entity_id == entity_id)
+    {
+        out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(entity_id)));
+        let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
+        out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
+            enemy_id: enemy_data.id.clone(),
+            exp: enemy_data.exp,
+            gold: enemy_data.gold,
+        }));
     }
     Ok(())
 }
@@ -262,11 +248,7 @@ fn resolve_revive_player(
     }
     let current_gold = world.gold_amount(leader_id)?;
     let gold_penalty = (current_gold / 10).max(10);
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
-        entity_id: leader_id,
-        item_id: GOLD_ITEM_ID.into(),
-        delta: -gold_penalty,
-    }));
+    push_item_delta(out, leader_id, GOLD_ITEM_ID, -gold_penalty);
 
     let target_hp = (leader.stat.base_max_hp / 2).max(1);
     let target_mp = (leader.stat.base_max_mp / 2).max(0);
@@ -301,39 +283,44 @@ fn resolve_revive_player(
     out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
     out.push(GameEvent::Combat(CombatEvent::SetActive(false)));
     out.push(GameEvent::Combat(CombatEvent::SetRespawnTimer(0)));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::Poison,
-        end_tick: 0,
+    clear_combatant_timed_effects(out, leader_id);
+    out.push(GameEvent::Transition(TransitionEvent::MapChanged));
+    out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+    Ok(())
+}
+
+fn push_item_delta(
+    out: &mut Vec<GameEvent>,
+    entity_id: u32,
+    item_id: impl Into<alloc::string::String>,
+    delta: i32,
+) {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
+        entity_id,
+        item_id: item_id.into(),
+        delta,
     }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::Stun,
-        end_tick: 0,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::ArmorBreak,
-        end_tick: 0,
-    }));
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::AttackCooldown,
-        end_tick: 0,
-    }));
+}
+
+fn clear_combatant_timed_effects(out: &mut Vec<GameEvent>, entity_id: u32) {
+    for kind in [
+        TimedKind::Poison,
+        TimedKind::Stun,
+        TimedKind::ArmorBreak,
+        TimedKind::AttackCooldown,
+        TimedKind::MpRegenTick,
+    ] {
+        out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
+            entity_id,
+            kind,
+            end_tick: 0,
+        }));
+    }
     for slot in 0..3u8 {
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-            entity_id: leader_id,
+            entity_id,
             kind: TimedKind::SkillCooldown(slot),
             end_tick: 0,
         }));
     }
-    out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
-        entity_id: leader_id,
-        kind: TimedKind::MpRegenTick,
-        end_tick: 0,
-    }));
-    out.push(GameEvent::Transition(TransitionEvent::MapChanged));
-    out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-    Ok(())
 }

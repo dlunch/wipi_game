@@ -22,6 +22,10 @@ pub struct MovementTickEvent {
 }
 
 impl MovementState {
+    pub fn is_moving(&self) -> bool {
+        self.pressed_direction.is_some()
+    }
+
     pub fn apply_tick(&mut self, event: MovementTickEvent) -> bool {
         self.apply_next_state(event.next_state);
         event.step.is_some()
@@ -56,8 +60,7 @@ impl MovementState {
 
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
-            GameEvent::Movement(MovementEvent::Tick(movement_event, tile_event)) => {
-                let _ = tile_event;
+            GameEvent::Movement(MovementEvent::Tick(movement_event, _)) => {
                 self.apply_tick(*movement_event);
             }
             GameEvent::Movement(MovementEvent::ClearPressedDirections) => {
