@@ -70,8 +70,16 @@ Mandatory architecture rules:
 - Keep a strict boundary between UI events and Game events.
 - Prefer field/delta events over whole-state snapshot replacement when possible.
 - Propagate errors upward with `anyhow::Result`; the engine handles state transition to `GameState::Error`.
+- Prefer the simplest architecture that satisfies requirements; avoid speculative abstractions.
 
 ## Code Style Guidelines
+
+### Simplicity First
+- Prefer the simplest code that works and keeps behavior explicit.
+- Do not introduce extra layers/types/helpers if a direct implementation is clear enough.
+- Avoid one-off abstractions (single-call-site wrappers, unnecessary indirection, over-generic traits).
+- Remove obsolete branches/fallback structures once the new path is stable.
+- When two implementations are equivalent, choose the one with fewer moving parts.
 
 ### Imports
 - Order: `alloc` crate → external crates (`wipi`) → `super::` → `crate::`
