@@ -431,22 +431,8 @@ impl WorldState {
     }
 
     fn apply_combat_event(&mut self, event: &CombatEvent, game_event: &GameEvent) -> Result<()> {
-        let hp_transition = if let CombatEvent::SetCombatantCurrentHp {
-            entity_id,
-            current_hp,
-        } = event
-        {
-            let was_alive = self.enemy_alive(*entity_id)?;
-            was_alive != (*current_hp > 0)
-        } else {
-            false
-        };
-
         let previous_tile_index = match event {
             CombatEvent::MoveEnemy { entity_id, .. } | CombatEvent::RemoveEnemy(entity_id) => {
-                self.enemy_tile_index_for_entity(*entity_id)?
-            }
-            CombatEvent::SetCombatantCurrentHp { entity_id, .. } if hp_transition => {
                 self.enemy_tile_index_for_entity(*entity_id)?
             }
             _ => None,
@@ -467,10 +453,6 @@ impl WorldState {
             }
             CombatEvent::ClearEnemies => {
                 self.clear_enemy_occupancy();
-            }
-            CombatEvent::SetCombatantCurrentHp { entity_id, .. } if hp_transition => {
-                let next_tile_index = self.enemy_tile_index_for_entity(*entity_id)?;
-                self.apply_enemy_occupancy_delta(previous_tile_index, next_tile_index);
             }
             CombatEvent::SetActive(_)
             | CombatEvent::SetCombatantMaxHp { .. }
@@ -503,15 +485,12 @@ impl WorldState {
         if self.occupancy.width == 0 || self.occupancy.height == 0 {
             return Ok(None);
         }
-        let Some(enemy) = self
+        if self
             .combat
             .enemies
             .iter()
-            .find(|enemy| enemy.entity_id == entity_id)
-        else {
-            return Ok(None);
-        };
-        if enemy.combatant.stats.current_hp <= 0 {
+            .all(|enemy| enemy.entity_id != entity_id)
+        {
             return Ok(None);
         }
         let entity = self.entities.get(entity_id)?;
@@ -522,15 +501,6 @@ impl WorldState {
             return Ok(None);
         }
         Ok(Some(entity.y * self.occupancy.width + entity.x))
-    }
-
-    fn enemy_alive(&self, entity_id: EntityId) -> Result<bool> {
-        self.combat
-            .enemies
-            .iter()
-            .find(|enemy| enemy.entity_id == entity_id)
-            .map(|enemy| enemy.combatant.stats.current_hp > 0)
-            .ok_or_else(|| anyhow!("Enemy not found for entity_id={}", entity_id))
     }
 
     fn apply_enemy_occupancy_delta(
@@ -850,7 +820,7 @@ mod tests {
     }
 
     #[test]
-    fn enemy_occupancy_updates_only_on_alive_transition() -> Result<()> {
+    fn enemy_occupancy_updates_on_remove_enemy() -> Result<()> {
         let data = GameData::default();
         let mut world = WorldState::empty();
 
@@ -899,16 +869,10 @@ mod tests {
                 current_hp: 0,
             }),
         )?;
-        assert!(!world.is_occupied(1, 1));
-
-        world.apply_event(
-            &data,
-            &GameEvent::Combat(CombatEvent::SetCombatantCurrentHp {
-                entity_id: 10,
-                current_hp: 3,
-            }),
-        )?;
         assert!(world.is_occupied(1, 1));
+
+        world.apply_event(&data, &GameEvent::Combat(CombatEvent::RemoveEnemy(10)))?;
+        assert!(!world.is_occupied(1, 1));
         Ok(())
     }
 }
