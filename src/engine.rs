@@ -77,7 +77,10 @@ impl GameEngine {
             Ok(changed) => needs_repaint |= changed,
             Err(e) => {
                 let error_event = GameEvent::Loading(LoadingEvent::Error(format!("{e}")));
-                if let Ok(render_fx_changed) = self.apply_with_handlers(&error_event) {
+                if self.apply_with_handlers(&error_event).is_ok() {
+                    let render_fx_changed =
+                        self.render_fx
+                            .apply_event(&self.state, self.world.as_ref(), &error_event);
                     needs_repaint |= self.render_state.apply_game_event_patch(
                         &error_event,
                         &self.state,
@@ -132,7 +135,7 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_with_handlers(&mut self, event: &GameEvent) -> Result<bool> {
+    fn apply_with_handlers(&mut self, event: &GameEvent) -> Result<()> {
         let kind = event.kind();
 
         if self.state.subscribes(kind) {
@@ -157,9 +160,7 @@ impl GameEngine {
             self.ui.apply_game_event(event)?;
         }
 
-        Ok(self
-            .render_fx
-            .apply_event(&self.state, self.world.as_ref(), event))
+        Ok(())
     }
 
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<bool> {
@@ -181,7 +182,10 @@ impl GameEngine {
             let effect_events =
                 apply_effects(&self.state, &mut self.data, self.world.as_ref(), &event)?;
 
-            let render_fx_changed = self.apply_with_handlers(&event)?;
+            self.apply_with_handlers(&event)?;
+            let render_fx_changed =
+                self.render_fx
+                    .apply_event(&self.state, self.world.as_ref(), &event);
 
             needs_repaint |= self.render_state.apply_game_event_patch(
                 &event,
