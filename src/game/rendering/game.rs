@@ -24,7 +24,8 @@ use super::render_state::{
     StatsRender, TrackedQuestRender, interaction_hint_from_world, scroll_for_selection,
 };
 use super::renderer::{
-    COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text, fill_rect,
+    COLOR_BLUE, COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text,
+    fill_rect,
 };
 use super::shop::draw_shop;
 
@@ -929,15 +930,31 @@ pub fn render(
 }
 
 fn draw_loading(fb: &mut Framebuffer, step: usize) {
+    const TOTAL_LOADING_STEPS: usize = 8;
+
     clear_screen(fb);
     let w = fb.width() as i32;
     let h = fb.height() as i32;
+    let clamped_step = step.min(TOTAL_LOADING_STEPS);
+    let percent = (clamped_step * 100) / TOTAL_LOADING_STEPS;
+
     draw_text(fb, w / 2 - 30, h / 2 - 10, "LOADING", COLOR_WHITE);
+    let bar_w = (w - 40).max(80);
+    let bar_h = 12;
+    let bar_x = (w - bar_w) / 2;
+    let bar_y = h / 2 + 12;
+    fill_rect(fb, bar_x, bar_y, bar_w, bar_h, COLOR_DARK_GRAY);
+    let fill_w = ((bar_w - 2) as usize * clamped_step / TOTAL_LOADING_STEPS) as i32;
+    if fill_w > 0 {
+        fill_rect(fb, bar_x + 1, bar_y + 1, fill_w, bar_h - 2, COLOR_BLUE);
+    }
+    draw_rect(fb, bar_x, bar_y, bar_w, bar_h, COLOR_WHITE);
+
     draw_text(
         fb,
-        w / 2 - 20,
-        h / 2 + 8,
-        &format!("Step {}", step),
+        w / 2 - 28,
+        h / 2 + 30,
+        &format!("{}% ({}/{})", percent, clamped_step, TOTAL_LOADING_STEPS),
         COLOR_WHITE,
     );
 }
