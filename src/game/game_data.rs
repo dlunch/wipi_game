@@ -1,16 +1,15 @@
-use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
 use core::str;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use wipi::resource::Resource;
 
 use crate::data::{
     Dialog, Enemy, Item, Map, NewGameConfig, Npc, Quest, Shop, parse_dialogs, parse_enemies,
     parse_items, parse_maps, parse_newgame, parse_npcs, parse_quests, parse_shops,
 };
 
-#[derive(Default)]
 pub struct GameData {
+    resource_loader: ResourceLoader,
     items: Vec<Item>,
     enemies: Vec<Enemy>,
     maps: Vec<Map>,
@@ -31,53 +30,34 @@ pub struct GameData {
     shop_index: BTreeMap<String, usize>,
 }
 
-impl GameData {
-    pub fn load_step(&mut self, step: usize) -> Result<bool> {
-        match step {
-            0 => {
-                self.items = Self::load_resource("data/items.dat", parse_items)?;
-                self.rebuild_item_index();
-                self.rebuild_item_data_id_index();
-            }
-            1 => {
-                self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?;
-                self.rebuild_enemy_index();
-                self.rebuild_enemy_name_index();
-                self.rebuild_enemy_data_id_index();
-            }
-            2 => {
-                self.maps = Self::load_resource("data/maps.dat", parse_maps)?;
-                self.rebuild_map_index();
-            }
-            3 => {
-                let npc_defs = Self::load_resource("data/npcs.dat", parse_npcs)?;
-                self.npcs = Self::resolve_map_npcs(&self.maps, &npc_defs)?;
-                self.rebuild_npc_data_id_index();
-            }
-            4 => {
-                self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?;
-                self.rebuild_dialog_index();
-            }
-            5 => {
-                self.quests = Self::load_resource("data/quests.dat", parse_quests)?;
-                self.rebuild_quest_index();
-            }
-            6 => {
-                self.shops = Self::load_resource("data/shops.dat", parse_shops)?;
-                self.rebuild_shop_index();
-            }
-            7 => self.newgame = Self::load_resource("data/newgame.dat", parse_newgame)?,
-            _ => return Ok(true),
-        }
-        Ok(false)
-    }
+type ResourceLoader = Box<dyn Fn(&str) -> Result<Vec<u8>>>;
 
-    fn load_resource<T>(path: &str, parser: fn(&str) -> Result<T>) -> Result<T> {
-        let resource = Resource::new(path)
-            .map_err(|e| anyhow!("failed to open resource '{}': {:?}", path, e))?;
-        let text = str::from_utf8(resource.read())
-            .with_context(|| format!("invalid UTF-8 in '{}'", path))?;
-        parser(text).with_context(|| format!("failed to parse '{}'", path))
+impl GameData {
+    pub fn new<F>(resource_loader: F) -> Self
+    where
+        F: Fn(&str) -> Result<Vec<u8>> + 'static,
+    {
+        Self {
+            resource_loader: Box::new(resource_loader),
+            items: Vec::new(),
+            enemies: Vec::new(),
+            maps: Vec::new(),
+            npcs: Vec::new(),
+            dialogs: Vec::new(),
+            quests: Vec::new(),
+            shops: Vec::new(),
+            newgame: NewGameConfig::default(),
+            item_index: BTreeMap::new(),
+            item_data_id_index: BTreeMap::new(),
+            enemy_index: BTreeMap::new(),
+            enemy_name_index: BTreeMap::new(),
+            enemy_data_id_index: BTreeMap::new(),
+            map_index: BTreeMap::new(),
+            npc_data_id_index: BTreeMap::new(),
+            dialog_index: BTreeMap::new(),
+            quest_index: BTreeMap::new(),
+            shop_index: BTreeMap::new(),
+        }
     }
 
     fn find_indexed<'a, T>(
@@ -277,4 +257,50 @@ impl GameData {
     fn rebuild_shop_index(&mut self) {
         Self::rebuild_index(&mut self.shop_index, &self.shops, |shop| shop.id.as_str());
     }
+}
+
+pub fn load_step(data: &mut GameData, step: usize) -> Result<bool> {
+    match step {
+        0 => {
+            data.items = load_resource_with(data, "data/items.dat", parse_items)?;
+            data.rebuild_item_index();
+            data.rebuild_item_data_id_index();
+        }
+        1 => {
+            data.enemies = load_resource_with(data, "data/enemies.dat", parse_enemies)?;
+            data.rebuild_enemy_index();
+            data.rebuild_enemy_name_index();
+            data.rebuild_enemy_data_id_index();
+        }
+        2 => {
+            data.maps = load_resource_with(data, "data/maps.dat", parse_maps)?;
+            data.rebuild_map_index();
+        }
+        3 => {
+            let npc_defs = load_resource_with(data, "data/npcs.dat", parse_npcs)?;
+            data.npcs = GameData::resolve_map_npcs(&data.maps, &npc_defs)?;
+            data.rebuild_npc_data_id_index();
+        }
+        4 => {
+            data.dialogs = load_resource_with(data, "data/dialogs.dat", parse_dialogs)?;
+            data.rebuild_dialog_index();
+        }
+        5 => {
+            data.quests = load_resource_with(data, "data/quests.dat", parse_quests)?;
+            data.rebuild_quest_index();
+        }
+        6 => {
+            data.shops = load_resource_with(data, "data/shops.dat", parse_shops)?;
+            data.rebuild_shop_index();
+        }
+        7 => data.newgame = load_resource_with(data, "data/newgame.dat", parse_newgame)?,
+        _ => return Ok(true),
+    }
+    Ok(false)
+}
+
+fn load_resource_with<T>(data: &GameData, path: &str, parser: fn(&str) -> Result<T>) -> Result<T> {
+    let bytes = (data.resource_loader)(path)?;
+    let text = str::from_utf8(&bytes).with_context(|| format!("invalid UTF-8 in '{}'", path))?;
+    parser(text).with_context(|| format!("failed to parse '{}'", path))
 }

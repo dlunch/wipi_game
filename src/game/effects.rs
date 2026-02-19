@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use super::save::{has_save_data, save_game};
 use crate::game::{
-    game_data::GameData,
+    game_data::{GameData, load_step as load_data_step},
     game_event::{GameEvent, GameEventKind, TransitionEvent},
     state::GameState,
     systems::lifecycle::{LifecycleEvent, LoadingEvent},
@@ -57,9 +57,8 @@ impl DomainEventEffect for CoreEffects {
 
                 let data_mut =
                     Rc::get_mut(data).ok_or_else(|| anyhow!("Load error: data is shared"))?;
-                let loaded = data_mut
-                    .load_step(*step)
-                    .map_err(|e| anyhow!("Load error: {}", e))?;
+                let loaded =
+                    load_data_step(data_mut, *step).map_err(|e| anyhow!("Load error: {}", e))?;
                 let loading = if loaded {
                     out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
                         has_save_data()?,

@@ -1,6 +1,7 @@
 use alloc::{collections::VecDeque, format, rc::Rc, vec, vec::Vec};
 
-use anyhow::{Error, Result, ensure};
+use anyhow::{Error, Result, anyhow, ensure};
+use wipi::resource::Resource;
 
 use crate::game::{
     effects::{DomainEventEffect, domain_effects},
@@ -48,7 +49,11 @@ impl GameEngine {
 
         Self {
             state: GameState::Loading(0),
-            data: Rc::new(GameData::default()),
+            data: Rc::new(GameData::new(|path| {
+                let resource = Resource::new(path)
+                    .map_err(|e| anyhow!("failed to open resource '{}': {:?}", path, e))?;
+                Ok(resource.read().to_vec())
+            })),
             world: WorldSlot::empty(),
             ui: UiState::default(),
             sprites: SpriteAtlas::load_default(),

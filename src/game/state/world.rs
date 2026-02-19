@@ -712,7 +712,7 @@ mod tests {
     use crate::{
         data::Direction,
         game::{
-            game_data::GameData,
+            game_data::{GameData, load_step as load_game_data_step},
             game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent},
             state::{
                 CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
@@ -720,9 +720,13 @@ mod tests {
         },
     };
 
+    fn empty_data() -> GameData {
+        GameData::new(|path| Err(anyhow!("unexpected resource path: {}", path)))
+    }
+
     #[test]
     fn add_entity_exp_keeps_runtime_resources_on_entity() -> Result<()> {
-        let data = GameData::default();
+        let data = empty_data();
         let mut world = WorldState::empty();
 
         world.apply_event(&data, &GameEvent::World(WorldEvent::CreateWorld))?;
@@ -755,8 +759,13 @@ mod tests {
 
     #[test]
     fn quest_progress_uses_delta_and_clamps_to_target() -> Result<()> {
-        let mut data = GameData::default();
-        data.load_step(5)?;
+        let mut data = GameData::new(|path| {
+            if path == "data/quests.dat" {
+                return Ok(b"quest_wolf:Wolf Hunt:KILL:wolf:3:80:30:Hunt 3 wolves\n".to_vec());
+            }
+            Err(anyhow!("unexpected resource path: {}", path))
+        });
+        load_game_data_step(&mut data, 5)?;
         let quest_id = String::from("quest_wolf");
 
         let mut world = WorldState::empty();
@@ -808,7 +817,7 @@ mod tests {
 
     #[test]
     fn enemy_occupancy_updates_on_remove_enemy() -> Result<()> {
-        let data = GameData::default();
+        let data = empty_data();
         let mut world = WorldState::empty();
 
         world.occupancy = OccupancyState {
@@ -867,7 +876,7 @@ mod tests {
 
     #[test]
     fn stale_enemy_combat_event_after_remove_is_ignored() -> Result<()> {
-        let data = GameData::default();
+        let data = empty_data();
         let mut world = WorldState::empty();
 
         world.occupancy = OccupancyState {
