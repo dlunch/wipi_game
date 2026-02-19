@@ -20,6 +20,7 @@ pub fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
         entity_id: entity.id,
         kind: entity.kind,
         name: entity.name.clone(),
+        source_enemy_id: None,
     }));
     out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: entity.id,

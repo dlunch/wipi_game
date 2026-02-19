@@ -2,7 +2,7 @@
 player_name:Hero
 start_map:1
 fallback_map:1
-intro_dialog:1010:마을 안내원
+intro_dialog:1010:3010
 equip_weapon:1001
 equip_armor:1101
 item:1301:2

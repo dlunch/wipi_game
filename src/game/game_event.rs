@@ -183,6 +183,7 @@ pub enum EntityEvent {
         entity_id: EntityId,
         kind: EntityKind,
         name: String,
+        source_enemy_id: Option<u32>,
     },
     SetEntityTransform {
         entity_id: EntityId,

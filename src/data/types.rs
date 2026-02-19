@@ -302,7 +302,7 @@ pub struct NewGameConfig {
     pub player_name: String,
     pub start_map: MapId,
     pub fallback_map: MapId,
-    pub intro_dialog: Option<(DialogId, String)>,
+    pub intro_dialog: Option<(DialogId, NpcId)>,
     pub equip_weapon: Option<ItemId>,
     pub equip_armor: Option<ItemId>,
     pub treasure_item: Option<ItemId>,

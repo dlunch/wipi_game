@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, vec::Vec};
 use core::str;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -20,7 +20,6 @@ pub struct GameData {
     newgame: NewGameConfig,
     item_index: BTreeMap<u32, usize>,
     enemy_index: BTreeMap<u32, usize>,
-    enemy_name_index: BTreeMap<String, usize>,
     map_index: BTreeMap<u32, usize>,
     npc_index: BTreeMap<u32, usize>,
     dialog_index: BTreeMap<u32, usize>,
@@ -47,7 +46,6 @@ impl GameData {
             newgame: NewGameConfig::default(),
             item_index: BTreeMap::new(),
             enemy_index: BTreeMap::new(),
-            enemy_name_index: BTreeMap::new(),
             map_index: BTreeMap::new(),
             npc_index: BTreeMap::new(),
             dialog_index: BTreeMap::new(),
@@ -77,13 +75,6 @@ impl GameData {
             .ok_or_else(|| anyhow!("enemy not found: {}", id))
     }
 
-    pub fn find_enemy_by_name(&self, name: &str) -> Result<&Enemy> {
-        self.enemy_name_index
-            .get(name)
-            .and_then(|idx| self.enemies.get(*idx))
-            .ok_or_else(|| anyhow!("enemy name not found: {}", name))
-    }
-
     pub fn find_dialog(&self, id: u32) -> Result<&Dialog> {
         self.dialog_index
             .get(&id)
@@ -96,13 +87,6 @@ impl GameData {
             .get(&id)
             .and_then(|idx| self.npcs.get(*idx))
             .ok_or_else(|| anyhow!("npc not found: {}", id))
-    }
-
-    pub fn find_npc_by_name(&self, name: &str) -> Result<&Npc> {
-        self.npcs
-            .iter()
-            .find(|npc| npc.name == name)
-            .ok_or_else(|| anyhow!("npc name not found: {}", name))
     }
 
     pub fn find_quest(&self, id: u32) -> Result<&Quest> {
@@ -197,13 +181,6 @@ impl GameData {
         }
     }
 
-    fn rebuild_enemy_name_index(&mut self) {
-        self.enemy_name_index.clear();
-        for (idx, enemy) in self.enemies.iter().enumerate() {
-            self.enemy_name_index.insert(enemy.name.clone(), idx);
-        }
-    }
-
     fn rebuild_npc_index(&mut self) {
         self.npc_index.clear();
         for (idx, npc) in self.npcs.iter().enumerate() {
@@ -249,7 +226,6 @@ pub fn load_step(data: &mut GameData, step: usize) -> Result<bool> {
         1 => {
             data.enemies = load_resource_with(data, "data/enemies.dat", parse_enemies)?;
             data.rebuild_enemy_index();
-            data.rebuild_enemy_name_index();
         }
         2 => {
             data.maps = load_resource_with(data, "data/maps.dat", parse_maps)?;

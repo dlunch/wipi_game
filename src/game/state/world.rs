@@ -186,7 +186,7 @@ impl WorldState {
                 self.apply_world_event(data, world_event)?;
             }
             GameEvent::Entity(entity_event) => {
-                self.apply_entity_event(data, entity_event)?;
+                self.apply_entity_event(entity_event)?;
             }
             GameEvent::Combat(combat_event) => {
                 self.apply_combat_event(combat_event, event)?;
@@ -265,7 +265,7 @@ impl WorldState {
         Ok(())
     }
 
-    fn apply_entity_event(&mut self, data: &GameData, event: &EntityEvent) -> Result<()> {
+    fn apply_entity_event(&mut self, event: &EntityEvent) -> Result<()> {
         match event {
             EntityEvent::SetLeaderEntity(entity_id) => {
                 self.party.leader_id = *entity_id;
@@ -283,6 +283,7 @@ impl WorldState {
                 entity_id,
                 kind,
                 name,
+                source_enemy_id,
             } => {
                 let stat = EntityStat::default();
                 ensure!(
@@ -304,7 +305,7 @@ impl WorldState {
                     inventory: Vec::new(),
                     loadout: Default::default(),
                 });
-                self.sync_combat_entry_for_entity(data, *entity_id)?;
+                self.sync_combat_entry_for_entity(*entity_id, *source_enemy_id)?;
                 self.sync_allies_with_party()?;
             }
             EntityEvent::SetEntityTransform {
@@ -614,11 +615,17 @@ impl WorldState {
         Ok(())
     }
 
-    fn sync_combat_entry_for_entity(&mut self, data: &GameData, entity_id: EntityId) -> Result<()> {
+    fn sync_combat_entry_for_entity(
+        &mut self,
+        entity_id: EntityId,
+        source_enemy_id: Option<u32>,
+    ) -> Result<()> {
         let entity = self.entities.get(entity_id)?;
 
         if matches!(entity.kind, EntityKind::Enemy) {
-            let source_enemy_id = data.find_enemy_by_name(&entity.name)?.id;
+            let Some(source_enemy_id) = source_enemy_id else {
+                return Ok(());
+            };
 
             if let Some(enemy) = self
                 .combat
@@ -737,6 +744,7 @@ mod tests {
                 entity_id: 1,
                 kind: EntityKind::Player,
                 name: String::from("Hero"),
+                source_enemy_id: None,
             }),
         )?;
         world.apply_event(

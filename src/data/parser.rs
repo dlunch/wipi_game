@@ -336,12 +336,12 @@ GIVE_QUEST=3001:Kill the slimes!
 
     #[test]
     fn parse_newgame_full_config() -> Result<()> {
-        let data = "player_name:Hero\nstart_map:1\nfallback_map:1\nintro_dialog:1010:Guide NPC\nequip_weapon:1001\nequip_armor:1101\ntreasure_item:1302\nitem:1301:2\nitem:1302:1\n";
+        let data = "player_name:Hero\nstart_map:1\nfallback_map:1\nintro_dialog:1010:3010\nequip_weapon:1001\nequip_armor:1101\ntreasure_item:1302\nitem:1301:2\nitem:1302:1\n";
         let config = parse_newgame(data)?;
         assert_eq!(config.player_name, "Hero");
         assert_eq!(config.start_map, 1);
         assert_eq!(config.fallback_map, 1);
-        assert_eq!(config.intro_dialog, Some((1010, "Guide NPC".into())));
+        assert_eq!(config.intro_dialog, Some((1010, 3010)));
         assert_eq!(config.equip_weapon, Some(1001));
         assert_eq!(config.equip_armor, Some(1101));
         assert_eq!(config.treasure_item, Some(1302));

@@ -402,6 +402,7 @@ fn resolve_map_changed(
                 entity_id,
                 kind: EntityKind::Enemy,
                 name: enemy_data.name.clone(),
+                source_enemy_id: Some(enemy_data.id),
             }));
             out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id,

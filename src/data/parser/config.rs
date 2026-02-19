@@ -33,11 +33,11 @@ pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
             "intro_dialog" => {
                 ensure!(
                     parts.len() >= 3,
-                    "intro_dialog requires dialog_id and npc_name"
+                    "intro_dialog requires dialog_id and npc_id"
                 );
                 config.intro_dialog = Some((
                     parse_u32(parts[1], "intro_dialog.dialog_id", line)?,
-                    parts[2].to_string(),
+                    parse_u32(parts[2], "intro_dialog.npc_id", line)?,
                 ));
             }
             "equip_weapon" => {

@@ -78,12 +78,12 @@ impl DomainEventResolver for LifecycleResolver {
 
 impl LifecycleResolver {
     fn intro_dialog_spec(data: &GameData) -> Result<Option<(u32, u32)>> {
-        let Some((dialog_id, npc_name)) = data.newgame_config().intro_dialog.as_ref() else {
+        let Some((dialog_id, npc_id)) = data.newgame_config().intro_dialog.as_ref() else {
             return Ok(None);
         };
         data.find_dialog(*dialog_id)?;
-        let npc_id = data.find_npc_by_name(npc_name)?.id;
-        Ok(Some((*dialog_id, npc_id)))
+        data.find_npc(*npc_id)?;
+        Ok(Some((*dialog_id, *npc_id)))
     }
 
     fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
