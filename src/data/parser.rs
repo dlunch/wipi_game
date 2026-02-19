@@ -20,6 +20,11 @@ pub(crate) fn parse_usize(s: &str, field: &str, line: &str) -> Result<usize> {
         .map_err(|_| anyhow!("invalid {} '{}' in: {}", field, s, line))
 }
 
+pub(crate) fn parse_u32(s: &str, field: &str, line: &str) -> Result<u32> {
+    s.parse::<u32>()
+        .map_err(|_| anyhow!("invalid {} '{}' in: {}", field, s, line))
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::vec;
@@ -34,15 +39,17 @@ mod tests {
 
     #[test]
     fn parse_items_weapon_and_consumable() -> Result<()> {
-        let data = "W:sword:Iron Sword:10:5:200\nI:potion:Potion:30:50\n";
+        let data = "W:1:sword:Iron Sword:10:5:200\nI:2:potion:Potion:30:50\n";
         let items = parse_items(data)?;
         assert_eq!(items.len(), 2);
 
+        assert_eq!(items[0].data_id, 1);
         assert_eq!(items[0].id, "sword");
         assert_eq!(items[0].kind, ItemKind::Weapon);
         assert_eq!(items[0].param1, 10);
         assert_eq!(items[0].price, 200);
 
+        assert_eq!(items[1].data_id, 2);
         assert_eq!(items[1].id, "potion");
         assert_eq!(items[1].kind, ItemKind::Consumable);
         assert_eq!(items[1].param1, 30);
@@ -52,13 +59,15 @@ mod tests {
 
     #[test]
     fn parse_items_armor_and_accessory() -> Result<()> {
-        let data = "A:leather:Leather:5:2:150\nC:ring:Ring:3:1:300\n";
+        let data = "A:10:leather:Leather:5:2:150\nC:11:ring:Ring:3:1:300\n";
         let items = parse_items(data)?;
         assert_eq!(items.len(), 2);
 
+        assert_eq!(items[0].data_id, 10);
         assert_eq!(items[0].kind, ItemKind::Armor);
         assert_eq!(items[0].param1, 5);
 
+        assert_eq!(items[1].data_id, 11);
         assert_eq!(items[1].kind, ItemKind::Accessory);
         assert_eq!(items[1].param1, 3);
         Ok(())
@@ -66,7 +75,7 @@ mod tests {
 
     #[test]
     fn parse_items_skips_comments_and_empty() -> Result<()> {
-        let data = "# comment\n\nW:sword:Sword:10:0:100\n";
+        let data = "# comment\n\nW:1:sword:Sword:10:0:100\n";
         let items = parse_items(data)?;
         assert_eq!(items.len(), 1);
         Ok(())
@@ -86,18 +95,20 @@ mod tests {
 
     #[test]
     fn parse_items_rejects_bad_number() {
-        let data = "W:sword:Sword:abc:5:200\n";
+        let data = "W:1:sword:Sword:abc:5:200\n";
         assert!(parse_items(data).is_err());
     }
 
     #[test]
     fn parse_enemies_basic() -> Result<()> {
-        let data = "slime:Slime:20:5:2:10:5\ngoblin:Goblin:30:8:3:15:8\n";
+        let data = "1:slime:Slime:20:5:2:10:5\n2:goblin:Goblin:30:8:3:15:8\n";
         let enemies = parse_enemies(data)?;
         assert_eq!(enemies.len(), 2);
+        assert_eq!(enemies[0].data_id, 1);
         assert_eq!(enemies[0].id, "slime");
         assert_eq!(enemies[0].hp, 20);
         assert_eq!(enemies[0].atk, 5);
+        assert_eq!(enemies[1].data_id, 2);
         assert_eq!(enemies[1].id, "goblin");
         assert_eq!(enemies[1].gold, 8);
         Ok(())
@@ -111,7 +122,7 @@ mod tests {
 
     #[test]
     fn parse_enemies_rejects_zero_hp() {
-        let data = "slime:Slime:0:5:2:10:5\n";
+        let data = "1:slime:Slime:0:5:2:10:5\n";
         assert!(parse_enemies(data).is_err());
     }
 
@@ -301,9 +312,10 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_npcs_basic() -> Result<()> {
-        let data = "npc1:Elder:Q:elder_dialog\n";
+        let data = "1:npc1:Elder:Q:elder_dialog\n";
         let npcs = parse_npcs(data)?;
         assert_eq!(npcs.len(), 1);
+        assert_eq!(npcs[0].data_id, 1);
         assert_eq!(npcs[0].id, "npc1");
         assert_eq!(npcs[0].name, "Elder");
         assert_eq!(npcs[0].npc_type, NpcType::QuestGiver);
@@ -313,8 +325,9 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_npcs_with_shop() -> Result<()> {
-        let data = "npc1:Merchant:S:shop_dialog:shop1\n";
+        let data = "2:npc1:Merchant:S:shop_dialog:shop1\n";
         let npcs = parse_npcs(data)?;
+        assert_eq!(npcs[0].data_id, 2);
         assert_eq!(npcs[0].npc_type, NpcType::ShopKeeper);
         assert_eq!(npcs[0].shop_id.as_deref(), Some("shop1"));
         Ok(())
@@ -322,7 +335,7 @@ GIVE_QUEST=slay:Kill the slimes!
 
     #[test]
     fn parse_npcs_rejects_unknown_type() {
-        let data = "npc1:Test:Z:dialog\n";
+        let data = "1:npc1:Test:Z:dialog\n";
         assert!(parse_npcs(data).is_err());
     }
 

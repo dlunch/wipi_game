@@ -20,8 +20,12 @@ pub struct GameData {
     pub shops: Vec<Shop>,
     pub newgame: NewGameConfig,
     item_index: BTreeMap<String, usize>,
+    item_data_id_index: BTreeMap<u32, usize>,
     enemy_index: BTreeMap<String, usize>,
+    enemy_name_index: BTreeMap<String, usize>,
+    enemy_data_id_index: BTreeMap<u32, usize>,
     map_index: BTreeMap<String, usize>,
+    npc_data_id_index: BTreeMap<u32, usize>,
     dialog_index: BTreeMap<String, usize>,
     quest_index: BTreeMap<String, usize>,
     shop_index: BTreeMap<String, usize>,
@@ -33,10 +37,13 @@ impl GameData {
             0 => {
                 self.items = Self::load_resource("data/items.dat", parse_items)?;
                 self.rebuild_item_index();
+                self.rebuild_item_data_id_index();
             }
             1 => {
                 self.enemies = Self::load_resource("data/enemies.dat", parse_enemies)?;
                 self.rebuild_enemy_index();
+                self.rebuild_enemy_name_index();
+                self.rebuild_enemy_data_id_index();
             }
             2 => {
                 self.maps = Self::load_resource("data/maps.dat", parse_maps)?;
@@ -45,6 +52,7 @@ impl GameData {
             3 => {
                 let npc_defs = Self::load_resource("data/npcs.dat", parse_npcs)?;
                 self.npcs = Self::resolve_map_npcs(&self.maps, &npc_defs)?;
+                self.rebuild_npc_data_id_index();
             }
             4 => {
                 self.dialogs = Self::load_resource("data/dialogs.dat", parse_dialogs)?;
@@ -106,6 +114,13 @@ impl GameData {
             enemy.id.as_str()
         })
         .ok_or_else(|| anyhow!("enemy not found: {}", id))
+    }
+
+    pub fn find_enemy_by_name(&self, name: &str) -> Result<&Enemy> {
+        Self::find_indexed(&self.enemies, &self.enemy_name_index, name, |enemy| {
+            enemy.name.as_str()
+        })
+        .ok_or_else(|| anyhow!("enemy name not found: {}", name))
     }
 
     pub fn find_dialog(&self, id: &str) -> Result<&Dialog> {
@@ -202,10 +217,37 @@ impl GameData {
         Self::rebuild_index(&mut self.item_index, &self.items, |item| item.id.as_str());
     }
 
+    fn rebuild_item_data_id_index(&mut self) {
+        self.item_data_id_index.clear();
+        for (idx, item) in self.items.iter().enumerate() {
+            self.item_data_id_index.insert(item.data_id, idx);
+        }
+    }
+
     fn rebuild_enemy_index(&mut self) {
         Self::rebuild_index(&mut self.enemy_index, &self.enemies, |enemy| {
             enemy.id.as_str()
         });
+    }
+
+    fn rebuild_enemy_name_index(&mut self) {
+        Self::rebuild_index(&mut self.enemy_name_index, &self.enemies, |enemy| {
+            enemy.name.as_str()
+        });
+    }
+
+    fn rebuild_enemy_data_id_index(&mut self) {
+        self.enemy_data_id_index.clear();
+        for (idx, enemy) in self.enemies.iter().enumerate() {
+            self.enemy_data_id_index.insert(enemy.data_id, idx);
+        }
+    }
+
+    fn rebuild_npc_data_id_index(&mut self) {
+        self.npc_data_id_index.clear();
+        for (idx, npc) in self.npcs.iter().enumerate() {
+            self.npc_data_id_index.insert(npc.data_id, idx);
+        }
     }
 
     fn rebuild_map_index(&mut self) {

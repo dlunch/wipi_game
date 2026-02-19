@@ -1,4 +1,4 @@
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{collections::BTreeSet, string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow, ensure};
 
@@ -495,14 +495,6 @@ impl WorldState {
         if self.occupancy.width == 0 || self.occupancy.height == 0 {
             return Ok(None);
         }
-        if self
-            .combat
-            .enemies
-            .iter()
-            .all(|enemy| enemy.entity_id != entity_id)
-        {
-            return Ok(None);
-        }
         let entity = self.entities.get(entity_id)?;
         if entity.map_id != self.occupancy.map_id {
             return Ok(None);
@@ -589,29 +581,34 @@ impl WorldState {
 
     fn sync_allies_with_party(&mut self) -> Result<()> {
         let mut party_ids = Vec::with_capacity(1 + self.party.companion_ids.len());
+        let mut party_set = BTreeSet::new();
         if self.party.leader_id != 0 && self.entities.contains(self.party.leader_id) {
             party_ids.push(self.party.leader_id);
+            party_set.insert(self.party.leader_id);
         }
         for entity_id in &self.party.companion_ids {
             self.entities.get(*entity_id)?;
-            party_ids.push(*entity_id);
+            if party_set.insert(*entity_id) {
+                party_ids.push(*entity_id);
+            }
         }
 
         self.combat
             .allies
-            .retain(|ally| party_ids.contains(&ally.entity_id));
+            .retain(|ally| party_set.contains(&ally.entity_id));
+
+        let mut existing_allies = BTreeSet::new();
+        for ally in &self.combat.allies {
+            existing_allies.insert(ally.entity_id);
+        }
 
         for entity_id in party_ids {
-            if self
-                .combat
-                .allies
-                .iter()
-                .all(|ally| ally.entity_id != entity_id)
-            {
+            if !existing_allies.contains(&entity_id) {
                 self.combat.allies.push(AllyCombatantState {
                     entity_id,
                     combatant: CombatantState::default(),
                 });
+                existing_allies.insert(entity_id);
             }
         }
         Ok(())
@@ -623,14 +620,8 @@ impl WorldState {
         if matches!(entity.kind, EntityKind::Enemy) {
             let source_enemy_id = data
                 .find_enemy(&entity.name)
-                .map(|_| entity.name.clone())
-                .or_else(|_| {
-                    data.enemies
-                        .iter()
-                        .find(|enemy| enemy.name == entity.name)
-                        .map(|enemy| enemy.id.clone())
-                        .ok_or_else(|| anyhow!("Enemy data not found for entity '{}'", entity.name))
-                })?;
+                .or_else(|_| data.find_enemy_by_name(&entity.name))
+                .map(|enemy| enemy.id.clone())?;
 
             if let Some(enemy) = self
                 .combat

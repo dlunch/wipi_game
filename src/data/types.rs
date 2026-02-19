@@ -12,13 +12,14 @@ pub enum ItemKind {
 }
 
 /// 아이템 데이터
-/// 포맷: TYPE:id:name:param1:param2:price
-/// W:sword:녹슨 검:5:0:100    (무기: atk:unused:price)
-/// A:leather:가죽갑옷:3:0:150  (방어구: def:unused:price)
-/// C:ring:힘의 반지:2:0:200   (악세서리: atk_bonus:def_bonus:price)
-/// I:potion:회복약:30:50      (소비: hp_restore:price)
+/// 포맷:
+/// W:data_id:id:name:atk:crit:price
+/// A:data_id:id:name:def:mdef:price
+/// C:data_id:id:name:atk_bonus:def_bonus:price
+/// I:data_id:id:name:hp_restore:price
 #[derive(Debug, Clone)]
 pub struct Item {
+    pub data_id: u32,
     pub id: String,
     pub name: String,
     pub kind: ItemKind,
@@ -52,10 +53,10 @@ impl Item {
 }
 
 /// 적 데이터
-/// 포맷: id:name:hp:atk:def:exp:gold
-/// slime:슬라임:20:5:2:10:5
+/// 포맷: data_id:id:name:hp:atk:def:exp:gold
 #[derive(Debug, Clone)]
 pub struct Enemy {
+    pub data_id: u32,
     pub id: String,
     pub name: String,
     pub hp: i32,
@@ -179,6 +180,7 @@ impl Map {
 
 #[derive(Debug, Clone)]
 pub struct Npc {
+    pub data_id: u32,
     pub id: String,
     pub name: String,
     pub map_id: String,
@@ -357,6 +359,7 @@ mod tests {
 
     fn make_item(kind: ItemKind, p1: i32, p2: i32) -> Item {
         Item {
+            data_id: 1,
             id: String::from("test"),
             name: String::from("Test"),
             kind,

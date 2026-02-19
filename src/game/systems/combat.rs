@@ -1,4 +1,4 @@
-use alloc::{rc::Rc, vec, vec::Vec};
+use alloc::{collections::BTreeSet, rc::Rc, vec, vec::Vec};
 use core::cmp::Ordering;
 
 use anyhow::{Result, anyhow};
@@ -81,11 +81,11 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
 
     tick_combatant_effects(leader_id, leader_combatant, next_tick, out);
 
-    let mut occupied_tiles = Vec::with_capacity(world.combat.enemies.len() + 1);
-    occupied_tiles.push(tile_index(leader_entity.x, leader_entity.y, map.width));
+    let mut occupied_tiles = BTreeSet::new();
+    occupied_tiles.insert(tile_index(leader_entity.x, leader_entity.y, map.width));
     for enemy in &world.combat.enemies {
         let entity = world.entity(enemy.entity_id)?;
-        occupied_tiles.push(tile_index(entity.x, entity.y, map.width));
+        occupied_tiles.insert(tile_index(entity.x, entity.y, map.width));
     }
 
     let mut total_player_damage = 0;
@@ -114,7 +114,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
                 leader_entity.x,
                 leader_entity.y,
                 map,
-                occupied_tiles.as_slice(),
+                &occupied_tiles,
             );
             next_x = mx;
             next_y = my;
@@ -126,10 +126,8 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
                 y: next_y,
             }));
             let old_tile = tile_index(enemy_entity.x, enemy_entity.y, map.width);
-            if let Some(index) = occupied_tiles.iter().position(|tile| *tile == old_tile) {
-                occupied_tiles.swap_remove(index);
-            }
-            occupied_tiles.push(tile_index(next_x, next_y, map.width));
+            occupied_tiles.remove(&old_tile);
+            occupied_tiles.insert(tile_index(next_x, next_y, map.width));
         }
 
         if !enemy_stunned
@@ -464,7 +462,7 @@ fn next_enemy_position_towards(
     target_x: usize,
     target_y: usize,
     map: &Map,
-    occupied: &[usize],
+    occupied: &BTreeSet<usize>,
 ) -> (usize, usize) {
     let dx = match target_x.cmp(&enemy_x) {
         Ordering::Greater => 1,
