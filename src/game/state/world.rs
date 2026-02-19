@@ -1,18 +1,21 @@
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::data::{Direction, Map, QuestProgress};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{
-    CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
-    MovementEvent, WorldEvent,
-};
-use crate::game::state::{
-    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
-    EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, ItemStack, MovementState, PartyState,
+use crate::{
+    data::{Direction, Map, QuestProgress},
+    game::{
+        game_data::GameData,
+        game_event::{
+            CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
+            MovementEvent, WorldEvent,
+        },
+        state::{
+            AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId,
+            EntityKind, EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, ItemStack,
+            MovementState, PartyState,
+        },
+    },
 };
 
 #[derive(Debug, Default)]
@@ -710,20 +713,21 @@ impl GameEventSubscriber for WorldState {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
-    use alloc::vec;
-    use alloc::vec::Vec;
+    use alloc::{string::String, vec, vec::Vec};
 
     use anyhow::{Result, anyhow};
 
-    use crate::data::{Direction, Quest, QuestType};
-    use crate::game::game_data::GameData;
-    use crate::game::game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent};
-    use crate::game::state::{
-        CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
-    };
-
     use super::{OccupancyState, WorldState};
+    use crate::{
+        data::{Direction, Quest, QuestType},
+        game::{
+            game_data::GameData,
+            game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent},
+            state::{
+                CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
+            },
+        },
+    };
 
     #[test]
     fn add_entity_exp_keeps_runtime_resources_on_entity() -> Result<()> {

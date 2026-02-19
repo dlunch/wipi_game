@@ -1,17 +1,23 @@
-use alloc::string::{String, ToString};
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::str::FromStr;
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::data::{Direction, QuestProgress};
-use crate::game::state::{
-    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityKind, EntityStat,
-    EntityState, EntityStore, ItemStack, LoadoutState, PartyState, TimedEffect, TimedKind,
-    TimedState,
+use crate::{
+    data::{Direction, QuestProgress},
+    game::{
+        state::{
+            AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityKind,
+            EntityStat, EntityState, EntityStore, ItemStack, LoadoutState, PartyState, TimedEffect,
+            TimedKind, TimedState,
+        },
+        world::{OccupancyState, WorldState},
+    },
 };
-use crate::game::world::{OccupancyState, WorldState};
 
 const SAVE_VERSION: u32 = 2;
 

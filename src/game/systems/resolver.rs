@@ -1,11 +1,12 @@
-use alloc::rc::Rc;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec::Vec};
 
 use anyhow::Result;
 
-use crate::game::game_data::GameData;
-use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber};
-use crate::game::world::WorldState;
+use crate::game::{
+    game_data::GameData,
+    game_event::{GameEvent, GameEventKind, GameEventSubscriber},
+    world::WorldState,
+};
 
 pub trait DomainEventResolver: GameEventSubscriber {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];

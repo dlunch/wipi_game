@@ -1,11 +1,12 @@
-use alloc::format;
-use alloc::string::String;
+use alloc::{format, string::String};
 
 use anyhow::Result;
 
-use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent};
-use crate::game::systems::lifecycle::LoadingEvent;
-use crate::game::ui::state::DialogTransition;
+use crate::game::{
+    game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent},
+    systems::lifecycle::LoadingEvent,
+    ui::state::DialogTransition,
+};
 
 #[derive(Debug)]
 pub enum GameState {

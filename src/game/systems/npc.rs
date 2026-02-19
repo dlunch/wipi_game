@@ -1,17 +1,17 @@
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{ExploreEvent, GameEvent, GameEventKind};
-use crate::game::ui::state::DialogState;
-use crate::game::world::WorldState;
-
 use super::resolver::DomainEventResolver;
+use crate::{
+    data::{Dialog, DialogCondition, DialogLine, Direction, NpcType},
+    game::{
+        game_data::GameData,
+        game_event::{ExploreEvent, GameEvent, GameEventKind},
+        ui::state::DialogState,
+        world::WorldState,
+    },
+};
 
 #[derive(Debug)]
 pub struct DialogSpec {

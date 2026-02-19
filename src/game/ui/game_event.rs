@@ -1,10 +1,11 @@
 use anyhow::Result;
 
 use super::state::{MenuState, ShopMode, UiState};
-use crate::game::game_event::TransitionEvent;
-use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber, WorldEvent};
-use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
-use crate::game::ui::state::DialogTransition;
+use crate::game::{
+    game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent, WorldEvent},
+    systems::lifecycle::{LifecycleEvent, LoadingEvent},
+    ui::state::DialogTransition,
+};
 
 impl UiState {
     pub fn apply_game_event(&mut self, event: &GameEvent) -> Result<()> {

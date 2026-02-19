@@ -8,8 +8,7 @@ pub(crate) mod resolver;
 pub(crate) mod shop;
 pub(crate) mod world;
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 pub fn domain_resolvers() -> Vec<&'static dyn resolver::DomainEventResolver> {
     let mut handlers: Vec<&'static dyn resolver::DomainEventResolver> = vec![];

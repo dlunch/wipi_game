@@ -2,13 +2,14 @@ use alloc::format;
 
 use wipi::framebuffer::Framebuffer;
 
-use super::renderer::{
-    COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
-    draw_text, fill_rect,
+use super::{
+    render_state::ShopRender,
+    renderer::{
+        COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen,
+        draw_rect, draw_text, fill_rect,
+    },
 };
 use crate::game::ui::state::ShopMode;
-
-use super::render_state::ShopRender;
 
 pub fn draw_shop(fb: &mut Framebuffer, state: &ShopRender) {
     clear_screen(fb);

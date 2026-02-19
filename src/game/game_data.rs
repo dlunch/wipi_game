@@ -1,8 +1,4 @@
-use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 use core::str;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};

@@ -1,8 +1,10 @@
 use anyhow::Result;
 
-use crate::data::Direction;
-use crate::game::game_event::{
-    ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, TransitionEvent,
+use crate::{
+    data::Direction,
+    game::game_event::{
+        ExploreEvent, GameEvent, GameEventKind, GameEventSubscriber, MovementEvent, TransitionEvent,
+    },
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]

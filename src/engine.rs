@@ -1,21 +1,20 @@
-use alloc::collections::VecDeque;
-use alloc::format;
-use alloc::rc::Rc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{collections::VecDeque, format, rc::Rc, vec, vec::Vec};
 
 use anyhow::{Error, Result, ensure};
 
-use crate::game::effects::{DomainEventEffect, domain_effects};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber};
-use crate::game::rendering::{RenderFxState, RenderState, SpriteAtlas};
-use crate::game::state::{GameState, WorldSlot};
-use crate::game::systems::domain_resolvers;
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::ui::apply::UiEventApplier;
-use crate::game::ui::resolve::UiInputEventResolver;
-use crate::game::ui::state::{GameInput, InputKey, UiState};
+use crate::game::{
+    effects::{DomainEventEffect, domain_effects},
+    game_data::GameData,
+    game_event::{GameEvent, GameEventKind, GameEventSubscriber},
+    rendering::{RenderFxState, RenderState, SpriteAtlas},
+    state::{GameState, WorldSlot},
+    systems::{domain_resolvers, resolver::DomainEventResolver},
+    ui::{
+        apply::UiEventApplier,
+        resolve::UiInputEventResolver,
+        state::{GameInput, InputKey, UiState},
+    },
+};
 
 pub struct GameEngine {
     state: GameState,

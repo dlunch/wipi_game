@@ -1,5 +1,4 @@
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use super::state::{GameInput, InputKey, UiEvent, UiState};
 use crate::game::state::{GameState, world::WorldState};

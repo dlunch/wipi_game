@@ -1,5 +1,4 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
@@ -352,9 +351,7 @@ impl Skill {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
-    use alloc::vec;
-    use alloc::vec::Vec;
+    use alloc::{string::String, vec, vec::Vec};
 
     use super::{Item, ItemKind, Map, Tile};
 

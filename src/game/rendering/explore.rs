@@ -1,17 +1,20 @@
-use alloc::format;
-use alloc::string::String;
+use alloc::{format, string::String};
 
 use wipi::framebuffer::{Color, Framebuffer};
 
-use super::render_state::ExploreRender;
-use super::renderer::{
-    COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
-    COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
-    draw_rect, draw_text, fill_rect, truncate_by_chars,
+use super::{
+    render_state::ExploreRender,
+    renderer::{
+        COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON,
+        COLOR_FOREST, COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE,
+        clear_screen, draw_rect, draw_text, fill_rect, truncate_by_chars,
+    },
+    sprites::SpriteAtlas,
 };
-use super::sprites::SpriteAtlas;
-use crate::data::{Direction, Map, SkillType, Tile};
-use crate::game::ui::state::ExploreAction;
+use crate::{
+    data::{Direction, Map, SkillType, Tile},
+    game::ui::state::ExploreAction,
+};
 
 const HUD_HEIGHT: i32 = 40;
 const MINIMAP_RADIUS: i32 = 6;

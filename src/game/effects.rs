@@ -1,15 +1,15 @@
-use alloc::rc::Rc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
 use super::save::{has_save_data, save_game};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{GameEvent, GameEventKind, TransitionEvent};
-use crate::game::state::GameState;
-use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
-use crate::game::world::WorldState;
+use crate::game::{
+    game_data::GameData,
+    game_event::{GameEvent, GameEventKind, TransitionEvent},
+    state::GameState,
+    systems::lifecycle::{LifecycleEvent, LoadingEvent},
+    world::WorldState,
+};
 
 pub trait DomainEventEffect {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];

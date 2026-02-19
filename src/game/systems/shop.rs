@@ -1,15 +1,14 @@
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
 use super::resolver::DomainEventResolver;
-use crate::game::game_data::GameData;
-use crate::game::game_event::{GameEvent, GameEventKind};
-use crate::game::ui::state::ShopState;
-use crate::game::world::WorldState;
+use crate::game::{
+    game_data::GameData,
+    game_event::{GameEvent, GameEventKind},
+    ui::state::ShopState,
+    world::WorldState,
+};
 struct OpenShopByIdResolver;
 
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;

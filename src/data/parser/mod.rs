@@ -30,7 +30,6 @@ mod tests {
         parse_dialogs, parse_enemies, parse_items, parse_maps, parse_newgame, parse_npcs,
         parse_quests, parse_shops,
     };
-
     use crate::data::types::{DialogAction, DialogCondition, ItemKind, NpcType, QuestType, Tile};
 
     #[test]

@@ -1,6 +1,4 @@
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{string::String, vec, vec::Vec};
 
 use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
 

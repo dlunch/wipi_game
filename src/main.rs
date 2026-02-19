@@ -7,19 +7,16 @@ mod engine;
 mod game;
 
 use alloc::rc::Rc;
-use core::cell::RefCell;
-use core::time::Duration;
+use core::{cell::RefCell, time::Duration};
 
-use wipi::app::App;
-use wipi::event::KeyCode;
-use wipi::framebuffer::Framebuffer;
-use wipi::graphics::repaint;
-use wipi::timer::Timer;
-use wipi::wipi_main;
+use wipi::{
+    app::App, event::KeyCode, framebuffer::Framebuffer, graphics::repaint, timer::Timer, wipi_main,
+};
 
-use crate::engine::GameEngine;
-use crate::game::rendering::render;
-use crate::game::ui::state::InputKey;
+use crate::{
+    engine::GameEngine,
+    game::{rendering::render, ui::state::InputKey},
+};
 
 fn map_key(key: KeyCode) -> Option<InputKey> {
     match key {

@@ -1,20 +1,19 @@
-use alloc::rc::Rc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec, vec::Vec};
 use core::cmp::Ordering;
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{
-    CombatEvent, EntityEvent, GameEvent, GameEventKind, TransitionEvent,
-};
-use crate::game::state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def};
-use crate::game::ui::state::ExploreAction;
-use crate::game::world::WorldState;
-
 use super::resolver::DomainEventResolver;
+use crate::{
+    data::{Direction, Enemy, Map, Skill, SkillType, Tile},
+    game::{
+        game_data::GameData,
+        game_event::{CombatEvent, EntityEvent, GameEvent, GameEventKind, TransitionEvent},
+        state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def},
+        ui::state::ExploreAction,
+        world::WorldState,
+    },
+};
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;

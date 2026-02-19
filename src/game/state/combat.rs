@@ -1,10 +1,11 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::game::game_event::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
-use crate::game::state::EntityId;
+use crate::game::{
+    game_event::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber},
+    state::EntityId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimedKind {

@@ -1,6 +1,8 @@
-use alloc::string::{String, ToString};
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 use anyhow::{Result, anyhow, bail, ensure};
 

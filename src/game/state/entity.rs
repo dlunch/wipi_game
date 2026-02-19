@@ -1,12 +1,9 @@
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::slice::Iter;
 
 use anyhow::{Result, anyhow};
 
-use crate::data::Direction;
-use crate::game::game_data::GameData;
+use crate::{data::Direction, game::game_data::GameData};
 
 pub type EntityId = u32;
 pub const GOLD_ITEM_ID: &str = "gold";

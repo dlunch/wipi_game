@@ -1,17 +1,17 @@
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{DialogAction, ItemKind};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{EntityEvent, GameEvent, GameEventKind, LoadoutSlot};
-use crate::game::state::{EntityState, GOLD_ITEM_ID};
-use crate::game::world::WorldState;
-
 use super::resolver::DomainEventResolver;
+use crate::{
+    data::{DialogAction, ItemKind},
+    game::{
+        game_data::GameData,
+        game_event::{EntityEvent, GameEvent, GameEventKind, LoadoutSlot},
+        state::{EntityState, GOLD_ITEM_ID},
+        world::WorldState,
+    },
+};
 
 struct CharacterMutationResolver;
 

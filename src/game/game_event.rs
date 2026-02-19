@@ -1,11 +1,16 @@
-use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 
-use crate::data::{DialogAction, Direction};
-use crate::game::state::{EntityId, EntityKind, MovementTickEvent, TimedKind};
-use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
-use crate::game::systems::npc::NpcEvent;
-use crate::game::ui::state::{DialogState, DialogTransition, ExploreAction, ShopState};
+use crate::{
+    data::{DialogAction, Direction},
+    game::{
+        state::{EntityId, EntityKind, MovementTickEvent, TimedKind},
+        systems::{
+            lifecycle::{LifecycleEvent, LoadingEvent},
+            npc::NpcEvent,
+        },
+        ui::state::{DialogState, DialogTransition, ExploreAction, ShopState},
+    },
+};
 
 pub enum CombatEvent {
     SetActive(bool),

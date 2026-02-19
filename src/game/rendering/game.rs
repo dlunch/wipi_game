@@ -1,39 +1,40 @@
-use alloc::format;
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{format, rc::Rc, string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 use wipi::framebuffer::Framebuffer;
 
-use crate::game::game_data::GameData;
-use crate::game::game_event::{
-    CombatEvent, EntityEvent, ExploreEvent, GameEvent, MovementEvent, TransitionEvent, WorldEvent,
+use super::{
+    dialog::draw_dialog,
+    explore::draw_explore,
+    inventory::{draw_inventory, draw_stats},
+    menu::{draw_menu, draw_pause_menu},
+    quest::draw_quest_log,
+    render_fx::RenderFxState,
+    render_state::{
+        ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender, SkillEffectRender,
+        StatsRender, TrackedQuestRender, interaction_hint_from_world, scroll_for_selection,
+    },
+    renderer::{
+        COLOR_BLUE, COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text,
+        fill_rect,
+    },
+    shop::draw_shop,
+    sprites::SpriteAtlas,
 };
-use crate::game::state::GameState;
-use crate::game::state::{CombatantState, EntityState, TimedKind};
-use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
-use crate::game::ui::state::{
-    DialogTransition, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
+use crate::game::{
+    game_data::GameData,
+    game_event::{
+        CombatEvent, EntityEvent, ExploreEvent, GameEvent, MovementEvent, TransitionEvent,
+        WorldEvent,
+    },
+    state::{CombatantState, EntityState, GameState, TimedKind},
+    systems::lifecycle::{LifecycleEvent, LoadingEvent},
+    ui::state::{
+        DialogTransition, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode,
+        UiState,
+    },
+    world::WorldState,
 };
-use crate::game::world::WorldState;
-
-use super::dialog::draw_dialog;
-use super::explore::draw_explore;
-use super::inventory::{draw_inventory, draw_stats};
-use super::menu::{draw_menu, draw_pause_menu};
-use super::quest::draw_quest_log;
-use super::render_fx::RenderFxState;
-use super::render_state::{
-    ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender, SkillEffectRender,
-    StatsRender, TrackedQuestRender, interaction_hint_from_world, scroll_for_selection,
-};
-use super::renderer::{
-    COLOR_BLUE, COLOR_DARK_GRAY, COLOR_RED, COLOR_WHITE, clear_screen, draw_rect, draw_text,
-    fill_rect,
-};
-use super::shop::draw_shop;
-use super::sprites::SpriteAtlas;
 
 struct DialogRenderFields {
     explore: Option<ExploreRender>,

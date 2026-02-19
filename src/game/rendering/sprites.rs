@@ -1,10 +1,7 @@
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::str;
 
-use wipi::image::Image;
-use wipi::resource::Resource;
+use wipi::{image::Image, resource::Resource};
 
 use crate::data::Direction;
 

@@ -1,17 +1,17 @@
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{Direction, Map, Tile};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{GameEvent, GameEventKind, MovementEvent, TileEvent};
-use crate::game::state::{EntityState, MovementState, MovementTickEvent};
-use crate::game::world::WorldState;
-
 use super::resolver::DomainEventResolver;
+use crate::{
+    data::{Direction, Map, Tile},
+    game::{
+        game_data::GameData,
+        game_event::{GameEvent, GameEventKind, MovementEvent, TileEvent},
+        state::{EntityState, MovementState, MovementTickEvent},
+        world::WorldState,
+    },
+};
 
 const MOVE_COOLDOWN: u32 = 2;
 

@@ -1,7 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::game::game_event::{CombatEvent, EntityEvent, GameEvent, LoadoutSlot};
-use crate::game::state::{EntityId, EntityState, TimedEffect};
+use crate::game::{
+    game_event::{CombatEvent, EntityEvent, GameEvent, LoadoutSlot},
+    state::{EntityId, EntityState, TimedEffect},
+};
 
 pub fn emit_timed_effects(entity_id: EntityId, effects: &[TimedEffect], out: &mut Vec<GameEvent>) {
     for effect in effects {

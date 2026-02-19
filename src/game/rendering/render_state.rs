@@ -1,21 +1,20 @@
-use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, format, rc::Rc, string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{Direction, ItemKind, NpcType, SkillType, Tile};
-use crate::game::game_data::GameData;
-use crate::game::state::GOLD_ITEM_ID;
-use crate::game::state::{TimedKind, TimedState, combat_attack_def};
-use crate::game::ui::state::{
-    ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
-};
-use crate::game::world::WorldState;
-
 use super::render_fx::RenderFxState;
+use crate::{
+    data::{Direction, ItemKind, NpcType, SkillType, Tile},
+    game::{
+        game_data::GameData,
+        state::{GOLD_ITEM_ID, TimedKind, TimedState, combat_attack_def},
+        ui::state::{
+            ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode,
+            UiState,
+        },
+        world::WorldState,
+    },
+};
 
 pub enum RenderState {
     Loading {

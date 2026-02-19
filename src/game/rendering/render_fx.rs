@@ -1,13 +1,15 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{Direction, Skill, SkillType};
-use crate::game::game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent};
-use crate::game::state::GameState;
-use crate::game::state::TimedKind;
-use crate::game::world::WorldState;
+use crate::{
+    data::{Direction, Skill, SkillType},
+    game::{
+        game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent},
+        state::{GameState, TimedKind},
+        world::WorldState,
+    },
+};
 
 #[derive(Default)]
 pub struct RenderFxState {

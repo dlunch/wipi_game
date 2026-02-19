@@ -1,13 +1,16 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
-use crate::data::DialogAction;
-use crate::game::game_event::{ExploreEvent, GameEvent, TransitionEvent};
-use crate::game::selection::{step_down, step_up};
-use crate::game::state::{GOLD_ITEM_ID, world::WorldState};
+use crate::{
+    data::DialogAction,
+    game::{
+        game_event::{ExploreEvent, GameEvent, TransitionEvent},
+        selection::{step_down, step_up},
+        state::{GOLD_ITEM_ID, world::WorldState},
+    },
+};
 
 pub trait UiEventApplier {
     fn apply_ui_event(

@@ -1,20 +1,20 @@
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use crate::data::{DialogAction, QuestType};
-use crate::game::game_data::GameData;
-use crate::game::game_event::{
-    CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TileEvent, TransitionEvent,
-    WorldEvent,
-};
-use crate::game::state::{GOLD_ITEM_ID, TimedKind};
-use crate::game::world::WorldState;
-
 use super::resolver::DomainEventResolver;
+use crate::{
+    data::{DialogAction, QuestType},
+    game::{
+        game_data::GameData,
+        game_event::{
+            CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TileEvent,
+            TransitionEvent, WorldEvent,
+        },
+        state::{GOLD_ITEM_ID, TimedKind},
+        world::WorldState,
+    },
+};
 
 struct WorldLogicResolver;
 
