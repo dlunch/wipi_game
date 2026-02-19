@@ -96,7 +96,7 @@ fn draw_map_with_entities(
         }
     }
 
-    for npc in &state.data.npcs {
+    for npc in state.data.npcs() {
         if npc.map_id != state.map_id {
             continue;
         }
@@ -369,7 +369,7 @@ fn draw_minimap(fb: &mut Framebuffer, map: &Map, state: &ExploreRender) {
         }
     }
 
-    for npc in &state.data.npcs {
+    for npc in state.data.npcs() {
         if npc.map_id != state.map_id {
             continue;
         }

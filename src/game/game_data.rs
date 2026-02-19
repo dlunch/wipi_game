@@ -11,14 +11,14 @@ use crate::data::{
 
 #[derive(Default)]
 pub struct GameData {
-    pub items: Vec<Item>,
-    pub enemies: Vec<Enemy>,
-    pub maps: Vec<Map>,
-    pub npcs: Vec<Npc>,
-    pub dialogs: Vec<Dialog>,
-    pub quests: Vec<Quest>,
-    pub shops: Vec<Shop>,
-    pub newgame: NewGameConfig,
+    items: Vec<Item>,
+    enemies: Vec<Enemy>,
+    maps: Vec<Map>,
+    npcs: Vec<Npc>,
+    dialogs: Vec<Dialog>,
+    quests: Vec<Quest>,
+    shops: Vec<Shop>,
+    newgame: NewGameConfig,
     item_index: BTreeMap<String, usize>,
     item_data_id_index: BTreeMap<u32, usize>,
     enemy_index: BTreeMap<String, usize>,
@@ -140,6 +140,14 @@ impl GameData {
     pub fn find_shop(&self, id: &str) -> Result<&Shop> {
         Self::find_indexed(&self.shops, &self.shop_index, id, |shop| shop.id.as_str())
             .ok_or_else(|| anyhow!("shop not found: {}", id))
+    }
+
+    pub fn newgame_config(&self) -> &NewGameConfig {
+        &self.newgame
+    }
+
+    pub fn npcs(&self) -> &[Npc] {
+        &self.npcs
     }
 
     pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {

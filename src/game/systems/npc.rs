@@ -15,9 +15,9 @@ use crate::{
 
 #[derive(Debug)]
 pub struct DialogSpec {
-    pub npc_name: String,
-    pub lines: Vec<DialogLine>,
-    pub restore: bool,
+    npc_name: String,
+    lines: Vec<DialogLine>,
+    restore: bool,
 }
 
 #[derive(Debug)]
@@ -55,13 +55,11 @@ fn try_interact_npc(
             return Ok(Some(NpcEvent::RestoreStats));
         }
         NpcType::ShopKeeper => {
-            let shop = npc
+            let shop_id = npc
                 .shop_id
                 .as_ref()
-                .map(|sid| data.find_shop(sid))
-                .transpose()?
-                .or_else(|| data.shops.first())
-                .ok_or_else(|| anyhow!("No shop available for NPC '{}'", npc.id))?;
+                .ok_or_else(|| anyhow!("No shop id for NPC '{}'", npc.id))?;
+            let shop = data.find_shop(shop_id)?;
             return Ok(Some(NpcEvent::OpenShop(shop.id.clone())));
         }
         NpcType::QuestGiver | NpcType::Villager => {}

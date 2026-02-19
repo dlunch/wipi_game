@@ -710,7 +710,7 @@ mod tests {
 
     use super::{OccupancyState, WorldState};
     use crate::{
-        data::{Direction, Quest, QuestType},
+        data::Direction,
         game::{
             game_data::GameData,
             game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent},
@@ -756,36 +756,27 @@ mod tests {
     #[test]
     fn quest_progress_uses_delta_and_clamps_to_target() -> Result<()> {
         let mut data = GameData::default();
-        data.quests.push(Quest {
-            id: String::from("q-kill"),
-            name: String::from("Quest"),
-            description: String::from("Desc"),
-            quest_type: QuestType::Kill,
-            target_id: String::from("slime"),
-            target_count: 3,
-            reward_exp: 1,
-            reward_gold: 1,
-            reward_item: None,
-        });
+        data.load_step(5)?;
+        let quest_id = String::from("quest_wolf");
 
         let mut world = WorldState::empty();
         world.apply_event(
             &data,
             &GameEvent::World(WorldEvent::CreateQuestProgress {
-                quest_id: String::from("q-kill"),
+                quest_id: quest_id.clone(),
             }),
         )?;
         world.apply_event(
             &data,
             &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: String::from("q-kill"),
+                quest_id: quest_id.clone(),
                 delta: 1,
             }),
         )?;
         world.apply_event(
             &data,
             &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: String::from("q-kill"),
+                quest_id: quest_id.clone(),
                 delta: 1,
             }),
         )?;
@@ -793,7 +784,7 @@ mod tests {
         let progress = world
             .quests
             .iter()
-            .find(|progress| progress.quest_id == "q-kill")
+            .find(|progress| progress.quest_id == quest_id)
             .ok_or_else(|| anyhow!("quest progress should exist"))?;
         assert_eq!(progress.current_count, 2);
         assert!(!progress.completed);
@@ -801,14 +792,14 @@ mod tests {
         world.apply_event(
             &data,
             &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: String::from("q-kill"),
+                quest_id: quest_id.clone(),
                 delta: 10,
             }),
         )?;
         let progress = world
             .quests
             .iter()
-            .find(|progress| progress.quest_id == "q-kill")
+            .find(|progress| progress.quest_id == quest_id)
             .ok_or_else(|| anyhow!("quest progress should exist"))?;
         assert_eq!(progress.current_count, 3);
         assert!(progress.completed);

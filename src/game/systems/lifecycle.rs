@@ -80,7 +80,7 @@ impl DomainEventResolver for LifecycleResolver {
 
 impl LifecycleResolver {
     fn intro_dialog_state(data: &GameData) -> Result<Option<DialogState>> {
-        let Some((dialog_id, npc_name)) = data.newgame.intro_dialog.as_ref() else {
+        let Some((dialog_id, npc_name)) = data.newgame_config().intro_dialog.as_ref() else {
             return Ok(None);
         };
         let dialog = data.find_dialog(dialog_id)?;
@@ -88,7 +88,7 @@ impl LifecycleResolver {
     }
 
     fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
-        let config = &data.newgame;
+        let config = data.newgame_config();
         let leader_id = 1;
 
         let mut leader = EntityState::new_player(

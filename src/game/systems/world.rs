@@ -103,7 +103,7 @@ fn resolve_tile_event(
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(item_id) = data.newgame.treasure_item.as_deref() {
+            if let Some(item_id) = data.newgame_config().treasure_item.as_deref() {
                 let leader_id = world.leader_id()?;
                 data.find_item(item_id)?;
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
@@ -270,7 +270,7 @@ fn resolve_revive_player(
         }));
     }
 
-    let village_map_id = data.newgame.start_map.clone();
+    let village_map_id = data.newgame_config().start_map.clone();
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
         village_map_id.clone(),
     )));
