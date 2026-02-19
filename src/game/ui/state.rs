@@ -65,6 +65,7 @@ impl UiState {
         self.quest_log.tracked_quest_id = None;
         self.shop.shop_id = None;
         self.shop.buy_item_ids.clear();
+        self.shop.sell_item_ids.clear();
         self.shop.mode = ShopMode::Select;
         self.shop.selected = 0;
         self.dialog.state = None;
@@ -181,7 +182,8 @@ pub struct QuestLogUiState {
 #[derive(Debug)]
 pub struct ShopUiState {
     pub shop_id: Option<String>,
-    pub buy_item_ids: Vec<String>,
+    pub buy_item_ids: Vec<u32>,
+    pub sell_item_ids: Vec<u32>,
     pub mode: ShopMode,
     pub selected: usize,
 }
@@ -191,6 +193,7 @@ impl Default for ShopUiState {
         Self {
             shop_id: None,
             buy_item_ids: Vec::new(),
+            sell_item_ids: Vec::new(),
             mode: ShopMode::Select,
             selected: 0,
         }

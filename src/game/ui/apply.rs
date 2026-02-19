@@ -8,7 +8,7 @@ use crate::{
     game::{
         game_event::{ExploreEvent, GameEvent, TransitionEvent},
         selection::{step_down, step_up},
-        state::{GOLD_ITEM_ID, world::WorldState},
+        state::world::WorldState,
     },
 };
 
@@ -202,16 +202,15 @@ fn apply_quest_log_input(
 
 fn apply_shop_input(
     ui: &mut UiState,
-    session: Option<&WorldState>,
+    _session: Option<&WorldState>,
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     if ui.shop.shop_id.is_none() {
         return Err(anyhow!("No active shop state"));
     }
-    let session = session.ok_or_else(|| anyhow!("No active world"))?;
     let shop_items_len = ui.shop.buy_item_ids.len();
-    let inventory_len = session.leader_entity()?.inventory.len();
+    let sell_items_len = ui.shop.sell_item_ids.len();
 
     match ui.shop.mode {
         ShopMode::Select => match key {
@@ -245,7 +244,7 @@ fn apply_shop_input(
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
                 if let Some(item_id) = ui.shop.buy_item_ids.get(ui.shop.selected) {
-                    out.push(GameEvent::ShopBuyItem(item_id.clone()));
+                    out.push(GameEvent::ShopBuyItem(*item_id));
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
                 }
@@ -258,9 +257,9 @@ fn apply_shop_input(
         },
         ShopMode::Sell => match key {
             InputKey::Up => ui.shop.selected = step_up(ui.shop.selected),
-            InputKey::Down => ui.shop.selected = step_down(ui.shop.selected, inventory_len),
+            InputKey::Down => ui.shop.selected = step_down(ui.shop.selected, sell_items_len),
             InputKey::Ok => {
-                if inventory_len > 0 {
+                if sell_items_len > 0 {
                     ui.shop.mode = ShopMode::ConfirmSell;
                 }
             }
@@ -272,13 +271,8 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                let leader = session.leader_entity()?;
-                if let Some(item) = leader.inventory.get(ui.shop.selected) {
-                    if item.item_id == GOLD_ITEM_ID {
-                        out.push(GameEvent::SoftError(String::from("Cannot sell gold")));
-                    } else {
-                        out.push(GameEvent::ShopSellSelected(ui.shop.selected));
-                    }
+                if let Some(item_data_id) = ui.shop.sell_item_ids.get(ui.shop.selected) {
+                    out.push(GameEvent::ShopSellItem(*item_data_id));
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
                 }

@@ -41,9 +41,12 @@ impl UiState {
                     self.dialog.state = None;
                 }
             },
-            GameEvent::ShopSellSelected(index) => {
-                if *index <= self.shop.selected && self.shop.selected > 0 {
-                    self.shop.selected -= 1;
+            GameEvent::ShopSellItem(_) => {
+                let sell_len = self.shop.sell_item_ids.len();
+                if sell_len == 0 {
+                    self.shop.selected = 0;
+                } else if self.shop.selected >= sell_len {
+                    self.shop.selected = sell_len - 1;
                 }
             }
             GameEvent::OpenDialogState(dialog_state) => {
@@ -52,11 +55,20 @@ impl UiState {
             GameEvent::OpenShopById(shop_id) => {
                 self.shop.shop_id = Some(shop_id.clone());
                 self.shop.buy_item_ids.clear();
+                self.shop.sell_item_ids.clear();
                 self.shop.mode = ShopMode::Select;
                 self.shop.selected = 0;
             }
             GameEvent::SetShopBuyItemIds(item_ids) => {
                 self.shop.buy_item_ids = item_ids.clone();
+            }
+            GameEvent::SetShopSellItemIds(item_ids) => {
+                self.shop.sell_item_ids = item_ids.clone();
+                if self.shop.sell_item_ids.is_empty() {
+                    self.shop.selected = 0;
+                } else if self.shop.selected >= self.shop.sell_item_ids.len() {
+                    self.shop.selected = self.shop.sell_item_ids.len() - 1;
+                }
             }
             GameEvent::World(WorldEvent::SetQuestRewarded { quest_id, rewarded })
                 if *rewarded && self.quest_log.tracked_quest_id.as_deref() == Some(quest_id) =>
@@ -78,10 +90,11 @@ impl GameEventSubscriber for UiState {
                 | GameEventKind::Transition
                 | GameEventKind::World
                 | GameEventKind::ApplyDialogTransition
-                | GameEventKind::ShopSellSelected
+                | GameEventKind::ShopSellItem
                 | GameEventKind::OpenDialogState
                 | GameEventKind::OpenShopById
                 | GameEventKind::SetShopBuyItemIds
+                | GameEventKind::SetShopSellItemIds
         )
     }
 }

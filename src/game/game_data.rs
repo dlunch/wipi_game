@@ -89,6 +89,14 @@ impl GameData {
             .ok_or_else(|| anyhow!("item not found: {}", id))
     }
 
+    pub fn find_item_by_data_id(&self, data_id: u32) -> Result<&Item> {
+        self.item_data_id_index
+            .get(&data_id)
+            .and_then(|idx| self.items.get(*idx))
+            .or_else(|| self.items.iter().find(|item| item.data_id == data_id))
+            .ok_or_else(|| anyhow!("item data_id not found: {}", data_id))
+    }
+
     pub fn find_enemy(&self, id: &str) -> Result<&Enemy> {
         Self::find_indexed(&self.enemies, &self.enemy_index, id, |enemy| {
             enemy.id.as_str()

@@ -26,7 +26,7 @@ impl DomainEventResolver for CharacterMutationResolver {
         &[
             GameEventKind::UseInventorySelected,
             GameEventKind::ShopBuyItem,
-            GameEventKind::ShopSellSelected,
+            GameEventKind::ShopSellItem,
             GameEventKind::RestoreHpMp,
             GameEventKind::ApplyDialogAction,
         ]
@@ -48,10 +48,10 @@ impl DomainEventResolver for CharacterMutationResolver {
                 resolve_use_item(data, leader_id, leader, *index, out)?
             }
             GameEvent::ShopBuyItem(item_id) => {
-                resolve_shop_buy(data, world, leader_id, item_id, out)?
+                resolve_shop_buy(data, world, leader_id, *item_id, out)?
             }
-            GameEvent::ShopSellSelected(index) => {
-                resolve_shop_sell(data, leader_id, leader, *index, out)?
+            GameEvent::ShopSellItem(item_data_id) => {
+                resolve_shop_sell(data, leader_id, leader, *item_data_id, out)?
             }
             GameEvent::RestoreHpMp => resolve_restore_hp_mp(world, leader_id, out)?,
             GameEvent::ApplyDialogAction(action) => {
@@ -101,17 +101,17 @@ fn resolve_shop_buy(
     data: &GameData,
     world: &WorldState,
     leader_id: u32,
-    item_id: &str,
+    item_data_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let item = data.find_item(item_id)?;
+    let item = data.find_item_by_data_id(item_data_id)?;
     if world.gold_amount(leader_id)? < item.price {
         push_soft_error(out, "Not enough gold");
         return Ok(());
     }
 
     push_item_delta(out, leader_id, GOLD_ITEM_ID, -item.price.max(0));
-    push_item_delta(out, leader_id, item_id, 1);
+    push_item_delta(out, leader_id, item.id.clone(), 1);
     Ok(())
 }
 
@@ -119,22 +119,23 @@ fn resolve_shop_sell(
     data: &GameData,
     leader_id: u32,
     leader: &EntityState,
-    index: usize,
+    item_data_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let Some(stack) = leader.inventory.get(index) else {
-        push_soft_error(out, "Invalid item selection");
-        return Ok(());
-    };
-    if stack.amount <= 0 {
-        push_soft_error(out, "Item is unavailable");
-        return Ok(());
-    }
-    if stack.item_id == GOLD_ITEM_ID {
+    let item = data.find_item_by_data_id(item_data_id)?;
+    if item.id == GOLD_ITEM_ID {
         push_soft_error(out, "Cannot sell gold");
         return Ok(());
     }
-    let item = data.find_item(&stack.item_id)?;
+
+    let Some(stack) = leader
+        .inventory
+        .iter()
+        .find(|stack| stack.item_id == item.id && stack.amount > 0)
+    else {
+        push_soft_error(out, "Invalid item selection");
+        return Ok(());
+    };
 
     push_item_delta(out, leader_id, stack.item_id.clone(), -1);
     push_item_delta(out, leader_id, GOLD_ITEM_ID, (item.price / 2).max(0));

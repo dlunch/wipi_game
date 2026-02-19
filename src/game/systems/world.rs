@@ -33,6 +33,8 @@ impl DomainEventResolver for WorldLogicResolver {
             GameEventKind::Combat,
             GameEventKind::RevivePlayer,
             GameEventKind::OpenShopById,
+            GameEventKind::ShopBuyItem,
+            GameEventKind::ShopSellItem,
         ]
     }
 
@@ -67,7 +69,13 @@ impl DomainEventResolver for WorldLogicResolver {
                 gold,
             }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out)?,
             GameEvent::OpenShopById(shop_id) => {
-                resolve_open_shop(data, shop_id, out)?;
+                resolve_open_shop(data, world, shop_id, out)?;
+            }
+            GameEvent::ShopBuyItem(item_data_id) => {
+                resolve_shop_sell_cache_after_buy(data, world, *item_data_id, out)?;
+            }
+            GameEvent::ShopSellItem(item_data_id) => {
+                resolve_shop_sell_cache_after_sell(data, world, *item_data_id, out)?;
             }
             GameEvent::RevivePlayer => {
                 resolve_revive_player(data, world, out)?;
@@ -78,10 +86,86 @@ impl DomainEventResolver for WorldLogicResolver {
     }
 }
 
-fn resolve_open_shop(data: &GameData, shop_id: &str, out: &mut Vec<GameEvent>) -> Result<()> {
+fn resolve_open_shop(
+    data: &GameData,
+    world: &WorldState,
+    shop_id: &str,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
     let shop = data.find_shop(shop_id)?;
-    out.push(GameEvent::SetShopBuyItemIds(shop.items.clone()));
+    let mut buy_item_ids = Vec::with_capacity(shop.items.len());
+    for item_id in &shop.items {
+        buy_item_ids.push(data.find_item(item_id)?.data_id);
+    }
+    out.push(GameEvent::SetShopBuyItemIds(buy_item_ids));
+    out.push(GameEvent::SetShopSellItemIds(sell_item_data_ids(
+        data, world,
+    )?));
     Ok(())
+}
+
+fn resolve_shop_sell_cache_after_buy(
+    data: &GameData,
+    world: &WorldState,
+    item_data_id: u32,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
+    let leader_id = world.leader_id()?;
+    let item = data.find_item_by_data_id(item_data_id)?;
+    if world.gold_amount(leader_id)? < item.price {
+        return Ok(());
+    }
+
+    let mut sell_item_ids = sell_item_data_ids(data, world)?;
+    sell_item_ids.push(item_data_id);
+    out.push(GameEvent::SetShopSellItemIds(sell_item_ids));
+    Ok(())
+}
+
+fn resolve_shop_sell_cache_after_sell(
+    data: &GameData,
+    world: &WorldState,
+    item_data_id: u32,
+    out: &mut Vec<GameEvent>,
+) -> Result<()> {
+    let item = data.find_item_by_data_id(item_data_id)?;
+    if item.id == GOLD_ITEM_ID {
+        return Ok(());
+    }
+
+    let leader = world.leader_entity()?;
+    let has_item = leader
+        .inventory
+        .iter()
+        .any(|stack| stack.item_id == item.id && stack.amount > 0);
+    if !has_item {
+        return Ok(());
+    }
+
+    let mut sell_item_ids = sell_item_data_ids(data, world)?;
+    if let Some(index) = sell_item_ids
+        .iter()
+        .position(|current_item_data_id| *current_item_data_id == item_data_id)
+    {
+        sell_item_ids.remove(index);
+    }
+    out.push(GameEvent::SetShopSellItemIds(sell_item_ids));
+    Ok(())
+}
+
+fn sell_item_data_ids(data: &GameData, world: &WorldState) -> Result<Vec<u32>> {
+    let leader = world.leader_entity()?;
+    let mut sell_item_ids = Vec::new();
+    for stack in &leader.inventory {
+        if stack.item_id == GOLD_ITEM_ID || stack.amount <= 0 {
+            continue;
+        }
+        let data_id = data.find_item(&stack.item_id)?.data_id;
+        for _ in 0..stack.amount.max(0) {
+            sell_item_ids.push(data_id);
+        }
+    }
+    Ok(sell_item_ids)
 }
 
 fn resolve_tile_event(

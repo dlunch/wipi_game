@@ -193,7 +193,7 @@ impl RenderState {
                 if matches!(
                     event,
                     GameEvent::ShopBuyItem(_)
-                        | GameEvent::ShopSellSelected(_)
+                        | GameEvent::ShopSellItem(_)
                         | GameEvent::Entity(_)
                         | GameEvent::OpenShopById(_)
                         | GameEvent::Transition(_)
