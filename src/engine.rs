@@ -33,10 +33,8 @@ impl GameEngine {
     pub fn new() -> Self {
         let resolvers = domain_resolvers();
         let effects = domain_effects();
-        let mut resolver_buckets: Vec<Vec<&'static dyn DomainEventResolver>> =
-            vec![Vec::new(); GameEventKind::COUNT];
-        let mut effect_buckets: Vec<Vec<&'static dyn DomainEventEffect>> =
-            vec![Vec::new(); GameEventKind::COUNT];
+        let mut resolver_buckets = vec![Vec::new(); GameEventKind::COUNT];
+        let mut effect_buckets = vec![Vec::new(); GameEventKind::COUNT];
         for resolver in resolvers {
             for kind in resolver.subscribed_kinds() {
                 resolver_buckets[kind.as_usize()].push(resolver);
@@ -161,7 +159,7 @@ impl GameEngine {
 
     fn dispatch_game_events(&mut self, initial_events: Vec<GameEvent>) -> Result<bool> {
         let mut needs_repaint = false;
-        let mut queue: VecDeque<GameEvent> = initial_events.into();
+        let mut queue = VecDeque::from(initial_events);
         let mut derived = Vec::with_capacity(8);
 
         while let Some(event) = queue.pop_front() {

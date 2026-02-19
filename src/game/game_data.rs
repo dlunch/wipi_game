@@ -144,7 +144,7 @@ impl GameData {
 
     fn resolve_map_npcs(maps: &[Map], npc_defs: &[Npc]) -> Result<Vec<Npc>> {
         let mut npcs = Vec::new();
-        let mut npc_index: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut npc_index = BTreeMap::new();
         let mut used = vec![false; npc_defs.len()];
 
         for (idx, def) in npc_defs.iter().enumerate() {

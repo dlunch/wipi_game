@@ -56,11 +56,11 @@ fn build_dialog_render_fields(
         .state
         .as_ref()
         .ok_or_else(|| anyhow!("No dialog state"))?;
-    let lines: Vec<String> = dialog_state
+    let lines = dialog_state
         .lines
         .iter()
         .map(|line| line.text.clone())
-        .collect();
+        .collect::<Vec<_>>();
     let current_line = dialog_state.current_line.min(lines.len().saturating_sub(1));
     let current_text = lines.get(current_line).cloned();
     let explore = world
@@ -393,10 +393,10 @@ impl RenderState {
                         changed = true;
                     }
                 }
-                let next_skill_effects: Vec<SkillEffectRender> = render_fx
+                let next_skill_effects = render_fx
                     .skill_effect_iter()
                     .map(|(x, y, effect_type)| SkillEffectRender { x, y, effect_type })
-                    .collect();
+                    .collect::<Vec<_>>();
                 if explore.skill_effects != next_skill_effects {
                     explore.skill_effects = next_skill_effects;
                     changed = true;

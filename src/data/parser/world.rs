@@ -11,7 +11,7 @@ use crate::data::types::{Map, Tile};
 
 pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
     let mut maps = Vec::new();
-    let mut current_map: Option<MapBuilder> = None;
+    let mut current_map = None::<MapBuilder>;
 
     for raw_line in data.lines() {
         let line = raw_line.trim();

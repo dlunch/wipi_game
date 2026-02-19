@@ -45,7 +45,7 @@ fn wrap_text(text: &str, max_chars: usize) -> Vec<&str> {
     }
 
     let mut start = 0;
-    let chars: Vec<_> = text.char_indices().collect();
+    let chars = text.char_indices().collect::<Vec<_>>();
 
     while start < chars.len() {
         let end = (start + max_chars).min(chars.len());

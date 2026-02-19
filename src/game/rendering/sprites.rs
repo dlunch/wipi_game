@@ -111,14 +111,14 @@ struct ParsedMeta {
 }
 
 fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
-    let mut sheets: BTreeMap<String, String> = BTreeMap::new();
-    let mut default_sheet_id: Option<String> = None;
-    let mut tile_w: u32 = 16;
-    let mut tile_h: u32 = 16;
-    let mut clips: BTreeMap<String, SpriteClip> = BTreeMap::new();
+    let mut sheets = BTreeMap::new();
+    let mut default_sheet_id = None;
+    let mut tile_w = 16;
+    let mut tile_h = 16;
+    let mut clips = BTreeMap::new();
 
-    let mut current_name: Option<String> = None;
-    let mut current_clip: Option<SpriteClip> = None;
+    let mut current_name = None;
+    let mut current_clip = None;
 
     for raw in text.lines() {
         let line = raw.trim();
@@ -196,8 +196,8 @@ fn parse_meta(text: &str) -> Result<ParsedMeta, ()> {
                 let Some(ty) = parts.next() else {
                     return Err(());
                 };
-                let tx: i32 = tx.parse().map_err(|_| ())?;
-                let ty: i32 = ty.parse().map_err(|_| ())?;
+                let tx = tx.parse::<i32>().map_err(|_| ())?;
+                let ty = ty.parse::<i32>().map_err(|_| ())?;
                 clip.frames.push(SpriteFrame {
                     sx: tx * tile_w as i32,
                     sy: ty * tile_h as i32,

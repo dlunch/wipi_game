@@ -10,7 +10,7 @@ use crate::data::types::{Dialog, DialogAction, DialogCondition, DialogLine};
 
 pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
     let mut dialogs = Vec::new();
-    let mut current: Option<DialogBuilder> = None;
+    let mut current = None::<DialogBuilder>;
 
     for raw_line in data.lines() {
         let line = raw_line.trim();
@@ -53,7 +53,7 @@ impl DialogBuilder {
     }
 
     fn add_line(&mut self, line: &str) -> Result<()> {
-        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        let parts = line.splitn(3, ':').collect::<Vec<_>>();
 
         let (condition, action, text) = if parts.len() == 3 {
             (
@@ -76,7 +76,7 @@ impl DialogBuilder {
     }
 
     fn parse_condition(s: &str) -> Result<Option<DialogCondition>> {
-        let parts: Vec<&str> = s.split('=').collect();
+        let parts = s.split('=').collect::<Vec<_>>();
         if parts.len() != 2 {
             return Ok(None);
         }
@@ -93,7 +93,7 @@ impl DialogBuilder {
     }
 
     fn parse_action(s: &str) -> Result<Option<DialogAction>> {
-        let parts: Vec<&str> = s.split('=').collect();
+        let parts = s.split('=').collect::<Vec<_>>();
         if parts.is_empty() {
             return Ok(None);
         }

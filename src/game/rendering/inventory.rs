@@ -29,8 +29,8 @@ pub fn draw_inventory(fb: &mut Framebuffer, state: &InventoryRender) {
         return;
     }
 
-    let start_y: i32 = 24;
-    let item_height: i32 = 14;
+    let start_y = 24;
+    let item_height = 14;
     let visible_items = ((screen_h - 50) / item_height).max(1) as usize;
     let scroll = state.scroll;
 
@@ -109,8 +109,8 @@ pub fn draw_stats(fb: &mut Framebuffer, state: &StatsRender) {
 
     draw_text(fb, 8, 8, "STATUS", COLOR_YELLOW);
 
-    let stat_y: i32 = 24;
-    let line_height: i32 = 14;
+    let stat_y = 24;
+    let line_height = 14;
 
     draw_text(fb, 10, stat_y, "HP", COLOR_WHITE);
     draw_hp_bar(fb, 30, stat_y + 2, 60, state.hp as i32, state.max_hp as i32);

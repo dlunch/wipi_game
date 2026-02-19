@@ -588,7 +588,7 @@ impl WorldState {
     }
 
     fn sync_allies_with_party(&mut self) -> Result<()> {
-        let mut party_ids: Vec<EntityId> = Vec::with_capacity(1 + self.party.companion_ids.len());
+        let mut party_ids = Vec::with_capacity(1 + self.party.companion_ids.len());
         if self.party.leader_id != 0 && self.entities.contains(self.party.leader_id) {
             party_ids.push(self.party.leader_id);
         }

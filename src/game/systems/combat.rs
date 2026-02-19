@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 
 use super::resolver::DomainEventResolver;
 use crate::{
-    data::{Direction, Enemy, Map, Skill, SkillType, Tile},
+    data::{Direction, Map, Skill, SkillType, Tile},
     game::{
         game_data::GameData,
         game_event::{CombatEvent, EntityEvent, GameEvent, GameEventKind, TransitionEvent},
@@ -376,7 +376,7 @@ fn resolve_map_changed(
     let leader_entity = world.leader_entity()?;
     let map = data.find_map(&leader_entity.map_id)?;
 
-    let mut enemy_templates: Vec<&Enemy> = Vec::with_capacity(map.encounters.len());
+    let mut enemy_templates = Vec::with_capacity(map.encounters.len());
     for (enemy_id, _) in &map.encounters {
         enemy_templates.push(data.find_enemy(enemy_id)?);
     }
@@ -466,12 +466,12 @@ fn next_enemy_position_towards(
     map: &Map,
     occupied: &[usize],
 ) -> (usize, usize) {
-    let dx: i32 = match target_x.cmp(&enemy_x) {
+    let dx = match target_x.cmp(&enemy_x) {
         Ordering::Greater => 1,
         Ordering::Less => -1,
         Ordering::Equal => 0,
     };
-    let dy: i32 = match target_y.cmp(&enemy_y) {
+    let dy = match target_y.cmp(&enemy_y) {
         Ordering::Greater => 1,
         Ordering::Less => -1,
         Ordering::Equal => 0,

@@ -135,10 +135,10 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
     let mut version = 0u32;
     let mut parsed_world_map = String::new();
     let mut parsed_party = PartyState::default();
-    let mut parsed_entities: Vec<EntityState> = Vec::new();
-    let mut parsed_allies: Vec<AllyCombatantState> = Vec::new();
-    let mut parsed_enemies: Vec<EnemyCombatantState> = Vec::new();
-    let mut parsed_timed: Vec<(u32, TimedEffect)> = Vec::new();
+    let mut parsed_entities = Vec::new();
+    let mut parsed_allies = Vec::new();
+    let mut parsed_enemies = Vec::new();
+    let mut parsed_timed = Vec::new();
     let mut parsed_quests = Vec::new();
     let mut parsed_treasures = Vec::new();
     let mut parsed_combat_active = false;
@@ -151,7 +151,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
         .filter(|line| !line.is_empty())
         .enumerate()
     {
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(
             !parts.is_empty(),
             "invalid save line {}: empty record",

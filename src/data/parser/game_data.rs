@@ -17,7 +17,7 @@ pub fn parse_items(data: &str) -> Result<Vec<Item>> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(parts.len() >= 5, "too few fields in item line: {}", line);
 
         let kind = match parts[0] {
@@ -69,7 +69,7 @@ pub fn parse_enemies(data: &str) -> Result<Vec<Enemy>> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(parts.len() >= 7, "too few fields in enemy line: {}", line);
 
         let hp = parse_int(parts[2], "hp", line)?;
@@ -98,7 +98,7 @@ pub fn parse_npcs(data: &str) -> Result<Vec<Npc>> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(parts.len() >= 4, "too few fields in npc line: {}", line);
 
         let npc_type = match parts[2] {
@@ -133,7 +133,7 @@ pub fn parse_quests(data: &str) -> Result<Vec<Quest>> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(parts.len() >= 8, "too few fields in quest line: {}", line);
 
         let quest_type = match parts[2] {
@@ -169,10 +169,10 @@ pub fn parse_shops(data: &str) -> Result<Vec<Shop>> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split(':').collect();
+        let parts = line.split(':').collect::<Vec<_>>();
         ensure!(parts.len() >= 3, "too few fields in shop line: {}", line);
 
-        let items: Vec<String> = parts[2..].iter().map(|s| s.to_string()).collect();
+        let items = parts[2..].iter().map(|s| s.to_string()).collect();
 
         shops.push(Shop {
             id: parts[0].to_string(),

@@ -13,7 +13,7 @@ use crate::game::{
         WorldEvent,
     },
     save::load_game,
-    state::{EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind},
+    state::{EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind},
     ui::state::DialogState,
     world::WorldState,
 };
@@ -89,7 +89,7 @@ impl LifecycleResolver {
 
     fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {
         let config = &data.newgame;
-        let leader_id: EntityId = 1;
+        let leader_id = 1;
 
         let mut leader = EntityState::new_player(
             leader_id,

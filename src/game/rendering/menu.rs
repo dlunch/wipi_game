@@ -20,8 +20,8 @@ pub fn draw_menu(
     draw_rect(fb, 20, 10, screen_w - 40, 24, COLOR_WHITE);
     draw_text(fb, 35, 18, title, COLOR_YELLOW);
 
-    let menu_y_start: i32 = 50;
-    let menu_spacing: i32 = 18;
+    let menu_y_start = 50;
+    let menu_spacing = 18;
 
     for (i, (label, _)) in items.iter().enumerate() {
         let y = menu_y_start + (i as i32) * menu_spacing;

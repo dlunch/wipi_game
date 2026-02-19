@@ -460,14 +460,14 @@ impl ShopRender {
             .as_ref()
             .ok_or_else(|| anyhow!("No shop state"))?;
 
-        let buy_items: Vec<ShopItemRender> = shop_state
+        let buy_items = shop_state
             .items
             .iter()
             .map(|item| ShopItemRender {
                 name: item.name.clone(),
                 price: item.price,
             })
-            .collect();
+            .collect::<Vec<_>>();
         let mut player_inventory = Vec::new();
         for stack in &leader.inventory {
             if stack.item_id == GOLD_ITEM_ID {

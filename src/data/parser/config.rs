@@ -14,7 +14,7 @@ pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
             continue;
         }
 
-        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        let parts = line.splitn(3, ':').collect::<Vec<_>>();
         ensure!(!parts.is_empty(), "empty directive in newgame config");
 
         match parts[0] {
