@@ -5,11 +5,16 @@ use wipi::resource::Resource;
 
 use crate::game::{
     effects::{DomainEventEffect, domain_effects},
-    game_data::GameData,
+    game_data::{GameData, load_step as load_data_step},
     game_event::{GameEvent, GameEventKind, GameEventSubscriber},
     rendering::{RenderFxState, RenderState, SpriteAtlas},
+    save::has_save_data,
     state::{GameState, WorldSlot},
-    systems::{domain_resolvers, resolver::DomainEventResolver},
+    systems::{
+        domain_resolvers,
+        lifecycle::{LifecycleEvent, LoadingEvent},
+        resolver::DomainEventResolver,
+    },
     ui::{
         apply::UiEventApplier,
         resolve::UiInputEventResolver,
@@ -104,11 +109,35 @@ impl GameEngine {
             needs_repaint |= self.dispatch_game_events(input_events)?;
         }
 
-        if matches!(self.state, GameState::Loading(_) | GameState::Explore) {
+        if matches!(self.state, GameState::Loading(_)) {
+            needs_repaint |= self.dispatch_loading_step()?;
+        } else if matches!(self.state, GameState::Explore) {
             needs_repaint |= self.dispatch_game_events(vec![GameEvent::Tick])?;
         }
 
         Ok(needs_repaint)
+    }
+
+    fn dispatch_loading_step(&mut self) -> Result<bool> {
+        let GameState::Loading(step) = self.state else {
+            return Ok(false);
+        };
+
+        let data =
+            Rc::get_mut(&mut self.data).ok_or_else(|| anyhow!("Load error: data is shared"))?;
+        let loaded = load_data_step(data, step).map_err(|e| anyhow!("Load error: {}", e))?;
+
+        let mut events = Vec::with_capacity(2);
+        if loaded {
+            events.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
+                has_save_data()?,
+            )));
+            events.push(GameEvent::Loading(LoadingEvent::Loaded));
+        } else {
+            events.push(GameEvent::Loading(LoadingEvent::Advance(step + 1)));
+        }
+
+        self.dispatch_game_events(events)
     }
 
     pub fn render_state(&self) -> &RenderState {
@@ -170,13 +199,7 @@ impl GameEngine {
             self.resolve_event(&event, &mut derived)?;
             let effect_bucket = &self.effect_buckets[event.kind().as_usize()];
             for effect in effect_bucket {
-                effect.apply(
-                    &self.state,
-                    &mut self.data,
-                    self.world.as_ref(),
-                    &event,
-                    &mut derived,
-                )?;
+                effect.apply(self.world.as_ref(), &event, &mut derived)?;
             }
 
             needs_repaint |= self.apply_and_patch(&event)?;
@@ -267,8 +290,6 @@ mod tests {
 
         fn apply(
             &self,
-            _state: &GameState,
-            _data: &mut Rc<GameData>,
             _world: Option<&WorldState>,
             _event: &GameEvent,
             out: &mut Vec<GameEvent>,

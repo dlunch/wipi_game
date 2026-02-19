@@ -100,7 +100,12 @@ fn draw_buy_list(fb: &mut Framebuffer, state: &ShopRender) {
             draw_text(fb, 8, y, ">", COLOR_YELLOW);
         }
 
-        draw_text(fb, 16, y, &item.name, text_color1);
+        let label = if item.amount > 1 {
+            format!("{} x{}", item.name, item.amount)
+        } else {
+            item.name.clone()
+        };
+        draw_text(fb, 16, y, &label, text_color1);
 
         let price_text = format!("{}G", item.price);
         draw_text(fb, screen_w - 40, y, &price_text, text_color2);
@@ -153,7 +158,12 @@ fn draw_sell_list(fb: &mut Framebuffer, state: &ShopRender) {
             draw_text(fb, 8, y, ">", COLOR_YELLOW);
         }
 
-        draw_text(fb, 16, y, &item.name, text_color1);
+        let label = if item.amount > 1 {
+            format!("{} x{}", item.name, item.amount)
+        } else {
+            item.name.clone()
+        };
+        draw_text(fb, 16, y, &label, text_color1);
 
         let price_text = format!("{}G", item.price);
         draw_text(fb, screen_w - 40, y, &price_text, text_color2);

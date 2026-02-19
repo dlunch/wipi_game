@@ -1,6 +1,9 @@
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 
-use crate::data::{DialogLine, Direction, Skill};
+use crate::{
+    data::{DialogAction, DialogId, Direction, NpcId, ShopId, Skill},
+    game::game_event::ShopItemEntry,
+};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -64,8 +67,8 @@ impl UiState {
         self.quest_log.selected = 0;
         self.quest_log.tracked_quest_id = None;
         self.shop.shop_id = None;
-        self.shop.buy_item_ids.clear();
-        self.shop.sell_item_ids.clear();
+        self.shop.buy_items.clear();
+        self.shop.sell_items.clear();
         self.shop.mode = ShopMode::Select;
         self.shop.selected = 0;
         self.dialog.state = None;
@@ -176,9 +179,9 @@ pub struct QuestLogUiState {
 
 #[derive(Debug)]
 pub struct ShopUiState {
-    pub shop_id: Option<u32>,
-    pub buy_item_ids: Vec<u32>,
-    pub sell_item_ids: Vec<u32>,
+    pub shop_id: Option<ShopId>,
+    pub buy_items: Vec<ShopItemEntry>,
+    pub sell_items: Vec<ShopItemEntry>,
     pub mode: ShopMode,
     pub selected: usize,
 }
@@ -187,8 +190,8 @@ impl Default for ShopUiState {
     fn default() -> Self {
         Self {
             shop_id: None,
-            buy_item_ids: Vec::new(),
-            sell_item_ids: Vec::new(),
+            buy_items: Vec::new(),
+            sell_items: Vec::new(),
             mode: ShopMode::Select,
             selected: 0,
         }
@@ -250,16 +253,25 @@ impl PauseMenuState {
 
 #[derive(Debug, Clone)]
 pub struct DialogState {
-    pub npc_name: String,
-    pub lines: Vec<DialogLine>,
+    pub dialog_id: DialogId,
+    pub npc_id: NpcId,
+    pub visible_line_indices: Vec<usize>,
+    pub visible_actions: Vec<Option<DialogAction>>,
     pub current_line: usize,
 }
 
 impl DialogState {
-    pub fn new(npc_name: String, lines: Vec<DialogLine>) -> Self {
+    pub fn new(
+        dialog_id: DialogId,
+        npc_id: NpcId,
+        visible_line_indices: Vec<usize>,
+        visible_actions: Vec<Option<DialogAction>>,
+    ) -> Self {
         Self {
-            npc_name,
-            lines,
+            dialog_id,
+            npc_id,
+            visible_line_indices,
+            visible_actions,
             current_line: 0,
         }
     }

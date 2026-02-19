@@ -1,7 +1,7 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::{
-    data::{DialogAction, Direction},
+    data::{DialogAction, DialogId, Direction, EnemyId, ItemId, MapId, NpcId, QuestId, ShopId},
     game::{
         state::{EntityId, EntityKind, MovementTickEvent, TimedKind},
         systems::{
@@ -28,7 +28,7 @@ pub enum CombatEvent {
     },
     SetRespawnTimer(u32),
     GrantKillReward {
-        enemy_id: u32,
+        enemy_id: EnemyId,
         exp: i32,
         gold: i32,
     },
@@ -44,18 +44,18 @@ pub enum GameEvent {
     World(WorldEvent),
     Entity(EntityEvent),
     OpenDialog {
-        dialog_id: u32,
-        npc_id: u32,
+        dialog_id: DialogId,
+        npc_id: NpcId,
     },
-    OpenShopById(u32),
-    SetShopItemIds {
+    OpenShopById(ShopId),
+    SetShopItems {
         list: ShopItemListKind,
-        item_ids: Vec<u32>,
+        items: Vec<ShopItemEntry>,
     },
     RestoreHpMp,
     ApplyDialogAction(DialogAction),
-    ShopBuyItem(u32),
-    ShopSellItem(u32),
+    ShopBuyItem(ItemId),
+    ShopSellItem(ItemId),
     RevivePlayer,
     CombatPlayerAction(ExploreAction),
     FatalError(String),
@@ -80,7 +80,7 @@ pub enum GameEventKind {
     Entity,
     OpenDialog,
     OpenShopById,
-    SetShopItemIds,
+    SetShopItems,
     RestoreHpMp,
     ApplyDialogAction,
     ShopBuyItem,
@@ -116,7 +116,7 @@ impl GameEventKind {
             Self::Entity => 7,
             Self::OpenDialog => 8,
             Self::OpenShopById => 9,
-            Self::SetShopItemIds => 10,
+            Self::SetShopItems => 10,
             Self::RestoreHpMp => 11,
             Self::ApplyDialogAction => 12,
             Self::ShopBuyItem => 13,
@@ -148,7 +148,7 @@ impl GameEvent {
             Self::Entity(_) => GameEventKind::Entity,
             Self::OpenDialog { .. } => GameEventKind::OpenDialog,
             Self::OpenShopById(_) => GameEventKind::OpenShopById,
-            Self::SetShopItemIds { .. } => GameEventKind::SetShopItemIds,
+            Self::SetShopItems { .. } => GameEventKind::SetShopItems,
             Self::RestoreHpMp => GameEventKind::RestoreHpMp,
             Self::ApplyDialogAction(_) => GameEventKind::ApplyDialogAction,
             Self::ShopBuyItem(_) => GameEventKind::ShopBuyItem,
@@ -169,21 +169,21 @@ impl GameEvent {
 
 pub enum WorldEvent {
     CreateWorld,
-    SetWorldMap(u32),
+    SetWorldMap(MapId),
     CreateQuestProgress {
-        quest_id: u32,
+        quest_id: QuestId,
     },
     ChangeQuestCurrentCount {
-        quest_id: u32,
+        quest_id: QuestId,
         delta: i32,
     },
     SetQuestFlag {
-        quest_id: u32,
+        quest_id: QuestId,
         flag: QuestFlag,
         value: bool,
     },
     AddOpenedTreasure {
-        map_id: u32,
+        map_id: MapId,
         x: usize,
         y: usize,
     },
@@ -197,11 +197,11 @@ pub enum EntityEvent {
         entity_id: EntityId,
         kind: EntityKind,
         name: String,
-        source_enemy_id: Option<u32>,
+        source_enemy_id: Option<EnemyId>,
     },
     SetEntityTransform {
         entity_id: EntityId,
-        map_id: Option<u32>,
+        map_id: Option<MapId>,
         position: Option<(usize, usize)>,
         facing: Option<Direction>,
     },
@@ -257,7 +257,7 @@ pub enum EntityEvent {
     },
     ChangeEntityItem {
         entity_id: EntityId,
-        item_id: u32,
+        item_id: ItemId,
         delta: i32,
     },
 }
@@ -266,6 +266,12 @@ pub enum LoadoutSlot {
     Weapon,
     Armor,
     Accessory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShopItemEntry {
+    pub item_id: ItemId,
+    pub amount: i32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -301,8 +307,8 @@ pub enum TransitionEvent {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TileEvent {
     Treasure,
-    MapExit(u32),
-    DungeonEntrance(u32),
+    MapExit(MapId),
+    DungeonEntrance(MapId),
 }
 
 pub enum ExploreEvent {

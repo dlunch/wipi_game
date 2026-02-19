@@ -7,7 +7,7 @@ use crate::{
     data::{Direction, ItemKind, NpcType, SkillType, Tile},
     game::{
         game_data::GameData,
-        state::{GOLD_ITEM_ID, TimedKind, TimedState, combat_attack_def},
+        state::{TimedKind, TimedState, combat_attack_def},
         ui::state::{
             ExploreAction, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode,
             UiState,
@@ -143,6 +143,7 @@ pub struct ShopRender {
 pub struct ShopItemRender {
     pub name: String,
     pub price: i32,
+    pub amount: i32,
 }
 
 pub struct QuestLogRender {
@@ -449,36 +450,35 @@ impl ShopRender {
         render_fx: &RenderFxState,
     ) -> Result<Self> {
         let leader_id = world.leader_id()?;
-        let leader = world.leader_entity()?;
         let shop_id = ui.shop.shop_id.ok_or_else(|| anyhow!("No shop state"))?;
         let shop = data.find_shop(shop_id)?;
 
-        let buy_items = shop
-            .items
+        let buy_items = ui
+            .shop
+            .buy_items
             .iter()
-            .map(|item_id| {
-                let item = data.find_item(*item_id)?;
+            .map(|entry| {
+                let item = data.find_item(entry.item_id)?;
                 Ok(ShopItemRender {
                     name: item.name.clone(),
                     price: item.price,
+                    amount: entry.amount.max(1),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut player_inventory = Vec::new();
-        for stack in &leader.inventory {
-            if stack.item_id == GOLD_ITEM_ID {
-                continue;
-            }
-            let item = data.find_item(stack.item_id)?;
-            let name = item.name.clone();
-            let sell_price = item.price / 2;
-            for _ in 0..stack.amount.max(0) {
-                player_inventory.push(ShopItemRender {
-                    name: name.clone(),
-                    price: sell_price,
-                });
-            }
-        }
+        let player_inventory = ui
+            .shop
+            .sell_items
+            .iter()
+            .map(|entry| {
+                let item = data.find_item(entry.item_id)?;
+                Ok(ShopItemRender {
+                    name: item.name.clone(),
+                    price: item.price / 2,
+                    amount: entry.amount.max(1),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
         let total = match ui.shop.mode {
             ShopMode::Select => 2,
             ShopMode::Buy | ShopMode::ConfirmBuy => buy_items.len(),

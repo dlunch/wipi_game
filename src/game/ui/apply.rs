@@ -129,15 +129,15 @@ fn apply_dialog_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>)
                 return;
             };
 
-            if dialog_state.current_line >= dialog_state.lines.len() {
+            if dialog_state.current_line >= dialog_state.visible_line_indices.len() {
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
                 return;
             }
 
             if let Some(action) = dialog_state
-                .lines
+                .visible_actions
                 .get(dialog_state.current_line)
-                .and_then(|line| line.action.as_ref())
+                .and_then(|action| action.as_ref())
                 .cloned()
             {
                 match action {
@@ -146,7 +146,7 @@ fn apply_dialog_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>)
                 }
             }
 
-            if dialog_state.current_line + 1 < dialog_state.lines.len() {
+            if dialog_state.current_line + 1 < dialog_state.visible_line_indices.len() {
                 dialog_state.current_line += 1;
             } else {
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
@@ -203,8 +203,8 @@ fn apply_shop_input(
     if ui.shop.shop_id.is_none() {
         return Err(anyhow!("No active shop state"));
     }
-    let shop_items_len = ui.shop.buy_item_ids.len();
-    let sell_items_len = ui.shop.sell_item_ids.len();
+    let shop_items_len = ui.shop.buy_items.len();
+    let sell_items_len = ui.shop.sell_items.len();
 
     match ui.shop.mode {
         ShopMode::Select => match key {
@@ -237,8 +237,8 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                if let Some(item_id) = ui.shop.buy_item_ids.get(ui.shop.selected) {
-                    out.push(GameEvent::ShopBuyItem(*item_id));
+                if let Some(item_id) = ui.shop.buy_items.get(ui.shop.selected) {
+                    out.push(GameEvent::ShopBuyItem(item_id.item_id));
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
                 }
@@ -265,8 +265,8 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmSell => match key {
             InputKey::Ok => {
-                if let Some(item_data_id) = ui.shop.sell_item_ids.get(ui.shop.selected) {
-                    out.push(GameEvent::ShopSellItem(*item_data_id));
+                if let Some(item_data_id) = ui.shop.sell_items.get(ui.shop.selected) {
+                    out.push(GameEvent::ShopSellItem(item_data_id.item_id));
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
                 }

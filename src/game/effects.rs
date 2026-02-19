@@ -1,13 +1,11 @@
-use alloc::{rc::Rc, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
 use super::save::{has_save_data, save_game};
 use crate::game::{
-    game_data::{GameData, load_step as load_data_step},
     game_event::{GameEvent, GameEventKind, TransitionEvent},
-    state::GameState,
-    systems::lifecycle::{LifecycleEvent, LoadingEvent},
+    systems::lifecycle::LifecycleEvent,
     world::WorldState,
 };
 
@@ -15,8 +13,6 @@ pub trait DomainEventEffect {
     fn subscribed_kinds(&self) -> &'static [GameEventKind];
     fn apply(
         &self,
-        state: &GameState,
-        data: &mut Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
@@ -34,7 +30,6 @@ pub fn domain_effects() -> Vec<&'static dyn DomainEventEffect> {
 impl DomainEventEffect for CoreEffects {
     fn subscribed_kinds(&self) -> &'static [GameEventKind] {
         &[
-            GameEventKind::Tick,
             GameEventKind::SaveWorld,
             GameEventKind::Transition,
             GameEventKind::Exit,
@@ -43,32 +38,11 @@ impl DomainEventEffect for CoreEffects {
 
     fn apply(
         &self,
-        state: &GameState,
-        data: &mut Rc<GameData>,
         world: Option<&WorldState>,
         event: &GameEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
         match event {
-            GameEvent::Tick => {
-                let GameState::Loading(step) = state else {
-                    return Ok(());
-                };
-
-                let data_mut =
-                    Rc::get_mut(data).ok_or_else(|| anyhow!("Load error: data is shared"))?;
-                let loaded =
-                    load_data_step(data_mut, *step).map_err(|e| anyhow!("Load error: {}", e))?;
-                let loading = if loaded {
-                    out.push(GameEvent::Lifecycle(LifecycleEvent::SetMenuHasSaveData(
-                        has_save_data()?,
-                    )));
-                    LoadingEvent::Loaded
-                } else {
-                    LoadingEvent::Advance(*step + 1)
-                };
-                out.push(GameEvent::Loading(loading));
-            }
             GameEvent::SaveWorld => {
                 let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 save_game(world)?;

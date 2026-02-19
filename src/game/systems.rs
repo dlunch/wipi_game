@@ -6,6 +6,7 @@ pub mod movement;
 pub mod npc;
 pub mod resolver;
 pub mod world;
+mod world_shop;
 
 use alloc::vec::Vec;
 

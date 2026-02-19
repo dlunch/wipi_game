@@ -53,24 +53,29 @@ fn build_dialog_render_fields(
         .state
         .as_ref()
         .ok_or_else(|| anyhow!("No dialog state"))?;
-    let lines = dialog_state
-        .lines
-        .iter()
-        .map(|line| line.text.clone())
-        .collect::<Vec<_>>();
+    let dialog = data.find_dialog(dialog_state.dialog_id)?;
+    let mut lines = Vec::with_capacity(dialog_state.visible_line_indices.len());
+    for line_index in &dialog_state.visible_line_indices {
+        let line = dialog
+            .lines
+            .get(*line_index)
+            .ok_or_else(|| anyhow!("Dialog line index out of range: {}", line_index))?;
+        lines.push(line.text.clone());
+    }
     let current_line = dialog_state.current_line.min(lines.len().saturating_sub(1));
     let current_text = lines.get(current_line).cloned();
     let explore = world
         .map(|world| ExploreRender::from_world(world, ui, data, render_fx))
         .transpose()?;
+    let npc_name = data.find_npc(dialog_state.npc_id)?.name.clone();
 
     Ok(DialogRenderFields {
         explore,
-        npc_name: dialog_state.npc_name.clone(),
+        npc_name,
         lines,
         current_line,
         current_text,
-        has_next: current_line + 1 < dialog_state.lines.len(),
+        has_next: current_line + 1 < dialog_state.visible_line_indices.len(),
     })
 }
 
@@ -180,6 +185,7 @@ impl RenderState {
                     event,
                     GameEvent::ShopBuyItem(_)
                         | GameEvent::ShopSellItem(_)
+                        | GameEvent::SetShopItems { .. }
                         | GameEvent::Entity(_)
                         | GameEvent::OpenShopById(_)
                         | GameEvent::Transition(_)
@@ -277,13 +283,12 @@ impl RenderState {
                 Ok(changed)
             }
             RenderState::Shop(shop) => {
-                let world = world.ok_or_else(|| anyhow!("No active world"))?;
-                let inventory_len = world.leader_entity()?.inventory.len();
                 let shop_items_len = shop.buy_items.len();
+                let sell_items_len = shop.player_inventory.len();
                 let total = match ui.shop.mode {
                     ShopMode::Select => 2,
                     ShopMode::Buy | ShopMode::ConfirmBuy => shop_items_len,
-                    ShopMode::Sell | ShopMode::ConfirmSell => inventory_len,
+                    ShopMode::Sell | ShopMode::ConfirmSell => sell_items_len,
                 };
                 let next_scroll = scroll_for_selection(ui.shop.selected, total, SHOP_VISIBLE_ITEMS);
                 let mut changed = false;
