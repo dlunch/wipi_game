@@ -32,6 +32,7 @@ impl DomainEventResolver for WorldLogicResolver {
             GameEventKind::Entity,
             GameEventKind::Combat,
             GameEventKind::RevivePlayer,
+            GameEventKind::OpenShopById,
         ]
     }
 
@@ -65,6 +66,9 @@ impl DomainEventResolver for WorldLogicResolver {
                 exp,
                 gold,
             }) => resolve_kill_reward(data, world, enemy_id, *exp, *gold, out)?,
+            GameEvent::OpenShopById(shop_id) => {
+                resolve_open_shop(data, shop_id, out)?;
+            }
             GameEvent::RevivePlayer => {
                 resolve_revive_player(data, world, out)?;
             }
@@ -72,6 +76,12 @@ impl DomainEventResolver for WorldLogicResolver {
         }
         Ok(())
     }
+}
+
+fn resolve_open_shop(data: &GameData, shop_id: &str, out: &mut Vec<GameEvent>) -> Result<()> {
+    let shop = data.find_shop(shop_id)?;
+    out.push(GameEvent::SetShopBuyItemIds(shop.items.clone()));
+    Ok(())
 }
 
 fn resolve_tile_event(

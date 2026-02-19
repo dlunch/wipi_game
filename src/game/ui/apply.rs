@@ -6,7 +6,6 @@ use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, Ui
 use crate::{
     data::DialogAction,
     game::{
-        game_data::GameData,
         game_event::{ExploreEvent, GameEvent, TransitionEvent},
         selection::{step_down, step_up},
         state::{GOLD_ITEM_ID, world::WorldState},
@@ -17,7 +16,6 @@ pub trait UiEventApplier {
     fn apply_ui_event(
         &mut self,
         session: Option<&WorldState>,
-        data: &GameData,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()>;
@@ -27,7 +25,6 @@ impl UiEventApplier for UiState {
     fn apply_ui_event(
         &mut self,
         session: Option<&WorldState>,
-        data: &GameData,
         event: UiEvent,
         out: &mut Vec<GameEvent>,
     ) -> Result<()> {
@@ -46,7 +43,7 @@ impl UiEventApplier for UiState {
             UiEvent::InventoryInput(key) => apply_inventory_input(self, session, key, out)?,
             UiEvent::QuestLogInput(key) => apply_quest_log_input(self, session, key, out)?,
             UiEvent::DialogInput(key) => apply_dialog_input(self, key, out),
-            UiEvent::ShopInput(key) => apply_shop_input(self, session, data, key, out)?,
+            UiEvent::ShopInput(key) => apply_shop_input(self, session, key, out)?,
         };
         Ok(())
     }
@@ -206,18 +203,14 @@ fn apply_quest_log_input(
 fn apply_shop_input(
     ui: &mut UiState,
     session: Option<&WorldState>,
-    data: &GameData,
     key: InputKey,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let shop_id = ui
-        .shop
-        .shop_id
-        .as_deref()
-        .ok_or_else(|| anyhow!("No active shop state"))?;
-    let shop = data.find_shop(shop_id)?;
+    if ui.shop.shop_id.is_none() {
+        return Err(anyhow!("No active shop state"));
+    }
     let session = session.ok_or_else(|| anyhow!("No active world"))?;
-    let shop_items_len = shop.items.len();
+    let shop_items_len = ui.shop.buy_item_ids.len();
     let inventory_len = session.leader_entity()?.inventory.len();
 
     match ui.shop.mode {
@@ -251,15 +244,8 @@ fn apply_shop_input(
         },
         ShopMode::ConfirmBuy => match key {
             InputKey::Ok => {
-                let leader_id = session.leader_id()?;
-                if let Some(item_id) = shop.items.get(ui.shop.selected) {
-                    let item = data.find_item(item_id)?;
-                    let gold = session.gold_amount(leader_id)?;
-                    if gold >= item.price {
-                        out.push(GameEvent::ShopBuyItem(item_id.clone()));
-                    } else {
-                        out.push(GameEvent::SoftError(String::from("Not enough gold")));
-                    }
+                if let Some(item_id) = ui.shop.buy_item_ids.get(ui.shop.selected) {
+                    out.push(GameEvent::ShopBuyItem(item_id.clone()));
                 } else {
                     out.push(GameEvent::SoftError(String::from("Invalid item selection")));
                 }

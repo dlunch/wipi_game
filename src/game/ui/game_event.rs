@@ -51,8 +51,12 @@ impl UiState {
             }
             GameEvent::OpenShopById(shop_id) => {
                 self.shop.shop_id = Some(shop_id.clone());
+                self.shop.buy_item_ids.clear();
                 self.shop.mode = ShopMode::Select;
                 self.shop.selected = 0;
+            }
+            GameEvent::SetShopBuyItemIds(item_ids) => {
+                self.shop.buy_item_ids = item_ids.clone();
             }
             GameEvent::World(WorldEvent::SetQuestRewarded { quest_id, rewarded })
                 if *rewarded && self.quest_log.tracked_quest_id.as_deref() == Some(quest_id) =>
@@ -77,6 +81,7 @@ impl GameEventSubscriber for UiState {
                 | GameEventKind::ShopSellSelected
                 | GameEventKind::OpenDialogState
                 | GameEventKind::OpenShopById
+                | GameEventKind::SetShopBuyItemIds
         )
     }
 }

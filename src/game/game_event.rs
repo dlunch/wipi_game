@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 use crate::{
     data::{DialogAction, Direction},
@@ -45,6 +45,7 @@ pub enum GameEvent {
     Entity(EntityEvent),
     OpenDialogState(DialogState),
     OpenShopById(String),
+    SetShopBuyItemIds(Vec<String>),
     RestoreHpMp,
     ApplyDialogAction(DialogAction),
     ApplyDialogTransition(DialogTransition),
@@ -74,6 +75,7 @@ pub enum GameEventKind {
     Entity,
     OpenDialogState,
     OpenShopById,
+    SetShopBuyItemIds,
     RestoreHpMp,
     ApplyDialogAction,
     ApplyDialogTransition,
@@ -96,7 +98,7 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 25;
+    pub const COUNT: usize = 26;
 
     pub const fn as_usize(&self) -> usize {
         match self {
@@ -110,21 +112,22 @@ impl GameEventKind {
             Self::Entity => 7,
             Self::OpenDialogState => 8,
             Self::OpenShopById => 9,
-            Self::RestoreHpMp => 10,
-            Self::ApplyDialogAction => 11,
-            Self::ApplyDialogTransition => 12,
-            Self::ShopBuyItem => 13,
-            Self::ShopSellSelected => 14,
-            Self::RevivePlayer => 15,
-            Self::CombatPlayerAction => 16,
-            Self::FatalError => 17,
-            Self::Loading => 18,
-            Self::Movement => 19,
-            Self::Combat => 20,
-            Self::Explore => 21,
-            Self::Lifecycle => 22,
-            Self::Transition => 23,
-            Self::Exit => 24,
+            Self::SetShopBuyItemIds => 10,
+            Self::RestoreHpMp => 11,
+            Self::ApplyDialogAction => 12,
+            Self::ApplyDialogTransition => 13,
+            Self::ShopBuyItem => 14,
+            Self::ShopSellSelected => 15,
+            Self::RevivePlayer => 16,
+            Self::CombatPlayerAction => 17,
+            Self::FatalError => 18,
+            Self::Loading => 19,
+            Self::Movement => 20,
+            Self::Combat => 21,
+            Self::Explore => 22,
+            Self::Lifecycle => 23,
+            Self::Transition => 24,
+            Self::Exit => 25,
         }
     }
 }
@@ -142,6 +145,7 @@ impl GameEvent {
             Self::Entity(_) => GameEventKind::Entity,
             Self::OpenDialogState(_) => GameEventKind::OpenDialogState,
             Self::OpenShopById(_) => GameEventKind::OpenShopById,
+            Self::SetShopBuyItemIds(_) => GameEventKind::SetShopBuyItemIds,
             Self::RestoreHpMp => GameEventKind::RestoreHpMp,
             Self::ApplyDialogAction(_) => GameEventKind::ApplyDialogAction,
             Self::ApplyDialogTransition(_) => GameEventKind::ApplyDialogTransition,
