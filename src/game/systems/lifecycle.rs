@@ -23,7 +23,6 @@ pub enum LoadingEvent {
     Loaded,
 }
 
-#[derive(Clone, Copy)]
 pub enum LifecycleEvent {
     ResetUi,
     ContinueSetup,

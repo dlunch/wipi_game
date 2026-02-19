@@ -37,7 +37,6 @@ impl InputKey {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
 pub enum GameInput {
     KeyDown(InputKey),
     KeyUp(InputKey),
@@ -85,7 +84,6 @@ pub enum UiEvent {
     ShopInput(InputKey),
 }
 
-#[derive(Debug, Clone, Copy)]
 pub enum DialogTransition {
     SetLine(usize),
     CloseToExplore,

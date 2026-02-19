@@ -253,14 +253,12 @@ pub enum EntityEvent {
     },
 }
 
-#[derive(Clone, Copy)]
 pub enum LoadoutSlot {
     Weapon,
     Armor,
     Accessory,
 }
 
-#[derive(Clone, Copy)]
 pub enum TransitionEvent {
     MapChanged,
     ToExplore,

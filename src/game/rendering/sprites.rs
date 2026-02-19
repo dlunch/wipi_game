@@ -5,7 +5,6 @@ use wipi::{image::Image, resource::Resource};
 
 use crate::data::Direction;
 
-#[derive(Clone, Copy)]
 pub struct SpriteFrame {
     pub sx: i32,
     pub sy: i32,
@@ -40,7 +39,7 @@ impl SpriteAtlas {
         facing: Direction,
         moving: bool,
         tick: u32,
-    ) -> Option<(&Image, SpriteFrame)> {
+    ) -> Option<(&Image, &SpriteFrame)> {
         let clip = match (facing, moving) {
             (Direction::Up, true) => "player_walk_up",
             (Direction::Down, true) => "player_walk_down",
@@ -54,16 +53,16 @@ impl SpriteAtlas {
         self.frame_for_clip(clip, tick)
     }
 
-    pub fn npc_frame(&self, tick: u32) -> Option<(&Image, SpriteFrame)> {
+    pub fn npc_frame(&self, tick: u32) -> Option<(&Image, &SpriteFrame)> {
         self.frame_for_clip("npc_idle_down", tick)
             .or_else(|| self.frame_for_clip("npc_idle", tick))
     }
 
-    pub fn enemy_frame(&self, tick: u32) -> Option<(&Image, SpriteFrame)> {
+    pub fn enemy_frame(&self, tick: u32) -> Option<(&Image, &SpriteFrame)> {
         self.frame_for_clip("enemy_idle", tick)
     }
 
-    fn frame_for_clip(&self, name: &str, tick: u32) -> Option<(&Image, SpriteFrame)> {
+    fn frame_for_clip(&self, name: &str, tick: u32) -> Option<(&Image, &SpriteFrame)> {
         let atlas = self.data.as_ref()?;
         let clip = atlas.clips.get(name)?;
         if clip.frames.is_empty() {
@@ -71,7 +70,7 @@ impl SpriteAtlas {
         }
 
         let frame = if clip.frames.len() == 1 {
-            clip.frames[0]
+            clip.frames.first()?
         } else {
             let fps = clip.fps.max(1) as u32;
             let frame_step = tick.saturating_mul(fps) / 30;
@@ -80,7 +79,7 @@ impl SpriteAtlas {
             } else {
                 (frame_step as usize).min(clip.frames.len() - 1)
             };
-            clip.frames[idx]
+            clip.frames.get(idx)?
         };
 
         let image = atlas.sheets.get(clip.sheet_id.as_str())?;

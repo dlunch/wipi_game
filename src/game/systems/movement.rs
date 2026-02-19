@@ -49,7 +49,7 @@ fn resolve_tick_with_occupancy(
     world: &WorldState,
     map: &Map,
 ) -> MovementTickEvent {
-    let mut next_state = *state;
+    let mut next_state = state.clone();
 
     if state.move_cooldown > 0 {
         next_state.move_cooldown -= 1;

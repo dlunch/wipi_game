@@ -23,7 +23,6 @@ pub struct RenderFxState {
     anim_tick: u32,
 }
 
-#[derive(Clone, Copy)]
 struct SkillEffectInstance {
     x: usize,
     y: usize,

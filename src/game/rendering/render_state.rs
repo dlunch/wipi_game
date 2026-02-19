@@ -47,7 +47,7 @@ pub enum RenderState {
     Error(String),
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub struct StatusRender {
     pub poison_timer: u32,
     pub stun_timer: u32,
@@ -96,7 +96,7 @@ pub struct EnemyRender {
     pub dead: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct SkillEffectRender {
     pub x: usize,
     pub y: usize,

@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub struct MovementState {
     pub pressed_direction: Option<Direction>,
     pub move_cooldown: u32,
@@ -16,7 +16,6 @@ pub struct MovementState {
     press_len: u8,
 }
 
-#[derive(Clone, Copy)]
 pub struct MovementTickEvent {
     pub next_state: MovementState,
     pub facing: Option<(i32, i32)>,
@@ -28,8 +27,8 @@ impl MovementState {
         self.pressed_direction.is_some()
     }
 
-    pub fn apply_tick(&mut self, event: MovementTickEvent) -> bool {
-        self.apply_next_state(event.next_state);
+    pub fn apply_tick(&mut self, event: &MovementTickEvent) -> bool {
+        self.apply_next_state(&event.next_state);
         event.step.is_some()
     }
 
@@ -63,7 +62,7 @@ impl MovementState {
     pub fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         match event {
             GameEvent::Movement(MovementEvent::Tick(movement_event, _)) => {
-                self.apply_tick(*movement_event);
+                self.apply_tick(movement_event);
             }
             GameEvent::Movement(MovementEvent::ClearPressedDirections) => {
                 self.pressed_direction = None;
@@ -102,7 +101,7 @@ impl MovementState {
         self.press_len = write as u8;
     }
 
-    fn apply_next_state(&mut self, next_state: MovementState) {
+    fn apply_next_state(&mut self, next_state: &MovementState) {
         self.pressed_direction = next_state.pressed_direction;
         self.move_cooldown = next_state.move_cooldown;
         self.pressed_mask = next_state.pressed_mask;

@@ -23,7 +23,7 @@ pub enum GameState {
     Error(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum GameStateKind {
     Loading,
     Menu,
