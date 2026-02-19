@@ -118,7 +118,7 @@ impl GameEngine {
         &self.render_fx
     }
 
-    fn resolve_with_handlers(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
+    fn resolve_event(&self, event: &GameEvent, out: &mut Vec<GameEvent>) -> Result<()> {
         if matches!(event, GameEvent::Tick) && !self.world.is_active() {
             return Ok(());
         }
@@ -129,7 +129,7 @@ impl GameEngine {
         Ok(())
     }
 
-    fn apply_with_handlers(&mut self, event: &GameEvent) -> Result<()> {
+    fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
         let kind = event.kind();
 
         if self.state.subscribes(kind) {
@@ -163,7 +163,7 @@ impl GameEngine {
         let mut derived = Vec::with_capacity(8);
 
         while let Some(event) = queue.pop_front() {
-            self.resolve_with_handlers(&event, &mut derived)?;
+            self.resolve_event(&event, &mut derived)?;
             let effect_bucket = &self.effect_buckets[event.kind().as_usize()];
             for effect in effect_bucket {
                 effect.apply(
@@ -175,7 +175,7 @@ impl GameEngine {
                 )?;
             }
 
-            needs_repaint |= self.apply_and_patch_event(&event)?;
+            needs_repaint |= self.apply_and_patch(&event)?;
 
             queue.extend(derived.drain(..));
         }
@@ -183,8 +183,8 @@ impl GameEngine {
         Ok(needs_repaint)
     }
 
-    fn apply_and_patch_event(&mut self, event: &GameEvent) -> Result<bool> {
-        self.apply_with_handlers(event)?;
+    fn apply_and_patch(&mut self, event: &GameEvent) -> Result<bool> {
+        self.apply_event(event)?;
 
         let render_fx_changed =
             self.render_fx
@@ -208,7 +208,7 @@ impl GameEngine {
 
     fn handle_tick_error(&mut self, err: Error) -> bool {
         let error_event = GameEvent::FatalError(format!("{err}"));
-        if let Err(apply_err) = self.apply_and_patch_event(&error_event) {
+        if let Err(apply_err) = self.apply_and_patch(&error_event) {
             self.state = GameState::Error(format!("{apply_err}"));
         }
         true

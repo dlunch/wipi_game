@@ -11,13 +11,13 @@ pub(crate) mod world;
 use alloc::vec::Vec;
 
 pub fn domain_resolvers() -> Vec<&'static dyn resolver::DomainEventResolver> {
-    let mut handlers = Vec::new();
-    handlers.extend(lifecycle::resolvers());
-    handlers.extend(movement::resolvers());
-    handlers.extend(combat::resolvers());
-    handlers.extend(world::resolvers());
-    handlers.extend(character::resolvers());
-    handlers.extend(shop::resolvers());
-    handlers.extend(npc::resolvers());
-    handlers
+    let mut resolvers = Vec::new();
+    resolvers.extend(lifecycle::resolvers());
+    resolvers.extend(movement::resolvers());
+    resolvers.extend(combat::resolvers());
+    resolvers.extend(world::resolvers());
+    resolvers.extend(character::resolvers());
+    resolvers.extend(shop::resolvers());
+    resolvers.extend(npc::resolvers());
+    resolvers
 }
