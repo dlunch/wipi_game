@@ -9,6 +9,7 @@ mod render_state;
 mod renderer;
 mod shop;
 mod sprites;
+mod state_patch;
 
 pub use game::render;
 pub use render_fx::RenderFxState;
