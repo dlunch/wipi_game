@@ -214,3 +214,105 @@ impl GameEngine {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloc::{rc::Rc, vec, vec::Vec};
+
+    use anyhow::Result;
+
+    use super::GameEngine;
+    use crate::game::{
+        effects::DomainEventEffect,
+        game_data::GameData,
+        game_event::{GameEvent, GameEventKind, TransitionEvent, WorldEvent},
+        state::GameState,
+        systems::resolver::DomainEventResolver,
+        world::WorldState,
+    };
+
+    struct CreateWorldResolver;
+
+    static CREATE_WORLD_RESOLVER: CreateWorldResolver = CreateWorldResolver;
+
+    impl DomainEventResolver for CreateWorldResolver {
+        fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+            &[GameEventKind::Exit]
+        }
+
+        fn resolve(
+            &self,
+            _data: &Rc<GameData>,
+            _world: Option<&WorldState>,
+            _event: &GameEvent,
+            out: &mut Vec<GameEvent>,
+        ) -> Result<()> {
+            out.push(GameEvent::World(WorldEvent::CreateWorld));
+            Ok(())
+        }
+    }
+
+    struct MenuTransitionEffect;
+
+    static MENU_TRANSITION_EFFECT: MenuTransitionEffect = MenuTransitionEffect;
+
+    impl DomainEventEffect for MenuTransitionEffect {
+        fn subscribed_kinds(&self) -> &'static [GameEventKind] {
+            &[GameEventKind::Exit]
+        }
+
+        fn apply(
+            &self,
+            _state: &GameState,
+            _data: &mut Rc<GameData>,
+            _world: Option<&WorldState>,
+            _event: &GameEvent,
+            out: &mut Vec<GameEvent>,
+        ) -> Result<()> {
+            out.push(GameEvent::Transition(TransitionEvent::ToMenu));
+            Ok(())
+        }
+    }
+
+    fn clear_dispatch_buckets(engine: &mut GameEngine) {
+        engine.resolver_buckets = vec![Vec::new(); GameEventKind::COUNT];
+        engine.effect_buckets = vec![Vec::new(); GameEventKind::COUNT];
+    }
+
+    #[test]
+    fn dispatch_applies_resolver_and_effect_events_in_order() -> Result<()> {
+        let mut engine = GameEngine::new();
+        clear_dispatch_buckets(&mut engine);
+        engine.resolver_buckets[GameEventKind::Exit.as_usize()].push(&CREATE_WORLD_RESOLVER);
+        engine.effect_buckets[GameEventKind::Exit.as_usize()].push(&MENU_TRANSITION_EFFECT);
+
+        engine.dispatch_game_events(vec![GameEvent::Exit(0)])?;
+
+        assert!(matches!(engine.state, GameState::Menu));
+        assert!(!engine.world.is_active());
+        Ok(())
+    }
+
+    #[test]
+    fn tick_transitions_to_error_when_world_is_missing_for_explore() {
+        let mut engine = GameEngine::new();
+        engine.state = GameState::Explore;
+        engine.world = crate::game::state::WorldSlot::empty();
+
+        let repaint = engine.tick();
+
+        assert!(repaint);
+        assert!(matches!(engine.state, GameState::Error(_)));
+    }
+
+    #[test]
+    fn resolve_tick_without_world_is_ignored() -> Result<()> {
+        let engine = GameEngine::new();
+        let mut derived = Vec::new();
+
+        engine.resolve_event(&GameEvent::Tick, &mut derived)?;
+
+        assert!(derived.is_empty());
+        Ok(())
+    }
+}
