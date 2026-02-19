@@ -1,22 +1,21 @@
-use alloc::{rc::Rc, string::String, vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
 use super::resolver::DomainEventResolver;
 use crate::{
-    data::{Dialog, DialogCondition, DialogLine, Direction, NpcType},
+    data::{Dialog, DialogCondition, Direction, NpcType},
     game::{
         game_data::GameData,
         game_event::{ExploreEvent, GameEvent, GameEventKind},
-        ui::state::DialogState,
         world::WorldState,
     },
 };
 
 #[derive(Debug)]
 pub struct DialogSpec {
-    npc_name: String,
-    lines: Vec<DialogLine>,
+    npc_id: u32,
+    dialog_id: u32,
     restore: bool,
 }
 
@@ -43,11 +42,10 @@ fn try_interact_npc(
     match npc.npc_type {
         NpcType::Healer => {
             let dialog = data.find_dialog(npc.dialog_id)?;
-            let lines = filter_dialog_lines(world, leader_id, dialog)?;
-            if !lines.is_empty() {
+            if has_visible_dialog_line(world, leader_id, dialog)? {
                 return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
-                    npc_name: npc.name.clone(),
-                    lines,
+                    npc_id: npc.id,
+                    dialog_id: npc.dialog_id,
                     restore: true,
                 })));
             }
@@ -66,11 +64,10 @@ fn try_interact_npc(
     }
 
     let dialog = data.find_dialog(npc.dialog_id)?;
-    let lines = filter_dialog_lines(world, leader_id, dialog)?;
-    if !lines.is_empty() {
+    if has_visible_dialog_line(world, leader_id, dialog)? {
         return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
-            npc_name: npc.name.clone(),
-            lines,
+            npc_id: npc.id,
+            dialog_id: npc.dialog_id,
             restore: false,
         })));
     }
@@ -78,25 +75,20 @@ fn try_interact_npc(
     Ok(None)
 }
 
-fn filter_dialog_lines(
-    world: &WorldState,
-    leader_id: u32,
-    dialog: &Dialog,
-) -> Result<Vec<DialogLine>> {
-    let mut out = Vec::with_capacity(dialog.lines.len());
+fn has_visible_dialog_line(world: &WorldState, leader_id: u32, dialog: &Dialog) -> Result<bool> {
     for line in &dialog.lines {
-        let include = match &line.condition {
+        let visible = match &line.condition {
             None => true,
             Some(DialogCondition::HasQuest(id)) => world.has_quest(*id),
             Some(DialogCondition::QuestComplete(id)) => world.is_quest_complete(*id),
             Some(DialogCondition::HasItem(id)) => world.has_item(leader_id, *id)?,
             Some(DialogCondition::HasGold(amount)) => world.gold_amount(leader_id)? >= *amount,
         };
-        if include {
-            out.push(line.clone());
+        if visible {
+            return Ok(true);
         }
     }
-    Ok(out)
+    Ok(false)
 }
 
 struct NpcResolver;
@@ -142,10 +134,10 @@ impl DomainEventResolver for NpcResolver {
                     if dialog_spec.restore {
                         out.push(GameEvent::RestoreHpMp);
                     }
-                    out.push(GameEvent::OpenDialogState(DialogState::new(
-                        dialog_spec.npc_name.clone(),
-                        dialog_spec.lines.clone(),
-                    )));
+                    out.push(GameEvent::OpenDialog {
+                        dialog_id: dialog_spec.dialog_id,
+                        npc_id: dialog_spec.npc_id,
+                    });
                 }
                 NpcEvent::OpenShop(shop_id) => {
                     out.push(GameEvent::OpenShopById(*shop_id));

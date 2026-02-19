@@ -91,6 +91,20 @@ impl GameData {
             .ok_or_else(|| anyhow!("dialog not found: {}", id))
     }
 
+    pub fn find_npc(&self, id: u32) -> Result<&Npc> {
+        self.npc_index
+            .get(&id)
+            .and_then(|idx| self.npcs.get(*idx))
+            .ok_or_else(|| anyhow!("npc not found: {}", id))
+    }
+
+    pub fn find_npc_by_name(&self, name: &str) -> Result<&Npc> {
+        self.npcs
+            .iter()
+            .find(|npc| npc.name == name)
+            .ok_or_else(|| anyhow!("npc name not found: {}", name))
+    }
+
     pub fn find_quest(&self, id: u32) -> Result<&Quest> {
         self.quest_index
             .get(&id)

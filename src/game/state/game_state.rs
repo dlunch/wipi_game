@@ -5,7 +5,6 @@ use anyhow::Result;
 use crate::game::{
     game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent},
     systems::lifecycle::LoadingEvent,
-    ui::state::DialogTransition,
 };
 
 #[derive(Debug)]
@@ -150,18 +149,14 @@ impl GameState {
             GameEvent::Loading(LoadingEvent::Advance(step)) => Some(GameState::Loading(*step)),
             GameEvent::Loading(LoadingEvent::Loaded) => Some(GameState::Menu),
             GameEvent::FatalError(msg) => Some(GameState::Error(msg.clone())),
-            GameEvent::Transition(TransitionEvent::ToExplore)
-            | GameEvent::ApplyDialogTransition(DialogTransition::CloseToExplore) => {
-                Some(GameState::Explore)
-            }
+            GameEvent::Transition(TransitionEvent::ToExplore) => Some(GameState::Explore),
             GameEvent::Transition(TransitionEvent::ToDead) => Some(GameState::Dead),
             GameEvent::Transition(TransitionEvent::ToMenu) => Some(GameState::Menu),
             GameEvent::Transition(TransitionEvent::ToPauseMenu) => Some(GameState::PauseMenu),
             GameEvent::Transition(TransitionEvent::ToInventory) => Some(GameState::Inventory),
             GameEvent::Transition(TransitionEvent::ToStats) => Some(GameState::Stats),
             GameEvent::Transition(TransitionEvent::ToQuestLog) => Some(GameState::QuestLog),
-            GameEvent::ApplyDialogTransition(DialogTransition::SetLine(_))
-            | GameEvent::OpenDialogState(_) => Some(GameState::Dialog),
+            GameEvent::OpenDialog { .. } => Some(GameState::Dialog),
             GameEvent::OpenShopById(_) => Some(GameState::Shop),
             _ => None,
         }
@@ -175,8 +170,7 @@ impl GameEventSubscriber for GameState {
             GameEventKind::Loading
                 | GameEventKind::FatalError
                 | GameEventKind::Transition
-                | GameEventKind::ApplyDialogTransition
-                | GameEventKind::OpenDialogState
+                | GameEventKind::OpenDialog
                 | GameEventKind::OpenShopById
         )
     }

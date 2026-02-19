@@ -1,6 +1,6 @@
 use alloc::{string::String, vec, vec::Vec};
 
-use crate::data::{Dialog, DialogLine, Direction, Skill};
+use crate::data::{DialogLine, Direction, Skill};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -84,11 +84,6 @@ pub enum UiEvent {
     DialogInput(InputKey),
     PauseMenuInput(InputKey),
     ShopInput(InputKey),
-}
-
-pub enum DialogTransition {
-    SetLine(usize),
-    CloseToExplore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,10 +256,6 @@ pub struct DialogState {
 }
 
 impl DialogState {
-    pub fn from_dialog(npc_name: String, dialog: &Dialog) -> Self {
-        Self::new(npc_name, dialog.lines.clone())
-    }
-
     pub fn new(npc_name: String, lines: Vec<DialogLine>) -> Self {
         Self {
             npc_name,

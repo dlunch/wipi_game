@@ -154,7 +154,8 @@ impl GameEngine {
         }
 
         if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
-            self.ui.apply_game_event(event)?;
+            self.ui
+                .apply_game_event(&self.data, self.world.as_ref(), event)?;
         }
 
         Ok(())

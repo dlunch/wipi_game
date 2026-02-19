@@ -14,7 +14,6 @@ use crate::game::{
     },
     save::load_game,
     state::{EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind},
-    ui::state::DialogState,
     world::WorldState,
 };
 
@@ -58,8 +57,8 @@ impl DomainEventResolver for LifecycleResolver {
                 out.push(GameEvent::Lifecycle(LifecycleEvent::ResetUi));
                 Self::setup_new_game_events(data, out)?;
                 out.push(GameEvent::Transition(TransitionEvent::ToExplore));
-                if let Some(dialog_state) = Self::intro_dialog_state(data)? {
-                    out.push(GameEvent::OpenDialogState(dialog_state));
+                if let Some((dialog_id, npc_id)) = Self::intro_dialog_spec(data)? {
+                    out.push(GameEvent::OpenDialog { dialog_id, npc_id });
                 }
             }
             GameEvent::ContinueGame => {
@@ -78,12 +77,13 @@ impl DomainEventResolver for LifecycleResolver {
 }
 
 impl LifecycleResolver {
-    fn intro_dialog_state(data: &GameData) -> Result<Option<DialogState>> {
+    fn intro_dialog_spec(data: &GameData) -> Result<Option<(u32, u32)>> {
         let Some((dialog_id, npc_name)) = data.newgame_config().intro_dialog.as_ref() else {
             return Ok(None);
         };
-        let dialog = data.find_dialog(*dialog_id)?;
-        Ok(Some(DialogState::from_dialog(npc_name.clone(), dialog)))
+        data.find_dialog(*dialog_id)?;
+        let npc_id = data.find_npc_by_name(npc_name)?.id;
+        Ok(Some((*dialog_id, npc_id)))
     }
 
     fn setup_new_game_events(data: &GameData, out: &mut Vec<GameEvent>) -> Result<()> {

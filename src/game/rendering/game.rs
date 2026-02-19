@@ -29,10 +29,7 @@ use crate::game::{
     },
     state::{CombatantState, EntityState, GameState, TimedKind},
     systems::lifecycle::{LifecycleEvent, LoadingEvent},
-    ui::state::{
-        DialogTransition, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode,
-        UiState,
-    },
+    ui::state::{INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState},
     world::WorldState,
 };
 
@@ -166,26 +163,15 @@ impl RenderState {
                 if let Some(explore) = explore.as_mut() {
                     changed |= patch_explore(explore, event, world, ui, data, render_fx, state)?;
                 }
-                match event {
-                    GameEvent::ApplyDialogTransition(DialogTransition::SetLine(line)) => {
-                        if *current_line != *line {
-                            *current_line = *line;
-                            *current_text = lines.get(*current_line).cloned();
-                            *has_next = *current_line + 1 < lines.len();
-                            changed = true;
-                        }
-                    }
-                    GameEvent::OpenDialogState(_) => {
-                        let next = build_dialog_render_fields(world, ui, data, render_fx)?;
-                        *explore = next.explore;
-                        *npc_name = next.npc_name;
-                        *lines = next.lines;
-                        *current_line = next.current_line;
-                        *current_text = next.current_text;
-                        *has_next = next.has_next;
-                        changed = true;
-                    }
-                    _ => {}
+                if let GameEvent::OpenDialog { .. } = event {
+                    let next = build_dialog_render_fields(world, ui, data, render_fx)?;
+                    *explore = next.explore;
+                    *npc_name = next.npc_name;
+                    *lines = next.lines;
+                    *current_line = next.current_line;
+                    *current_text = next.current_text;
+                    *has_next = next.has_next;
+                    changed = true;
                 }
                 Ok(changed)
             }
@@ -578,7 +564,7 @@ fn patch_explore(
             }
             Ok(false)
         }
-        GameEvent::ApplyDialogAction(_) | GameEvent::ApplyDialogTransition(_) => {
+        GameEvent::ApplyDialogAction(_) => {
             if matches!(
                 state,
                 GameState::Explore | GameState::Dialog | GameState::PauseMenu

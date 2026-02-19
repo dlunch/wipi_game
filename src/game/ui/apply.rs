@@ -2,7 +2,7 @@ use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
+use super::state::{InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::{
     data::DialogAction,
     game::{
@@ -121,41 +121,35 @@ fn apply_inventory_input(
     Ok(())
 }
 
-fn apply_dialog_input(ui: &UiState, key: InputKey, out: &mut Vec<GameEvent>) {
+fn apply_dialog_input(ui: &mut UiState, key: InputKey, out: &mut Vec<GameEvent>) {
     match key {
-        InputKey::Back => out.push(GameEvent::ApplyDialogTransition(
-            DialogTransition::CloseToExplore,
-        )),
+        InputKey::Back => out.push(GameEvent::Transition(TransitionEvent::ToExplore)),
         InputKey::Ok => {
-            if let Some(dialog_state_ref) = ui.dialog.state.as_ref() {
-                if dialog_state_ref.current_line >= dialog_state_ref.lines.len() {
-                    out.push(GameEvent::ApplyDialogTransition(
-                        DialogTransition::CloseToExplore,
-                    ));
-                    return;
-                }
+            let Some(dialog_state) = ui.dialog.state.as_mut() else {
+                return;
+            };
 
-                let transition = if dialog_state_ref.current_line + 1 < dialog_state_ref.lines.len()
-                {
-                    DialogTransition::SetLine(dialog_state_ref.current_line + 1)
-                } else {
-                    DialogTransition::CloseToExplore
-                };
+            if dialog_state.current_line >= dialog_state.lines.len() {
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
+                return;
+            }
 
-                out.push(GameEvent::ApplyDialogTransition(transition));
-                if let Some(action) = dialog_state_ref
-                    .lines
-                    .get(dialog_state_ref.current_line)
-                    .and_then(|line| line.action.as_ref())
-                    .cloned()
-                {
-                    match action {
-                        DialogAction::OpenShop(shop_id) => {
-                            out.push(GameEvent::OpenShopById(shop_id));
-                        }
-                        _ => out.push(GameEvent::ApplyDialogAction(action)),
-                    }
+            if let Some(action) = dialog_state
+                .lines
+                .get(dialog_state.current_line)
+                .and_then(|line| line.action.as_ref())
+                .cloned()
+            {
+                match action {
+                    DialogAction::OpenShop(shop_id) => out.push(GameEvent::OpenShopById(shop_id)),
+                    _ => out.push(GameEvent::ApplyDialogAction(action)),
                 }
+            }
+
+            if dialog_state.current_line + 1 < dialog_state.lines.len() {
+                dialog_state.current_line += 1;
+            } else {
+                out.push(GameEvent::Transition(TransitionEvent::ToExplore));
             }
         }
         _ => {}
