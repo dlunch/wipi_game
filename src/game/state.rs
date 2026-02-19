@@ -2,8 +2,8 @@ mod combat;
 mod entity;
 mod game_state;
 mod movement;
-pub(crate) mod world;
-pub(crate) mod world_slot;
+pub mod world;
+pub mod world_slot;
 
 pub use combat::{
     AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, TimedEffect, TimedKind,
@@ -15,4 +15,4 @@ pub use entity::{
 };
 pub use game_state::GameState;
 pub use movement::{MovementState, MovementTickEvent};
-pub(crate) use world_slot::WorldSlot;
+pub use world_slot::WorldSlot;

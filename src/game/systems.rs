@@ -1,12 +1,12 @@
-pub(crate) mod character;
-pub(crate) mod combat;
+pub mod character;
+pub mod combat;
 mod emit;
-pub(crate) mod lifecycle;
-pub(crate) mod movement;
-pub(crate) mod npc;
-pub(crate) mod resolver;
-pub(crate) mod shop;
-pub(crate) mod world;
+pub mod lifecycle;
+pub mod movement;
+pub mod npc;
+pub mod resolver;
+pub mod shop;
+pub mod world;
 
 use alloc::vec::Vec;
 

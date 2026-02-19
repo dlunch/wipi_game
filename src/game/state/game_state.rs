@@ -190,7 +190,7 @@ impl GameState {
         Ok(())
     }
 
-    pub(crate) fn transition_to(&mut self, next: GameState) {
+    fn transition_to(&mut self, next: GameState) {
         if self.can_transition_to(&next) {
             *self = next;
             return;

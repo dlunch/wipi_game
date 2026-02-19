@@ -159,31 +159,31 @@ impl RenderFxState {
         Ok(changed)
     }
 
-    pub(super) fn player_hit_flash(&self) -> u32 {
+    pub fn player_hit_flash(&self) -> u32 {
         self.player_hit_flash
     }
 
-    pub(super) fn quest_notice_timer(&self) -> u32 {
+    pub fn quest_notice_timer(&self) -> u32 {
         self.quest_notice_timer
     }
 
-    pub(super) fn shop_purchase_notice_timer(&self) -> u32 {
+    pub fn shop_purchase_notice_timer(&self) -> u32 {
         self.shop_purchase_notice_timer
     }
 
-    pub(super) fn soft_error_notice_timer(&self) -> u32 {
+    pub fn soft_error_notice_timer(&self) -> u32 {
         self.soft_error_notice_timer
     }
 
-    pub(super) fn soft_error_message(&self) -> Option<&str> {
+    pub fn soft_error_message(&self) -> Option<&str> {
         self.soft_error_message.as_deref()
     }
 
-    pub(super) fn anim_tick(&self) -> u32 {
+    pub fn anim_tick(&self) -> u32 {
         self.anim_tick
     }
 
-    pub(super) fn enemy_hit_flash(&self, enemy_id: u32) -> u32 {
+    pub fn enemy_hit_flash(&self, enemy_id: u32) -> u32 {
         for (id, timer) in &self.enemy_hit_flashes {
             if *id == enemy_id {
                 return *timer;
@@ -192,7 +192,7 @@ impl RenderFxState {
         0
     }
 
-    pub(super) fn skill_effect_iter(&self) -> impl Iterator<Item = (usize, usize, SkillType)> + '_ {
+    pub fn skill_effect_iter(&self) -> impl Iterator<Item = (usize, usize, SkillType)> + '_ {
         self.skill_effects
             .iter()
             .map(|effect| (effect.x, effect.y, effect.effect_type))

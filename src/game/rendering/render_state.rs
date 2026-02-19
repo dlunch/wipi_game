@@ -72,7 +72,7 @@ pub struct ExploreRender {
     pub first_live_enemy_name: Option<String>,
     pub opened_treasures: Vec<(String, usize, usize)>,
     pub enemies: Vec<EnemyRender>,
-    pub(super) enemy_indices: BTreeMap<u32, usize>,
+    pub enemy_indices: BTreeMap<u32, usize>,
     pub player_hit_flash: u32,
     pub skill_effects: Vec<SkillEffectRender>,
     pub skill_cooldowns: [u32; 3],
@@ -167,7 +167,7 @@ pub struct TrackedQuestRender {
     pub completed: bool,
 }
 
-pub(super) fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize {
+pub fn scroll_for_selection(selected: usize, total: usize, visible: usize) -> usize {
     if total <= visible {
         return 0;
     }
@@ -181,7 +181,7 @@ pub(super) fn scroll_for_selection(selected: usize, total: usize, visible: usize
 }
 
 impl StatusRender {
-    pub(super) fn from_timed(timed: &TimedState, current_tick: u32) -> Self {
+    pub fn from_timed(timed: &TimedState, current_tick: u32) -> Self {
         Self {
             poison_timer: timed.time_left(TimedKind::Poison, current_tick),
             stun_timer: timed.time_left(TimedKind::Stun, current_tick),
@@ -190,7 +190,7 @@ impl StatusRender {
     }
 }
 
-pub(super) fn skill_cooldowns_from_timed(timed: &TimedState, current_tick: u32) -> [u32; 3] {
+pub fn skill_cooldowns_from_timed(timed: &TimedState, current_tick: u32) -> [u32; 3] {
     [
         timed.time_left(TimedKind::SkillCooldown(0), current_tick),
         timed.time_left(TimedKind::SkillCooldown(1), current_tick),
@@ -198,7 +198,7 @@ pub(super) fn skill_cooldowns_from_timed(timed: &TimedState, current_tick: u32) 
     ]
 }
 
-pub(super) fn interaction_hint_from_world(
+pub fn interaction_hint_from_world(
     world: &WorldState,
     data: &Rc<GameData>,
 ) -> Result<Option<String>> {
@@ -242,7 +242,7 @@ fn stacked_item_label(item_id: &str, amount: i32, item_name: Option<&str>) -> St
 }
 
 impl ExploreRender {
-    pub(super) fn from_world(
+    pub fn from_world(
         world: &WorldState,
         ui: &UiState,
         data: &Rc<GameData>,
@@ -325,12 +325,12 @@ impl ExploreRender {
         })
     }
 
-    pub(super) fn enemy_mut(&mut self, enemy_id: u32) -> Option<&mut EnemyRender> {
+    pub fn enemy_mut(&mut self, enemy_id: u32) -> Option<&mut EnemyRender> {
         let index = self.enemy_indices.get(&enemy_id).copied()?;
         self.enemies.get_mut(index)
     }
 
-    pub(super) fn remove_enemy(&mut self, enemy_id: u32) -> bool {
+    pub fn remove_enemy(&mut self, enemy_id: u32) -> bool {
         let Some(index) = self.enemy_indices.remove(&enemy_id) else {
             return false;
         };
@@ -342,7 +342,7 @@ impl ExploreRender {
         true
     }
 
-    pub(super) fn upsert_enemy(&mut self, enemy: EnemyRender) {
+    pub fn upsert_enemy(&mut self, enemy: EnemyRender) {
         if let Some(existing) = self.enemy_mut(enemy.enemy_id) {
             *existing = enemy;
             return;
@@ -352,14 +352,14 @@ impl ExploreRender {
         self.enemies.push(enemy);
     }
 
-    pub(super) fn rebuild_enemy_indices(&mut self) {
+    pub fn rebuild_enemy_indices(&mut self) {
         self.enemy_indices.clear();
         for (index, enemy) in self.enemies.iter().enumerate() {
             self.enemy_indices.insert(enemy.enemy_id, index);
         }
     }
 
-    pub(super) fn first_live_enemy_name(&self) -> Option<String> {
+    pub fn first_live_enemy_name(&self) -> Option<String> {
         self.enemies
             .iter()
             .find(|enemy| enemy.hp > 0)
@@ -368,7 +368,7 @@ impl ExploreRender {
 }
 
 impl TrackedQuestRender {
-    pub(super) fn from_world(
+    pub fn from_world(
         world: &WorldState,
         data: &Rc<GameData>,
         tracked_quest_id: Option<&str>,
@@ -395,11 +395,7 @@ impl TrackedQuestRender {
 }
 
 impl InventoryRender {
-    pub(super) fn from_world(
-        world: &WorldState,
-        ui: &UiState,
-        data: &Rc<GameData>,
-    ) -> Result<Self> {
+    pub fn from_world(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> Result<Self> {
         let leader = world.leader_entity()?;
 
         let mut items = Vec::with_capacity(leader.inventory.len());
@@ -426,7 +422,7 @@ impl InventoryRender {
 }
 
 impl StatsRender {
-    pub(super) fn from_world(world: &WorldState, data: &Rc<GameData>) -> Result<Self> {
+    pub fn from_world(world: &WorldState, data: &Rc<GameData>) -> Result<Self> {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
         let (atk, def) = combat_attack_def(data, leader)?;
@@ -446,7 +442,7 @@ impl StatsRender {
 }
 
 impl ShopRender {
-    pub(super) fn from_world(
+    pub fn from_world(
         world: &WorldState,
         ui: &UiState,
         data: &Rc<GameData>,
@@ -503,11 +499,7 @@ impl ShopRender {
 }
 
 impl QuestLogRender {
-    pub(super) fn from_world(
-        world: &WorldState,
-        ui: &UiState,
-        data: &Rc<GameData>,
-    ) -> Result<Self> {
+    pub fn from_world(world: &WorldState, ui: &UiState, data: &Rc<GameData>) -> Result<Self> {
         let mut quests = Vec::with_capacity(world.quests.len());
         for quest in &world.quests {
             if quest.rewarded {

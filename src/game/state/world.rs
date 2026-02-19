@@ -172,7 +172,7 @@ impl WorldState {
         self.occupancy.npc_tiles[idx] || self.occupancy.enemy_tiles[idx]
     }
 
-    pub(crate) fn is_occupied_on_map(&self, map: &Map, x: usize, y: usize) -> bool {
+    pub fn is_occupied_on_map(&self, map: &Map, x: usize, y: usize) -> bool {
         if x >= map.width || y >= map.height {
             return true;
         }
