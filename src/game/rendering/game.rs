@@ -24,8 +24,8 @@ use super::{
 use crate::game::{
     game_data::GameData,
     game_event::{
-        CombatEvent, EntityEvent, ExploreEvent, GameEvent, MovementEvent, TransitionEvent,
-        WorldEvent,
+        CombatEvent, EntityEvent, ExploreEvent, GameEvent, MovementEvent, QuestFlag,
+        TransitionEvent, WorldEvent,
     },
     state::{CombatantState, EntityState, GameState, TimedKind},
     systems::lifecycle::{LifecycleEvent, LoadingEvent},
@@ -546,8 +546,14 @@ fn patch_explore(
         GameEvent::World(
             WorldEvent::CreateQuestProgress { .. }
             | WorldEvent::ChangeQuestCurrentCount { .. }
-            | WorldEvent::SetQuestCompleted { .. }
-            | WorldEvent::SetQuestRewarded { .. },
+            | WorldEvent::SetQuestFlag {
+                flag: QuestFlag::Completed,
+                ..
+            }
+            | WorldEvent::SetQuestFlag {
+                flag: QuestFlag::Rewarded,
+                ..
+            },
         ) => sync_explore_quest(explore, world, ui, data),
         GameEvent::World(WorldEvent::AddOpenedTreasure { map_id, x, y }) => {
             if *map_id != explore.map_id {
@@ -615,10 +621,8 @@ fn patch_explore_entity(
         | EntityEvent::SetEntityBaseMaxMp { entity_id, .. }
         | EntityEvent::SetEntityBaseAtk { entity_id, .. }
         | EntityEvent::SetEntityBaseDef { entity_id, .. }
-        | EntityEvent::SetEntityCurrentHp { entity_id, .. }
-        | EntityEvent::ChangeEntityHp { entity_id, .. }
-        | EntityEvent::SetEntityCurrentMp { entity_id, .. }
-        | EntityEvent::ChangeEntityMp { entity_id, .. }
+        | EntityEvent::SetEntityResource { entity_id, .. }
+        | EntityEvent::ChangeEntityResource { entity_id, .. }
         | EntityEvent::SetEntityLoadoutSlot { entity_id, .. }
         | EntityEvent::ChangeEntityItem { entity_id, .. }
         | EntityEvent::ClearEntityInventory { entity_id }

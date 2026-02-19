@@ -43,10 +43,15 @@ pub enum GameEvent {
     UseInventorySelected(usize),
     World(WorldEvent),
     Entity(EntityEvent),
-    OpenDialog { dialog_id: u32, npc_id: u32 },
+    OpenDialog {
+        dialog_id: u32,
+        npc_id: u32,
+    },
     OpenShopById(u32),
-    SetShopBuyItemIds(Vec<u32>),
-    SetShopSellItemIds(Vec<u32>),
+    SetShopItemIds {
+        list: ShopItemListKind,
+        item_ids: Vec<u32>,
+    },
     RestoreHpMp,
     ApplyDialogAction(DialogAction),
     ShopBuyItem(u32),
@@ -75,8 +80,7 @@ pub enum GameEventKind {
     Entity,
     OpenDialog,
     OpenShopById,
-    SetShopBuyItemIds,
-    SetShopSellItemIds,
+    SetShopItemIds,
     RestoreHpMp,
     ApplyDialogAction,
     ShopBuyItem,
@@ -98,7 +102,7 @@ pub trait GameEventSubscriber {
 }
 
 impl GameEventKind {
-    pub const COUNT: usize = 26;
+    pub const COUNT: usize = 25;
 
     pub const fn as_usize(&self) -> usize {
         match self {
@@ -112,22 +116,21 @@ impl GameEventKind {
             Self::Entity => 7,
             Self::OpenDialog => 8,
             Self::OpenShopById => 9,
-            Self::SetShopBuyItemIds => 10,
-            Self::SetShopSellItemIds => 11,
-            Self::RestoreHpMp => 12,
-            Self::ApplyDialogAction => 13,
-            Self::ShopBuyItem => 14,
-            Self::ShopSellItem => 15,
-            Self::RevivePlayer => 16,
-            Self::CombatPlayerAction => 17,
-            Self::FatalError => 18,
-            Self::Loading => 19,
-            Self::Movement => 20,
-            Self::Combat => 21,
-            Self::Explore => 22,
-            Self::Lifecycle => 23,
-            Self::Transition => 24,
-            Self::Exit => 25,
+            Self::SetShopItemIds => 10,
+            Self::RestoreHpMp => 11,
+            Self::ApplyDialogAction => 12,
+            Self::ShopBuyItem => 13,
+            Self::ShopSellItem => 14,
+            Self::RevivePlayer => 15,
+            Self::CombatPlayerAction => 16,
+            Self::FatalError => 17,
+            Self::Loading => 18,
+            Self::Movement => 19,
+            Self::Combat => 20,
+            Self::Explore => 21,
+            Self::Lifecycle => 22,
+            Self::Transition => 23,
+            Self::Exit => 24,
         }
     }
 }
@@ -145,8 +148,7 @@ impl GameEvent {
             Self::Entity(_) => GameEventKind::Entity,
             Self::OpenDialog { .. } => GameEventKind::OpenDialog,
             Self::OpenShopById(_) => GameEventKind::OpenShopById,
-            Self::SetShopBuyItemIds(_) => GameEventKind::SetShopBuyItemIds,
-            Self::SetShopSellItemIds(_) => GameEventKind::SetShopSellItemIds,
+            Self::SetShopItemIds { .. } => GameEventKind::SetShopItemIds,
             Self::RestoreHpMp => GameEventKind::RestoreHpMp,
             Self::ApplyDialogAction(_) => GameEventKind::ApplyDialogAction,
             Self::ShopBuyItem(_) => GameEventKind::ShopBuyItem,
@@ -168,11 +170,23 @@ impl GameEvent {
 pub enum WorldEvent {
     CreateWorld,
     SetWorldMap(u32),
-    CreateQuestProgress { quest_id: u32 },
-    ChangeQuestCurrentCount { quest_id: u32, delta: i32 },
-    SetQuestCompleted { quest_id: u32, completed: bool },
-    SetQuestRewarded { quest_id: u32, rewarded: bool },
-    AddOpenedTreasure { map_id: u32, x: usize, y: usize },
+    CreateQuestProgress {
+        quest_id: u32,
+    },
+    ChangeQuestCurrentCount {
+        quest_id: u32,
+        delta: i32,
+    },
+    SetQuestFlag {
+        quest_id: u32,
+        flag: QuestFlag,
+        value: bool,
+    },
+    AddOpenedTreasure {
+        map_id: u32,
+        x: usize,
+        y: usize,
+    },
 }
 
 pub enum EntityEvent {
@@ -219,20 +233,14 @@ pub enum EntityEvent {
         entity_id: EntityId,
         base_def: i32,
     },
-    SetEntityCurrentHp {
+    SetEntityResource {
         entity_id: EntityId,
+        resource: EntityResource,
         value: i32,
     },
-    ChangeEntityHp {
+    ChangeEntityResource {
         entity_id: EntityId,
-        delta: i32,
-    },
-    SetEntityCurrentMp {
-        entity_id: EntityId,
-        value: i32,
-    },
-    ChangeEntityMp {
-        entity_id: EntityId,
+        resource: EntityResource,
         delta: i32,
     },
     AddEntityExp {
@@ -258,6 +266,24 @@ pub enum LoadoutSlot {
     Weapon,
     Armor,
     Accessory,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ShopItemListKind {
+    Buy,
+    Sell,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum QuestFlag {
+    Completed,
+    Rewarded,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum EntityResource {
+    Hp,
+    Mp,
 }
 
 pub enum TransitionEvent {

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::game::{
-    game_event::{CombatEvent, EntityEvent, GameEvent, LoadoutSlot},
+    game_event::{CombatEvent, EntityEvent, EntityResource, GameEvent, LoadoutSlot},
     state::{EntityId, EntityState, TimedEffect},
 };
 
@@ -56,12 +56,14 @@ pub fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
         entity_id: entity.id,
         base_def: entity.stat.base_def,
     }));
-    out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentHp {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityResource {
         entity_id: entity.id,
+        resource: EntityResource::Hp,
         value: entity.current_hp,
     }));
-    out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentMp {
+    out.push(GameEvent::Entity(EntityEvent::SetEntityResource {
         entity_id: entity.id,
+        resource: EntityResource::Mp,
         value: entity.current_mp,
     }));
     out.push(GameEvent::Entity(EntityEvent::ClearEntityInventory {

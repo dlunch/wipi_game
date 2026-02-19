@@ -7,7 +7,7 @@ use crate::{
     data::{DialogAction, ItemKind},
     game::{
         game_data::GameData,
-        game_event::{EntityEvent, GameEvent, GameEventKind, LoadoutSlot},
+        game_event::{EntityEvent, EntityResource, GameEvent, GameEventKind, LoadoutSlot},
         state::{EntityState, GOLD_ITEM_ID},
         world::WorldState,
     },
@@ -89,8 +89,9 @@ fn resolve_use_item(
         return Ok(());
     }
 
-    out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+    out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
         entity_id: leader_id,
+        resource: EntityResource::Hp,
         delta: item.hp_restore(),
     }));
     push_item_delta(out, leader_id, stack.item_id, -1);
@@ -151,14 +152,16 @@ fn resolve_restore_hp_mp(
     let hp_delta = entity.stat.base_max_hp - entity.current_hp;
     let mp_delta = entity.stat.base_max_mp - entity.current_mp;
     if hp_delta != 0 {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id,
+            resource: EntityResource::Hp,
             delta: hp_delta,
         }));
     }
     if mp_delta != 0 {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id,
+            resource: EntityResource::Mp,
             delta: mp_delta,
         }));
     }

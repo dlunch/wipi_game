@@ -9,8 +9,8 @@ use super::{
 use crate::game::{
     game_data::GameData,
     game_event::{
-        CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TransitionEvent,
-        WorldEvent,
+        CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, QuestFlag,
+        TransitionEvent, WorldEvent,
     },
     save::load_game,
     state::{EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind},
@@ -246,12 +246,14 @@ fn emit_quest_snapshot(
         quest_id,
         delta: current_count,
     }));
-    out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
+    out.push(GameEvent::World(WorldEvent::SetQuestFlag {
         quest_id,
-        completed,
+        flag: QuestFlag::Completed,
+        value: completed,
     }));
-    out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
+    out.push(GameEvent::World(WorldEvent::SetQuestFlag {
         quest_id,
-        rewarded,
+        flag: QuestFlag::Rewarded,
+        value: rewarded,
     }));
 }

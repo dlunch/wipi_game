@@ -8,7 +8,9 @@ use crate::{
     data::{Direction, Map, Skill, SkillType, Tile},
     game::{
         game_data::GameData,
-        game_event::{CombatEvent, EntityEvent, GameEvent, GameEventKind, TransitionEvent},
+        game_event::{
+            CombatEvent, EntityEvent, EntityResource, GameEvent, GameEventKind, TransitionEvent,
+        },
         state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def},
         ui::state::ExploreAction,
         world::WorldState,
@@ -155,8 +157,9 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     }
 
     if total_player_damage > 0 {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id: leader_id,
+            resource: EntityResource::Hp,
             delta: -total_player_damage,
         }));
     }
@@ -175,8 +178,9 @@ fn tick_mp_regen(
     }
 
     if !combatant.timed.is_active(TimedKind::MpRegenTick, next_tick) {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id,
+            resource: EntityResource::Mp,
             delta: 1,
         }));
         out.push(GameEvent::Combat(CombatEvent::SetCombatantTimed {
@@ -196,8 +200,9 @@ fn tick_combatant_effects(
     if combatant.timed.is_active(TimedKind::Poison, next_tick)
         && next_tick.is_multiple_of(STATUS_TICK_INTERVAL)
     {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id,
+            resource: EntityResource::Hp,
             delta: -POISON_DAMAGE,
         }));
     }
@@ -237,8 +242,9 @@ fn resolve_player_action(
             kind: TimedKind::SkillCooldown(slot as u8),
             end_tick: current_tick.wrapping_add(skill.cooldown),
         }));
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id: leader_id,
+            resource: EntityResource::Mp,
             delta: -skill.mp_cost,
         }));
         resolve_skill_action(world, leader_id, leader_entity, leader_atk, skill, out)?;
@@ -304,8 +310,9 @@ fn resolve_skill_action(
             }
         }
         SkillType::Heal => {
-            out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+            out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
                 entity_id: leader_id,
+                resource: EntityResource::Hp,
                 delta: skill.heal_power.max(0),
             }));
         }
@@ -339,8 +346,9 @@ fn damage_enemy_at_position(
         let damage = raw_damage.saturating_sub(effective_def / 2).max(1);
         let next_hp = entity.current_hp.saturating_sub(damage).max(0);
 
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id: enemy.entity_id,
+            resource: EntityResource::Hp,
             delta: -damage,
         }));
 
@@ -438,12 +446,14 @@ fn resolve_map_changed(
                 entity_id,
                 base_def: enemy_data.def,
             }));
-            out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentHp {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityResource {
                 entity_id,
+                resource: EntityResource::Hp,
                 value: enemy_data.hp,
             }));
-            out.push(GameEvent::Entity(EntityEvent::SetEntityCurrentMp {
+            out.push(GameEvent::Entity(EntityEvent::SetEntityResource {
                 entity_id,
+                resource: EntityResource::Mp,
                 value: 0,
             }));
             out.push(GameEvent::Entity(EntityEvent::ClearEntityInventory {

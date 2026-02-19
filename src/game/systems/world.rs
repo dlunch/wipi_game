@@ -8,8 +8,8 @@ use crate::{
     game::{
         game_data::GameData,
         game_event::{
-            CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TileEvent,
-            TransitionEvent, WorldEvent,
+            CombatEvent, EntityEvent, EntityResource, GameEvent, GameEventKind, MovementEvent,
+            QuestFlag, ShopItemListKind, TileEvent, TransitionEvent, WorldEvent,
         },
         state::{GOLD_ITEM_ID, TimedKind},
         world::WorldState,
@@ -56,10 +56,16 @@ impl DomainEventResolver for WorldLogicResolver {
             GameEvent::ApplyDialogAction(DialogAction::CompleteQuest(id)) => {
                 resolve_complete_quest(data, world, id, out)?;
             }
-            GameEvent::Entity(EntityEvent::ChangeEntityHp { entity_id, delta }) => {
-                resolve_entity_hp_change(data, world, *entity_id, *delta, out)?;
-            }
-            GameEvent::Entity(EntityEvent::SetEntityCurrentHp { entity_id, value }) => {
+            GameEvent::Entity(EntityEvent::ChangeEntityResource {
+                entity_id,
+                resource: EntityResource::Hp,
+                delta,
+            }) => resolve_entity_hp_change(data, world, *entity_id, *delta, out)?,
+            GameEvent::Entity(EntityEvent::SetEntityResource {
+                entity_id,
+                resource: EntityResource::Hp,
+                value,
+            }) => {
                 let current_hp = world.entity(*entity_id)?.current_hp;
                 resolve_entity_hp_change(data, world, *entity_id, *value - current_hp, out)?;
             }
@@ -97,8 +103,14 @@ fn resolve_open_shop(
     for item_id in &shop.items {
         buy_item_ids.push(*item_id);
     }
-    out.push(GameEvent::SetShopBuyItemIds(buy_item_ids));
-    out.push(GameEvent::SetShopSellItemIds(sell_item_data_ids(world)?));
+    out.push(GameEvent::SetShopItemIds {
+        list: ShopItemListKind::Buy,
+        item_ids: buy_item_ids,
+    });
+    out.push(GameEvent::SetShopItemIds {
+        list: ShopItemListKind::Sell,
+        item_ids: sell_item_data_ids(world)?,
+    });
     Ok(())
 }
 
@@ -116,7 +128,10 @@ fn resolve_shop_sell_cache_after_buy(
 
     let mut sell_item_ids = sell_item_data_ids(world)?;
     sell_item_ids.push(item_data_id);
-    out.push(GameEvent::SetShopSellItemIds(sell_item_ids));
+    out.push(GameEvent::SetShopItemIds {
+        list: ShopItemListKind::Sell,
+        item_ids: sell_item_ids,
+    });
     Ok(())
 }
 
@@ -147,7 +162,10 @@ fn resolve_shop_sell_cache_after_sell(
     {
         sell_item_ids.remove(index);
     }
-    out.push(GameEvent::SetShopSellItemIds(sell_item_ids));
+    out.push(GameEvent::SetShopItemIds {
+        list: ShopItemListKind::Sell,
+        item_ids: sell_item_ids,
+    });
     Ok(())
 }
 
@@ -258,9 +276,10 @@ fn resolve_complete_quest(
         push_item_delta(out, leader_id, item_id, 1);
     }
 
-    out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
+    out.push(GameEvent::World(WorldEvent::SetQuestFlag {
         quest_id: *id,
-        rewarded: true,
+        flag: QuestFlag::Rewarded,
+        value: true,
     }));
     Ok(())
 }
@@ -349,14 +368,16 @@ fn resolve_revive_player(
     let hp_delta = target_hp - leader.current_hp;
     let mp_delta = target_mp - leader.current_mp;
     if hp_delta != 0 {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityHp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id: leader_id,
+            resource: EntityResource::Hp,
             delta: hp_delta,
         }));
     }
     if mp_delta != 0 {
-        out.push(GameEvent::Entity(EntityEvent::ChangeEntityMp {
+        out.push(GameEvent::Entity(EntityEvent::ChangeEntityResource {
             entity_id: leader_id,
+            resource: EntityResource::Mp,
             delta: mp_delta,
         }));
     }

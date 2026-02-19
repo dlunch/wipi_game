@@ -7,7 +7,10 @@ use crate::{
     data::{DialogCondition, DialogLine},
     game::{
         game_data::GameData,
-        game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent, WorldEvent},
+        game_event::{
+            GameEvent, GameEventKind, GameEventSubscriber, QuestFlag, ShopItemListKind,
+            TransitionEvent, WorldEvent,
+        },
         systems::lifecycle::{LifecycleEvent, LoadingEvent},
         world::WorldState,
     },
@@ -70,20 +73,24 @@ impl UiState {
                 self.shop.mode = ShopMode::Select;
                 self.shop.selected = 0;
             }
-            GameEvent::SetShopBuyItemIds(item_ids) => {
-                self.shop.buy_item_ids = item_ids.clone();
-            }
-            GameEvent::SetShopSellItemIds(item_ids) => {
-                self.shop.sell_item_ids = item_ids.clone();
-                if self.shop.sell_item_ids.is_empty() {
-                    self.shop.selected = 0;
-                } else if self.shop.selected >= self.shop.sell_item_ids.len() {
-                    self.shop.selected = self.shop.sell_item_ids.len() - 1;
+            GameEvent::SetShopItemIds { list, item_ids } => match list {
+                ShopItemListKind::Buy => {
+                    self.shop.buy_item_ids = item_ids.clone();
                 }
-            }
-            GameEvent::World(WorldEvent::SetQuestRewarded { quest_id, rewarded })
-                if *rewarded && self.quest_log.tracked_quest_id == Some(*quest_id) =>
-            {
+                ShopItemListKind::Sell => {
+                    self.shop.sell_item_ids = item_ids.clone();
+                    if self.shop.sell_item_ids.is_empty() {
+                        self.shop.selected = 0;
+                    } else if self.shop.selected >= self.shop.sell_item_ids.len() {
+                        self.shop.selected = self.shop.sell_item_ids.len() - 1;
+                    }
+                }
+            },
+            GameEvent::World(WorldEvent::SetQuestFlag {
+                quest_id,
+                flag: QuestFlag::Rewarded,
+                value,
+            }) if *value && self.quest_log.tracked_quest_id == Some(*quest_id) => {
                 self.quest_log.tracked_quest_id = None;
             }
             _ => {}
@@ -103,8 +110,7 @@ impl GameEventSubscriber for UiState {
                 | GameEventKind::ShopSellItem
                 | GameEventKind::OpenDialog
                 | GameEventKind::OpenShopById
-                | GameEventKind::SetShopBuyItemIds
-                | GameEventKind::SetShopSellItemIds
+                | GameEventKind::SetShopItemIds
         )
     }
 }

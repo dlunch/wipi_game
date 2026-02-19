@@ -7,8 +7,8 @@ use crate::{
     game::{
         game_data::GameData,
         game_event::{
-            CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
-            MovementEvent, WorldEvent,
+            CombatEvent, EntityEvent, EntityResource, GameEvent, GameEventKind,
+            GameEventSubscriber, LoadoutSlot, MovementEvent, QuestFlag, WorldEvent,
         },
         state::{
             AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId,
@@ -247,14 +247,16 @@ impl WorldState {
                     progress.completed = true;
                 }
             }
-            WorldEvent::SetQuestCompleted {
+            WorldEvent::SetQuestFlag {
                 quest_id,
-                completed,
+                flag,
+                value,
             } => {
-                self.ensure_quest_progress(*quest_id).completed = *completed;
-            }
-            WorldEvent::SetQuestRewarded { quest_id, rewarded } => {
-                self.ensure_quest_progress(*quest_id).rewarded = *rewarded;
+                let progress = self.ensure_quest_progress(*quest_id);
+                match flag {
+                    QuestFlag::Completed => progress.completed = *value,
+                    QuestFlag::Rewarded => progress.rewarded = *value,
+                }
             }
             WorldEvent::AddOpenedTreasure { map_id, x, y } => {
                 if !self.is_treasure_opened(*map_id, *x, *y) {
@@ -412,25 +414,39 @@ impl WorldState {
                     self.remove_item_amount(*entity_id, *item_id, -*delta)?;
                 }
             }
-            EntityEvent::SetEntityCurrentHp { entity_id, value } => {
+            EntityEvent::SetEntityResource {
+                entity_id,
+                resource,
+                value,
+            } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                let max_hp = entity.stat.base_max_hp.max(0);
-                entity.current_hp = (*value).clamp(0, max_hp);
+                match resource {
+                    EntityResource::Hp => {
+                        let max_hp = entity.stat.base_max_hp.max(0);
+                        entity.current_hp = (*value).clamp(0, max_hp);
+                    }
+                    EntityResource::Mp => {
+                        let max_mp = entity.stat.base_max_mp.max(0);
+                        entity.current_mp = (*value).clamp(0, max_mp);
+                    }
+                }
             }
-            EntityEvent::ChangeEntityHp { entity_id, delta } => {
+            EntityEvent::ChangeEntityResource {
+                entity_id,
+                resource,
+                delta,
+            } => {
                 let entity = self.entities.get_mut(*entity_id)?;
-                entity.current_hp =
-                    (entity.current_hp + *delta).clamp(0, entity.stat.base_max_hp.max(0));
-            }
-            EntityEvent::SetEntityCurrentMp { entity_id, value } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                let max_mp = entity.stat.base_max_mp.max(0);
-                entity.current_mp = (*value).clamp(0, max_mp);
-            }
-            EntityEvent::ChangeEntityMp { entity_id, delta } => {
-                let entity = self.entities.get_mut(*entity_id)?;
-                entity.current_mp =
-                    (entity.current_mp + *delta).clamp(0, entity.stat.base_max_mp.max(0));
+                match resource {
+                    EntityResource::Hp => {
+                        entity.current_hp =
+                            (entity.current_hp + *delta).clamp(0, entity.stat.base_max_hp.max(0));
+                    }
+                    EntityResource::Mp => {
+                        entity.current_mp =
+                            (entity.current_mp + *delta).clamp(0, entity.stat.base_max_mp.max(0));
+                    }
+                }
             }
         }
         Ok(())
@@ -719,7 +735,8 @@ mod tests {
         game::{
             game_data::{GameData, load_step as load_game_data_step},
             game_event::{
-                CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, WorldEvent,
+                CombatEvent, EntityEvent, EntityResource, GameEvent, GameEventKind,
+                GameEventSubscriber, WorldEvent,
             },
             state::{
                 CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
@@ -853,8 +870,9 @@ mod tests {
 
         world.apply_event(
             &data,
-            &GameEvent::Entity(EntityEvent::ChangeEntityHp {
+            &GameEvent::Entity(EntityEvent::ChangeEntityResource {
                 entity_id: 10,
+                resource: EntityResource::Hp,
                 delta: -75,
             }),
         )?;
@@ -862,8 +880,9 @@ mod tests {
 
         world.apply_event(
             &data,
-            &GameEvent::Entity(EntityEvent::ChangeEntityHp {
+            &GameEvent::Entity(EntityEvent::ChangeEntityResource {
                 entity_id: 10,
+                resource: EntityResource::Hp,
                 delta: -5,
             }),
         )?;
