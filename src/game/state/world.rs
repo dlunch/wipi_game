@@ -689,7 +689,8 @@ impl GameEventSubscriber for WorldState {
     fn subscribes(&self, kind: GameEventKind) -> bool {
         matches!(
             kind,
-            GameEventKind::World
+            GameEventKind::Tick
+                | GameEventKind::World
                 | GameEventKind::Entity
                 | GameEventKind::Combat
                 | GameEventKind::Movement
@@ -710,7 +711,9 @@ mod tests {
         data::Direction,
         game::{
             game_data::{GameData, load_step as load_game_data_step},
-            game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent},
+            game_event::{
+                CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, WorldEvent,
+            },
             state::{
                 CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
             },
@@ -908,5 +911,11 @@ mod tests {
         )?;
 
         Ok(())
+    }
+
+    #[test]
+    fn world_state_subscribes_tick_event() {
+        let world = WorldState::empty();
+        assert!(world.subscribes(GameEventKind::Tick));
     }
 }
