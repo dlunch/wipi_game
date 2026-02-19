@@ -1,4 +1,4 @@
-use alloc::{rc::Rc, string::String, vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
@@ -21,12 +21,12 @@ pub fn resolve_world_tick(
     world: &WorldState,
     data: &GameData,
 ) -> Result<(MovementTickEvent, Option<TileEvent>)> {
-    let map = data.find_map(&leader.map_id)?;
+    let map = data.find_map(leader.map_id)?;
     let movement_event = resolve_tick_with_occupancy(state, leader, world, map);
     let tile_event = if let Some((dx, dy)) = movement_event.step {
         let next_x = (leader.x as i32 + dx).max(0) as usize;
         let next_y = (leader.y as i32 + dy).max(0) as usize;
-        tile_event_for_position(&leader.map_id, next_x, next_y, data)?
+        tile_event_for_position(leader.map_id, next_x, next_y, data)?
     } else {
         None
     };
@@ -92,7 +92,7 @@ fn idle_tick(next_move_cooldown: u32) -> MovementTickEvent {
 }
 
 fn tile_event_for_position(
-    map_id: &str,
+    map_id: u32,
     x: usize,
     y: usize,
     data: &GameData,
@@ -106,10 +106,10 @@ fn tile_event_for_position(
     })
 }
 
-fn find_tile_target(tiles: &[(usize, usize, String)], x: usize, y: usize) -> Option<String> {
+fn find_tile_target(tiles: &[(usize, usize, u32)], x: usize, y: usize) -> Option<u32> {
     tiles
         .iter()
-        .find_map(|(tx, ty, target)| (*tx == x && *ty == y).then(|| target.clone()))
+        .find_map(|(tx, ty, target)| (*tx == x && *ty == y).then_some(*target))
 }
 
 struct TickMovementResolver;

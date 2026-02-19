@@ -23,7 +23,7 @@ pub fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
     }));
     out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: entity.id,
-        map_id: Some(entity.map_id.clone()),
+        map_id: Some(entity.map_id),
         position: Some((entity.x, entity.y)),
         facing: Some(entity.facing),
     }));
@@ -69,7 +69,7 @@ pub fn emit_entity_snapshot(entity: &EntityState, out: &mut Vec<GameEvent>) {
     for stack in &entity.inventory {
         out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
             entity_id: entity.id,
-            item_id: stack.item_id.clone(),
+            item_id: stack.item_id,
             delta: stack.amount,
         }));
     }

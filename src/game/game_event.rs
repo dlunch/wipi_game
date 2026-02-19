@@ -28,7 +28,7 @@ pub enum CombatEvent {
     },
     SetRespawnTimer(u32),
     GrantKillReward {
-        enemy_id: String,
+        enemy_id: u32,
         exp: i32,
         gold: i32,
     },
@@ -44,7 +44,7 @@ pub enum GameEvent {
     World(WorldEvent),
     Entity(EntityEvent),
     OpenDialogState(DialogState),
-    OpenShopById(String),
+    OpenShopById(u32),
     SetShopBuyItemIds(Vec<u32>),
     SetShopSellItemIds(Vec<u32>),
     RestoreHpMp,
@@ -171,12 +171,12 @@ impl GameEvent {
 
 pub enum WorldEvent {
     CreateWorld,
-    SetWorldMap(String),
-    CreateQuestProgress { quest_id: String },
-    ChangeQuestCurrentCount { quest_id: String, delta: i32 },
-    SetQuestCompleted { quest_id: String, completed: bool },
-    SetQuestRewarded { quest_id: String, rewarded: bool },
-    AddOpenedTreasure { map_id: String, x: usize, y: usize },
+    SetWorldMap(u32),
+    CreateQuestProgress { quest_id: u32 },
+    ChangeQuestCurrentCount { quest_id: u32, delta: i32 },
+    SetQuestCompleted { quest_id: u32, completed: bool },
+    SetQuestRewarded { quest_id: u32, rewarded: bool },
+    AddOpenedTreasure { map_id: u32, x: usize, y: usize },
 }
 
 pub enum EntityEvent {
@@ -190,7 +190,7 @@ pub enum EntityEvent {
     },
     SetEntityTransform {
         entity_id: EntityId,
-        map_id: Option<String>,
+        map_id: Option<u32>,
         position: Option<(usize, usize)>,
         facing: Option<Direction>,
     },
@@ -252,7 +252,7 @@ pub enum EntityEvent {
     },
     ChangeEntityItem {
         entity_id: EntityId,
-        item_id: String,
+        item_id: u32,
         delta: i32,
     },
 }
@@ -278,8 +278,8 @@ pub enum TransitionEvent {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TileEvent {
     Treasure,
-    MapExit(String),
-    DungeonEntrance(String),
+    MapExit(u32),
+    DungeonEntrance(u32),
 }
 
 pub enum ExploreEvent {

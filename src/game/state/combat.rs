@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
@@ -74,7 +74,7 @@ pub struct AllyCombatantState {
 #[derive(Debug, PartialEq, Eq)]
 pub struct EnemyCombatantState {
     pub entity_id: EntityId,
-    pub source_enemy_id: String,
+    pub source_enemy_id: u32,
     pub combatant: CombatantState,
 }
 

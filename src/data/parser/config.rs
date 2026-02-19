@@ -2,7 +2,7 @@ use alloc::{string::ToString, vec::Vec};
 
 use anyhow::{Result, bail, ensure};
 
-use super::parse_int;
+use super::{parse_int, parse_u32};
 use crate::data::types::{NewGameConfig, StartItem};
 
 pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
@@ -24,36 +24,39 @@ pub fn parse_newgame(data: &str) -> Result<NewGameConfig> {
             }
             "start_map" => {
                 ensure!(parts.len() >= 2, "missing value for start_map");
-                config.start_map = parts[1].to_string();
+                config.start_map = parse_u32(parts[1], "start_map", line)?;
             }
             "fallback_map" => {
                 ensure!(parts.len() >= 2, "missing value for fallback_map");
-                config.fallback_map = parts[1].to_string();
+                config.fallback_map = parse_u32(parts[1], "fallback_map", line)?;
             }
             "intro_dialog" => {
                 ensure!(
                     parts.len() >= 3,
                     "intro_dialog requires dialog_id and npc_name"
                 );
-                config.intro_dialog = Some((parts[1].to_string(), parts[2].to_string()));
+                config.intro_dialog = Some((
+                    parse_u32(parts[1], "intro_dialog.dialog_id", line)?,
+                    parts[2].to_string(),
+                ));
             }
             "equip_weapon" => {
                 ensure!(parts.len() >= 2, "missing value for equip_weapon");
-                config.equip_weapon = Some(parts[1].to_string());
+                config.equip_weapon = Some(parse_u32(parts[1], "equip_weapon", line)?);
             }
             "equip_armor" => {
                 ensure!(parts.len() >= 2, "missing value for equip_armor");
-                config.equip_armor = Some(parts[1].to_string());
+                config.equip_armor = Some(parse_u32(parts[1], "equip_armor", line)?);
             }
             "treasure_item" => {
                 ensure!(parts.len() >= 2, "missing value for treasure_item");
-                config.treasure_item = Some(parts[1].to_string());
+                config.treasure_item = Some(parse_u32(parts[1], "treasure_item", line)?);
             }
             "item" => {
                 ensure!(parts.len() >= 3, "item requires item_id and count");
                 let count = parse_int(parts[2], "item count", line)?;
                 config.items.push(StartItem {
-                    item_id: parts[1].to_string(),
+                    item_id: parse_u32(parts[1], "item.item_id", line)?,
                     count,
                 });
             }

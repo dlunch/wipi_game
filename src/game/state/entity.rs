@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use crate::{data::Direction, game::game_data::GameData};
 
 pub type EntityId = u32;
-pub const GOLD_ITEM_ID: &str = "gold";
+pub const GOLD_ITEM_ID: u32 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityKind {
@@ -61,16 +61,13 @@ impl EntityStat {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ItemStack {
-    pub item_id: String,
+    pub item_id: u32,
     pub amount: i32,
 }
 
 impl ItemStack {
-    pub fn new(item_id: impl Into<String>, amount: i32) -> Self {
-        Self {
-            item_id: item_id.into(),
-            amount,
-        }
+    pub fn new(item_id: u32, amount: i32) -> Self {
+        Self { item_id, amount }
     }
 }
 
@@ -86,7 +83,7 @@ pub struct EntityState {
     pub id: EntityId,
     pub kind: EntityKind,
     pub name: String,
-    pub map_id: String,
+    pub map_id: u32,
     pub x: usize,
     pub y: usize,
     pub facing: Direction,
@@ -98,7 +95,7 @@ pub struct EntityState {
 }
 
 impl EntityState {
-    pub fn new_player(id: EntityId, name: String, map_id: String) -> Self {
+    pub fn new_player(id: EntityId, name: String, map_id: u32) -> Self {
         let stat = EntityStat::default();
         Self {
             id,
@@ -124,19 +121,19 @@ pub fn combat_attack_def(data: &GameData, entity: &EntityState) -> Result<(i32, 
     if let Some(index) = entity.loadout.weapon
         && let Some(stack) = entity.inventory.get(index)
     {
-        let item = data.find_item(&stack.item_id)?;
+        let item = data.find_item(stack.item_id)?;
         atk += item.atk();
     }
     if let Some(index) = entity.loadout.armor
         && let Some(stack) = entity.inventory.get(index)
     {
-        let item = data.find_item(&stack.item_id)?;
+        let item = data.find_item(stack.item_id)?;
         def += item.def();
     }
     if let Some(index) = entity.loadout.accessory
         && let Some(stack) = entity.inventory.get(index)
     {
-        let item = data.find_item(&stack.item_id)?;
+        let item = data.find_item(stack.item_id)?;
         atk += item.atk();
         def += item.def();
     }

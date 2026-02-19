@@ -1,68 +1,64 @@
 # 대화 데이터
-# 포맷:
-# @DIALOG:dialog_id
-# [CONDITION:][:ACTION:]대화 내용
-# @END
-#
+# @DIALOG:id
 # CONDITION: HAS_QUEST=id, QUEST_DONE=id, HAS_ITEM=id, HAS_GOLD=n
 # ACTION: GIVE_QUEST=id, COMPLETE_QUEST=id, GIVE_ITEM=id, TAKE_ITEM=id
 #         GIVE_GOLD=n, TAKE_GOLD=n, OPEN_SHOP=id, HEAL
 
-@DIALOG:dialog_elder
+@DIALOG:1001
 어서오게, 젊은 용사여.
 최근 숲에 고블린이 나타나 마을을 위협하고 있다네.
-HAS_QUEST=quest_goblin::이미 부탁을 들어주고 있구나. 고블린 5마리를 처치해주게.
-QUEST_DONE=quest_goblin:COMPLETE_QUEST=quest_goblin:훌륭하네! 마을을 구해줘서 고맙네.
-GIVE_QUEST=quest_goblin:숲의 고블린 5마리를 처치해줄 수 있겠나?
+HAS_QUEST=3001::이미 부탁을 들어주고 있구나. 고블린 5마리를 처치해주게.
+QUEST_DONE=3001:COMPLETE_QUEST=3001:훌륭하네! 마을을 구해줘서 고맙네.
+GIVE_QUEST=3001:숲의 고블린 5마리를 처치해줄 수 있겠나?
 @END
 
-@DIALOG:dialog_shop
+@DIALOG:1002
 어서 오시게! 좋은 무기가 많이 있다네.
-OPEN_SHOP=weapon_shop:구경해 보시게.
+OPEN_SHOP=2001:구경해 보시게.
 @END
 
-@DIALOG:dialog_healer
+@DIALOG:1003
 상처가 있으시군요.
 HEAL:체력을 회복해 드렸습니다.
 무리하지 마세요.
 @END
 
-@DIALOG:dialog_villager
+@DIALOG:1004
 평화롭던 마을에 몬스터가 나타났어요...
 장로님께 가보세요.
 @END
 
-@DIALOG:dialog_guard
+@DIALOG:1005
 이 성은 마왕이 점령했다.
-HAS_QUEST=quest_boss::마왕을 물리치러 가시는 건가요? 조심하세요!
+HAS_QUEST=3004::마왕을 물리치러 가시는 건가요? 조심하세요!
 강해지지 않으면 들어갈 수 없소.
 @END
-@DIALOG:dialog_ranger
+
+@DIALOG:1006
 고원은 넓고 위험하다.
-HAS_QUEST=quest_orc_hunt::오크 토벌은 진행 중인가?
-QUEST_DONE=quest_orc_hunt:COMPLETE_QUEST=quest_orc_hunt:좋아, 이걸 가져가라.
-GIVE_QUEST=quest_orc_hunt:고원의 오크 4마리를 처치해줘.
+HAS_QUEST=3005::오크 토벌은 진행 중인가?
+QUEST_DONE=3005:COMPLETE_QUEST=3005:좋아, 이걸 가져가라.
+GIVE_QUEST=3005:고원의 오크 4마리를 처치해줘.
 @END
 
-@DIALOG:dialog_highland_shop
+@DIALOG:1007
 멀리서 왔군. 장비를 정비하게.
-OPEN_SHOP=highland_shop:고원 원정 장비를 보여주지.
+OPEN_SHOP=2002:고원 원정 장비를 보여주지.
 @END
 
-@DIALOG:dialog_archaeologist
+@DIALOG:1008
 유적 깊숙한 곳에 강한 망령이 배회하고 있어.
-HAS_QUEST=quest_wraith::망령 조사 의뢰는 계속 부탁하네.
-QUEST_DONE=quest_wraith:COMPLETE_QUEST=quest_wraith:훌륭해! 유적이 한결 안전해졌네.
-GIVE_QUEST=quest_wraith:유적의 망령 3마리를 정리해주게.
+HAS_QUEST=3006::망령 조사 의뢰는 계속 부탁하네.
+QUEST_DONE=3006:COMPLETE_QUEST=3006:훌륭해! 유적이 한결 안전해졌네.
+GIVE_QUEST=3006:유적의 망령 3마리를 정리해주게.
 @END
 
-@DIALOG:dialog_swamp_guide
+@DIALOG:1009
 늪지 상층으로 가면 마왕성의 비밀 통로가 있다네.
 조심하게, 독안개가 짙다.
 @END
 
-
-@DIALOG:dialog_guide
+@DIALOG:1010
 안녕! 여기는 평화로운 마을이야.
 방향키로 이동하고, OK버튼으로 NPC에게 말을 걸 수 있어.
 마을 왼쪽에 장로님이 계셔. 퀘스트를 받아봐!

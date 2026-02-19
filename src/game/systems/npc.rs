@@ -23,7 +23,7 @@ pub struct DialogSpec {
 #[derive(Debug)]
 pub enum NpcEvent {
     OpenDialog(DialogSpec),
-    OpenShop(String),
+    OpenShop(u32),
     RestoreStats,
 }
 
@@ -36,13 +36,13 @@ fn try_interact_npc(
     let leader_id = world.leader_id()?;
     let (target_x, target_y) = facing.apply(leader.x, leader.y);
 
-    let Some(npc) = data.find_npc_at(&leader.map_id, target_x, target_y) else {
+    let Some(npc) = data.find_npc_at(leader.map_id, target_x, target_y) else {
         return Ok(None);
     };
 
     match npc.npc_type {
         NpcType::Healer => {
-            let dialog = data.find_dialog(&npc.dialog_id)?;
+            let dialog = data.find_dialog(npc.dialog_id)?;
             let lines = filter_dialog_lines(world, leader_id, dialog)?;
             if !lines.is_empty() {
                 return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
@@ -59,13 +59,13 @@ fn try_interact_npc(
                 .shop_id
                 .as_ref()
                 .ok_or_else(|| anyhow!("No shop id for NPC '{}'", npc.id))?;
-            let shop = data.find_shop(shop_id)?;
-            return Ok(Some(NpcEvent::OpenShop(shop.id.clone())));
+            let shop = data.find_shop(*shop_id)?;
+            return Ok(Some(NpcEvent::OpenShop(shop.id)));
         }
         NpcType::QuestGiver | NpcType::Villager => {}
     }
 
-    let dialog = data.find_dialog(&npc.dialog_id)?;
+    let dialog = data.find_dialog(npc.dialog_id)?;
     let lines = filter_dialog_lines(world, leader_id, dialog)?;
     if !lines.is_empty() {
         return Ok(Some(NpcEvent::OpenDialog(DialogSpec {
@@ -87,9 +87,9 @@ fn filter_dialog_lines(
     for line in &dialog.lines {
         let include = match &line.condition {
             None => true,
-            Some(DialogCondition::HasQuest(id)) => world.has_quest(id),
-            Some(DialogCondition::QuestComplete(id)) => world.is_quest_complete(id),
-            Some(DialogCondition::HasItem(id)) => world.has_item(leader_id, id)?,
+            Some(DialogCondition::HasQuest(id)) => world.has_quest(*id),
+            Some(DialogCondition::QuestComplete(id)) => world.is_quest_complete(*id),
+            Some(DialogCondition::HasItem(id)) => world.has_item(leader_id, *id)?,
             Some(DialogCondition::HasGold(amount)) => world.gold_amount(leader_id)? >= *amount,
         };
         if include {
@@ -132,7 +132,7 @@ impl DomainEventResolver for NpcResolver {
                     return Ok(());
                 }
 
-                let is_peaceful = data.find_map(&leader.map_id)?.peaceful;
+                let is_peaceful = data.find_map(leader.map_id)?.peaceful;
                 if !is_peaceful && let Some(action) = fallback_action {
                     out.push(GameEvent::CombatPlayerAction(*action));
                 }
@@ -148,7 +148,7 @@ impl DomainEventResolver for NpcResolver {
                     )));
                 }
                 NpcEvent::OpenShop(shop_id) => {
-                    out.push(GameEvent::OpenShopById(shop_id.clone()));
+                    out.push(GameEvent::OpenShopById(*shop_id));
                 }
                 NpcEvent::RestoreStats => {
                     out.push(GameEvent::RestoreHpMp);

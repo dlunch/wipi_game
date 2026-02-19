@@ -21,7 +21,7 @@ const MINIMAP_RADIUS: i32 = 6;
 const MINIMAP_CELL: i32 = 3;
 
 pub fn draw_explore(fb: &mut Framebuffer, state: &ExploreRender, sprites: &SpriteAtlas) {
-    let Ok(map) = state.data.find_map(&state.map_id) else {
+    let Ok(map) = state.data.find_map(state.map_id) else {
         clear_screen(fb);
         draw_text(fb, 16, 16, "ERR: Map not found", COLOR_RED);
         return;
@@ -250,7 +250,7 @@ fn draw_map_with_entities(
     }
 }
 
-fn is_treasure_opened(opened: &[(String, usize, usize)], map_id: &str, x: usize, y: usize) -> bool {
+fn is_treasure_opened(opened: &[(u32, usize, usize)], map_id: &u32, x: usize, y: usize) -> bool {
     opened
         .iter()
         .any(|(opened_map_id, tx, ty)| opened_map_id == map_id && *tx == x && *ty == y)

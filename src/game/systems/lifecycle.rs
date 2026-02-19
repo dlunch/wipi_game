@@ -1,4 +1,4 @@
-use alloc::{rc::Rc, string::String, vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use anyhow::Result;
 
@@ -82,7 +82,7 @@ impl LifecycleResolver {
         let Some((dialog_id, npc_name)) = data.newgame_config().intro_dialog.as_ref() else {
             return Ok(None);
         };
-        let dialog = data.find_dialog(dialog_id)?;
+        let dialog = data.find_dialog(*dialog_id)?;
         Ok(Some(DialogState::from_dialog(npc_name.clone(), dialog)))
     }
 
@@ -90,33 +90,30 @@ impl LifecycleResolver {
         let config = data.newgame_config();
         let leader_id = 1;
 
-        let mut leader = EntityState::new_player(
-            leader_id,
-            config.player_name.clone(),
-            config.start_map.clone(),
-        );
+        let mut leader =
+            EntityState::new_player(leader_id, config.player_name.clone(), config.start_map);
         leader.stat = EntityStat::default();
         add_or_inc_stack(&mut leader.inventory, GOLD_ITEM_ID, 50);
 
-        if let Some(weapon_id) = config.equip_weapon.as_deref() {
+        if let Some(weapon_id) = config.equip_weapon {
             let idx = push_stack(&mut leader.inventory, weapon_id, 1);
             leader.loadout.weapon = Some(idx);
         }
-        if let Some(armor_id) = config.equip_armor.as_deref() {
+        if let Some(armor_id) = config.equip_armor {
             let idx = push_stack(&mut leader.inventory, armor_id, 1);
             leader.loadout.armor = Some(idx);
         }
         for start_item in &config.items {
             add_or_inc_stack(
                 &mut leader.inventory,
-                &start_item.item_id,
+                start_item.item_id,
                 start_item.count.max(0),
             );
         }
 
-        let map = data.find_map(&config.start_map)?;
+        let map = data.find_map(config.start_map)?;
         let (x, y) = map.find_player_start()?;
-        leader.map_id = map.id.clone();
+        leader.map_id = map.id;
         leader.x = x;
         leader.y = y;
 
@@ -124,9 +121,7 @@ impl LifecycleResolver {
         leader.current_mp = leader.stat.base_max_mp;
 
         out.push(GameEvent::World(WorldEvent::CreateWorld));
-        out.push(GameEvent::World(WorldEvent::SetWorldMap(
-            leader.map_id.clone(),
-        )));
+        out.push(GameEvent::World(WorldEvent::SetWorldMap(leader.map_id)));
         out.push(GameEvent::Entity(EntityEvent::SetLeaderEntity(leader_id)));
         out.push(GameEvent::Entity(EntityEvent::ClearCompanionEntities));
         emit_entity_snapshot(&leader, out);
@@ -148,7 +143,7 @@ impl LifecycleResolver {
         load_game(&mut world)?;
 
         let leader = world.leader_entity()?;
-        data.find_map(&leader.map_id)?;
+        data.find_map(leader.map_id)?;
         let leader_id = world.leader_id()?;
 
         emit_world_snapshot(&world, out);
@@ -170,12 +165,12 @@ impl LifecycleResolver {
     }
 }
 
-fn push_stack(inventory: &mut Vec<ItemStack>, item_id: &str, amount: i32) -> usize {
+fn push_stack(inventory: &mut Vec<ItemStack>, item_id: u32, amount: i32) -> usize {
     inventory.push(ItemStack::new(item_id, amount));
     inventory.len() - 1
 }
 
-fn add_or_inc_stack(inventory: &mut Vec<ItemStack>, item_id: &str, amount: i32) {
+fn add_or_inc_stack(inventory: &mut Vec<ItemStack>, item_id: u32, amount: i32) {
     if amount <= 0 {
         return;
     }
@@ -189,7 +184,7 @@ fn add_or_inc_stack(inventory: &mut Vec<ItemStack>, item_id: &str, amount: i32) 
 fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     out.push(GameEvent::World(WorldEvent::CreateWorld));
     out.push(GameEvent::World(WorldEvent::SetWorldMap(
-        world.occupancy.map_id.clone(),
+        world.occupancy.map_id,
     )));
     out.push(GameEvent::Entity(EntityEvent::SetLeaderEntity(
         world.party.leader_id,
@@ -205,7 +200,7 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     }
     for quest in &world.quests {
         emit_quest_snapshot(
-            &quest.quest_id,
+            quest.quest_id,
             quest.current_count,
             quest.completed,
             quest.rewarded,
@@ -214,7 +209,7 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
     }
     for (map_id, x, y) in &world.opened_treasures {
         out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
-            map_id: map_id.clone(),
+            map_id: *map_id,
             x: *x,
             y: *y,
         }));
@@ -238,22 +233,21 @@ fn emit_world_snapshot(world: &WorldState, out: &mut Vec<GameEvent>) {
 }
 
 fn emit_quest_snapshot(
-    quest_id: &str,
+    quest_id: u32,
     current_count: i32,
     completed: bool,
     rewarded: bool,
     out: &mut Vec<GameEvent>,
 ) {
-    let quest_id = String::from(quest_id);
     out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
-        quest_id: quest_id.clone(),
+        quest_id,
     }));
     out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-        quest_id: quest_id.clone(),
+        quest_id,
         delta: current_count,
     }));
     out.push(GameEvent::World(WorldEvent::SetQuestCompleted {
-        quest_id: quest_id.clone(),
+        quest_id,
         completed,
     }));
     out.push(GameEvent::World(WorldEvent::SetQuestRewarded {

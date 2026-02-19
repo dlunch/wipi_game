@@ -173,7 +173,7 @@ fn apply_quest_log_input(
     let mut active_quest_ids = Vec::with_capacity(s.quests.len());
     for quest in &s.quests {
         if !quest.rewarded {
-            active_quest_ids.push(quest.quest_id.clone());
+            active_quest_ids.push(quest.quest_id);
         }
     }
 
@@ -186,7 +186,7 @@ fn apply_quest_log_input(
             let Some(quest_id) = active_quest_ids.get(ui.quest_log.selected).cloned() else {
                 return Ok(());
             };
-            if ui.quest_log.tracked_quest_id.as_deref() == Some(quest_id.as_str()) {
+            if ui.quest_log.tracked_quest_id == Some(quest_id) {
                 ui.quest_log.tracked_quest_id = None;
             } else {
                 ui.quest_log.tracked_quest_id = Some(quest_id);

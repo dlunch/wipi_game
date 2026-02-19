@@ -38,7 +38,7 @@ pub fn draw_quest_log(fb: &mut Framebuffer, state: &QuestLogRender) {
             let prefix = if i == state.selected { ">" } else { " " };
             draw_text(fb, 8, y, prefix, COLOR_YELLOW);
 
-            let marker = if state.tracked_quest_id.as_deref() == Some(quest.quest_id.as_str()) {
+            let marker = if state.tracked_quest_id == Some(quest.quest_id) {
                 "*"
             } else {
                 " "

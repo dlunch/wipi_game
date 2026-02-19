@@ -2,6 +2,14 @@ use alloc::{string::String, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
+pub type ItemId = u32;
+pub type EnemyId = u32;
+pub type MapId = u32;
+pub type NpcId = u32;
+pub type DialogId = u32;
+pub type QuestId = u32;
+pub type ShopId = u32;
+
 /// 아이템 종류
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemKind {
@@ -13,14 +21,13 @@ pub enum ItemKind {
 
 /// 아이템 데이터
 /// 포맷:
-/// W:data_id:id:name:atk:crit:price
-/// A:data_id:id:name:def:mdef:price
-/// C:data_id:id:name:atk_bonus:def_bonus:price
-/// I:data_id:id:name:hp_restore:price
+/// W:id:name:atk:crit:price
+/// A:id:name:def:mdef:price
+/// C:id:name:atk_bonus:def_bonus:price
+/// I:id:name:hp_restore:price
 #[derive(Debug, Clone)]
 pub struct Item {
-    pub data_id: u32,
-    pub id: String,
+    pub id: ItemId,
     pub name: String,
     pub kind: ItemKind,
     pub param1: i32,
@@ -53,11 +60,10 @@ impl Item {
 }
 
 /// 적 데이터
-/// 포맷: data_id:id:name:hp:atk:def:exp:gold
+/// 포맷: id:name:hp:atk:def:exp:gold
 #[derive(Debug)]
 pub struct Enemy {
-    pub data_id: u32,
-    pub id: String,
+    pub id: EnemyId,
     pub name: String,
     pub hp: i32,
     pub atk: i32,
@@ -146,15 +152,15 @@ impl Tile {
 /// @END
 #[derive(Debug)]
 pub struct Map {
-    pub id: String,
+    pub id: MapId,
     pub name: String,
     pub width: usize,
     pub height: usize,
     pub tiles: Vec<Tile>,
-    pub encounters: Vec<(String, i32)>,
-    pub exits: Vec<(usize, usize, String)>,
-    pub dungeons: Vec<(usize, usize, String)>,
-    pub npcs: Vec<(usize, usize, String)>,
+    pub encounters: Vec<(EnemyId, i32)>,
+    pub exits: Vec<(usize, usize, MapId)>,
+    pub dungeons: Vec<(usize, usize, MapId)>,
+    pub npcs: Vec<(usize, usize, NpcId)>,
     pub peaceful: bool,
 }
 
@@ -180,15 +186,14 @@ impl Map {
 
 #[derive(Debug)]
 pub struct Npc {
-    pub data_id: u32,
-    pub id: String,
+    pub id: NpcId,
     pub name: String,
-    pub map_id: String,
+    pub map_id: MapId,
     pub x: usize,
     pub y: usize,
     pub npc_type: NpcType,
-    pub dialog_id: String,
-    pub shop_id: Option<String>,
+    pub dialog_id: DialogId,
+    pub shop_id: Option<ShopId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,7 +206,7 @@ pub enum NpcType {
 
 #[derive(Debug)]
 pub struct Dialog {
-    pub id: String,
+    pub id: DialogId,
     pub lines: Vec<DialogLine>,
 }
 
@@ -214,35 +219,35 @@ pub struct DialogLine {
 
 #[derive(Debug, Clone)]
 pub enum DialogCondition {
-    HasQuest(String),
-    QuestComplete(String),
-    HasItem(String),
+    HasQuest(QuestId),
+    QuestComplete(QuestId),
+    HasItem(ItemId),
     HasGold(i32),
 }
 
 #[derive(Debug, Clone)]
 pub enum DialogAction {
-    GiveQuest(String),
-    CompleteQuest(String),
-    GiveItem(String),
-    TakeItem(String),
+    GiveQuest(QuestId),
+    CompleteQuest(QuestId),
+    GiveItem(ItemId),
+    TakeItem(ItemId),
     GiveGold(i32),
     TakeGold(i32),
-    OpenShop(String),
+    OpenShop(ShopId),
     Heal,
 }
 
 #[derive(Debug)]
 pub struct Quest {
-    pub id: String,
+    pub id: QuestId,
     pub name: String,
     pub description: String,
     pub quest_type: QuestType,
-    pub target_id: String,
+    pub target_id: u32,
     pub target_count: i32,
     pub reward_exp: i32,
     pub reward_gold: i32,
-    pub reward_item: Option<String>,
+    pub reward_item: Option<ItemId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,7 +260,7 @@ pub enum QuestType {
 
 #[derive(Debug, Default)]
 pub struct QuestProgress {
-    pub quest_id: String,
+    pub quest_id: QuestId,
     pub current_count: i32,
     pub completed: bool,
     pub rewarded: bool,
@@ -263,9 +268,9 @@ pub struct QuestProgress {
 
 #[derive(Debug, Clone)]
 pub struct Shop {
-    pub id: String,
+    pub id: ShopId,
     pub name: String,
-    pub items: Vec<String>,
+    pub items: Vec<ItemId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,19 +293,19 @@ pub struct Skill {
 
 #[derive(Debug)]
 pub struct StartItem {
-    pub item_id: String,
+    pub item_id: ItemId,
     pub count: i32,
 }
 
 #[derive(Debug)]
 pub struct NewGameConfig {
     pub player_name: String,
-    pub start_map: String,
-    pub fallback_map: String,
-    pub intro_dialog: Option<(String, String)>,
-    pub equip_weapon: Option<String>,
-    pub equip_armor: Option<String>,
-    pub treasure_item: Option<String>,
+    pub start_map: MapId,
+    pub fallback_map: MapId,
+    pub intro_dialog: Option<(DialogId, String)>,
+    pub equip_weapon: Option<ItemId>,
+    pub equip_armor: Option<ItemId>,
+    pub treasure_item: Option<ItemId>,
     pub items: Vec<StartItem>,
 }
 
@@ -308,12 +313,12 @@ impl Default for NewGameConfig {
     fn default() -> Self {
         Self {
             player_name: String::from("Hero"),
-            start_map: String::from("village"),
-            fallback_map: String::from("village"),
+            start_map: 1,
+            fallback_map: 1,
             intro_dialog: None,
             equip_weapon: None,
             equip_armor: None,
-            treasure_item: Some(String::from("potion")),
+            treasure_item: Some(1301),
             items: Vec::new(),
         }
     }
@@ -359,8 +364,7 @@ mod tests {
 
     fn make_item(kind: ItemKind, p1: i32, p2: i32) -> Item {
         Item {
-            data_id: 1,
-            id: String::from("test"),
+            id: 1,
             name: String::from("Test"),
             kind,
             param1: p1,
@@ -431,7 +435,7 @@ mod tests {
     #[test]
     fn map_get_tile_out_of_bounds() {
         let map = Map {
-            id: String::from("test"),
+            id: 1,
             name: String::from("Test"),
             width: 3,
             height: 2,
@@ -458,7 +462,7 @@ mod tests {
     #[test]
     fn map_find_player_start() {
         let map = Map {
-            id: String::from("test"),
+            id: 1,
             name: String::from("Test"),
             width: 3,
             height: 2,
@@ -482,7 +486,7 @@ mod tests {
     #[test]
     fn map_find_player_start_none() {
         let map = Map {
-            id: String::from("test"),
+            id: 1,
             name: String::from("Test"),
             width: 2,
             height: 1,

@@ -6,7 +6,7 @@ use alloc::{
 
 use anyhow::{Result, anyhow, bail, ensure};
 
-use super::{parse_int, parse_usize};
+use super::{parse_int, parse_u32, parse_usize};
 use crate::data::types::{Map, Tile};
 
 pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
@@ -24,7 +24,7 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
             let (id_raw, name_raw) = rest
                 .split_once(':')
                 .ok_or_else(|| anyhow!("missing ':' separator in map line: {}", line))?;
-            let id = id_raw.to_string();
+            let id = parse_u32(id_raw, "map_id", line)?;
             let name = name_raw.to_string();
 
             current_map = Some(MapBuilder::new(id, name));
@@ -40,7 +40,9 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                         break;
                     };
                     let weight = parse_int(weight_raw, "encounter weight", line)?;
-                    builder.encounters.push((enemy_id.to_string(), weight));
+                    builder
+                        .encounters
+                        .push((parse_u32(enemy_id, "enemy_id", line)?, weight));
                 }
             }
         } else if let Some(rest) = line.strip_prefix("@NEXT:") {
@@ -57,7 +59,7 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 };
                 let x = parse_usize(x_raw, "exit x", line)?;
                 let y = parse_usize(y_raw, "exit y", line)?;
-                let target = target_raw.to_string();
+                let target = parse_u32(target_raw, "target_map_id", line)?;
                 builder.exits.push((x, y, target));
             }
         } else if let Some(rest) = line.strip_prefix("@DUNGEON:") {
@@ -74,7 +76,7 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 };
                 let x = parse_usize(x_raw, "dungeon x", line)?;
                 let y = parse_usize(y_raw, "dungeon y", line)?;
-                let target = target_raw.to_string();
+                let target = parse_u32(target_raw, "target_map_id", line)?;
                 builder.dungeons.push((x, y, target));
             }
         } else if line == "@PEACEFUL" {
@@ -95,7 +97,7 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
                 };
                 let x = parse_usize(x_raw, "npc x", line)?;
                 let y = parse_usize(y_raw, "npc y", line)?;
-                let npc_id = id_raw.to_string();
+                let npc_id = parse_u32(id_raw, "npc_id", line)?;
                 builder.npcs.push((x, y, npc_id));
             }
         } else if !line.is_empty()
@@ -113,18 +115,18 @@ pub fn parse_maps(data: &str) -> Result<Vec<Map>> {
 }
 
 struct MapBuilder {
-    id: String,
+    id: u32,
     name: String,
     rows: Vec<String>,
-    encounters: Vec<(String, i32)>,
-    exits: Vec<(usize, usize, String)>,
-    dungeons: Vec<(usize, usize, String)>,
-    npcs: Vec<(usize, usize, String)>,
+    encounters: Vec<(u32, i32)>,
+    exits: Vec<(usize, usize, u32)>,
+    dungeons: Vec<(usize, usize, u32)>,
+    npcs: Vec<(usize, usize, u32)>,
     peaceful: bool,
 }
 
 impl MapBuilder {
-    fn new(id: String, name: String) -> Self {
+    fn new(id: u32, name: String) -> Self {
         Self {
             id,
             name,
@@ -173,7 +175,7 @@ impl MapBuilder {
         let mut exits = self.exits;
         for (x, y) in auto_exits {
             if !exits.iter().any(|(ex, ey, _)| *ex == x && *ey == y) {
-                exits.push((x, y, String::new()));
+                exits.push((x, y, 0));
             }
         }
 

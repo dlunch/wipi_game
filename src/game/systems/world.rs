@@ -1,4 +1,4 @@
-use alloc::{rc::Rc, string::String, vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
@@ -89,18 +89,16 @@ impl DomainEventResolver for WorldLogicResolver {
 fn resolve_open_shop(
     data: &GameData,
     world: &WorldState,
-    shop_id: &str,
+    shop_id: &u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let shop = data.find_shop(shop_id)?;
+    let shop = data.find_shop(*shop_id)?;
     let mut buy_item_ids = Vec::with_capacity(shop.items.len());
     for item_id in &shop.items {
-        buy_item_ids.push(data.find_item(item_id)?.data_id);
+        buy_item_ids.push(*item_id);
     }
     out.push(GameEvent::SetShopBuyItemIds(buy_item_ids));
-    out.push(GameEvent::SetShopSellItemIds(sell_item_data_ids(
-        data, world,
-    )?));
+    out.push(GameEvent::SetShopSellItemIds(sell_item_data_ids(world)?));
     Ok(())
 }
 
@@ -111,12 +109,12 @@ fn resolve_shop_sell_cache_after_buy(
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let leader_id = world.leader_id()?;
-    let item = data.find_item_by_data_id(item_data_id)?;
+    let item = data.find_item(item_data_id)?;
     if world.gold_amount(leader_id)? < item.price {
         return Ok(());
     }
 
-    let mut sell_item_ids = sell_item_data_ids(data, world)?;
+    let mut sell_item_ids = sell_item_data_ids(world)?;
     sell_item_ids.push(item_data_id);
     out.push(GameEvent::SetShopSellItemIds(sell_item_ids));
     Ok(())
@@ -128,7 +126,7 @@ fn resolve_shop_sell_cache_after_sell(
     item_data_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let item = data.find_item_by_data_id(item_data_id)?;
+    let item = data.find_item(item_data_id)?;
     if item.id == GOLD_ITEM_ID {
         return Ok(());
     }
@@ -142,7 +140,7 @@ fn resolve_shop_sell_cache_after_sell(
         return Ok(());
     }
 
-    let mut sell_item_ids = sell_item_data_ids(data, world)?;
+    let mut sell_item_ids = sell_item_data_ids(world)?;
     if let Some(index) = sell_item_ids
         .iter()
         .position(|current_item_data_id| *current_item_data_id == item_data_id)
@@ -153,16 +151,15 @@ fn resolve_shop_sell_cache_after_sell(
     Ok(())
 }
 
-fn sell_item_data_ids(data: &GameData, world: &WorldState) -> Result<Vec<u32>> {
+fn sell_item_data_ids(world: &WorldState) -> Result<Vec<u32>> {
     let leader = world.leader_entity()?;
     let mut sell_item_ids = Vec::new();
     for stack in &leader.inventory {
         if stack.item_id == GOLD_ITEM_ID || stack.amount <= 0 {
             continue;
         }
-        let data_id = data.find_item(&stack.item_id)?.data_id;
         for _ in 0..stack.amount.max(0) {
-            sell_item_ids.push(data_id);
+            sell_item_ids.push(stack.item_id);
         }
     }
     Ok(sell_item_ids)
@@ -188,8 +185,8 @@ fn resolve_tile_event(
 
     match tile_event {
         TileEvent::Treasure => {
-            let map_id = leader.map_id.clone();
-            if world.is_treasure_opened(&map_id, next_x, next_y) {
+            let map_id = leader.map_id;
+            if world.is_treasure_opened(map_id, next_x, next_y) {
                 return Ok(());
             }
             out.push(GameEvent::World(WorldEvent::AddOpenedTreasure {
@@ -197,27 +194,27 @@ fn resolve_tile_event(
                 x: next_x,
                 y: next_y,
             }));
-            if let Some(item_id) = data.newgame_config().treasure_item.as_deref() {
+            if let Some(item_id) = data.newgame_config().treasure_item {
                 let leader_id = world.leader_id()?;
                 data.find_item(item_id)?;
                 out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
                     entity_id: leader_id,
-                    item_id: item_id.into(),
+                    item_id,
                     delta: 1,
                 }));
             }
         }
         TileEvent::MapExit(target) | TileEvent::DungeonEntrance(target) => {
-            if target.is_empty() {
+            if *target == 0 {
                 return Ok(());
             }
-            let map = data.find_map(target)?;
+            let map = data.find_map(*target)?;
             let leader_id = world.leader_id()?;
             let (x, y) = map.find_player_start()?;
-            out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id.clone())));
+            out.push(GameEvent::World(WorldEvent::SetWorldMap(map.id)));
             out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id: leader_id,
-                map_id: Some(map.id.clone()),
+                map_id: Some(map.id),
                 position: Some((x, y)),
                 facing: None,
             }));
@@ -227,42 +224,42 @@ fn resolve_tile_event(
     Ok(())
 }
 
-fn resolve_give_quest(world: &WorldState, id: &str, out: &mut Vec<GameEvent>) {
-    if world.quests.iter().any(|quest| quest.quest_id == id) {
+fn resolve_give_quest(world: &WorldState, id: &u32, out: &mut Vec<GameEvent>) {
+    if world.quests.iter().any(|quest| quest.quest_id == *id) {
         return;
     }
     out.push(GameEvent::World(WorldEvent::CreateQuestProgress {
-        quest_id: id.into(),
+        quest_id: *id,
     }));
 }
 
 fn resolve_complete_quest(
     data: &GameData,
     world: &WorldState,
-    id: &str,
+    id: &u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let can_reward = world
         .quests
         .iter()
-        .any(|quest| quest.quest_id == id && quest.completed && !quest.rewarded);
+        .any(|quest| quest.quest_id == *id && quest.completed && !quest.rewarded);
     if !can_reward {
         return Ok(());
     }
 
-    let quest = data.find_quest(id)?;
+    let quest = data.find_quest(*id)?;
     let leader_id = world.leader_id()?;
     out.push(GameEvent::Entity(EntityEvent::AddEntityExp {
         entity_id: leader_id,
         amount: quest.reward_exp,
     }));
     push_item_delta(out, leader_id, GOLD_ITEM_ID, quest.reward_gold.max(0));
-    if let Some(item_id) = &quest.reward_item {
-        push_item_delta(out, leader_id, item_id.clone(), 1);
+    if let Some(item_id) = quest.reward_item {
+        push_item_delta(out, leader_id, item_id, 1);
     }
 
     out.push(GameEvent::World(WorldEvent::SetQuestRewarded {
-        quest_id: id.into(),
+        quest_id: *id,
         rewarded: true,
     }));
     Ok(())
@@ -271,7 +268,7 @@ fn resolve_complete_quest(
 fn resolve_kill_reward(
     data: &GameData,
     world: &WorldState,
-    enemy_id: &str,
+    enemy_id: &u32,
     exp: i32,
     gold: i32,
     out: &mut Vec<GameEvent>,
@@ -287,10 +284,10 @@ fn resolve_kill_reward(
         if progress.completed || progress.rewarded {
             continue;
         }
-        let quest = data.find_quest(&progress.quest_id)?;
-        if quest.quest_type == QuestType::Kill && quest.target_id == enemy_id {
+        let quest = data.find_quest(progress.quest_id)?;
+        if quest.quest_type == QuestType::Kill && quest.target_id == *enemy_id {
             out.push(GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: progress.quest_id.clone(),
+                quest_id: progress.quest_id,
                 delta: 1,
             }));
         }
@@ -322,9 +319,9 @@ fn resolve_entity_hp_change(
         .find(|e| e.entity_id == entity_id)
     {
         out.push(GameEvent::Combat(CombatEvent::RemoveEnemy(entity_id)));
-        let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
+        let enemy_data = data.find_enemy(enemy.source_enemy_id)?;
         out.push(GameEvent::Combat(CombatEvent::GrantKillReward {
-            enemy_id: enemy_data.id.clone(),
+            enemy_id: enemy_data.id,
             exp: enemy_data.exp,
             gold: enemy_data.gold,
         }));
@@ -364,11 +361,9 @@ fn resolve_revive_player(
         }));
     }
 
-    let village_map_id = data.newgame_config().start_map.clone();
-    out.push(GameEvent::World(WorldEvent::SetWorldMap(
-        village_map_id.clone(),
-    )));
-    let village_position = Some(data.find_map(&village_map_id)?.find_player_start()?);
+    let village_map_id = data.newgame_config().start_map;
+    out.push(GameEvent::World(WorldEvent::SetWorldMap(village_map_id)));
+    let village_position = Some(data.find_map(village_map_id)?.find_player_start()?);
     out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
         entity_id: leader_id,
         map_id: Some(village_map_id),
@@ -386,15 +381,10 @@ fn resolve_revive_player(
     Ok(())
 }
 
-fn push_item_delta(
-    out: &mut Vec<GameEvent>,
-    entity_id: u32,
-    item_id: impl Into<String>,
-    delta: i32,
-) {
+fn push_item_delta(out: &mut Vec<GameEvent>, entity_id: u32, item_id: u32, delta: i32) {
     out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id,
-        item_id: item_id.into(),
+        item_id,
         delta,
     }));
 }

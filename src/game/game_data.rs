@@ -18,16 +18,14 @@ pub struct GameData {
     quests: Vec<Quest>,
     shops: Vec<Shop>,
     newgame: NewGameConfig,
-    item_index: BTreeMap<String, usize>,
-    item_data_id_index: BTreeMap<u32, usize>,
-    enemy_index: BTreeMap<String, usize>,
+    item_index: BTreeMap<u32, usize>,
+    enemy_index: BTreeMap<u32, usize>,
     enemy_name_index: BTreeMap<String, usize>,
-    enemy_data_id_index: BTreeMap<u32, usize>,
-    map_index: BTreeMap<String, usize>,
-    npc_data_id_index: BTreeMap<u32, usize>,
-    dialog_index: BTreeMap<String, usize>,
-    quest_index: BTreeMap<String, usize>,
-    shop_index: BTreeMap<String, usize>,
+    map_index: BTreeMap<u32, usize>,
+    npc_index: BTreeMap<u32, usize>,
+    dialog_index: BTreeMap<u32, usize>,
+    quest_index: BTreeMap<u32, usize>,
+    shop_index: BTreeMap<u32, usize>,
 }
 
 type ResourceLoader = Box<dyn Fn(&str) -> Result<Vec<u8>>>;
@@ -48,85 +46,62 @@ impl GameData {
             shops: Vec::new(),
             newgame: NewGameConfig::default(),
             item_index: BTreeMap::new(),
-            item_data_id_index: BTreeMap::new(),
             enemy_index: BTreeMap::new(),
             enemy_name_index: BTreeMap::new(),
-            enemy_data_id_index: BTreeMap::new(),
             map_index: BTreeMap::new(),
-            npc_data_id_index: BTreeMap::new(),
+            npc_index: BTreeMap::new(),
             dialog_index: BTreeMap::new(),
             quest_index: BTreeMap::new(),
             shop_index: BTreeMap::new(),
         }
     }
 
-    fn find_indexed<'a, T>(
-        items: &'a [T],
-        index: &BTreeMap<String, usize>,
-        id: &str,
-        id_of: fn(&T) -> &str,
-    ) -> Option<&'a T> {
-        index
-            .get(id)
-            .and_then(|idx| items.get(*idx))
-            .or_else(|| items.iter().find(|item| id_of(item) == id))
-    }
-
-    fn rebuild_index<T>(index: &mut BTreeMap<String, usize>, items: &[T], id_of: fn(&T) -> &str) {
-        index.clear();
-        for (idx, item) in items.iter().enumerate() {
-            index.insert(String::from(id_of(item)), idx);
-        }
-    }
-
-    pub fn find_map(&self, id: &str) -> Result<&Map> {
-        Self::find_indexed(&self.maps, &self.map_index, id, |map| map.id.as_str())
+    pub fn find_map(&self, id: u32) -> Result<&Map> {
+        self.map_index
+            .get(&id)
+            .and_then(|idx| self.maps.get(*idx))
             .ok_or_else(|| anyhow!("map not found: {}", id))
     }
 
-    pub fn find_item(&self, id: &str) -> Result<&Item> {
-        Self::find_indexed(&self.items, &self.item_index, id, |item| item.id.as_str())
+    pub fn find_item(&self, id: u32) -> Result<&Item> {
+        self.item_index
+            .get(&id)
+            .and_then(|idx| self.items.get(*idx))
             .ok_or_else(|| anyhow!("item not found: {}", id))
     }
 
-    pub fn find_item_by_data_id(&self, data_id: u32) -> Result<&Item> {
-        self.item_data_id_index
-            .get(&data_id)
-            .and_then(|idx| self.items.get(*idx))
-            .or_else(|| self.items.iter().find(|item| item.data_id == data_id))
-            .ok_or_else(|| anyhow!("item data_id not found: {}", data_id))
-    }
-
-    pub fn find_enemy(&self, id: &str) -> Result<&Enemy> {
-        Self::find_indexed(&self.enemies, &self.enemy_index, id, |enemy| {
-            enemy.id.as_str()
-        })
-        .ok_or_else(|| anyhow!("enemy not found: {}", id))
+    pub fn find_enemy(&self, id: u32) -> Result<&Enemy> {
+        self.enemy_index
+            .get(&id)
+            .and_then(|idx| self.enemies.get(*idx))
+            .ok_or_else(|| anyhow!("enemy not found: {}", id))
     }
 
     pub fn find_enemy_by_name(&self, name: &str) -> Result<&Enemy> {
-        Self::find_indexed(&self.enemies, &self.enemy_name_index, name, |enemy| {
-            enemy.name.as_str()
-        })
-        .ok_or_else(|| anyhow!("enemy name not found: {}", name))
+        self.enemy_name_index
+            .get(name)
+            .and_then(|idx| self.enemies.get(*idx))
+            .ok_or_else(|| anyhow!("enemy name not found: {}", name))
     }
 
-    pub fn find_dialog(&self, id: &str) -> Result<&Dialog> {
-        Self::find_indexed(&self.dialogs, &self.dialog_index, id, |dialog| {
-            dialog.id.as_str()
-        })
-        .ok_or_else(|| anyhow!("dialog not found: {}", id))
+    pub fn find_dialog(&self, id: u32) -> Result<&Dialog> {
+        self.dialog_index
+            .get(&id)
+            .and_then(|idx| self.dialogs.get(*idx))
+            .ok_or_else(|| anyhow!("dialog not found: {}", id))
     }
 
-    pub fn find_quest(&self, id: &str) -> Result<&Quest> {
-        Self::find_indexed(&self.quests, &self.quest_index, id, |quest| {
-            quest.id.as_str()
-        })
-        .ok_or_else(|| anyhow!("quest not found: {}", id))
+    pub fn find_quest(&self, id: u32) -> Result<&Quest> {
+        self.quest_index
+            .get(&id)
+            .and_then(|idx| self.quests.get(*idx))
+            .ok_or_else(|| anyhow!("quest not found: {}", id))
     }
 
-    pub fn find_shop(&self, id: &str) -> Result<&Shop> {
-        Self::find_indexed(&self.shops, &self.shop_index, id, |shop| shop.id.as_str())
+    pub fn find_shop(&self, id: u32) -> Result<&Shop> {
+        self.shop_index
+            .get(&id)
+            .and_then(|idx| self.shops.get(*idx))
             .ok_or_else(|| anyhow!("shop not found: {}", id))
     }
 
@@ -138,7 +113,7 @@ impl GameData {
         &self.npcs
     }
 
-    pub fn find_npc_at(&self, map_id: &str, x: usize, y: usize) -> Option<&Npc> {
+    pub fn find_npc_at(&self, map_id: u32, x: usize, y: usize) -> Option<&Npc> {
         self.npcs
             .iter()
             .find(|npc| npc.map_id == map_id && npc.x == x && npc.y == y)
@@ -150,9 +125,9 @@ impl GameData {
         let mut npc_index = BTreeMap::new();
 
         for npc in npc_defs {
-            let npc_id = npc.id.clone();
+            let npc_id = npc.id;
             ensure!(
-                npc_index.insert(npc_id.clone(), npc).is_none(),
+                npc_index.insert(npc_id, npc).is_none(),
                 "duplicate npc id '{}'",
                 npc_id
             );
@@ -180,7 +155,7 @@ impl GameData {
                 let mut npc = npc_index.remove(npc_id).ok_or_else(|| {
                     anyhow!("map '{}' references unknown npc id '{}'", map.id, npc_id)
                 })?;
-                npc.map_id = map.id.clone();
+                npc.map_id = map.id;
                 npc.x = *x;
                 npc.y = *y;
                 npcs.push(npc);
@@ -195,60 +170,59 @@ impl GameData {
     }
 
     fn rebuild_item_index(&mut self) {
-        Self::rebuild_index(&mut self.item_index, &self.items, |item| item.id.as_str());
-    }
-
-    fn rebuild_item_data_id_index(&mut self) {
-        self.item_data_id_index.clear();
+        self.item_index.clear();
         for (idx, item) in self.items.iter().enumerate() {
-            self.item_data_id_index.insert(item.data_id, idx);
+            self.item_index.insert(item.id, idx);
         }
     }
 
     fn rebuild_enemy_index(&mut self) {
-        Self::rebuild_index(&mut self.enemy_index, &self.enemies, |enemy| {
-            enemy.id.as_str()
-        });
-    }
-
-    fn rebuild_enemy_name_index(&mut self) {
-        Self::rebuild_index(&mut self.enemy_name_index, &self.enemies, |enemy| {
-            enemy.name.as_str()
-        });
-    }
-
-    fn rebuild_enemy_data_id_index(&mut self) {
-        self.enemy_data_id_index.clear();
+        self.enemy_index.clear();
         for (idx, enemy) in self.enemies.iter().enumerate() {
-            self.enemy_data_id_index.insert(enemy.data_id, idx);
+            self.enemy_index.insert(enemy.id, idx);
         }
     }
 
-    fn rebuild_npc_data_id_index(&mut self) {
-        self.npc_data_id_index.clear();
+    fn rebuild_enemy_name_index(&mut self) {
+        self.enemy_name_index.clear();
+        for (idx, enemy) in self.enemies.iter().enumerate() {
+            self.enemy_name_index.insert(enemy.name.clone(), idx);
+        }
+    }
+
+    fn rebuild_npc_index(&mut self) {
+        self.npc_index.clear();
         for (idx, npc) in self.npcs.iter().enumerate() {
-            self.npc_data_id_index.insert(npc.data_id, idx);
+            self.npc_index.insert(npc.id, idx);
         }
     }
 
     fn rebuild_map_index(&mut self) {
-        Self::rebuild_index(&mut self.map_index, &self.maps, |map| map.id.as_str());
+        self.map_index.clear();
+        for (idx, map) in self.maps.iter().enumerate() {
+            self.map_index.insert(map.id, idx);
+        }
     }
 
     fn rebuild_dialog_index(&mut self) {
-        Self::rebuild_index(&mut self.dialog_index, &self.dialogs, |dialog| {
-            dialog.id.as_str()
-        });
+        self.dialog_index.clear();
+        for (idx, dialog) in self.dialogs.iter().enumerate() {
+            self.dialog_index.insert(dialog.id, idx);
+        }
     }
 
     fn rebuild_quest_index(&mut self) {
-        Self::rebuild_index(&mut self.quest_index, &self.quests, |quest| {
-            quest.id.as_str()
-        });
+        self.quest_index.clear();
+        for (idx, quest) in self.quests.iter().enumerate() {
+            self.quest_index.insert(quest.id, idx);
+        }
     }
 
     fn rebuild_shop_index(&mut self) {
-        Self::rebuild_index(&mut self.shop_index, &self.shops, |shop| shop.id.as_str());
+        self.shop_index.clear();
+        for (idx, shop) in self.shops.iter().enumerate() {
+            self.shop_index.insert(shop.id, idx);
+        }
     }
 }
 
@@ -257,13 +231,11 @@ pub fn load_step(data: &mut GameData, step: usize) -> Result<bool> {
         0 => {
             data.items = load_resource_with(data, "data/items.dat", parse_items)?;
             data.rebuild_item_index();
-            data.rebuild_item_data_id_index();
         }
         1 => {
             data.enemies = load_resource_with(data, "data/enemies.dat", parse_enemies)?;
             data.rebuild_enemy_index();
             data.rebuild_enemy_name_index();
-            data.rebuild_enemy_data_id_index();
         }
         2 => {
             data.maps = load_resource_with(data, "data/maps.dat", parse_maps)?;
@@ -272,7 +244,7 @@ pub fn load_step(data: &mut GameData, step: usize) -> Result<bool> {
         3 => {
             let npc_defs = load_resource_with(data, "data/npcs.dat", parse_npcs)?;
             data.npcs = GameData::resolve_map_npcs(&data.maps, npc_defs)?;
-            data.rebuild_npc_data_id_index();
+            data.rebuild_npc_index();
         }
         4 => {
             data.dialogs = load_resource_with(data, "data/dialogs.dat", parse_dialogs)?;

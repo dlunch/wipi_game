@@ -2,11 +2,9 @@
 # 포맷: id:name:type:target_id:count:reward_exp:reward_gold:description[:reward_item]
 # type: KILL, COLLECT, TALK, REACH
 
-quest_goblin:고블린 퇴치:KILL:goblin:5:100:50:숲의 고블린 5마리 처치:potion
-quest_wolf:늑대 사냥:KILL:wolf:3:80:30:숲의 늑대 3마리 처치
-quest_skeleton:해골 소탕:KILL:skeleton:5:150:80:동굴의 해골 5마리 처치:iron_sword
-quest_boss:마왕 토벌:KILL:boss_demon:1:1000:500:왕좌의 방에서 마왕 처치:legendary_sword
-
-quest_orc_hunt:고원 오크 토벌:KILL:orc:4:220:140:바람의 고원 오크 4마리 처치:chainmail
-quest_wraith:유적 망령 정화:KILL:wraith:3:320:220:고대 유적의 망령 3마리 처치:power_ring
-
+3001:고블린 퇴치:KILL:2004:5:100:50:숲의 고블린 5마리 처치:1301
+3002:늑대 사냥:KILL:2005:3:80:30:숲의 늑대 3마리 처치
+3003:해골 소탕:KILL:2008:5:150:80:동굴의 해골 5마리 처치:1002
+3004:마왕 토벌:KILL:2016:1:1000:500:왕좌의 방에서 마왕 처치:1006
+3005:고원 오크 토벌:KILL:2007:4:220:140:바람의 고원 오크 4마리 처치:1103
+3006:유적 망령 정화:KILL:2018:3:320:220:고대 유적의 망령 3마리 처치:1201

@@ -56,7 +56,7 @@ pub struct StatusRender {
 
 pub struct ExploreRender {
     pub data: Rc<GameData>,
-    pub map_id: String,
+    pub map_id: u32,
     pub player_x: usize,
     pub player_y: usize,
     pub player_facing: Direction,
@@ -70,7 +70,7 @@ pub struct ExploreRender {
     pub tracked_quest: Option<TrackedQuestRender>,
     pub interaction_hint: Option<String>,
     pub first_live_enemy_name: Option<String>,
-    pub opened_treasures: Vec<(String, usize, usize)>,
+    pub opened_treasures: Vec<(u32, usize, usize)>,
     pub enemies: Vec<EnemyRender>,
     pub enemy_indices: BTreeMap<u32, usize>,
     pub player_hit_flash: u32,
@@ -148,11 +148,11 @@ pub struct ShopItemRender {
 pub struct QuestLogRender {
     pub quests: Vec<QuestEntryRender>,
     pub selected: usize,
-    pub tracked_quest_id: Option<String>,
+    pub tracked_quest_id: Option<u32>,
 }
 
 pub struct QuestEntryRender {
-    pub quest_id: String,
+    pub quest_id: u32,
     pub name: String,
     pub description: String,
     pub current_count: u32,
@@ -203,10 +203,10 @@ pub fn interaction_hint_from_world(
     data: &Rc<GameData>,
 ) -> Result<Option<String>> {
     let leader = world.leader_entity()?;
-    let map = data.find_map(&leader.map_id)?;
+    let map = data.find_map(leader.map_id)?;
     let (tx, ty) = leader.facing.apply(leader.x, leader.y);
 
-    if let Some(npc) = data.find_npc_at(&leader.map_id, tx, ty) {
+    if let Some(npc) = data.find_npc_at(leader.map_id, tx, ty) {
         let text = match npc.npc_type {
             NpcType::ShopKeeper => "OK: Shop",
             NpcType::Healer => "OK: Heal",
@@ -224,15 +224,15 @@ pub fn interaction_hint_from_world(
     Ok(Some(String::from(text)))
 }
 
-fn item_name_or_id(item_id: &str, item_name: Option<&str>) -> String {
+fn item_name_or_id(item_id: u32, item_name: Option<&str>) -> String {
     if let Some(item_name) = item_name {
         String::from(item_name)
     } else {
-        String::from(item_id)
+        format!("{}", item_id)
     }
 }
 
-fn stacked_item_label(item_id: &str, amount: i32, item_name: Option<&str>) -> String {
+fn stacked_item_label(item_id: u32, amount: i32, item_name: Option<&str>) -> String {
     let name = item_name_or_id(item_id, item_name);
     if amount > 1 {
         format!("{} x{}", name, amount)
@@ -251,13 +251,13 @@ impl ExploreRender {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
         let leader_combatant = world.combat.combatant(leader_id)?;
-        let map = data.find_map(&leader.map_id)?;
+        let map = data.find_map(leader.map_id)?;
 
         let mut enemies = Vec::with_capacity(world.combat.enemies.len());
         let mut enemy_indices = BTreeMap::new();
         for enemy in &world.combat.enemies {
             let entity = world.entity(enemy.entity_id)?;
-            let name = data.find_enemy(&enemy.source_enemy_id)?.name.clone();
+            let name = data.find_enemy(enemy.source_enemy_id)?.name.clone();
             let enemy_index = enemies.len();
             enemies.push(EnemyRender {
                 enemy_id: enemy.entity_id,
@@ -283,7 +283,7 @@ impl ExploreRender {
 
         Ok(Self {
             data: Rc::clone(data),
-            map_id: leader.map_id.clone(),
+            map_id: leader.map_id,
             player_x: leader.x,
             player_y: leader.y,
             player_facing: leader.facing,
@@ -301,7 +301,7 @@ impl ExploreRender {
             tracked_quest: TrackedQuestRender::from_world(
                 world,
                 data,
-                ui.quest_log.tracked_quest_id.as_deref(),
+                ui.quest_log.tracked_quest_id,
             )?,
             interaction_hint: interaction_hint_from_world(world, data)?,
             first_live_enemy_name,
@@ -371,7 +371,7 @@ impl TrackedQuestRender {
     pub fn from_world(
         world: &WorldState,
         data: &Rc<GameData>,
-        tracked_quest_id: Option<&str>,
+        tracked_quest_id: Option<u32>,
     ) -> Result<Option<Self>> {
         let Some(tracked_quest_id) = tracked_quest_id else {
             return Ok(None);
@@ -383,7 +383,7 @@ impl TrackedQuestRender {
         else {
             return Ok(None);
         };
-        let quest_data = data.find_quest(&progress.quest_id)?;
+        let quest_data = data.find_quest(progress.quest_id)?;
 
         Ok(Some(Self {
             name: quest_data.name.clone(),
@@ -400,8 +400,8 @@ impl InventoryRender {
 
         let mut items = Vec::with_capacity(leader.inventory.len());
         for stack in &leader.inventory {
-            let item = data.find_item(&stack.item_id)?;
-            let name = stacked_item_label(&stack.item_id, stack.amount, Some(item.name.as_str()));
+            let item = data.find_item(stack.item_id)?;
+            let name = stacked_item_label(stack.item_id, stack.amount, Some(item.name.as_str()));
             let kind = item.kind;
             items.push(InventoryItemRender { name, kind });
         }
@@ -450,18 +450,14 @@ impl ShopRender {
     ) -> Result<Self> {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
-        let shop_id = ui
-            .shop
-            .shop_id
-            .as_deref()
-            .ok_or_else(|| anyhow!("No shop state"))?;
+        let shop_id = ui.shop.shop_id.ok_or_else(|| anyhow!("No shop state"))?;
         let shop = data.find_shop(shop_id)?;
 
         let buy_items = shop
             .items
             .iter()
             .map(|item_id| {
-                let item = data.find_item(item_id)?;
+                let item = data.find_item(*item_id)?;
                 Ok(ShopItemRender {
                     name: item.name.clone(),
                     price: item.price,
@@ -473,7 +469,7 @@ impl ShopRender {
             if stack.item_id == GOLD_ITEM_ID {
                 continue;
             }
-            let item = data.find_item(&stack.item_id)?;
+            let item = data.find_item(stack.item_id)?;
             let name = item.name.clone();
             let sell_price = item.price / 2;
             for _ in 0..stack.amount.max(0) {
@@ -509,9 +505,9 @@ impl QuestLogRender {
             if quest.rewarded {
                 continue;
             }
-            let quest_data = data.find_quest(&quest.quest_id)?;
+            let quest_data = data.find_quest(quest.quest_id)?;
             quests.push(QuestEntryRender {
-                quest_id: quest.quest_id.clone(),
+                quest_id: quest.quest_id,
                 name: quest_data.name.clone(),
                 description: quest_data.description.clone(),
                 current_count: quest.current_count as u32,
@@ -523,7 +519,7 @@ impl QuestLogRender {
         Ok(Self {
             quests,
             selected: ui.quest_log.selected,
-            tracked_quest_id: ui.quest_log.tracked_quest_id.clone(),
+            tracked_quest_id: ui.quest_log.tracked_quest_id,
         })
     }
 }

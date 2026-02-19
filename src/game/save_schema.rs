@@ -24,7 +24,7 @@ const SAVE_VERSION: u32 = 2;
 pub fn serialize(world: &WorldState) -> String {
     let mut lines = vec![
         format_args_to_string(&["VERSION", &SAVE_VERSION.to_string()]),
-        format_args_to_string(&["WORLD_MAP", &world.occupancy.map_id]),
+        format_args_to_string(&["WORLD_MAP", &world.occupancy.map_id.to_string()]),
         format_args_to_string(&[
             "PARTY",
             &world.party.leader_id.to_string(),
@@ -44,7 +44,7 @@ pub fn serialize(world: &WorldState) -> String {
             &entity.id.to_string(),
             entity_kind_code(entity.kind),
             &entity.name,
-            &entity.map_id,
+            &entity.map_id.to_string(),
             &entity.x.to_string(),
             &entity.y.to_string(),
             direction_code(entity.facing),
@@ -69,7 +69,7 @@ pub fn serialize(world: &WorldState) -> String {
             lines.push(format_args_to_string(&[
                 "ITEM",
                 &entity.id.to_string(),
-                &stack.item_id,
+                &stack.item_id.to_string(),
                 &stack.amount.to_string(),
             ]));
         }
@@ -86,7 +86,7 @@ pub fn serialize(world: &WorldState) -> String {
         lines.push(format_args_to_string(&[
             "ENEMY",
             &enemy.entity_id.to_string(),
-            &enemy.source_enemy_id,
+            &enemy.source_enemy_id.to_string(),
         ]));
         push_timed_lines(enemy.entity_id, &enemy.combatant, &mut lines);
     }
@@ -94,7 +94,7 @@ pub fn serialize(world: &WorldState) -> String {
     for quest in &world.quests {
         lines.push(format_args_to_string(&[
             "QUEST",
-            &quest.quest_id,
+            &quest.quest_id.to_string(),
             &quest.current_count.to_string(),
             if quest.completed { "1" } else { "0" },
             if quest.rewarded { "1" } else { "0" },
@@ -104,7 +104,7 @@ pub fn serialize(world: &WorldState) -> String {
     for (map_id, x, y) in &world.opened_treasures {
         lines.push(format_args_to_string(&[
             "TREASURE",
-            map_id,
+            &map_id.to_string(),
             &x.to_string(),
             &y.to_string(),
         ]));
@@ -133,7 +133,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
     ensure!(!data.trim().is_empty(), "empty save data");
 
     let mut version = 0u32;
-    let mut parsed_world_map = String::new();
+    let mut parsed_world_map = 0u32;
     let mut parsed_party = PartyState::default();
     let mut parsed_entities = Vec::new();
     let mut parsed_allies = Vec::new();
@@ -165,7 +165,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             }
             "WORLD_MAP" => {
                 ensure!(parts.len() >= 2, "WORLD_MAP line is malformed");
-                parsed_world_map = parts[1].into();
+                parsed_world_map = parse_value(parts[1], "WORLD_MAP.map_id")?;
             }
             "PARTY" => {
                 ensure!(parts.len() >= 3, "PARTY line is malformed");
@@ -184,7 +184,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                     id: parse_value(parts[1], "ENTITY.id")?,
                     kind: parse_entity_kind(parts[2])?,
                     name: parts[3].into(),
-                    map_id: parts[4].into(),
+                    map_id: parse_value(parts[4], "ENTITY.map_id")?,
                     x: parse_value(parts[5], "ENTITY.x")?,
                     y: parse_value(parts[6], "ENTITY.y")?,
                     facing: parse_direction(parts[7])?,
@@ -224,7 +224,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                     .find(|entity| entity.id == entity_id)
                     .ok_or_else(|| anyhow!("ITEM target entity not found: {}", entity_id))?;
                 entity.inventory.push(ItemStack {
-                    item_id: parts[2].into(),
+                    item_id: parse_value(parts[2], "ITEM.item_id")?,
                     amount: parse_value::<i32>(parts[3], "ITEM.amount")?.max(0),
                 });
             }
@@ -242,7 +242,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                 ensure!(parts.len() >= 3, "ENEMY line is malformed");
                 parsed_enemies.push(EnemyCombatantState {
                     entity_id: parse_value(parts[1], "ENEMY.entity_id")?,
-                    source_enemy_id: parts[2].into(),
+                    source_enemy_id: parse_value(parts[2], "ENEMY.source_enemy_id")?,
                     combatant: CombatantState::default(),
                 });
             }
@@ -260,7 +260,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             "QUEST" => {
                 ensure!(parts.len() >= 5, "QUEST line is malformed");
                 parsed_quests.push(QuestProgress {
-                    quest_id: parts[1].into(),
+                    quest_id: parse_value(parts[1], "QUEST.quest_id")?,
                     current_count: parse_value(parts[2], "QUEST.current_count")?,
                     completed: parse_flag(parts[3], "QUEST.completed")?,
                     rewarded: parse_flag(parts[4], "QUEST.rewarded")?,
@@ -269,7 +269,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             "TREASURE" => {
                 ensure!(parts.len() >= 4, "TREASURE line is malformed");
                 parsed_treasures.push((
-                    parts[1].into(),
+                    parse_value(parts[1], "TREASURE.map_id")?,
                     parse_value(parts[2], "TREASURE.x")?,
                     parse_value(parts[3], "TREASURE.y")?,
                 ));

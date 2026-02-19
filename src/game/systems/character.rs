@@ -79,7 +79,7 @@ fn resolve_use_item(
         return Ok(());
     }
 
-    let item = data.find_item(&stack.item_id)?;
+    let item = data.find_item(stack.item_id)?;
     if let Some(slot) = loadout_slot(item.kind) {
         out.push(GameEvent::Entity(EntityEvent::SetEntityLoadoutSlot {
             entity_id: leader_id,
@@ -93,7 +93,7 @@ fn resolve_use_item(
         entity_id: leader_id,
         delta: item.hp_restore(),
     }));
-    push_item_delta(out, leader_id, stack.item_id.clone(), -1);
+    push_item_delta(out, leader_id, stack.item_id, -1);
     Ok(())
 }
 
@@ -104,14 +104,14 @@ fn resolve_shop_buy(
     item_data_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let item = data.find_item_by_data_id(item_data_id)?;
+    let item = data.find_item(item_data_id)?;
     if world.gold_amount(leader_id)? < item.price {
         push_soft_error(out, "Not enough gold");
         return Ok(());
     }
 
     push_item_delta(out, leader_id, GOLD_ITEM_ID, -item.price.max(0));
-    push_item_delta(out, leader_id, item.id.clone(), 1);
+    push_item_delta(out, leader_id, item.id, 1);
     Ok(())
 }
 
@@ -122,7 +122,7 @@ fn resolve_shop_sell(
     item_data_id: u32,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
-    let item = data.find_item_by_data_id(item_data_id)?;
+    let item = data.find_item(item_data_id)?;
     if item.id == GOLD_ITEM_ID {
         push_soft_error(out, "Cannot sell gold");
         return Ok(());
@@ -137,7 +137,7 @@ fn resolve_shop_sell(
         return Ok(());
     };
 
-    push_item_delta(out, leader_id, stack.item_id.clone(), -1);
+    push_item_delta(out, leader_id, stack.item_id, -1);
     push_item_delta(out, leader_id, GOLD_ITEM_ID, (item.price / 2).max(0));
     Ok(())
 }
@@ -173,10 +173,10 @@ fn resolve_dialog_action(
 ) -> Result<()> {
     match action {
         DialogAction::GiveItem(id) => {
-            push_item_delta(out, entity_id, id.clone(), 1);
+            push_item_delta(out, entity_id, *id, 1);
         }
         DialogAction::TakeItem(id) => {
-            push_item_delta(out, entity_id, id.clone(), -1);
+            push_item_delta(out, entity_id, *id, -1);
         }
         DialogAction::GiveGold(amount) => {
             push_item_delta(out, entity_id, GOLD_ITEM_ID, (*amount).max(0));
@@ -191,15 +191,10 @@ fn resolve_dialog_action(
     Ok(())
 }
 
-fn push_item_delta(
-    out: &mut Vec<GameEvent>,
-    entity_id: u32,
-    item_id: impl Into<String>,
-    delta: i32,
-) {
+fn push_item_delta(out: &mut Vec<GameEvent>, entity_id: u32, item_id: u32, delta: i32) {
     out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {
         entity_id,
-        item_id: item_id.into(),
+        item_id,
         delta,
     }));
 }

@@ -1,11 +1,8 @@
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{string::ToString, vec::Vec};
 
 use anyhow::{Result, anyhow};
 
-use super::parse_int;
+use super::{parse_int, parse_u32};
 use crate::data::types::{Dialog, DialogAction, DialogCondition, DialogLine};
 
 pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
@@ -19,7 +16,7 @@ pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
             if let Some(builder) = current.take() {
                 dialogs.push(builder.build());
             }
-            current = Some(DialogBuilder::new(rest.to_string()));
+            current = Some(DialogBuilder::new(parse_u32(rest, "dialog_id", line)?));
         } else if line == "@END" {
             if let Some(builder) = current.take() {
                 dialogs.push(builder.build());
@@ -40,12 +37,12 @@ pub fn parse_dialogs(data: &str) -> Result<Vec<Dialog>> {
 }
 
 struct DialogBuilder {
-    id: String,
+    id: u32,
     lines: Vec<DialogLine>,
 }
 
 impl DialogBuilder {
-    fn new(id: String) -> Self {
+    fn new(id: u32) -> Self {
         Self {
             id,
             lines: Vec::new(),
@@ -81,9 +78,21 @@ impl DialogBuilder {
             return Ok(None);
         }
         match parts[0] {
-            "HAS_QUEST" => Ok(Some(DialogCondition::HasQuest(parts[1].to_string()))),
-            "QUEST_DONE" => Ok(Some(DialogCondition::QuestComplete(parts[1].to_string()))),
-            "HAS_ITEM" => Ok(Some(DialogCondition::HasItem(parts[1].to_string()))),
+            "HAS_QUEST" => Ok(Some(DialogCondition::HasQuest(parse_u32(
+                parts[1],
+                "HAS_QUEST.quest_id",
+                s,
+            )?))),
+            "QUEST_DONE" => Ok(Some(DialogCondition::QuestComplete(parse_u32(
+                parts[1],
+                "QUEST_DONE.quest_id",
+                s,
+            )?))),
+            "HAS_ITEM" => Ok(Some(DialogCondition::HasItem(parse_u32(
+                parts[1],
+                "HAS_ITEM.item_id",
+                s,
+            )?))),
             "HAS_GOLD" => {
                 let amount = parse_int(parts[1], "HAS_GOLD amount", s)?;
                 Ok(Some(DialogCondition::HasGold(amount)))
@@ -100,16 +109,22 @@ impl DialogBuilder {
         match parts[0] {
             "GIVE_QUEST" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::GiveQuest(id.to_string()))),
+                .map(|id| parse_u32(id, "GIVE_QUEST.quest_id", s).map(DialogAction::GiveQuest))
+                .transpose()?),
             "COMPLETE_QUEST" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::CompleteQuest(id.to_string()))),
+                .map(|id| {
+                    parse_u32(id, "COMPLETE_QUEST.quest_id", s).map(DialogAction::CompleteQuest)
+                })
+                .transpose()?),
             "GIVE_ITEM" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::GiveItem(id.to_string()))),
+                .map(|id| parse_u32(id, "GIVE_ITEM.item_id", s).map(DialogAction::GiveItem))
+                .transpose()?),
             "TAKE_ITEM" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::TakeItem(id.to_string()))),
+                .map(|id| parse_u32(id, "TAKE_ITEM.item_id", s).map(DialogAction::TakeItem))
+                .transpose()?),
             "GIVE_GOLD" => {
                 let val = parts
                     .get(1)
@@ -126,7 +141,8 @@ impl DialogBuilder {
             }
             "OPEN_SHOP" => Ok(parts
                 .get(1)
-                .map(|id| DialogAction::OpenShop(id.to_string()))),
+                .map(|id| parse_u32(id, "OPEN_SHOP.shop_id", s).map(DialogAction::OpenShop))
+                .transpose()?),
             "HEAL" => Ok(Some(DialogAction::Heal)),
             _ => Ok(None),
         }

@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeSet, string::String, vec, vec::Vec};
+use alloc::{collections::BTreeSet, vec, vec::Vec};
 
 use anyhow::{Result, anyhow, ensure};
 
@@ -20,7 +20,7 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct OccupancyState {
-    pub map_id: String,
+    pub map_id: u32,
     pub width: usize,
     pub height: usize,
     pub npc_tiles: Vec<bool>,
@@ -36,7 +36,7 @@ pub struct WorldState {
     pub movement: MovementState,
     pub combat: CombatState,
     pub quests: Vec<QuestProgress>,
-    pub opened_treasures: Vec<(String, usize, usize)>,
+    pub opened_treasures: Vec<(u32, usize, usize)>,
     pub occupancy: OccupancyState,
 }
 
@@ -75,29 +75,29 @@ impl WorldState {
         self.entities.get_mut(entity_id)
     }
 
-    pub fn has_quest(&self, quest_id: &str) -> bool {
+    pub fn has_quest(&self, quest_id: u32) -> bool {
         self.quests
             .iter()
             .any(|q| q.quest_id == quest_id && !q.rewarded)
     }
 
-    pub fn is_quest_complete(&self, quest_id: &str) -> bool {
+    pub fn is_quest_complete(&self, quest_id: u32) -> bool {
         self.quests
             .iter()
             .any(|q| q.quest_id == quest_id && q.completed)
     }
 
-    pub fn is_treasure_opened(&self, map_id: &str, x: usize, y: usize) -> bool {
+    pub fn is_treasure_opened(&self, map_id: u32, x: usize, y: usize) -> bool {
         self.opened_treasures
             .iter()
-            .any(|(m, tx, ty)| m == map_id && *tx == x && *ty == y)
+            .any(|(m, tx, ty)| *m == map_id && *tx == x && *ty == y)
     }
 
-    pub fn has_item(&self, entity_id: EntityId, item_id: &str) -> Result<bool> {
+    pub fn has_item(&self, entity_id: EntityId, item_id: u32) -> Result<bool> {
         Ok(self.item_amount(entity_id, item_id)? > 0)
     }
 
-    pub fn item_amount(&self, entity_id: EntityId, item_id: &str) -> Result<i32> {
+    pub fn item_amount(&self, entity_id: EntityId, item_id: u32) -> Result<i32> {
         let entity = self.entity(entity_id)?;
         Ok(entity
             .inventory
@@ -113,7 +113,7 @@ impl WorldState {
     pub fn add_item_amount(
         &mut self,
         entity_id: EntityId,
-        item_id: &str,
+        item_id: u32,
         amount: i32,
     ) -> Result<()> {
         if amount <= 0 {
@@ -136,7 +136,7 @@ impl WorldState {
     pub fn remove_item_amount(
         &mut self,
         entity_id: EntityId,
-        item_id: &str,
+        item_id: u32,
         amount: i32,
     ) -> Result<()> {
         if amount <= 0 {
@@ -232,16 +232,16 @@ impl WorldState {
         match event {
             WorldEvent::CreateWorld => self.reset(),
             WorldEvent::SetWorldMap(map_id) => {
-                self.rebuild_npc_occupancy_for_map(data, map_id)?;
+                self.rebuild_npc_occupancy_for_map(data, *map_id)?;
                 self.rebuild_enemy_occupancy()?;
             }
             WorldEvent::CreateQuestProgress { quest_id } => {
-                self.ensure_quest_progress(quest_id);
+                self.ensure_quest_progress(*quest_id);
             }
             WorldEvent::ChangeQuestCurrentCount { quest_id, delta } => {
-                let progress = self.ensure_quest_progress(quest_id);
+                let progress = self.ensure_quest_progress(*quest_id);
                 progress.current_count = (progress.current_count + *delta).max(0);
-                let quest = data.find_quest(quest_id)?;
+                let quest = data.find_quest(*quest_id)?;
                 progress.current_count = progress.current_count.min(quest.target_count.max(0));
                 if progress.current_count >= quest.target_count {
                     progress.completed = true;
@@ -251,14 +251,14 @@ impl WorldState {
                 quest_id,
                 completed,
             } => {
-                self.ensure_quest_progress(quest_id).completed = *completed;
+                self.ensure_quest_progress(*quest_id).completed = *completed;
             }
             WorldEvent::SetQuestRewarded { quest_id, rewarded } => {
-                self.ensure_quest_progress(quest_id).rewarded = *rewarded;
+                self.ensure_quest_progress(*quest_id).rewarded = *rewarded;
             }
             WorldEvent::AddOpenedTreasure { map_id, x, y } => {
-                if !self.is_treasure_opened(map_id, *x, *y) {
-                    self.opened_treasures.push((map_id.clone(), *x, *y));
+                if !self.is_treasure_opened(*map_id, *x, *y) {
+                    self.opened_treasures.push((*map_id, *x, *y));
                 }
             }
         }
@@ -294,7 +294,7 @@ impl WorldState {
                     id: *entity_id,
                     kind: *kind,
                     name: name.clone(),
-                    map_id: String::new(),
+                    map_id: 0,
                     x: 0,
                     y: 0,
                     facing: Direction::Down,
@@ -316,7 +316,7 @@ impl WorldState {
                 let previous_tile_index = self.enemy_tile_index_for_entity(*entity_id)?;
                 let entity = self.entities.get_mut(*entity_id)?;
                 if let Some(map_id) = map_id {
-                    entity.map_id = map_id.clone();
+                    entity.map_id = *map_id;
                 }
                 if let Some((x, y)) = position {
                     entity.x = *x;
@@ -406,9 +406,9 @@ impl WorldState {
                 delta,
             } => {
                 if *delta > 0 {
-                    self.add_item_amount(*entity_id, item_id, *delta)?;
+                    self.add_item_amount(*entity_id, *item_id, *delta)?;
                 } else if *delta < 0 {
-                    self.remove_item_amount(*entity_id, item_id, -*delta)?;
+                    self.remove_item_amount(*entity_id, *item_id, -*delta)?;
                 }
             }
             EntityEvent::SetEntityCurrentHp { entity_id, value } => {
@@ -537,8 +537,8 @@ impl WorldState {
         }
     }
 
-    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: &str) -> Result<()> {
-        self.occupancy.map_id = map_id.into();
+    fn rebuild_npc_occupancy_for_map(&mut self, data: &GameData, map_id: u32) -> Result<()> {
+        self.occupancy.map_id = map_id;
         let map = data.find_map(map_id)?;
         self.occupancy.width = map.width;
         self.occupancy.height = map.height;
@@ -618,10 +618,7 @@ impl WorldState {
         let entity = self.entities.get(entity_id)?;
 
         if matches!(entity.kind, EntityKind::Enemy) {
-            let source_enemy_id = data
-                .find_enemy(&entity.name)
-                .or_else(|_| data.find_enemy_by_name(&entity.name))
-                .map(|enemy| enemy.id.clone())?;
+            let source_enemy_id = data.find_enemy_by_name(&entity.name)?.id;
 
             if let Some(enemy) = self
                 .combat
@@ -641,7 +638,7 @@ impl WorldState {
         Ok(())
     }
 
-    fn ensure_quest_progress(&mut self, quest_id: &str) -> &mut QuestProgress {
+    fn ensure_quest_progress(&mut self, quest_id: u32) -> &mut QuestProgress {
         if let Some(index) = self
             .quests
             .iter()
@@ -650,7 +647,7 @@ impl WorldState {
             &mut self.quests[index]
         } else {
             self.quests.push(QuestProgress {
-                quest_id: quest_id.into(),
+                quest_id,
                 current_count: 0,
                 completed: false,
                 rewarded: false,
@@ -761,33 +758,25 @@ mod tests {
     fn quest_progress_uses_delta_and_clamps_to_target() -> Result<()> {
         let mut data = GameData::new(|path| {
             if path == "data/quests.dat" {
-                return Ok(b"quest_wolf:Wolf Hunt:KILL:wolf:3:80:30:Hunt 3 wolves\n".to_vec());
+                return Ok(b"3002:Wolf Hunt:KILL:2005:3:80:30:Hunt 3 wolves\n".to_vec());
             }
             Err(anyhow!("unexpected resource path: {}", path))
         });
         load_game_data_step(&mut data, 5)?;
-        let quest_id = String::from("quest_wolf");
+        let quest_id = 3002;
 
         let mut world = WorldState::empty();
         world.apply_event(
             &data,
-            &GameEvent::World(WorldEvent::CreateQuestProgress {
-                quest_id: quest_id.clone(),
-            }),
+            &GameEvent::World(WorldEvent::CreateQuestProgress { quest_id }),
         )?;
         world.apply_event(
             &data,
-            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: quest_id.clone(),
-                delta: 1,
-            }),
+            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount { quest_id, delta: 1 }),
         )?;
         world.apply_event(
             &data,
-            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: quest_id.clone(),
-                delta: 1,
-            }),
+            &GameEvent::World(WorldEvent::ChangeQuestCurrentCount { quest_id, delta: 1 }),
         )?;
 
         let progress = world
@@ -801,7 +790,7 @@ mod tests {
         world.apply_event(
             &data,
             &GameEvent::World(WorldEvent::ChangeQuestCurrentCount {
-                quest_id: quest_id.clone(),
+                quest_id,
                 delta: 10,
             }),
         )?;
@@ -821,7 +810,7 @@ mod tests {
         let mut world = WorldState::empty();
 
         world.occupancy = OccupancyState {
-            map_id: String::from("map"),
+            map_id: 1,
             width: 3,
             height: 3,
             npc_tiles: vec![false; 9],
@@ -833,7 +822,7 @@ mod tests {
             id: 10,
             kind: EntityKind::Enemy,
             name: String::from("slime"),
-            map_id: String::from("map"),
+            map_id: 1,
             x: 1,
             y: 1,
             facing: Direction::Down,
@@ -845,7 +834,7 @@ mod tests {
         });
         world.combat.enemies.push(EnemyCombatantState {
             entity_id: 10,
-            source_enemy_id: String::from("slime"),
+            source_enemy_id: 2001,
             combatant: CombatantState::default(),
         });
         world.rebuild_enemy_occupancy()?;
@@ -880,7 +869,7 @@ mod tests {
         let mut world = WorldState::empty();
 
         world.occupancy = OccupancyState {
-            map_id: String::from("map"),
+            map_id: 1,
             width: 3,
             height: 3,
             npc_tiles: vec![false; 9],
@@ -892,7 +881,7 @@ mod tests {
             id: 10,
             kind: EntityKind::Enemy,
             name: String::from("slime"),
-            map_id: String::from("map"),
+            map_id: 1,
             x: 1,
             y: 1,
             facing: Direction::Down,
@@ -904,7 +893,7 @@ mod tests {
         });
         world.combat.enemies.push(EnemyCombatantState {
             entity_id: 10,
-            source_enemy_id: String::from("slime"),
+            source_enemy_id: 2001,
             combatant: CombatantState::default(),
         });
 

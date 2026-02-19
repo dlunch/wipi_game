@@ -176,12 +176,12 @@ pub struct InventoryUiState {
 #[derive(Debug, Default)]
 pub struct QuestLogUiState {
     pub selected: usize,
-    pub tracked_quest_id: Option<String>,
+    pub tracked_quest_id: Option<u32>,
 }
 
 #[derive(Debug)]
 pub struct ShopUiState {
-    pub shop_id: Option<String>,
+    pub shop_id: Option<u32>,
     pub buy_item_ids: Vec<u32>,
     pub sell_item_ids: Vec<u32>,
     pub mode: ShopMode,

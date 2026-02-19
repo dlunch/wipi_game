@@ -76,7 +76,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
     if !world.combat.active {
         return Ok(());
     }
-    let map = data.find_map(&leader_entity.map_id)?;
+    let map = data.find_map(leader_entity.map_id)?;
     let (_, leader_def) = combat_attack_def(data, leader_entity)?;
 
     tick_combatant_effects(leader_id, leader_combatant, next_tick, out);
@@ -135,7 +135,7 @@ fn resolve_tick(data: &GameData, world: &WorldState, out: &mut Vec<GameEvent>) -
             && attack_cooldown == 0
             && leader_entity.current_hp > 0
         {
-            let enemy_data = data.find_enemy(&enemy.source_enemy_id)?;
+            let enemy_data = data.find_enemy(enemy.source_enemy_id)?;
             let effective_def = if leader_combatant
                 .timed
                 .is_active(TimedKind::ArmorBreak, next_tick)
@@ -372,11 +372,11 @@ fn resolve_map_changed(
     }
 
     let leader_entity = world.leader_entity()?;
-    let map = data.find_map(&leader_entity.map_id)?;
+    let map = data.find_map(leader_entity.map_id)?;
 
     let mut enemy_templates = Vec::with_capacity(map.encounters.len());
     for (enemy_id, _) in &map.encounters {
-        enemy_templates.push(data.find_enemy(enemy_id)?);
+        enemy_templates.push(data.find_enemy(*enemy_id)?);
     }
     if enemy_templates.is_empty() || map.peaceful {
         out.push(GameEvent::Combat(CombatEvent::ClearEnemies));
@@ -405,7 +405,7 @@ fn resolve_map_changed(
             }));
             out.push(GameEvent::Entity(EntityEvent::SetEntityTransform {
                 entity_id,
-                map_id: Some(map.id.clone()),
+                map_id: Some(map.id),
                 position: Some((x, y)),
                 facing: Some(Direction::Down),
             }));

@@ -318,7 +318,7 @@ impl RenderState {
             RenderState::QuestLog(quest_log) => {
                 let mut changed = false;
                 if quest_log.tracked_quest_id != ui.quest_log.tracked_quest_id {
-                    quest_log.tracked_quest_id = ui.quest_log.tracked_quest_id.clone();
+                    quest_log.tracked_quest_id = ui.quest_log.tracked_quest_id;
                     changed = true;
                 }
                 let next_selected = if quest_log.quests.is_empty() {
@@ -572,7 +572,7 @@ fn patch_explore(
                 .iter()
                 .any(|(m, tx, ty)| m == map_id && *tx == *x && *ty == *y)
             {
-                explore.opened_treasures.push((map_id.clone(), *x, *y));
+                explore.opened_treasures.push((*map_id, *x, *y));
                 explore.interaction_hint = interaction_hint_from_world(world, data)?;
                 return Ok(true);
             }
@@ -739,7 +739,7 @@ fn patch_or_insert_enemy(
         return Ok(explore.remove_enemy(entity_id));
     }
 
-    let name = data.find_enemy(&enemy.source_enemy_id)?.name.clone();
+    let name = data.find_enemy(enemy.source_enemy_id)?.name.clone();
     let next = super::render_state::EnemyRender {
         enemy_id: entity_id,
         name,
@@ -785,7 +785,7 @@ fn sync_explore_player(
 
     let mut changed = false;
     if explore.map_id != leader.map_id {
-        explore.map_id = leader.map_id.clone();
+        explore.map_id = leader.map_id;
         changed = true;
     }
     if explore.player_x != leader.x {
@@ -809,7 +809,7 @@ fn sync_explore_player(
         explore.level = leader.stat.level as u32;
         changed = true;
     }
-    let next_peaceful = data.find_map(&leader.map_id)?.peaceful;
+    let next_peaceful = data.find_map(leader.map_id)?.peaceful;
     if explore.peaceful != next_peaceful {
         explore.peaceful = next_peaceful;
         changed = true;
@@ -900,8 +900,7 @@ fn sync_explore_quest(
         explore.active_quest_count = next_active_count;
         changed = true;
     }
-    let next_tracked =
-        TrackedQuestRender::from_world(world, data, ui.quest_log.tracked_quest_id.as_deref())?;
+    let next_tracked = TrackedQuestRender::from_world(world, data, ui.quest_log.tracked_quest_id)?;
     let tracked_changed = match (&explore.tracked_quest, &next_tracked) {
         (None, None) => false,
         (Some(current), Some(next)) => {
