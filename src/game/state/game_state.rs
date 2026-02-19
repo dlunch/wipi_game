@@ -162,7 +162,7 @@ impl GameState {
             GameEvent::Transition(TransitionEvent::ToQuestLog) => Some(GameState::QuestLog),
             GameEvent::ApplyDialogTransition(DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => Some(GameState::Dialog),
-            GameEvent::OpenShopState(_) => Some(GameState::Shop),
+            GameEvent::OpenShopById(_) => Some(GameState::Shop),
             _ => None,
         }
     }
@@ -177,7 +177,7 @@ impl GameEventSubscriber for GameState {
                 | GameEventKind::Transition
                 | GameEventKind::ApplyDialogTransition
                 | GameEventKind::OpenDialogState
-                | GameEventKind::OpenShopState
+                | GameEventKind::OpenShopById
         )
     }
 }

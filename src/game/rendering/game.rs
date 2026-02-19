@@ -131,7 +131,7 @@ impl RenderState {
                     GameEvent::UseInventorySelected(_)
                         | GameEvent::Entity(_)
                         | GameEvent::Transition(_)
-                        | GameEvent::OpenShopState(_)
+                        | GameEvent::OpenShopById(_)
                 ) {
                     let next = InventoryRender::from_world(
                         world.ok_or_else(|| anyhow!("No active world"))?,
@@ -195,7 +195,7 @@ impl RenderState {
                     GameEvent::ShopBuyItem(_)
                         | GameEvent::ShopSellSelected(_)
                         | GameEvent::Entity(_)
-                        | GameEvent::OpenShopState(_)
+                        | GameEvent::OpenShopById(_)
                         | GameEvent::Transition(_)
                 ) {
                     let next = ShopRender::from_world(
@@ -293,12 +293,7 @@ impl RenderState {
             RenderState::Shop(shop) => {
                 let world = world.ok_or_else(|| anyhow!("No active world"))?;
                 let inventory_len = world.leader_entity()?.inventory.len();
-                let shop_items_len = ui
-                    .shop
-                    .state
-                    .as_ref()
-                    .map(|shop_state| shop_state.items.len())
-                    .ok_or_else(|| anyhow!("No active shop state"))?;
+                let shop_items_len = shop.buy_items.len();
                 let total = match ui.shop.mode {
                     ShopMode::Select => 2,
                     ShopMode::Buy | ShopMode::ConfirmBuy => shop_items_len,

@@ -49,8 +49,8 @@ impl UiState {
             GameEvent::OpenDialogState(dialog_state) => {
                 self.dialog.state = Some(dialog_state.clone());
             }
-            GameEvent::OpenShopState(shop_state) => {
-                self.shop.state = Some((**shop_state).clone());
+            GameEvent::OpenShopById(shop_id) => {
+                self.shop.shop_id = Some(shop_id.clone());
                 self.shop.mode = ShopMode::Select;
                 self.shop.selected = 0;
             }
@@ -76,7 +76,7 @@ impl GameEventSubscriber for UiState {
                 | GameEventKind::ApplyDialogTransition
                 | GameEventKind::ShopSellSelected
                 | GameEventKind::OpenDialogState
-                | GameEventKind::OpenShopState
+                | GameEventKind::OpenShopById
         )
     }
 }

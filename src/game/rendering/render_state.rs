@@ -450,20 +450,24 @@ impl ShopRender {
     ) -> Result<Self> {
         let leader_id = world.leader_id()?;
         let leader = world.leader_entity()?;
-        let shop_state = ui
+        let shop_id = ui
             .shop
-            .state
-            .as_ref()
+            .shop_id
+            .as_deref()
             .ok_or_else(|| anyhow!("No shop state"))?;
+        let shop = data.find_shop(shop_id)?;
 
-        let buy_items = shop_state
+        let buy_items = shop
             .items
             .iter()
-            .map(|item| ShopItemRender {
-                name: item.name.clone(),
-                price: item.price,
+            .map(|item_id| {
+                let item = data.find_item(item_id)?;
+                Ok(ShopItemRender {
+                    name: item.name.clone(),
+                    price: item.price,
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let mut player_inventory = Vec::new();
         for stack in &leader.inventory {
             if stack.item_id == GOLD_ITEM_ID {
@@ -486,7 +490,7 @@ impl ShopRender {
         };
 
         Ok(Self {
-            shop_name: shop_state.shop.name.clone(),
+            shop_name: shop.name.clone(),
             mode: ui.shop.mode,
             selected: ui.shop.selected,
             scroll: scroll_for_selection(ui.shop.selected, total, SHOP_VISIBLE_ITEMS),

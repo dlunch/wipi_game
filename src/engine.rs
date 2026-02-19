@@ -89,8 +89,12 @@ impl GameEngine {
                 .resolve_input(input, &self.state, self.world.as_ref());
             input_events.reserve(ui_events.len() * 2);
             for event in ui_events {
-                self.ui
-                    .apply_ui_event(self.world.as_ref(), event, &mut input_events)?;
+                self.ui.apply_ui_event(
+                    self.world.as_ref(),
+                    self.data.as_ref(),
+                    event,
+                    &mut input_events,
+                )?;
             }
         }
         needs_repaint |= self

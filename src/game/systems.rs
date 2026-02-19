@@ -5,7 +5,6 @@ pub mod lifecycle;
 pub mod movement;
 pub mod npc;
 pub mod resolver;
-pub mod shop;
 pub mod world;
 
 use alloc::vec::Vec;
@@ -17,7 +16,6 @@ pub fn domain_resolvers() -> Vec<&'static dyn resolver::DomainEventResolver> {
     resolvers.extend(combat::resolvers());
     resolvers.extend(world::resolvers());
     resolvers.extend(character::resolvers());
-    resolvers.extend(shop::resolvers());
     resolvers.extend(npc::resolvers());
     resolvers
 }

@@ -136,15 +136,6 @@ impl GameData {
             .find(|npc| npc.map_id == map_id && npc.x == x && npc.y == y)
     }
 
-    pub fn get_shop_items(&self, shop: &Shop) -> Result<Vec<Item>> {
-        let mut items = Vec::with_capacity(shop.items.len());
-        for item_id in &shop.items {
-            let item = self.find_item(item_id)?;
-            items.push(item.clone());
-        }
-        Ok(items)
-    }
-
     fn resolve_map_npcs(maps: &[Map], npc_defs: Vec<Npc>) -> Result<Vec<Npc>> {
         let placement_count = maps.iter().map(|map| map.npcs.len()).sum();
         let mut npcs = Vec::with_capacity(placement_count);

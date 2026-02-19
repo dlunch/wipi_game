@@ -1,6 +1,6 @@
 use alloc::{string::String, vec, vec::Vec};
 
-use crate::data::{Dialog, DialogLine, Direction, Item, Shop, Skill};
+use crate::data::{Dialog, DialogLine, Direction, Skill};
 
 pub const INVENTORY_VISIBLE_ITEMS: usize = 8;
 pub const SHOP_VISIBLE_ITEMS: usize = 8;
@@ -63,7 +63,7 @@ impl UiState {
         self.inventory.selected = 0;
         self.quest_log.selected = 0;
         self.quest_log.tracked_quest_id = None;
-        self.shop.state = None;
+        self.shop.shop_id = None;
         self.shop.mode = ShopMode::Select;
         self.shop.selected = 0;
         self.dialog.state = None;
@@ -179,7 +179,7 @@ pub struct QuestLogUiState {
 
 #[derive(Debug)]
 pub struct ShopUiState {
-    pub state: Option<ShopState>,
+    pub shop_id: Option<String>,
     pub mode: ShopMode,
     pub selected: usize,
 }
@@ -187,7 +187,7 @@ pub struct ShopUiState {
 impl Default for ShopUiState {
     fn default() -> Self {
         Self {
-            state: None,
+            shop_id: None,
             mode: ShopMode::Select,
             selected: 0,
         }
@@ -265,18 +265,6 @@ impl DialogState {
             lines,
             current_line: 0,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ShopState {
-    pub shop: Shop,
-    pub items: Vec<Item>,
-}
-
-impl ShopState {
-    pub fn new(shop: Shop, items: Vec<Item>) -> Self {
-        Self { shop, items }
     }
 }
 
