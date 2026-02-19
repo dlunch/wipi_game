@@ -5,8 +5,11 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{GameData, GameEvent, GameEventKind, ShopState, WorldState};
+use super::resolver::DomainEventResolver;
+use crate::game::game_data::GameData;
+use crate::game::game_event::{GameEvent, GameEventKind};
+use crate::game::ui::state::ShopState;
+use crate::game::world::WorldState;
 struct OpenShopByIdResolver;
 
 static OPEN_SHOP_BY_ID_RESOLVER: OpenShopByIdResolver = OpenShopByIdResolver;

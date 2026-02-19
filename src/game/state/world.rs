@@ -4,15 +4,15 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow, ensure};
 
-use crate::data::Direction;
-use crate::data::QuestProgress;
+use crate::data::{Direction, Map, QuestProgress};
+use crate::game::game_data::GameData;
+use crate::game::game_event::{
+    CombatEvent, EntityEvent, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
+    MovementEvent, WorldEvent,
+};
 use crate::game::state::{
     AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityId, EntityKind,
-    EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, PartyState,
-};
-use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, GameEventSubscriber, LoadoutSlot,
-    MovementEvent, MovementState, WorldEvent,
+    EntityStat, EntityState, EntityStore, GOLD_ITEM_ID, ItemStack, MovementState, PartyState,
 };
 
 #[derive(Debug, Default)]
@@ -125,9 +125,7 @@ impl WorldState {
         {
             stack.amount += amount;
         } else {
-            entity
-                .inventory
-                .push(crate::game::state::ItemStack::new(item_id, amount));
+            entity.inventory.push(ItemStack::new(item_id, amount));
         }
         Ok(())
     }
@@ -171,7 +169,7 @@ impl WorldState {
         self.occupancy.npc_tiles[idx] || self.occupancy.enemy_tiles[idx]
     }
 
-    pub(crate) fn is_occupied_on_map(&self, map: &crate::data::Map, x: usize, y: usize) -> bool {
+    pub(crate) fn is_occupied_on_map(&self, map: &Map, x: usize, y: usize) -> bool {
         if x >= map.width || y >= map.height {
             return true;
         }
@@ -197,10 +195,10 @@ impl WorldState {
                     let leader = self.entities.get_mut(leader_id)?;
                     if let Some((dx, dy)) = movement_event.facing {
                         leader.facing = match (dx, dy) {
-                            (0, -1) => crate::data::Direction::Up,
-                            (0, 1) => crate::data::Direction::Down,
-                            (-1, 0) => crate::data::Direction::Left,
-                            (1, 0) => crate::data::Direction::Right,
+                            (0, -1) => Direction::Up,
+                            (0, 1) => Direction::Down,
+                            (-1, 0) => Direction::Left,
+                            (1, 0) => Direction::Right,
                             _ => leader.facing,
                         };
                     }
@@ -719,10 +717,11 @@ mod tests {
     use anyhow::{Result, anyhow};
 
     use crate::data::{Direction, Quest, QuestType};
+    use crate::game::game_data::GameData;
+    use crate::game::game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent};
     use crate::game::state::{
         CombatantState, EnemyCombatantState, EntityKind, EntityState, ItemStack, TimedKind,
     };
-    use crate::game::{CombatEvent, EntityEvent, GameData, GameEvent, WorldEvent};
 
     use super::{OccupancyState, WorldState};
 

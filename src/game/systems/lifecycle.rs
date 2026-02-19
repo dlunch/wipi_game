@@ -5,14 +5,17 @@ use alloc::vec::Vec;
 
 use anyhow::Result;
 
+use crate::game::game_data::GameData;
+use crate::game::game_event::{
+    CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TransitionEvent, WorldEvent,
+};
 use crate::game::save::load_game;
 use crate::game::state::{EntityId, EntityStat, EntityState, GOLD_ITEM_ID, ItemStack, TimedKind};
-use crate::game::systems::emit::{emit_entity_snapshot, emit_timed_effects};
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    CombatEvent, DialogState, EntityEvent, GameData, GameEvent, GameEventKind, MovementEvent,
-    TransitionEvent, WorldEvent, WorldState,
-};
+use crate::game::ui::state::DialogState;
+use crate::game::world::WorldState;
+
+use super::emit::{emit_entity_snapshot, emit_timed_effects};
+use super::resolver::DomainEventResolver;
 
 pub enum LoadingEvent {
     Advance(usize),

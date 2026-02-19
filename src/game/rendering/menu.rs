@@ -4,7 +4,7 @@ use super::renderer::{
     COLOR_DARK_GRAY, COLOR_GRAY, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, clear_screen, draw_rect,
     draw_selection_cursor, draw_text, fill_rect,
 };
-use crate::game::MenuAction;
+use crate::game::ui::state::MenuAction;
 
 pub fn draw_menu(
     fb: &mut Framebuffer,

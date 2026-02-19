@@ -1,8 +1,11 @@
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::data::Direction;
-use crate::game::state::{EntityId, EntityKind, TimedKind};
+use crate::data::{DialogAction, Direction};
+use crate::game::state::{EntityId, EntityKind, MovementTickEvent, TimedKind};
+use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
+use crate::game::systems::npc::NpcEvent;
+use crate::game::ui::state::{DialogState, DialogTransition, ExploreAction, ShopState};
 
 pub enum CombatEvent {
     SetActive(bool),
@@ -35,22 +38,22 @@ pub enum GameEvent {
     UseInventorySelected(usize),
     World(WorldEvent),
     Entity(EntityEvent),
-    OpenDialogState(crate::game::DialogState),
+    OpenDialogState(DialogState),
     OpenShopById(String),
-    OpenShopState(Box<crate::game::ShopState>),
+    OpenShopState(Box<ShopState>),
     RestoreHpMp,
-    ApplyDialogAction(crate::data::DialogAction),
-    ApplyDialogTransition(crate::game::DialogTransition),
+    ApplyDialogAction(DialogAction),
+    ApplyDialogTransition(DialogTransition),
     ShopBuyItem(String),
     ShopSellSelected(usize),
     RevivePlayer,
-    CombatPlayerAction(crate::game::ExploreAction),
+    CombatPlayerAction(ExploreAction),
     FatalError(String),
-    Loading(crate::game::LoadingEvent),
+    Loading(LoadingEvent),
     Movement(MovementEvent),
     Combat(CombatEvent),
     Explore(ExploreEvent),
-    Lifecycle(crate::game::LifecycleEvent),
+    Lifecycle(LifecycleEvent),
     Transition(TransitionEvent),
     Exit(i32),
 }
@@ -276,13 +279,13 @@ pub enum ExploreEvent {
     MoveDirection(Direction),
     TryNpcInteract {
         facing: Direction,
-        fallback_action: Option<crate::game::ExploreAction>,
+        fallback_action: Option<ExploreAction>,
     },
-    Npc(crate::game::NpcEvent),
+    Npc(NpcEvent),
 }
 
 pub enum MovementEvent {
-    Tick(crate::game::MovementTickEvent, Option<TileEvent>),
+    Tick(MovementTickEvent, Option<TileEvent>),
     ClearPressedDirections,
     SetMoveCooldown(u32),
 }

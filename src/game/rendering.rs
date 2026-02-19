@@ -12,7 +12,5 @@ mod sprites;
 
 pub use game::render;
 pub use render_fx::RenderFxState;
-pub use render_state::{
-    ExploreRender, InventoryRender, QuestLogRender, RenderState, ShopRender, StatsRender,
-};
+pub use render_state::RenderState;
 pub use sprites::SpriteAtlas;

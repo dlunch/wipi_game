@@ -1,10 +1,13 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Skill, SkillType};
+use crate::game::game_event::{CombatEvent, EntityEvent, GameEvent, WorldEvent};
+use crate::game::state::GameState;
 use crate::game::state::TimedKind;
-use crate::game::{CombatEvent, EntityEvent, GameEvent, GameState, WorldEvent, WorldState};
+use crate::game::world::WorldState;
 
 #[derive(Default)]
 pub struct RenderFxState {
@@ -14,7 +17,7 @@ pub struct RenderFxState {
     quest_notice_timer: u32,
     shop_purchase_notice_timer: u32,
     soft_error_notice_timer: u32,
-    soft_error_message: Option<alloc::string::String>,
+    soft_error_message: Option<String>,
     anim_tick: u32,
 }
 

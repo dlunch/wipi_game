@@ -6,11 +6,16 @@ use alloc::vec::Vec;
 
 use anyhow::{Error, Result, ensure};
 
-use crate::game::{
-    DomainEventEffect, DomainEventResolver, GameData, GameEvent, GameEventKind,
-    GameEventSubscriber, GameInput, GameState, InputKey, RenderFxState, RenderState, SpriteAtlas,
-    UiEventApplier, UiInputEventResolver, UiState, WorldSlot, domain_effects, domain_resolvers,
-};
+use crate::game::effects::{DomainEventEffect, domain_effects};
+use crate::game::game_data::GameData;
+use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber};
+use crate::game::rendering::{RenderFxState, RenderState, SpriteAtlas};
+use crate::game::state::{GameState, WorldSlot};
+use crate::game::systems::domain_resolvers;
+use crate::game::systems::resolver::DomainEventResolver;
+use crate::game::ui::apply::UiEventApplier;
+use crate::game::ui::resolve::UiInputEventResolver;
+use crate::game::ui::state::{GameInput, InputKey, UiState};
 
 pub struct GameEngine {
     state: GameState,

@@ -3,8 +3,8 @@ use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
+use crate::game::game_event::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
 use crate::game::state::EntityId;
-use crate::game::{CombatEvent, GameEvent, GameEventKind, GameEventSubscriber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimedKind {

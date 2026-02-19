@@ -1,15 +1,17 @@
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
+use core::str::FromStr;
 
 use anyhow::{Result, anyhow, ensure};
 
-use super::WorldState;
-use crate::data::Direction;
+use crate::data::{Direction, QuestProgress};
 use crate::game::state::{
-    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityKind, EntityState,
-    ItemStack, LoadoutState, PartyState, TimedEffect, TimedKind, TimedState,
+    AllyCombatantState, CombatState, CombatantState, EnemyCombatantState, EntityKind, EntityStat,
+    EntityState, EntityStore, ItemStack, LoadoutState, PartyState, TimedEffect, TimedKind,
+    TimedState,
 };
+use crate::game::world::{OccupancyState, WorldState};
 
 const SAVE_VERSION: u32 = 2;
 
@@ -180,7 +182,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
                     x: parse_value(parts[5], "ENTITY.x")?,
                     y: parse_value(parts[6], "ENTITY.y")?,
                     facing: parse_direction(parts[7])?,
-                    stat: crate::game::EntityStat {
+                    stat: EntityStat {
                         level: parse_value::<i32>(parts[8], "ENTITY.level")?.max(1),
                         exp: parse_value::<i32>(parts[9], "ENTITY.exp")?.max(0),
                         exp_to_next: parse_value::<i32>(parts[10], "ENTITY.exp_to_next")?.max(1),
@@ -251,7 +253,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
             }
             "QUEST" => {
                 ensure!(parts.len() >= 5, "QUEST line is malformed");
-                parsed_quests.push(crate::data::QuestProgress {
+                parsed_quests.push(QuestProgress {
                     quest_id: parts[1].into(),
                     current_count: parse_value(parts[2], "QUEST.current_count")?,
                     completed: parse_flag(parts[3], "QUEST.completed")?,
@@ -305,7 +307,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
 
     *world = WorldState {
         tick_counter: parsed_tick_counter,
-        entities: crate::game::EntityStore::from_list(parsed_entities, next_entity_id),
+        entities: EntityStore::from_list(parsed_entities, next_entity_id),
         party: parsed_party,
         movement: Default::default(),
         combat: CombatState {
@@ -316,7 +318,7 @@ pub fn deserialize(data: &str, world: &mut WorldState) -> Result<()> {
         },
         quests: parsed_quests,
         opened_treasures: parsed_treasures,
-        occupancy: crate::game::world::OccupancyState {
+        occupancy: OccupancyState {
             map_id: parsed_world_map,
             width: 0,
             height: 0,
@@ -452,7 +454,7 @@ fn parse_flag(raw: &str, field: &str) -> Result<bool> {
 
 fn parse_value<T>(raw: &str, field: &str) -> Result<T>
 where
-    T: core::str::FromStr,
+    T: FromStr,
 {
     raw.parse::<T>()
         .map_err(|_| anyhow!("invalid {} value: {}", field, raw))

@@ -6,8 +6,12 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, ItemKind};
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{EntityEvent, GameData, GameEvent, GameEventKind, LoadoutSlot, WorldState};
+use crate::game::game_data::GameData;
+use crate::game::game_event::{EntityEvent, GameEvent, GameEventKind, LoadoutSlot};
+use crate::game::state::{EntityState, GOLD_ITEM_ID};
+use crate::game::world::WorldState;
+
+use super::resolver::DomainEventResolver;
 
 struct CharacterMutationResolver;
 
@@ -62,7 +66,7 @@ impl DomainEventResolver for CharacterMutationResolver {
 fn resolve_use_item(
     data: &GameData,
     leader_id: u32,
-    leader: &crate::game::EntityState,
+    leader: &EntityState,
     index: usize,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
@@ -106,12 +110,7 @@ fn resolve_shop_buy(
         return Ok(());
     }
 
-    push_item_delta(
-        out,
-        leader_id,
-        crate::game::GOLD_ITEM_ID,
-        -item.price.max(0),
-    );
+    push_item_delta(out, leader_id, GOLD_ITEM_ID, -item.price.max(0));
     push_item_delta(out, leader_id, item_id, 1);
     Ok(())
 }
@@ -119,7 +118,7 @@ fn resolve_shop_buy(
 fn resolve_shop_sell(
     data: &GameData,
     leader_id: u32,
-    leader: &crate::game::EntityState,
+    leader: &EntityState,
     index: usize,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
@@ -131,19 +130,14 @@ fn resolve_shop_sell(
         push_soft_error(out, "Item is unavailable");
         return Ok(());
     }
-    if stack.item_id == crate::game::GOLD_ITEM_ID {
+    if stack.item_id == GOLD_ITEM_ID {
         push_soft_error(out, "Cannot sell gold");
         return Ok(());
     }
     let item = data.find_item(&stack.item_id)?;
 
     push_item_delta(out, leader_id, stack.item_id.clone(), -1);
-    push_item_delta(
-        out,
-        leader_id,
-        crate::game::GOLD_ITEM_ID,
-        (item.price / 2).max(0),
-    );
+    push_item_delta(out, leader_id, GOLD_ITEM_ID, (item.price / 2).max(0));
     Ok(())
 }
 
@@ -184,10 +178,10 @@ fn resolve_dialog_action(
             push_item_delta(out, entity_id, id.clone(), -1);
         }
         DialogAction::GiveGold(amount) => {
-            push_item_delta(out, entity_id, crate::game::GOLD_ITEM_ID, (*amount).max(0));
+            push_item_delta(out, entity_id, GOLD_ITEM_ID, (*amount).max(0));
         }
         DialogAction::TakeGold(amount) => {
-            push_item_delta(out, entity_id, crate::game::GOLD_ITEM_ID, -(*amount).max(0));
+            push_item_delta(out, entity_id, GOLD_ITEM_ID, -(*amount).max(0));
         }
         DialogAction::Heal => resolve_restore_hp_mp(world, entity_id, out)?,
         DialogAction::GiveQuest(_) | DialogAction::CompleteQuest(_) | DialogAction::OpenShop(_) => {
@@ -199,7 +193,7 @@ fn resolve_dialog_action(
 fn push_item_delta(
     out: &mut Vec<GameEvent>,
     entity_id: u32,
-    item_id: impl Into<alloc::string::String>,
+    item_id: impl Into<String>,
     delta: i32,
 ) {
     out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {

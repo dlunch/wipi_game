@@ -18,7 +18,8 @@ use wipi::timer::Timer;
 use wipi::wipi_main;
 
 use crate::engine::GameEngine;
-use crate::game::{InputKey, render};
+use crate::game::rendering::render;
+use crate::game::ui::state::InputKey;
 
 fn map_key(key: KeyCode) -> Option<InputKey> {
     match key {

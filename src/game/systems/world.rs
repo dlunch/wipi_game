@@ -1,16 +1,20 @@
 use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
 use anyhow::{Result, anyhow};
 
 use crate::data::{DialogAction, QuestType};
-use crate::game::state::{GOLD_ITEM_ID, TimedKind};
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, MovementEvent, TileEvent,
-    TransitionEvent, WorldEvent, WorldState,
+use crate::game::game_data::GameData;
+use crate::game::game_event::{
+    CombatEvent, EntityEvent, GameEvent, GameEventKind, MovementEvent, TileEvent, TransitionEvent,
+    WorldEvent,
 };
+use crate::game::state::{GOLD_ITEM_ID, TimedKind};
+use crate::game::world::WorldState;
+
+use super::resolver::DomainEventResolver;
 
 struct WorldLogicResolver;
 
@@ -291,7 +295,7 @@ fn resolve_revive_player(
 fn push_item_delta(
     out: &mut Vec<GameEvent>,
     entity_id: u32,
-    item_id: impl Into<alloc::string::String>,
+    item_id: impl Into<String>,
     delta: i32,
 ) {
     out.push(GameEvent::Entity(EntityEvent::ChangeEntityItem {

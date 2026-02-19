@@ -2,11 +2,11 @@ use alloc::format;
 
 use wipi::framebuffer::Framebuffer;
 
+use super::render_state::QuestLogRender;
 use super::renderer::{
     COLOR_BLACK, COLOR_CYAN, COLOR_GRAY, COLOR_GREEN, COLOR_WHITE, COLOR_YELLOW, clear_screen,
     draw_rect, draw_text, fill_rect, truncate_by_chars,
 };
-use crate::game::QuestLogRender;
 
 pub fn draw_quest_log(fb: &mut Framebuffer, state: &QuestLogRender) {
     clear_screen(fb);

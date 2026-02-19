@@ -3,7 +3,9 @@ use alloc::string::String;
 
 use anyhow::Result;
 
-use crate::game::{GameEvent, GameEventKind, GameEventSubscriber, LoadingEvent, TransitionEvent};
+use crate::game::game_event::{GameEvent, GameEventKind, GameEventSubscriber, TransitionEvent};
+use crate::game::systems::lifecycle::LoadingEvent;
+use crate::game::ui::state::DialogTransition;
 
 #[derive(Debug)]
 pub enum GameState {
@@ -148,7 +150,7 @@ impl GameState {
             GameEvent::Loading(LoadingEvent::Loaded) => Some(GameState::Menu),
             GameEvent::FatalError(msg) => Some(GameState::Error(msg.clone())),
             GameEvent::Transition(TransitionEvent::ToExplore)
-            | GameEvent::ApplyDialogTransition(crate::game::DialogTransition::CloseToExplore) => {
+            | GameEvent::ApplyDialogTransition(DialogTransition::CloseToExplore) => {
                 Some(GameState::Explore)
             }
             GameEvent::Transition(TransitionEvent::ToDead) => Some(GameState::Dead),
@@ -157,7 +159,7 @@ impl GameState {
             GameEvent::Transition(TransitionEvent::ToInventory) => Some(GameState::Inventory),
             GameEvent::Transition(TransitionEvent::ToStats) => Some(GameState::Stats),
             GameEvent::Transition(TransitionEvent::ToQuestLog) => Some(GameState::QuestLog),
-            GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(_))
+            GameEvent::ApplyDialogTransition(DialogTransition::SetLine(_))
             | GameEvent::OpenDialogState(_) => Some(GameState::Dialog),
             GameEvent::OpenShopState(_) => Some(GameState::Shop),
             _ => None,

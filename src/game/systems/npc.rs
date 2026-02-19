@@ -6,9 +6,12 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Dialog, DialogCondition, DialogLine, Direction, NpcType};
+use crate::game::game_data::GameData;
+use crate::game::game_event::{ExploreEvent, GameEvent, GameEventKind};
+use crate::game::ui::state::DialogState;
+use crate::game::world::WorldState;
 
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{DialogState, ExploreEvent, GameData, GameEvent, GameEventKind, WorldState};
+use super::resolver::DomainEventResolver;
 
 #[derive(Debug)]
 pub struct DialogSpec {

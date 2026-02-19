@@ -1,11 +1,12 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::slice::Iter;
 
 use anyhow::{Result, anyhow};
 
 use crate::data::Direction;
-use crate::game::GameData;
+use crate::game::game_data::GameData;
 
 pub type EntityId = u32;
 pub const GOLD_ITEM_ID: &str = "gold";
@@ -174,7 +175,7 @@ impl EntityStore {
         }
     }
 
-    pub fn iter(&self) -> core::slice::Iter<'_, EntityState> {
+    pub fn iter(&self) -> Iter<'_, EntityState> {
         self.list.iter()
     }
 

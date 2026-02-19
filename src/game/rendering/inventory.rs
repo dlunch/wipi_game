@@ -2,13 +2,13 @@ use alloc::format;
 
 use wipi::framebuffer::Framebuffer;
 
+use super::render_state::{InventoryRender, StatsRender};
 use super::renderer::{
     COLOR_BLACK, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE,
     COLOR_YELLOW, clear_screen, draw_hp_bar, draw_rect, draw_selection_cursor, draw_text,
     fill_rect,
 };
 use crate::data::ItemKind;
-use crate::game::{InventoryRender, StatsRender};
 
 pub fn draw_inventory(fb: &mut Framebuffer, state: &InventoryRender) {
     clear_screen(fb);

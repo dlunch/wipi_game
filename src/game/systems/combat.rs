@@ -1,15 +1,20 @@
 use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Enemy, Map, Skill, SkillType, Tile};
-use crate::game::state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def};
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameEventKind, TransitionEvent, WorldState,
+use crate::game::game_data::GameData;
+use crate::game::game_event::{
+    CombatEvent, EntityEvent, GameEvent, GameEventKind, TransitionEvent,
 };
+use crate::game::state::{CombatantState, EntityKind, EntityState, TimedKind, combat_attack_def};
+use crate::game::ui::state::ExploreAction;
+use crate::game::world::WorldState;
+
+use super::resolver::DomainEventResolver;
 
 const ENEMY_MOVE_INTERVAL: u32 = 8;
 const MP_REGEN_INTERVAL: u32 = 60;
@@ -204,7 +209,7 @@ fn tick_combatant_effects(
 fn resolve_player_action(
     data: &GameData,
     world: &WorldState,
-    action: &crate::game::ExploreAction,
+    action: &ExploreAction,
     out: &mut Vec<GameEvent>,
 ) -> Result<()> {
     let leader_id = world.leader_id()?;
@@ -463,14 +468,14 @@ fn next_enemy_position_towards(
     occupied: &[usize],
 ) -> (usize, usize) {
     let dx: i32 = match target_x.cmp(&enemy_x) {
-        core::cmp::Ordering::Greater => 1,
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Equal => 0,
+        Ordering::Greater => 1,
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
     };
     let dy: i32 = match target_y.cmp(&enemy_y) {
-        core::cmp::Ordering::Greater => 1,
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Equal => 0,
+        Ordering::Greater => 1,
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
     };
 
     if dx != 0 {

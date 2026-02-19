@@ -3,6 +3,7 @@ use alloc::string::String;
 
 use wipi::framebuffer::{Color, Framebuffer};
 
+use super::render_state::ExploreRender;
 use super::renderer::{
     COLOR_BLACK, COLOR_BLUE, COLOR_BROWN, COLOR_CYAN, COLOR_DARK_GRAY, COLOR_DUNGEON, COLOR_FOREST,
     COLOR_GRAY, COLOR_GREEN, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, TILE_SIZE, clear_screen,
@@ -10,8 +11,7 @@ use super::renderer::{
 };
 use super::sprites::SpriteAtlas;
 use crate::data::{Direction, Map, SkillType, Tile};
-use crate::game::ExploreAction;
-use crate::game::ExploreRender;
+use crate::game::ui::state::ExploreAction;
 
 const HUD_HEIGHT: i32 = 40;
 const MINIMAP_RADIUS: i32 = 6;
@@ -424,7 +424,7 @@ fn draw_skill_bar(
             _ => "3",
         };
 
-        let Some(action) = action_opt else {
+        let Some(action) = action_opt.as_ref().copied() else {
             draw_text(fb, x, y, &format!("[{}]-", key), COLOR_GRAY);
             continue;
         };

@@ -5,8 +5,9 @@ use anyhow::{Result, anyhow};
 
 use super::state::{DialogTransition, InputKey, MenuAction, ShopMode, UiEvent, UiState};
 use crate::data::DialogAction;
+use crate::game::game_event::{ExploreEvent, GameEvent, TransitionEvent};
 use crate::game::selection::{step_down, step_up};
-use crate::game::{ExploreEvent, GOLD_ITEM_ID, GameEvent, TransitionEvent, WorldState};
+use crate::game::state::{GOLD_ITEM_ID, world::WorldState};
 
 pub trait UiEventApplier {
     fn apply_ui_event(

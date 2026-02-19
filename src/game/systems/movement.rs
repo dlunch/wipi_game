@@ -6,13 +6,12 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 
 use crate::data::{Direction, Map, Tile};
+use crate::game::game_data::GameData;
+use crate::game::game_event::{GameEvent, GameEventKind, MovementEvent, TileEvent};
+use crate::game::state::{EntityState, MovementState, MovementTickEvent};
+use crate::game::world::WorldState;
 
-use crate::game::state::EntityState;
-use crate::game::systems::resolver::DomainEventResolver;
-use crate::game::{
-    GameData, GameEvent, GameEventKind, MovementEvent, MovementState, MovementTickEvent, TileEvent,
-    WorldState,
-};
+use super::resolver::DomainEventResolver;
 
 const MOVE_COOLDOWN: u32 = 2;
 

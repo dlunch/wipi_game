@@ -3,8 +3,8 @@ use core::str;
 use anyhow::{Result, anyhow};
 use wipi::database::{Database, OpenMode};
 
-use super::WorldState;
 use crate::game::save_schema;
+use crate::game::world::WorldState;
 
 const SAVE_DB_NAME: &str = "save";
 

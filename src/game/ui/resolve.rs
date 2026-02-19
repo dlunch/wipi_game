@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::state::{GameInput, InputKey, UiEvent, UiState};
-use crate::game::{GameState, WorldState};
+use crate::game::state::{GameState, world::WorldState};
 
 const EXPLORE_KEYS: [InputKey; 10] = [
     InputKey::Up,

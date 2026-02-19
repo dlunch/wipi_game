@@ -1,22 +1,18 @@
-pub mod character;
-pub mod combat;
+pub(crate) mod character;
+pub(crate) mod combat;
 mod emit;
-pub mod lifecycle;
-pub mod movement;
-pub mod npc;
-pub mod resolver;
-pub mod shop;
-pub mod world;
+pub(crate) mod lifecycle;
+pub(crate) mod movement;
+pub(crate) mod npc;
+pub(crate) mod resolver;
+pub(crate) mod shop;
+pub(crate) mod world;
 
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub use lifecycle::{LifecycleEvent, LoadingEvent};
-pub use npc::NpcEvent;
-pub use resolver::DomainEventResolver;
-
-pub fn domain_resolvers() -> Vec<&'static dyn DomainEventResolver> {
-    let mut handlers: Vec<&'static dyn DomainEventResolver> = vec![];
+pub fn domain_resolvers() -> Vec<&'static dyn resolver::DomainEventResolver> {
+    let mut handlers: Vec<&'static dyn resolver::DomainEventResolver> = vec![];
     handlers.extend(lifecycle::resolvers());
     handlers.extend(movement::resolvers());
     handlers.extend(combat::resolvers());

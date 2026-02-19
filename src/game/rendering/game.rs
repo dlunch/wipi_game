@@ -6,12 +6,17 @@ use alloc::vec::Vec;
 use anyhow::{Result, anyhow};
 use wipi::framebuffer::Framebuffer;
 
-use crate::game::state::{CombatantState, TimedKind};
-use crate::game::ui::{INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState};
-use crate::game::{
-    CombatEvent, EntityEvent, GameData, GameEvent, GameState, LifecycleEvent, LoadingEvent,
-    MovementEvent, SpriteAtlas, TransitionEvent, WorldEvent, WorldState,
+use crate::game::game_data::GameData;
+use crate::game::game_event::{
+    CombatEvent, EntityEvent, ExploreEvent, GameEvent, MovementEvent, TransitionEvent, WorldEvent,
 };
+use crate::game::state::GameState;
+use crate::game::state::{CombatantState, EntityState, TimedKind};
+use crate::game::systems::lifecycle::{LifecycleEvent, LoadingEvent};
+use crate::game::ui::state::{
+    DialogTransition, INVENTORY_VISIBLE_ITEMS, MenuAction, SHOP_VISIBLE_ITEMS, ShopMode, UiState,
+};
+use crate::game::world::WorldState;
 
 use super::dialog::draw_dialog;
 use super::explore::draw_explore;
@@ -28,6 +33,7 @@ use super::renderer::{
     fill_rect,
 };
 use super::shop::draw_shop;
+use super::sprites::SpriteAtlas;
 
 struct DialogRenderFields {
     explore: Option<ExploreRender>,
@@ -160,9 +166,7 @@ impl RenderState {
                     changed |= patch_explore(explore, event, world, ui, data, render_fx, state)?;
                 }
                 match event {
-                    GameEvent::ApplyDialogTransition(crate::game::DialogTransition::SetLine(
-                        line,
-                    )) => {
+                    GameEvent::ApplyDialogTransition(DialogTransition::SetLine(line)) => {
                         if *current_line != *line {
                             *current_line = *line;
                             *current_text = lines.get(*current_line).cloned();
@@ -548,7 +552,7 @@ fn patch_explore(
         }
         GameEvent::Movement(MovementEvent::Tick(..))
         | GameEvent::Transition(TransitionEvent::ReleaseMovementDirection(_))
-        | GameEvent::Explore(crate::game::ExploreEvent::MoveDirection(_)) => {
+        | GameEvent::Explore(ExploreEvent::MoveDirection(_)) => {
             sync_explore_player(explore, world, ui, data)
         }
         GameEvent::Entity(entity_event) => {
@@ -842,7 +846,7 @@ fn sync_explore_player_stats(explore: &mut ExploreRender, world: &WorldState) ->
 
 fn sync_explore_combatant_stats(
     explore: &mut ExploreRender,
-    entity: &crate::game::EntityState,
+    entity: &EntityState,
     combatant: &CombatantState,
     current_tick: u32,
 ) -> bool {
