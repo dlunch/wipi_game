@@ -23,7 +23,6 @@ impl<T: DomainEventResolver + ?Sized> GameEventSubscriber for T {
     fn subscribes(&self, kind: GameEventKind) -> bool {
         self.subscribed_kinds()
             .iter()
-            .copied()
-            .any(|subscribed| subscribed == kind)
+            .any(|subscribed| subscribed == &kind)
     }
 }

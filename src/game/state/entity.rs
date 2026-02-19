@@ -16,7 +16,7 @@ pub enum EntityKind {
     Npc,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct EntityStat {
     pub level: i32,
     pub exp: i32,
@@ -74,7 +74,7 @@ impl ItemStack {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct LoadoutState {
     pub weapon: Option<usize>,
     pub armor: Option<usize>,

@@ -49,15 +49,15 @@ fn resolve_tick_with_occupancy(
     world: &WorldState,
     map: &Map,
 ) -> MovementTickEvent {
-    let mut next_state = state.clone();
+    let mut next_move_cooldown = state.move_cooldown;
 
     if state.move_cooldown > 0 {
-        next_state.move_cooldown -= 1;
-        return idle_tick(next_state);
+        next_move_cooldown -= 1;
+        return idle_tick(next_move_cooldown);
     }
 
     let Some(key) = state.pressed_direction else {
-        return idle_tick(next_state);
+        return idle_tick(next_move_cooldown);
     };
 
     let (dx, dy) = match key {
@@ -67,7 +67,7 @@ fn resolve_tick_with_occupancy(
         Direction::Right => (1, 0),
     };
 
-    next_state.move_cooldown = MOVE_COOLDOWN;
+    next_move_cooldown = MOVE_COOLDOWN;
     let mut step = None;
     let new_x = (leader.x as i32 + dx).max(0) as usize;
     let new_y = (leader.y as i32 + dy).max(0) as usize;
@@ -77,15 +77,15 @@ fn resolve_tick_with_occupancy(
     }
 
     MovementTickEvent {
-        next_state,
+        next_move_cooldown,
         facing: Some((dx, dy)),
         step,
     }
 }
 
-fn idle_tick(next_state: MovementState) -> MovementTickEvent {
+fn idle_tick(next_move_cooldown: u32) -> MovementTickEvent {
     MovementTickEvent {
-        next_state,
+        next_move_cooldown,
         facing: None,
         step: None,
     }
@@ -138,7 +138,8 @@ impl DomainEventResolver for TickMovementResolver {
         let (movement_event, tile_event) =
             resolve_world_tick(&world.movement, leader, world, data)?;
 
-        let has_meaningful_movement = movement_event.next_state != world.movement
+        let has_meaningful_movement = movement_event.next_move_cooldown
+            != world.movement.move_cooldown
             || movement_event.facing.is_some()
             || movement_event.step.is_some()
             || tile_event.is_some();

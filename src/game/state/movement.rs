@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq)]
 pub struct MovementState {
     pub pressed_direction: Option<Direction>,
     pub move_cooldown: u32,
@@ -17,7 +17,7 @@ pub struct MovementState {
 }
 
 pub struct MovementTickEvent {
-    pub next_state: MovementState,
+    pub next_move_cooldown: u32,
     pub facing: Option<(i32, i32)>,
     pub step: Option<(i32, i32)>,
 }
@@ -28,7 +28,7 @@ impl MovementState {
     }
 
     pub fn apply_tick(&mut self, event: &MovementTickEvent) -> bool {
-        self.apply_next_state(&event.next_state);
+        self.move_cooldown = event.next_move_cooldown;
         event.step.is_some()
     }
 
@@ -99,14 +99,6 @@ impl MovementState {
             self.press_order[idx] = u8::MAX;
         }
         self.press_len = write as u8;
-    }
-
-    fn apply_next_state(&mut self, next_state: &MovementState) {
-        self.pressed_direction = next_state.pressed_direction;
-        self.move_cooldown = next_state.move_cooldown;
-        self.pressed_mask = next_state.pressed_mask;
-        self.press_order = next_state.press_order;
-        self.press_len = next_state.press_len;
     }
 
     fn refresh_pressed_direction(&mut self) {

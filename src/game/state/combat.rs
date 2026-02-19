@@ -17,7 +17,7 @@ pub enum TimedKind {
     MpRegenTick,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TimedEffect {
     pub kind: TimedKind,
     pub end_tick: u32,

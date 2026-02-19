@@ -54,7 +54,7 @@ impl Item {
 
 /// 적 데이터
 /// 포맷: data_id:id:name:hp:atk:def:exp:gold
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Enemy {
     pub data_id: u32,
     pub id: String,
@@ -144,7 +144,7 @@ impl Tile {
 /// @ENCOUNTERS:slime:3:goblin:1
 /// @NEXT:>:next_map_id
 /// @END
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Map {
     pub id: String,
     pub name: String,
@@ -178,7 +178,7 @@ impl Map {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Npc {
     pub data_id: u32,
     pub id: String,
@@ -199,7 +199,7 @@ pub enum NpcType {
     Healer,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Dialog {
     pub id: String,
     pub lines: Vec<DialogLine>,
@@ -232,7 +232,7 @@ pub enum DialogAction {
     Heal,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Quest {
     pub id: String,
     pub name: String,
@@ -253,7 +253,7 @@ pub enum QuestType {
     Reach,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct QuestProgress {
     pub quest_id: String,
     pub current_count: i32,
@@ -275,7 +275,7 @@ pub enum SkillType {
     Area,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Skill {
     pub name: &'static str,
     pub skill_type: SkillType,
@@ -286,13 +286,13 @@ pub struct Skill {
     pub cooldown: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StartItem {
     pub item_id: String,
     pub count: i32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NewGameConfig {
     pub player_name: String,
     pub start_map: String,

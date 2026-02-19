@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
 use core::str;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -145,17 +145,19 @@ impl GameData {
         Ok(items)
     }
 
-    fn resolve_map_npcs(maps: &[Map], npc_defs: &[Npc]) -> Result<Vec<Npc>> {
-        let mut npcs = Vec::new();
-        let mut npc_index = BTreeMap::new();
-        let mut used = vec![false; npc_defs.len()];
-
-        for (idx, def) in npc_defs.iter().enumerate() {
-            npc_index.insert(def.id.as_str(), idx);
-        }
-
+    fn resolve_map_npcs(maps: &[Map], npc_defs: Vec<Npc>) -> Result<Vec<Npc>> {
         let placement_count = maps.iter().map(|map| map.npcs.len()).sum();
-        npcs.reserve(placement_count);
+        let mut npcs = Vec::with_capacity(placement_count);
+        let mut npc_index = BTreeMap::new();
+
+        for npc in npc_defs {
+            let npc_id = npc.id.clone();
+            ensure!(
+                npc_index.insert(npc_id.clone(), npc).is_none(),
+                "duplicate npc id '{}'",
+                npc_id
+            );
+        }
 
         for map in maps {
             for (x, y, npc_id) in &map.npcs {
@@ -176,13 +178,9 @@ impl GameData {
                     y
                 );
 
-                let Some(def_idx) = npc_index.get(npc_id.as_str()).copied() else {
-                    bail!("map '{}' references unknown npc id '{}'", map.id, npc_id);
-                };
-                let def = &npc_defs[def_idx];
-                used[def_idx] = true;
-
-                let mut npc = def.clone();
+                let mut npc = npc_index.remove(npc_id).ok_or_else(|| {
+                    anyhow!("map '{}' references unknown npc id '{}'", map.id, npc_id)
+                })?;
                 npc.map_id = map.id.clone();
                 npc.x = *x;
                 npc.y = *y;
@@ -190,12 +188,8 @@ impl GameData {
             }
         }
 
-        for (idx, def) in npc_defs.iter().enumerate() {
-            ensure!(
-                used[idx],
-                "npc '{}' is defined but not placed in any map",
-                def.id
-            );
+        if let Some((npc_id, _)) = npc_index.into_iter().next() {
+            bail!("npc '{}' is defined but not placed in any map", npc_id);
         }
 
         Ok(npcs)
@@ -278,7 +272,7 @@ pub fn load_step(data: &mut GameData, step: usize) -> Result<bool> {
         }
         3 => {
             let npc_defs = load_resource_with(data, "data/npcs.dat", parse_npcs)?;
-            data.npcs = GameData::resolve_map_npcs(&data.maps, &npc_defs)?;
+            data.npcs = GameData::resolve_map_npcs(&data.maps, npc_defs)?;
             data.rebuild_npc_data_id_index();
         }
         4 => {

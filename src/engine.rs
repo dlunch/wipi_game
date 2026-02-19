@@ -135,9 +135,7 @@ impl GameEngine {
     }
 
     fn apply_event(&mut self, event: &GameEvent) -> Result<()> {
-        let kind = event.kind();
-
-        if self.state.subscribes(kind) {
+        if self.state.subscribes(event.kind()) {
             self.state.apply_event(event)?;
         }
 
@@ -150,12 +148,12 @@ impl GameEngine {
         );
 
         if let Some(world) = self.world.as_mut()
-            && world.subscribes(kind)
+            && world.subscribes(event.kind())
         {
             world.apply_event(&self.data, event)?;
         }
 
-        if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(kind) {
+        if !matches!(self.state, GameState::Error(_)) && self.ui.subscribes(event.kind()) {
             self.ui.apply_game_event(event)?;
         }
 

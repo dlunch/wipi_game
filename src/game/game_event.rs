@@ -63,7 +63,7 @@ pub enum GameEvent {
     Exit(i32),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum GameEventKind {
     Tick,
     SoftError,
@@ -100,7 +100,7 @@ pub trait GameEventSubscriber {
 impl GameEventKind {
     pub const COUNT: usize = 26;
 
-    pub const fn as_usize(self) -> usize {
+    pub const fn as_usize(&self) -> usize {
         match self {
             Self::Tick => 0,
             Self::SoftError => 1,
