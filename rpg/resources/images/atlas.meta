@@ -1,0 +1,52 @@
+sheet main images/atlas.png
+tile 16 16
+
+clip tile_floor
+frame 0 0
+clip tile_wall
+frame 1 0
+clip tile_water fps=2 loop=1
+frame 2 0
+frame 3 0
+clip tile_tree
+frame 4 0
+clip tile_house
+frame 5 0
+clip tile_dungeon
+frame 6 0
+clip tile_exit
+frame 7 0
+clip tile_treasure
+frame 0 1
+clip tile_treasure_open
+frame 1 1
+clip tile_enemy_area
+frame 2 1
+
+clip player_idle_down
+frame 0 2
+clip player_walk_down fps=6 loop=1
+frame 1 2
+frame 2 2
+clip player_idle_up
+frame 3 2
+clip player_walk_up fps=6 loop=1
+frame 4 2
+frame 5 2
+clip player_idle_left
+frame 0 3
+clip player_walk_left fps=6 loop=1
+frame 1 3
+frame 2 3
+clip player_idle_right
+frame 3 3
+clip player_walk_right fps=6 loop=1
+frame 4 3
+frame 5 3
+
+clip npc_idle_down fps=2 loop=1
+frame 0 4
+frame 1 4
+clip enemy_idle fps=3 loop=1
+frame 2 4
+frame 3 4

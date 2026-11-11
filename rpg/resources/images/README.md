@@ -31,8 +31,11 @@ frame 5 0
 If `sheet=<id>` is omitted in `clip`, the first declared sheet is used.
 
 Expected clip names used by current renderer:
+- Tiles: `tile_floor`, `tile_wall`, `tile_water`, `tile_tree`, `tile_house`, `tile_dungeon`, `tile_exit`, `tile_treasure`, `tile_treasure_open`, `tile_enemy_area`
 - Player: `player_idle_up/down/left/right`, `player_walk_up/down/left/right`
 - NPC: `npc_idle_down` (fallback `npc_idle`)
 - Enemy: `enemy_idle`
+
+Tile cells are opaque; character cells use binary transparency.
 
 If atlas or clips are missing, rendering falls back to colored rectangles.

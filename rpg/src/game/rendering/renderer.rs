@@ -1,6 +1,7 @@
 use wipi::framebuffer::{Color, Framebuffer};
 
 pub const TILE_SIZE: i32 = 16;
+const FONT_SIZE: i32 = 10;
 
 pub const COLOR_BLACK: Color = Color {
     r: 0,
@@ -90,7 +91,8 @@ pub fn draw_rect(fb: &mut Framebuffer, x: i32, y: i32, w: i32, h: i32, c: Color)
 }
 
 pub fn draw_text(fb: &mut Framebuffer, x: i32, y: i32, text: &str, c: Color) {
-    fb.draw_text(x, y, text, c);
+    // Layout positions are text tops; the platform takes the baseline.
+    fb.draw_text(x, y + FONT_SIZE, text, c);
 }
 
 pub fn draw_hp_bar(fb: &mut Framebuffer, x: i32, y: i32, w: i32, current: i32, max: i32) {

@@ -3,7 +3,7 @@ use core::str;
 
 use wipi::{image::Image, resource::Resource};
 
-use crate::data::Direction;
+use crate::data::{Direction, Tile};
 
 pub struct SpriteFrame {
     pub sx: i32,
@@ -49,6 +49,27 @@ impl SpriteAtlas {
             (Direction::Down, false) => "player_idle_down",
             (Direction::Left, false) => "player_idle_left",
             (Direction::Right, false) => "player_idle_right",
+        };
+        self.frame_for_clip(clip, tick)
+    }
+
+    pub fn tile_frame(
+        &self,
+        tile: Tile,
+        opened_treasure: bool,
+        tick: u32,
+    ) -> Option<(&Image, &SpriteFrame)> {
+        let clip = match tile {
+            Tile::Wall => "tile_wall",
+            Tile::Floor | Tile::PlayerStart => "tile_floor",
+            Tile::Enemy => "tile_enemy_area",
+            Tile::House => "tile_house",
+            Tile::Dungeon => "tile_dungeon",
+            Tile::Treasure if opened_treasure => "tile_treasure_open",
+            Tile::Treasure => "tile_treasure",
+            Tile::Exit => "tile_exit",
+            Tile::Water => "tile_water",
+            Tile::Tree => "tile_tree",
         };
         self.frame_for_clip(clip, tick)
     }

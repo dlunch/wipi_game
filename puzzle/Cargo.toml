@@ -1,0 +1,18 @@
+[package]
+name = "puzzle"
+version = "0.1.0"
+edition = "2024"
+build = "../build.rs"
+
+[features]
+default = ["simulation"]
+ktf = ["wipi/ktf", "wipi-build/ktf"]
+lgt = ["wipi/lgt", "wipi-build/lgt"]
+simulation = ["wipi/simulation"]
+
+[dependencies]
+anyhow = { workspace = true }
+wipi = { workspace = true }
+
+[build-dependencies]
+wipi-build = { workspace = true }

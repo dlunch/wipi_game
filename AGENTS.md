@@ -2,17 +2,21 @@
 
 ## Project Overview
 
-WIPI Game is a retro RPG demo for the WIPI SDK (Korean feature phone platform emulator).
+WIPI Game is a set of demo games for the WIPI SDK (Korean feature phone platform emulator),
+built as one Cargo workspace: a retro RPG (`rpg/`) and a box-pushing puzzle (`puzzle/`).
 - **Language**: Rust (nightly)
 - **Environment**: `no_std` with `alloc` crate - NO standard library
 - **Target**: ARM thumbv4t (feature phone) + simulation mode
-- **Screen**: 240x320 pixels, 16x16 tile size
+- **Screen**: 240x320 pixels
 
 ## Build Commands
 
 ```bash
 # Development build (simulation mode - default)
 cargo build
+
+# Run one game in simulation mode with its resource directory
+cargo run -p puzzle -- puzzle/resources
 
 # Lint check - MUST pass before commit
 cargo clippy -- -D warnings
@@ -30,26 +34,36 @@ cargo fmt
 ## Project Structure
 
 ```
-src/
-├── main.rs              # App entry/WIPI glue
-├── engine.rs            # Runtime orchestration (input->event queue->apply->render)
-├── data/                # Data model + parser
-└── game/
-    ├── game_event.rs    # Core runtime event types
-    ├── state/           # Persistent domain state + apply logic
-    ├── systems/         # Stateless resolver logic (derive events)
-    ├── ui/              # UI state + input resolve/apply
-    ├── rendering/       # Render state + draw modules + sprite atlas
-    ├── game_data.rs     # Loaded game data access
-    └── save.rs          # Save/load
-resources/
-├── data/                # Game data files (.dat)
-└── images/              # Image assets
+Cargo.toml               # Workspace manifest
+build.rs                 # Build script shared by every game crate
+release.sh               # Builds and archives every game for KTF/LGT
+rpg/
+├── resources/           # Game data files (.dat) and image assets
+└── src/
+    ├── main.rs          # App entry/WIPI glue
+    ├── engine.rs        # Runtime orchestration (input->event queue->apply->render)
+    ├── data/            # Data model + parser
+    └── game/
+        ├── game_event.rs    # Core runtime event types
+        ├── state/           # Persistent domain state + apply logic
+        ├── systems/         # Stateless resolver logic (derive events)
+        ├── ui/              # UI state + input resolve/apply
+        ├── rendering/       # Render state + draw modules + sprite atlas
+        ├── game_data.rs     # Loaded game data access
+        └── save.rs          # Save/load
+puzzle/
+├── resources/           # levels.dat + tiles.png (24x24 tile strip)
+└── src/
+    ├── main.rs          # App entry, key mapping
+    ├── level.rs         # Level parser
+    ├── game.rs          # Board state: move, undo, level selection
+    ├── save.rs          # Current stage save/load
+    └── render.rs        # Board and HUD drawing
 ```
 
-## Architecture
+## RPG Architecture
 
-The codebase follows an **event queue + resolve systems + apply + rendering** pattern:
+The RPG (`rpg/`) follows an **event queue + resolve systems + apply + rendering** pattern:
 
 - **State** (`state/`): Owns data and only applies events (mutation sink).
 - **Systems** (`systems/`): Read-only over current state/data, derive additional `GameEvent`s.

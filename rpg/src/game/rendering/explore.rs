@@ -84,14 +84,18 @@ fn draw_map_with_entities(
                 let tile = map.get_tile(map_xu, map_yu);
                 let is_opened = tile == Tile::Treasure
                     && is_treasure_opened(&state.opened_treasures, &state.map_id, map_xu, map_yu);
-                fill_rect(
-                    fb,
-                    px,
-                    py,
-                    TILE_SIZE,
-                    TILE_SIZE,
-                    tile_color(tile, is_opened),
-                );
+                if let Some((sheet, frame)) = sprites.tile_frame(tile, is_opened, state.anim_tick) {
+                    fb.draw_image(px, py, frame.w, frame.h, sheet, frame.sx, frame.sy);
+                } else {
+                    fill_rect(
+                        fb,
+                        px,
+                        py,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                        tile_color(tile, is_opened),
+                    );
+                }
             }
         }
     }
