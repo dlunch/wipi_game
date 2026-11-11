@@ -95,9 +95,7 @@ impl MovementState {
                 write += 1;
             }
         }
-        for idx in write..4 {
-            self.press_order[idx] = u8::MAX;
-        }
+        self.press_order[write..].fill(u8::MAX);
         self.press_len = write as u8;
     }
 
